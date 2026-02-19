@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robotframework-trace-viewer"
+version = "0.1.0"
+description = "Standalone HTML report generator and live trace viewer for Robot Framework OpenTelemetry traces"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Robot Framework Trace Viewer Contributors"}
+]
+keywords = ["robotframework", "testing", "tracing", "opentelemetry", "report", "viewer", "timeline"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: Robot Framework",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+rf-trace-report = "rf_trace_viewer.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/tridentsx/robotframework-trace-viewer"
+Documentation = "https://github.com/tridentsx/robotframework-trace-viewer/blob/main/README.md"
+Repository = "https://github.com/tridentsx/robotframework-trace-viewer"
+Issues = "https://github.com/tridentsx/robotframework-trace-viewer/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PT"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing"
