@@ -36,7 +36,7 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
     - Create `tree.js` with expandable tree view renderer: render suite→test→keyword hierarchy, expand/collapse, color-coded status, duration display, keyword args display, error message display, expand-all/collapse-all controls
     - Create `stats.js` with statistics panel renderer: total/pass/fail/skip counts with percentages, total duration, per-suite breakdown, overall status indicator
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 12.1, 12.2, 12.3_
-  - [ ] 1.5 Implement report generator module (`src/rf_trace_viewer/generator.py`)
+  - [x] 1.5 Implement report generator module (`src/rf_trace_viewer/generator.py`)
     - Implement `embed_data(model)` to serialize RFRunModel to JSON string
     - Implement `embed_viewer_assets()` to read and return JS and CSS content from viewer/ directory
     - Implement `generate_report(model, options)` to produce complete HTML5 string with embedded data, JS, and CSS
