@@ -145,7 +145,7 @@ Note: In live mode, the parsing and tree building happen in JavaScript in the br
 ## File Structure
 
 ```
-robotframework-trace-viewer/
+robotframework-trace-report/
 ├── src/
 │   └── rf_trace_viewer/
 │       ├── __init__.py

@@ -6,8 +6,8 @@ Thank you for your interest in contributing! This document provides guidelines f
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/tridentsx/robotframework-trace-viewer.git
-cd robotframework-trace-viewer
+git clone https://github.com/xtergo/robotframework-trace-report.git
+cd robotframework-trace-report
 ```
 
 2. **Create virtual environment**

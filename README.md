@@ -1,10 +1,10 @@
-# Robot Framework Trace Viewer
+# Robot Framework Trace Report
 
 Standalone HTML report generator and live trace viewer for Robot Framework test execution, powered by OpenTelemetry trace data.
 
 ## What is this?
 
-`robotframework-trace-viewer` reads OTLP trace files produced by [robotframework-tracer](https://github.com/tridentsx/robotframework-tracer) and generates interactive HTML reports with timeline visualization. It can also run in live mode, updating the view in real-time as tests execute.
+`robotframework-trace-report` reads OTLP trace files produced by [robotframework-tracer](https://github.com/tridentsx/robotframework-tracer) and generates interactive HTML reports with timeline visualization. It can also run in live mode, updating the view in real-time as tests execute.
 
 Unlike Robot Framework's built-in `report.html` and `log.html`, the trace viewer provides:
 
@@ -23,7 +23,7 @@ Robot Framework + robotframework-tracer
 OTLP JSON trace file (.json / .json.gz)
     │
     ▼
-robotframework-trace-viewer
+robotframework-trace-report
     │
     ├── Static mode:  rf-trace-report traces.json -o report.html
     │                 (self-contained HTML, open in any browser)
@@ -37,7 +37,7 @@ The trace file is standard OTLP NDJSON — one `ExportTraceServiceRequest` per l
 ## Installation
 
 ```bash
-pip install robotframework-trace-viewer
+pip install robotframework-trace-report
 ```
 
 ## Usage

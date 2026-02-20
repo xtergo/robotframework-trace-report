@@ -258,7 +258,7 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
     - Add `--cors-origin` CLI option for CORS header configuration
     - _Requirements: 19.1, 19.2, 19.3, 19.5_
   - [ ] 12.2 Add WebSocket endpoint for live updates
-    - Add `websockets` as optional dependency (`pip install robotframework-trace-viewer[api]`)
+    - Add `websockets` as optional dependency (`pip install robotframework-trace-report[api]`)
     - Implement `/ws` WebSocket endpoint that pushes incremental span updates
     - Only active when both `--live` and `--serve-api` are used together
     - _Requirements: 19.4_
