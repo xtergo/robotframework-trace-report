@@ -30,7 +30,7 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
     - Implement `interpret_tree(roots)` converting SpanNode tree to RFRunModel
     - Implement `compute_statistics(suites)` aggregating pass/fail/skip counts and durations
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
-  - [ ] 1.4 Create minimal JS viewer assets (`src/rf_trace_viewer/viewer/`)
+  - [x] 1.4 Create minimal JS viewer assets (`src/rf_trace_viewer/viewer/`)
     - Create `style.css` with light and dark theme using CSS custom properties, status colors (pass=green, fail=red, skip=yellow), tree view styles, statistics panel styles
     - Create `app.js` with main application initialization: read embedded data, initialize views, manage state, handle theme toggle
     - Create `tree.js` with expandable tree view renderer: render suite→test→keyword hierarchy, expand/collapse, color-coded status, duration display, keyword args display, error message display, expand-all/collapse-all controls
