@@ -15,7 +15,7 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
     - Implement `parse_stream(stream)` to read lines from a stream, call parse_line for each, skip malformed lines with warnings
     - Implement `parse_file(path)` to open plain or gzip file and delegate to parse_stream
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9_
-  - [ ] 1.2 Implement tree builder module (`src/rf_trace_viewer/tree.py`)
+  - [x] 1.2 Implement tree builder module (`src/rf_trace_viewer/tree.py`)
     - Define `SpanNode` dataclass with fields: span (RawSpan), children (List[SpanNode]), parent (Optional[SpanNode])
     - Implement `group_by_trace(spans)` to group spans by trace_id into a dict
     - Implement `build_tree(spans)` to build parent-child tree from flat span list: group by trace, link parents, identify roots, sort children by start_time, sort root list by start_time
