@@ -201,3 +201,26 @@ The Robot Framework Trace Viewer is a standalone HTML report generator and live 
 1. WHEN a Trace_File contains more than 10,000 spans, THE Viewer SHALL render the tree view using virtual scrolling to maintain responsiveness
 2. WHEN a Trace_File contains more than 10,000 spans, THE Viewer SHALL render the timeline using canvas-based rendering for performance
 3. THE Parser SHALL process a 50MB Trace_File within 10 seconds on a standard development machine
+
+### Requirement 15: Embeddable Viewer Component
+
+**User Story:** As a frontend developer, I want to mount the trace viewer inside an existing Angular/React/Vue application so that I can integrate test result visualization into a larger dashboard without using iframes.
+
+#### Acceptance Criteria
+
+1. THE Viewer JS SHALL expose a public initialization function that accepts a DOM container element and a data object (RFRunModel JSON), and renders the full viewer (tree, timeline, statistics) inside that container
+2. THE Viewer SHALL NOT assume it owns the entire page — it SHALL scope all DOM manipulation and event listeners to the provided container element
+3. THE Viewer CSS SHALL use a namespace prefix or scoping strategy (e.g., all selectors under `.rf-trace-viewer`) to avoid style collisions with the host application
+4. THE Viewer SHALL expose a `destroy()` method that removes all DOM elements, event listeners, and timers created during initialization
+5. THE Viewer SHALL accept an optional configuration object to control which panels are visible (tree, timeline, statistics) and initial theme setting
+
+### Requirement 16: Published Data Model Schema
+
+**User Story:** As a developer building a custom UI, I want access to a documented JSON schema for the trace viewer's data model so that I can parse trace files and build my own visualization.
+
+#### Acceptance Criteria
+
+1. THE project SHALL publish a JSON Schema document describing the RFRunModel structure, including all nested types (RFSuite, RFTest, RFKeyword, RFSignal, RunStatistics, SuiteStatistics)
+2. THE Python data pipeline (parser → tree builder → RF model interpreter) SHALL be importable as a library, allowing external code to call `parse_file()`, `build_tree()`, and `interpret_tree()` to produce an RFRunModel from a Trace_File
+3. THE RFRunModel SHALL be serializable to JSON via a `to_json()` or `to_dict()` method, producing output conforming to the published schema
+4. THE CLI SHALL accept a `--json` flag that outputs the processed RFRunModel as JSON to stdout instead of generating an HTML report

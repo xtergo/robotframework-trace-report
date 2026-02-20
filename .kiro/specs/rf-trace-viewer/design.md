@@ -298,9 +298,78 @@ const AppState = {
 def main() -> int:
     """CLI entry point. Returns exit code."""
     # Parse args
+    # If --json: parse → build tree → interpret → print JSON to stdout
     # If --live: start_live_server(...)
     # Else: parse → build tree → interpret → generate → write file
 ```
+
+### 8. Embeddable Viewer API (`viewer/app.js`)
+
+The viewer exposes a public API for mounting inside external applications (Angular, React, Vue, etc.):
+
+```javascript
+/**
+ * Mount the RF Trace Viewer into a DOM container.
+ * @param {HTMLElement} container - The DOM element to render into
+ * @param {Object} data - RFRunModel JSON data
+ * @param {Object} [options] - Configuration options
+ * @param {boolean} [options.showTree=true] - Show tree view panel
+ * @param {boolean} [options.showTimeline=true] - Show timeline panel
+ * @param {boolean} [options.showStats=true] - Show statistics panel
+ * @param {string} [options.theme='system'] - Theme: 'light', 'dark', 'system'
+ * @returns {Object} Instance with destroy() method
+ */
+function RFTraceViewer(container, data, options) { ... }
+
+// Usage in external app:
+const viewer = RFTraceViewer(
+    document.getElementById('trace-container'),
+    rfRunModelJson,
+    { showTimeline: true, theme: 'dark' }
+);
+// Later: viewer.destroy();
+```
+
+Design constraints for embeddability:
+- All DOM manipulation scoped to the provided container element
+- All CSS selectors namespaced under `.rf-trace-viewer` to avoid style collisions
+- All event listeners attached to the container or its children (not `document` or `window` globals)
+- `destroy()` removes all DOM nodes, event listeners, and timers (polling intervals, animation frames)
+- No global state pollution — multiple instances can coexist on the same page
+
+### 9. Data Model Schema and Library API
+
+The Python data pipeline is designed to be importable as a library, independent of the CLI:
+
+```python
+# Library usage — external code can use the pipeline directly
+from rf_trace_viewer.parser import parse_file
+from rf_trace_viewer.tree import build_tree
+from rf_trace_viewer.rf_model import interpret_tree
+
+spans = parse_file("traces.json")
+tree = build_tree(spans)
+model = interpret_tree(tree)
+
+# Serialize to JSON (conforms to published schema)
+json_str = model.to_json()
+model_dict = model.to_dict()
+```
+
+All model dataclasses (`RFRunModel`, `RFSuite`, `RFTest`, `RFKeyword`, `RFSignal`, `RunStatistics`, `SuiteStatistics`) implement:
+- `to_dict()` → returns a plain dict suitable for `json.dumps()`, with Status enums serialized as strings
+- `to_json()` → returns a JSON string (calls `to_dict()` internally)
+
+The CLI `--json` flag uses this:
+```bash
+# Output processed model as JSON to stdout
+rf-trace-report traces.json --json
+
+# Pipe to another tool
+rf-trace-report traces.json --json | jq '.statistics'
+```
+
+A JSON Schema file (`schema/rf_run_model.schema.json`) documents the RFRunModel structure for consumers building custom UIs.
 
 ## Data Models
 
@@ -553,6 +622,24 @@ classDiagram
 *For any* CLI invocation missing the required input positional argument, the process SHALL exit with a non-zero status code.
 
 **Validates: Requirements 11.7**
+
+### Property 18: Viewer container scoping
+
+*For any* invocation of `RFTraceViewer(container, data, options)`, all DOM elements created by the viewer SHALL be descendants of the provided container element, and calling `destroy()` SHALL leave the container empty with no residual event listeners.
+
+**Validates: Requirements 15.1, 15.2, 15.4**
+
+### Property 19: Model serialization round-trip
+
+*For any* RFRunModel produced by `interpret_tree`, calling `to_dict()` and then reconstructing the model from that dict SHALL produce an equivalent model. The JSON output SHALL conform to the published JSON Schema.
+
+**Validates: Requirements 16.2, 16.3**
+
+### Property 20: JSON CLI output matches embedded data
+
+*For any* trace file, the JSON output from `rf-trace-report <input> --json` SHALL be identical to the data embedded in the HTML report generated from the same input.
+
+**Validates: Requirements 16.4**
 
 ## Error Handling
 
