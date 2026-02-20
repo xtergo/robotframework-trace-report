@@ -22,7 +22,7 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
     - Handle orphan spans (missing parent) by treating as roots
     - Handle duplicate span_ids by keeping first occurrence
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
-  - [ ] 1.3 Implement RF model module (`src/rf_trace_viewer/rf_model.py`)
+  - [x] 1.3 Implement RF model module (`src/rf_trace_viewer/rf_model.py`)
     - Define enums: `SpanType` (SUITE, TEST, KEYWORD, SIGNAL, GENERIC), `Status` (PASS, FAIL, SKIP, NOT_RUN)
     - Define dataclasses: `RFSuite`, `RFTest`, `RFKeyword`, `RFSignal`, `RFRunModel`, `RunStatistics`, `SuiteStatistics`
     - Implement `classify_span(span)` with priority: SUITE > TEST > KEYWORD > SIGNAL > GENERIC
