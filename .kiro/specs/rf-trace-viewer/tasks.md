@@ -43,7 +43,7 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
     - Handle title from options or derive from model
     - Implement `ReportOptions` dataclass
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
-  - [ ] 1.6 Wire up CLI for static mode (`src/rf_trace_viewer/cli.py`)
+  - [x] 1.6 Wire up CLI for static mode (`src/rf_trace_viewer/cli.py`)
     - Wire static mode: parse args → parse_file → build_tree → interpret_tree → generate_report → write file
     - Add `--version` flag using `__version__` from `__init__.py`
     - Add error handling: catch FileNotFoundError, PermissionError, IOError with user-friendly messages
