@@ -6,7 +6,7 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
 
 ## Tasks
 
-- [ ] 1. End-to-end static report (minimal viable pipeline)
+- [x] 1. End-to-end static report (minimal viable pipeline)
   - [x] 1.1 Implement core parser module (`src/rf_trace_viewer/parser.py`)
     - Define `RawSpan` dataclass with fields: trace_id, span_id, parent_span_id, name, kind, start_time_unix_nano, end_time_unix_nano, attributes, status, events, resource_attributes
     - Implement `flatten_attributes(attrs)` to convert OTLP attribute list to flat dict, handling string_value, int_value, double_value, bool_value, array_value, kvlist_value, bytes_value
