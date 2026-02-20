@@ -16,6 +16,8 @@ The architecture follows a pipeline pattern: `NDJSON → Flat Spans → Span Tre
 3. **No runtime dependencies**: Python side uses only stdlib. The viewer uses only browser APIs.
 4. **OTLP NDJSON as interchange**: The viewer reads standard OTLP JSON, not a custom format. Any OTLP-compatible tool can produce compatible files.
 5. **Single-run scope**: The viewer handles one execution run at a time. Multi-run aggregation is out of scope.
+6. **Python 3.10+**: Minimum Python version is 3.10, enabling modern syntax (match statements, `X | Y` union types, improved type hints).
+7. **Accessibility-first**: All interactive elements use semantic HTML and ARIA attributes. Status is conveyed via icons/patterns alongside color, not color alone.
 
 ## Architecture
 
@@ -370,6 +372,55 @@ rf-trace-report traces.json --json | jq '.statistics'
 ```
 
 A JSON Schema file (`schema/rf_run_model.schema.json`) documents the RFRunModel structure for consumers building custom UIs.
+
+### 10. REST/WebSocket API Server (`api.py`)
+
+When invoked with `--serve-api`, the server exposes a REST API alongside the HTML viewer:
+
+```python
+# REST endpoints
+GET /api/v1/model       → full RFRunModel as JSON
+GET /api/v1/traces      → raw parsed spans as JSON
+GET /api/v1/statistics  → RunStatistics subset
+
+# WebSocket (live mode only)
+WS /ws                  → pushes incremental span updates as JSON messages
+```
+
+Implementation uses Python stdlib `http.server` for REST and the `websockets` library (optional dependency) for WebSocket support. CORS headers are configurable via `--cors-origin`.
+
+### 11. Deep Link / Shareable URLs
+
+The viewer uses URL hash fragments to support deep linking to specific nodes:
+
+```
+report.html#span=f17e43d020d07570
+```
+
+- Selecting a tree node updates `location.hash`
+- On page load, if a hash is present, the viewer expands the tree path to that node and highlights it
+- Each tree node has a "copy link" icon that copies the full URL with hash to clipboard
+- Invalid span_ids show a brief toast notification and fall back to default view
+
+### 12. npm Package (`viewer/package.json`)
+
+The viewer JS and CSS are published as an npm package for direct use in JS/TS projects:
+
+```bash
+npm install @rf-trace-viewer/viewer
+```
+
+```javascript
+import { RFTraceViewer } from '@rf-trace-viewer/viewer';
+import '@rf-trace-viewer/viewer/style.css';
+
+const viewer = RFTraceViewer(container, data, { theme: 'dark' });
+```
+
+The package includes:
+- ES module and CommonJS builds
+- TypeScript type definitions for `RFTraceViewer`, options, and the RFRunModel data types
+- CSS as a separate importable file
 
 ## Data Models
 

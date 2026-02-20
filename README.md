@@ -117,7 +117,7 @@ The viewer understands Robot Framework-specific span attributes (`rf.suite.*`, `
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10+
 - A modern browser (Chrome, Firefox, Safari, Edge)
 - Trace files from [robotframework-tracer](https://github.com/tridentsx/robotframework-tracer) (or any OTLP JSON source)
 

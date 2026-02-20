@@ -224,3 +224,49 @@ The Robot Framework Trace Viewer is a standalone HTML report generator and live 
 2. THE Python data pipeline (parser → tree builder → RF model interpreter) SHALL be importable as a library, allowing external code to call `parse_file()`, `build_tree()`, and `interpret_tree()` to produce an RFRunModel from a Trace_File
 3. THE RFRunModel SHALL be serializable to JSON via a `to_json()` or `to_dict()` method, producing output conforming to the published schema
 4. THE CLI SHALL accept a `--json` flag that outputs the processed RFRunModel as JSON to stdout instead of generating an HTML report
+
+### Requirement 17: Accessibility
+
+**User Story:** As a test engineer with visual impairments or who uses assistive technology, I want the report viewer to be accessible so that I can effectively review test results.
+
+#### Acceptance Criteria
+
+1. THE Viewer SHALL use appropriate ARIA roles and attributes on all interactive elements (tree nodes as `role="treeitem"`, expand/collapse as `aria-expanded`, status indicators with `aria-label`)
+2. THE Viewer SHALL use status icons or patterns alongside color coding so that status is distinguishable without relying solely on color (color-blind safe)
+3. THE Viewer SHALL ensure all interactive elements are reachable and operable via keyboard (tab order, focus indicators)
+4. THE Viewer SHALL provide visible focus indicators on all focusable elements that meet WCAG 2.1 contrast requirements
+5. THE Viewer SHALL use semantic HTML elements where appropriate (`<nav>`, `<main>`, `<section>`, `<button>`) rather than generic `<div>` elements with click handlers
+
+### Requirement 18: Shareable Deep Links
+
+**User Story:** As a test engineer, I want to share a link that points directly to a specific test or keyword in the report so that teammates can jump straight to the relevant result.
+
+#### Acceptance Criteria
+
+1. WHEN a user selects a node in the tree view, THE Viewer SHALL update the browser URL hash to include the selected node's span_id (e.g., `#span=f17e43d020d07570`)
+2. WHEN the report is loaded with a span_id in the URL hash, THE Viewer SHALL automatically expand the tree to reveal and highlight the referenced node
+3. THE Viewer SHALL provide a "copy link" control on each tree node that copies the deep link URL to the clipboard
+4. WHEN a deep-linked span_id does not exist in the data, THE Viewer SHALL display a brief notification and show the default view
+
+### Requirement 19: REST/WebSocket API
+
+**User Story:** As a developer building a dashboard application, I want to access processed trace data via a REST API and receive live updates via WebSocket so that I can integrate trace viewing into a web application backend.
+
+#### Acceptance Criteria
+
+1. WHEN the CLI is invoked with `rf-trace-report <input> --serve-api`, THE server SHALL expose a REST API at `/api/v1/model` returning the processed RFRunModel as JSON
+2. THE server SHALL expose a REST API at `/api/v1/traces` returning the raw parsed spans as JSON
+3. THE server SHALL expose a REST API at `/api/v1/statistics` returning only the RunStatistics portion of the model
+4. WHEN running in live mode with `--serve-api`, THE server SHALL provide a WebSocket endpoint at `/ws` that pushes incremental span updates to connected clients as new data arrives in the Trace_File
+5. THE REST API SHALL support CORS headers configurable via `--cors-origin` CLI option to allow cross-origin requests from frontend applications
+
+### Requirement 20: npm Package Distribution
+
+**User Story:** As a frontend developer, I want to install the trace viewer as an npm package so that I can import it directly into my JavaScript/TypeScript project with proper module support.
+
+#### Acceptance Criteria
+
+1. THE project SHALL publish the viewer JS and CSS as an npm package (e.g., `@rf-trace-viewer/viewer`)
+2. THE npm package SHALL export the `RFTraceViewer` initialization function as an ES module and CommonJS module
+3. THE npm package SHALL include TypeScript type definitions for the `RFTraceViewer` function, configuration options, and the RFRunModel data structure
+4. THE npm package SHALL include the CSS as a separate importable file (e.g., `import '@rf-trace-viewer/viewer/style.css'`)

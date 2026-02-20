@@ -2,7 +2,7 @@
 
 ## Overview
 
-End-to-end-first implementation: get a working `rf-trace-report` command producing a viewable HTML report as fast as possible, then layer on tests, polish, and live mode. Python backend uses only stdlib + hypothesis for testing. JS viewer is vanilla with no framework.
+End-to-end-first implementation: get a working `rf-trace-report` command producing a viewable HTML report as fast as possible, then layer on tests, polish, live mode, and integration features. Python 3.10+ backend uses only stdlib + hypothesis for testing. JS viewer is vanilla with no framework.
 
 ## Tasks
 
@@ -228,7 +228,54 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
     - Test `--json` is mutually exclusive with `--live`
     - _Requirements: 16.2, 16.3, 16.4_
 
-- [ ] 10. Final checkpoint — Full integration
+- [ ] 10. Add accessibility support
+  - [ ] 10.1 Add ARIA attributes and semantic HTML to viewer
+    - Add `role="tree"` to tree container, `role="treeitem"` to nodes, `aria-expanded` for expand/collapse state
+    - Add `aria-label` to status indicators, buttons, and interactive controls
+    - Replace generic `<div>` click handlers with `<button>` elements where appropriate
+    - Use semantic elements: `<nav>`, `<main>`, `<section>` for layout structure
+    - _Requirements: 17.1, 17.3, 17.5_
+  - [ ] 10.2 Add color-blind safe status indicators
+    - Add status icons alongside colors: ✓ for PASS, ✗ for FAIL, ⊘ for SKIP (or similar distinct shapes)
+    - Ensure status is distinguishable in grayscale
+    - Add visible focus indicators meeting WCAG 2.1 contrast requirements
+    - _Requirements: 17.2, 17.4_
+
+- [ ] 11. Add shareable deep links
+  - [ ] 11.1 Implement URL hash-based deep linking
+    - Update `location.hash` when a tree node is selected (e.g., `#span=f17e43d020d07570`)
+    - On page load, parse hash and expand tree to the referenced node
+    - Add "copy link" icon on each tree node that copies the deep link URL to clipboard
+    - Handle invalid span_ids with a toast notification and fallback to default view
+    - _Requirements: 18.1, 18.2, 18.3, 18.4_
+
+- [ ] 12. Implement REST/WebSocket API
+  - [ ] 12.1 Add REST API endpoints to server
+    - Add `GET /api/v1/model` returning full RFRunModel as JSON
+    - Add `GET /api/v1/traces` returning raw parsed spans as JSON
+    - Add `GET /api/v1/statistics` returning RunStatistics as JSON
+    - Add `--serve-api` CLI flag to enable API endpoints
+    - Add `--cors-origin` CLI option for CORS header configuration
+    - _Requirements: 19.1, 19.2, 19.3, 19.5_
+  - [ ] 12.2 Add WebSocket endpoint for live updates
+    - Add `websockets` as optional dependency (`pip install robotframework-trace-viewer[api]`)
+    - Implement `/ws` WebSocket endpoint that pushes incremental span updates
+    - Only active when both `--live` and `--serve-api` are used together
+    - _Requirements: 19.4_
+
+- [ ] 13. Create npm package for viewer
+  - [ ] 13.1 Set up npm package structure
+    - Create `viewer/package.json` with package name `@rf-trace-viewer/viewer`
+    - Configure ES module and CommonJS dual exports
+    - Create TypeScript type definitions for `RFTraceViewer`, options, and RFRunModel data types
+    - Export CSS as separate importable file
+    - _Requirements: 20.1, 20.2, 20.3, 20.4_
+  - [ ] 13.2 Add npm publish workflow
+    - Create `.github/workflows/npm-publish.yml` triggered on GitHub release
+    - Build and publish to npm registry
+    - _Requirements: 20.1_
+
+- [ ] 14. Final checkpoint — Full integration
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
@@ -241,3 +288,6 @@ End-to-end-first implementation: get a working `rf-trace-report` command produci
 - The JS viewer (task 1.4) starts minimal (tree + stats), timeline and search added in tasks 3-4
 - Tests are grouped at the end (task 8) but can be run incrementally as features land
 - Python has zero runtime dependencies; only `hypothesis` is added as a dev dependency
+- `websockets` is an optional dependency for the REST/WebSocket API feature
+- Python minimum version is 3.10
+- Accessibility (task 10) should be kept in mind during earlier viewer tasks — easier to build in than retrofit
