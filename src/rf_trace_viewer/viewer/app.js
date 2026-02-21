@@ -28,10 +28,8 @@
 
   // Application state
   var appState = {
-    currentView: 'tree',
     data: null,
-    filterState: {},
-    viewContainers: {}
+    filterState: {}
   };
 
   // Expose public API on window.RFTraceViewer
@@ -51,7 +49,6 @@
 
   window.RFTraceViewer.getState = function () {
     return {
-      currentView: appState.currentView,
       filterState: appState.filterState,
       data: appState.data
     };
@@ -104,108 +101,26 @@
     header.appendChild(toggleBtn);
     root.appendChild(header);
 
-    // Build navigation tabs
-    var nav = document.createElement('nav');
-    nav.className = 'view-tabs';
-    nav.setAttribute('role', 'tablist');
+    // Timeline section (full width at top)
+    var timelineSection = document.createElement('section');
+    timelineSection.className = 'timeline-section';
+    timelineSection.style.height = '300px';
+    timelineSection.style.borderBottom = '1px solid var(--border-color)';
+    root.appendChild(timelineSection);
 
-    var views = [
-      { id: 'tree', label: 'Tree' },
-      { id: 'timeline', label: 'Timeline' },
-      { id: 'stats', label: 'Stats' },
-      { id: 'keywords', label: 'Keywords' },
-      { id: 'flaky', label: 'Flaky' },
-      { id: 'compare', label: 'Compare' }
-    ];
+    // Body layout (stats + tree side by side)
+    var body = document.createElement('div');
+    body.className = 'viewer-body';
 
-    views.forEach(function (view) {
-      var tab = document.createElement('button');
-      tab.className = 'view-tab';
-      tab.textContent = view.label;
-      tab.setAttribute('role', 'tab');
-      tab.setAttribute('aria-controls', 'view-' + view.id);
-      tab.setAttribute('data-view', view.id);
-      
-      if (view.id === appState.currentView) {
-        tab.classList.add('active');
-        tab.setAttribute('aria-selected', 'true');
-      } else {
-        tab.setAttribute('aria-selected', 'false');
-      }
+    var statsPanel = document.createElement('aside');
+    statsPanel.className = 'panel-stats';
 
-      tab.addEventListener('click', function () {
-        _switchView(view.id);
-      });
+    var treePanel = document.createElement('main');
+    treePanel.className = 'panel-tree';
 
-      nav.appendChild(tab);
-    });
-
-    root.appendChild(nav);
-
-    // Build main content area with all view containers
-    var main = document.createElement('main');
-    main.className = 'viewer-main';
-
-    // Tree view container
-    var treeView = document.createElement('div');
-    treeView.id = 'view-tree';
-    treeView.className = 'view-container';
-    treeView.setAttribute('role', 'tabpanel');
-    treeView.setAttribute('aria-labelledby', 'tab-tree');
-    main.appendChild(treeView);
-    appState.viewContainers.tree = treeView;
-
-    // Timeline view container
-    var timelineView = document.createElement('div');
-    timelineView.id = 'view-timeline';
-    timelineView.className = 'view-container';
-    timelineView.setAttribute('role', 'tabpanel');
-    timelineView.setAttribute('aria-labelledby', 'tab-timeline');
-    timelineView.style.display = 'none';
-    main.appendChild(timelineView);
-    appState.viewContainers.timeline = timelineView;
-
-    // Stats view container
-    var statsView = document.createElement('div');
-    statsView.id = 'view-stats';
-    statsView.className = 'view-container';
-    statsView.setAttribute('role', 'tabpanel');
-    statsView.setAttribute('aria-labelledby', 'tab-stats');
-    statsView.style.display = 'none';
-    main.appendChild(statsView);
-    appState.viewContainers.stats = statsView;
-
-    // Keywords view container
-    var keywordsView = document.createElement('div');
-    keywordsView.id = 'view-keywords';
-    keywordsView.className = 'view-container';
-    keywordsView.setAttribute('role', 'tabpanel');
-    keywordsView.setAttribute('aria-labelledby', 'tab-keywords');
-    keywordsView.style.display = 'none';
-    main.appendChild(keywordsView);
-    appState.viewContainers.keywords = keywordsView;
-
-    // Flaky view container
-    var flakyView = document.createElement('div');
-    flakyView.id = 'view-flaky';
-    flakyView.className = 'view-container';
-    flakyView.setAttribute('role', 'tabpanel');
-    flakyView.setAttribute('aria-labelledby', 'tab-flaky');
-    flakyView.style.display = 'none';
-    main.appendChild(flakyView);
-    appState.viewContainers.flaky = flakyView;
-
-    // Compare view container
-    var compareView = document.createElement('div');
-    compareView.id = 'view-compare';
-    compareView.className = 'view-container';
-    compareView.setAttribute('role', 'tabpanel');
-    compareView.setAttribute('aria-labelledby', 'tab-compare');
-    compareView.style.display = 'none';
-    main.appendChild(compareView);
-    appState.viewContainers.compare = compareView;
-
-    root.appendChild(main);
+    body.appendChild(statsPanel);
+    body.appendChild(treePanel);
+    root.appendChild(body);
 
     // Initialize views
     _initializeViews(data);
@@ -218,76 +133,25 @@
    * Initialize all views with data.
    */
   function _initializeViews(data) {
+    // Initialize timeline view (always visible at top)
+    if (typeof window.initTimeline === 'function') {
+      var timelineSection = document.querySelector('.timeline-section');
+      if (timelineSection) {
+        window.initTimeline(timelineSection, data);
+      }
+    }
+
     // Initialize tree view
-    if (typeof renderTree === 'function') {
-      renderTree(appState.viewContainers.tree, data);
+    var treePanel = document.querySelector('.panel-tree');
+    if (treePanel && typeof renderTree === 'function') {
+      renderTree(treePanel, data);
     }
 
     // Initialize stats view
-    if (typeof renderStats === 'function') {
-      renderStats(appState.viewContainers.stats, data.statistics || {});
+    var statsPanel = document.querySelector('.panel-stats');
+    if (statsPanel && typeof renderStats === 'function') {
+      renderStats(statsPanel, data.statistics || {});
     }
-
-    // Timeline view will be initialized on first switch to it
-    // Keywords, Flaky, and Compare views will be initialized when implemented
-  }
-
-  /**
-   * Switch to a different view.
-   */
-  function _switchView(viewId) {
-    if (appState.currentView === viewId) return;
-
-    // Hide current view
-    var currentContainer = appState.viewContainers[appState.currentView];
-    if (currentContainer) {
-      currentContainer.style.display = 'none';
-    }
-
-    // Update tab states
-    var tabs = document.querySelectorAll('.view-tab');
-    tabs.forEach(function (tab) {
-      if (tab.getAttribute('data-view') === viewId) {
-        tab.classList.add('active');
-        tab.setAttribute('aria-selected', 'true');
-      } else {
-        tab.classList.remove('active');
-        tab.setAttribute('aria-selected', 'false');
-      }
-    });
-
-    // Show new view
-    var newContainer = appState.viewContainers[viewId];
-    if (newContainer) {
-      newContainer.style.display = 'block';
-
-      // Initialize timeline view on first display
-      if (viewId === 'timeline' && !newContainer.hasAttribute('data-initialized')) {
-        if (typeof window.initTimeline === 'function') {
-          window.initTimeline(newContainer, appState.data);
-          newContainer.setAttribute('data-initialized', 'true');
-        }
-      }
-
-      // Initialize other views as needed
-      if (viewId === 'keywords' && !newContainer.hasAttribute('data-initialized')) {
-        newContainer.textContent = 'Keywords view - Coming soon';
-        newContainer.setAttribute('data-initialized', 'true');
-      }
-
-      if (viewId === 'flaky' && !newContainer.hasAttribute('data-initialized')) {
-        newContainer.textContent = 'Flaky tests view - Coming soon';
-        newContainer.setAttribute('data-initialized', 'true');
-      }
-
-      if (viewId === 'compare' && !newContainer.hasAttribute('data-initialized')) {
-        newContainer.textContent = 'Compare view - Coming soon';
-        newContainer.setAttribute('data-initialized', 'true');
-      }
-    }
-
-    appState.currentView = viewId;
-    eventBus.emit('view-changed', { view: viewId });
   }
 
   /** Detect OS color scheme preference. */
