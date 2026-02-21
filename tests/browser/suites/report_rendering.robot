@@ -1,7 +1,7 @@
 *** Settings ***
 Documentation     Browser tests for RF Trace Report HTML rendering
 Library           Browser
-Suite Setup       Generate Test Report
+Suite Setup       Setup Test Environment
 Suite Teardown    Close Browser
 
 *** Variables ***
@@ -16,23 +16,77 @@ Report Should Load Without Errors
     # Wait for page to load
     Wait For Load State    networkidle
     
-    # Get console errors
-    ${errors}=    Get Console Errors
-    Should Be Empty    ${errors}    Console errors found: ${errors}
+    # Capture console messages
+    ${console_messages}=    Evaluate JavaScript    
+    ...    () => {
+    ...        const logs = [];
+    ...        const errors = [];
+    ...        // Get console.log messages
+    ...        if (window.__consoleLogs) logs.push(...window.__consoleLogs);
+    ...        // Get console.error messages  
+    ...        if (window.__consoleErrors) errors.push(...window.__consoleErrors);
+    ...        return { logs: logs, errors: errors };
+    ...    }
+    
+    # Log all console messages for debugging
+    Log    Console Logs: ${console_messages}[logs]
+    Log    Console Errors: ${console_messages}[errors]
+    
+    # Fail if there are console errors
+    ${error_count}=    Get Length    ${console_messages}[errors]
+    Should Be Equal As Integers    ${error_count}    0    
+    ...    Console errors found: ${console_messages}[errors]
 
-Timeline Section Should Be Visible
-    [Documentation]    Verify timeline section exists and is visible
+Timeline Section Should Be Visible And Render Gantt Chart
+    [Documentation]    Verify timeline section exists, is visible, and renders the Gantt chart
     New Page    file://${REPORT_PATH}
     
+    Wait For Load State    networkidle
+    
     # Check timeline section exists
-    Get Element    .timeline-section
+    ${timeline_exists}=    Run Keyword And Return Status    Get Element    .timeline-section
+    Should Be True    ${timeline_exists}    Timeline section not found in DOM
     
-    # Check it has content (canvas)
-    Get Element    .timeline-section canvas
+    # Check it has canvas element
+    ${canvas_exists}=    Run Keyword And Return Status    Get Element    .timeline-section canvas
+    Should Be True    ${canvas_exists}    Canvas element not found in timeline section
     
-    # Verify it's visible
-    ${visible}=    Get Element States    .timeline-section    validate    visible
-    Should Be True    ${visible}
+    # Verify timeline section is visible
+    ${timeline_visible}=    Get Element States    .timeline-section    validate    visible
+    Should Be True    ${timeline_visible}    Timeline section exists but is not visible
+    
+    # Verify canvas is visible
+    ${canvas_visible}=    Get Element States    .timeline-section canvas    validate    visible
+    Should Be True    ${canvas_visible}    Canvas exists but is not visible
+    
+    # Check canvas has proper dimensions (not 0x0)
+    ${canvas}=    Get Element    .timeline-section canvas
+    ${width}=    Get Property    ${canvas}    width
+    ${height}=    Get Property    ${canvas}    height
+    Should Be True    ${width} > 0    Canvas width is 0 - not initialized
+    Should Be True    ${height} > 0    Canvas height is 0 - not initialized
+    
+    # Verify initTimeline was called successfully
+    ${init_logs}=    Evaluate JavaScript
+    ...    () => {
+    ...        const logs = window.__consoleLogs || [];
+    ...        return logs.filter(log => log.includes('initTimeline') || log.includes('Timeline'));
+    ...    }
+    Log    Timeline initialization logs: ${init_logs}
+    
+    # Check for any timeline-related errors
+    ${timeline_errors}=    Evaluate JavaScript
+    ...    () => {
+    ...        const errors = window.__consoleErrors || [];
+    ...        return errors.filter(err => 
+    ...            err.includes('timeline') || 
+    ...            err.includes('canvas') ||
+    ...            err.includes('initTimeline')
+    ...        );
+    ...    }
+    ${error_count}=    Get Length    ${timeline_errors}
+    Should Be Equal As Integers    ${error_count}    0
+    ...    Timeline-related errors found: ${timeline_errors}
 
 Tree Panel Should Render Content
     [Documentation]    Verify tree panel renders suite/test nodes
@@ -100,6 +154,30 @@ Tree Node Click Should Work
     Should Be Empty    ${errors}
 
 *** Keywords ***
+Setup Test Environment
+    [Documentation]    Generate report and set up browser with console capture
+    Generate Test Report
+    New Browser    headless=True
+    New Context
+    
+    # Add console message interceptor script
+    ${console_script}=    Set Variable
+    ...    window.__consoleLogs = [];
+    ...    window.__consoleErrors = [];
+    ...    const originalLog = console.log;
+    ...    const originalError = console.error;
+    ...    console.log = function(...args) {
+    ...        window.__consoleLogs.push(args.map(a => String(a)).join(' '));
+    ...        originalLog.apply(console, args);
+    ...    };
+    ...    console.error = function(...args) {
+    ...        window.__consoleErrors.push(args.map(a => String(a)).join(' '));
+    ...        originalError.apply(console, args);
+    ...    };
+    
+    # This script will be injected into every page
+    Add Init Script    ${console_script}
+
 Generate Test Report
     [Documentation]    Generate a test report from fixture data
     ${result}=    Run Process    
