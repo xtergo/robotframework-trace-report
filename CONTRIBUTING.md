@@ -1,104 +1,159 @@
-# Contributing to Robot Framework Trace Report
+# Contributing to robotframework-trace-report
 
-Thank you for your interest in contributing! This document provides guidelines for contributing to the project.
+## Prerequisites
 
-## Development Setup
+**Only 2 things required:**
 
-1. **Clone the repository**
+1. **Docker** - For running tests and verification
+2. **Kiro** - For AI-assisted development
+
+That's it! No Python environment setup, no npm, no Playwright installation needed.
+
+## Development Workflow
+
+### 1. Make Code Changes
+
+Edit Python or JavaScript files as needed.
+
+### 2. Run Tests
+
 ```bash
-git clone https://github.com/xtergo/robotframework-trace-report.git
-cd robotframework-trace-report
+# Browser tests (validates HTML rendering)
+cd tests/browser
+docker compose up --build
+
+# Unit tests (Python only)
+docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
+  pip install pytest pytest-cov black ruff &&
+  PYTHONPATH=src pytest --cov=src/rf_trace_viewer
+"
 ```
 
-2. **Create virtual environment**
+### 3. Check Code Quality
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# Format and lint
+docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
+  pip install black ruff &&
+  black src/ tests/ &&
+  ruff check src/
+"
 ```
 
-3. **Install in development mode**
+### 4. Generate Test Report
+
 ```bash
-pip install -e ".[dev]"
+# Generate a report to manually inspect
+docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
+  PYTHONPATH=src python3 -m rf_trace_viewer.cli tests/fixtures/pabot_trace.json -o report.html
+"
 ```
 
-4. **Run tests**
-```bash
-pytest tests/
+## Why Docker-Only?
+
+- **Consistent environment** - Same results for everyone
+- **No dependency hell** - No Python venv, npm, or system packages
+- **Easy onboarding** - New contributors start immediately
+- **CI/CD ready** - Same Docker images in development and CI
+
+## Project Structure
+
+```
+robotframework-trace-report/
+├── src/rf_trace_viewer/          # Python backend
+│   ├── cli.py                    # CLI entry point
+│   ├── parser.py                 # NDJSON parser
+│   ├── tree.py                   # Span tree builder
+│   ├── rf_model.py               # RF attribute interpreter
+│   ├── generator.py              # HTML generator
+│   └── viewer/                   # JavaScript/CSS assets
+│       ├── app.js                # Main application
+│       ├── tree.js               # Tree view
+│       ├── timeline.js           # Timeline view
+│       ├── stats.js              # Statistics panel
+│       └── style.css             # Styles
+├── tests/
+│   ├── unit/                     # Python unit tests
+│   ├── fixtures/                 # Test trace files
+│   └── browser/                  # Browser tests (Docker-based)
+│       ├── Dockerfile            # Test environment
+│       ├── docker-compose.yml    # Easy test runner
+│       └── suites/               # Robot Framework test suites
+└── .kiro/specs/                  # Kiro spec files
+
 ```
 
-## How to Contribute
+## Testing Strategy
 
-### Reporting Bugs
+### Browser Tests (Primary Validation)
 
-- Check if the bug has already been reported in Issues
-- Include Python version, browser, OS
-- Provide minimal reproduction steps
-- Include the trace file if possible (or a minimal example)
+Located in `tests/browser/`, these tests:
+- Open generated HTML in a real browser (headless)
+- Capture console errors and logs automatically
+- Validate UI components are visible and functional
+- Run in Docker - no local setup needed
 
-### Suggesting Features
+**Run them:**
+```bash
+cd tests/browser
+docker compose up --build
+```
 
-- Check if the feature has been suggested
-- Explain the use case and benefits
-- Provide examples of how it would work
+**Results:** `tests/browser/results/log.html`
 
-### Pull Requests
+### Unit Tests (Python Logic)
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass (`pytest`)
-6. Format code (`black src/ tests/`)
-7. Lint code (`ruff check src/ tests/`)
-8. Commit changes (`git commit -m 'Add amazing feature'`)
-9. Push to branch (`git push origin feature/amazing-feature`)
-10. Open a Pull Request
+Located in `tests/unit/`, these test:
+- Parser logic
+- Tree building
+- RF attribute interpretation
+- Generator output
+
+**Run them:**
+```bash
+docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
+  pip install pytest pytest-cov &&
+  PYTHONPATH=src pytest tests/unit/
+"
+```
+
+## Common Tasks
+
+### Add a New Feature
+
+1. Update spec in `.kiro/specs/rf-html-report-replacement/`
+2. Implement in `src/rf_trace_viewer/`
+3. Add tests in `tests/unit/` or `tests/browser/suites/`
+4. Run browser tests to verify
+5. Commit
+
+### Fix a Bug
+
+1. Add a failing test that reproduces the bug
+2. Fix the code
+3. Verify test passes
+4. Commit
+
+### Update Dependencies
+
+Dependencies are managed in:
+- `pyproject.toml` - Python package dependencies
+- `tests/browser/Dockerfile` - Test environment dependencies
+
+Update and rebuild Docker images:
+```bash
+cd tests/browser
+docker compose build --no-cache
+```
 
 ## Code Style
 
-- Follow PEP 8
-- Use Black for formatting (line length: 100)
-- Use Ruff for linting
-- Add type hints where appropriate
-- Write docstrings for public APIs
-- JavaScript: vanilla JS, no frameworks, ES6+
+- **Python**: Black (line length 100) + Ruff
+- **JavaScript**: Vanilla ES2020+, no build step
+- **CSS**: CSS3 with custom properties
 
-## Testing
-
-- Write unit tests for new features
-- Maintain >70% code coverage
-- Test on Python 3.8+
-- Test HTML output in Chrome, Firefox, Safari
-
-## Documentation
-
-- Update README.md for user-facing changes
-- Update ARCHITECTURE.md for structural changes
-- Update TODO.md for roadmap changes
-- Update CHANGELOG.md for each release
-
-## Commit Messages
-
-- Use clear, descriptive commit messages
-- Start with a verb (Add, Fix, Update, Remove)
-- Reference issues when applicable
-
-Examples:
-- `Add timeline zoom controls`
-- `Fix span tree ordering for parallel traces`
-- `Update parser to handle malformed NDJSON lines`
-
-## Code of Conduct
-
-- Be respectful and inclusive
-- Welcome newcomers
-- Focus on constructive feedback
-- Help others learn and grow
+All enforced via Docker-based checks.
 
 ## Questions?
 
-- Open an issue for questions
-- Check existing documentation
-- Ask in discussions
-
-Thank you for contributing! 🎉
+Open an issue or ask in discussions. Remember: if you have Docker and Kiro, you're ready to contribute!

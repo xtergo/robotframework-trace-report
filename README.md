@@ -117,9 +117,16 @@ The viewer understands Robot Framework-specific span attributes (`rf.suite.*`, `
 
 ## Requirements
 
-- Python 3.10+
-- A modern browser (Chrome, Firefox, Safari, Edge)
-- Trace files from [robotframework-tracer](https://github.com/tridentsx/robotframework-tracer) (or any OTLP JSON source)
+- **For Users:** Python 3.10+, a modern browser
+- **For Development:** Docker + (optional) Kiro
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup. **TL;DR:** Only Docker required.
+
+```bash
+# Run browser tests
+cd tests/browser
+docker compose up --build
+```
 
 ## Related Projects
 
