@@ -1,6 +1,7 @@
 *** Settings ***
 Documentation     Browser tests for RF Trace Report HTML rendering
 Library           Browser
+Library           Process
 Suite Setup       Setup Test Environment
 Suite Teardown    Close Browser
 
