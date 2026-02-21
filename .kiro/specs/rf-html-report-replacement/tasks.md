@@ -20,8 +20,8 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - Verify existing `pabot_trace.json` fixture is sufficient for parallel execution tests
     - _Requirements: 25.6_
 
-- [ ] 2. Implement NDJSON Parser
-  - [ ] 2.1 Implement `ParsedSpan` dataclass and `NDJSONParser` class in `src/rf_trace_viewer/parser.py`
+- [x] 2. Implement NDJSON Parser
+  - [x] 2.1 Implement `ParsedSpan` dataclass and `NDJSONParser` class in `src/rf_trace_viewer/parser.py`
     - Implement `parse_line()`: parse single NDJSON line, extract spans from resource_spans → scope_spans → spans
     - Implement OTLP attribute flattening (array of key/value objects → plain dict)
     - Implement hex ID normalization for trace_id and span_id
@@ -55,8 +55,8 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - Test fixture files: simple_trace.json, pabot_trace.json, malformed_trace.json
     - _Requirements: 1.1, 1.3, 1.4_
 
-- [ ] 3. Implement Span Tree Builder
-  - [ ] 3.1 Implement `SpanNode` dataclass and `SpanTreeBuilder` class in `src/rf_trace_viewer/tree.py`
+- [x] 3. Implement Span Tree Builder
+  - [x] 3.1 Implement `SpanNode` dataclass and `SpanTreeBuilder` class in `src/rf_trace_viewer/tree.py`
     - Implement `build()`: group spans by trace_id, build parent-child map, identify roots, sort children by start_time, compute depth
     - Implement orphan span handling (missing parent → root)
     - Implement `merge()`: incrementally add new spans to existing trees (for live mode)
@@ -77,8 +77,8 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - Test with pabot_trace.json fixture
     - _Requirements: 2.1, 2.2, 2.5_
 
-- [ ] 4. Implement RF Attribute Interpreter
-  - [ ] 4.1 Implement enums, model dataclasses, and `RFAttributeInterpreter` class in `src/rf_trace_viewer/rf_model.py`
+- [x] 4. Implement RF Attribute Interpreter
+  - [x] 4.1 Implement enums, model dataclasses, and `RFAttributeInterpreter` class in `src/rf_trace_viewer/rf_model.py`
     - Implement `SpanType` enum, `RFStatus` enum
     - Implement `RFSuite`, `RFTest`, `RFKeyword`, `RFSignal` dataclasses
     - Implement `classify()`: determine span type from rf.* attributes
@@ -103,8 +103,8 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
   - Ensure all tests pass, ask the user if questions arise.
   - Verify parser → tree builder → RF interpreter pipeline works end-to-end with fixture data.
 
-- [ ] 6. Implement HTML Report Generator
-  - [ ] 6.1 Implement `ReportOptions` dataclass and `ReportGenerator` class in `src/rf_trace_viewer/generator.py`
+- [x] 6. Implement HTML Report Generator
+  - [x] 6.1 Implement `ReportOptions` dataclass and `ReportGenerator` class in `src/rf_trace_viewer/generator.py`
     - Implement `generate()`: produce complete HTML string with embedded JSON data, JS, and CSS
     - Implement HTML template with proper structure (header, nav, aside, main, footer)
     - Implement trace data embedding as JSON in `<script id="trace-data">` tag
@@ -128,8 +128,8 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - Test title derivation, logo embedding, theme file embedding
     - _Requirements: 4.1, 4.4, 4.5_
 
-- [ ] 7. Implement CLI entry point
-  - [ ] 7.1 Complete CLI implementation in `src/rf_trace_viewer/cli.py`
+- [x] 7. Implement CLI entry point
+  - [x] 7.1 Complete CLI implementation in `src/rf_trace_viewer/cli.py`
     - Add all new arguments: --poll-interval, --logo, --theme-file, --accent-color, --primary-color, --footer-text, --plugin, --plugin-file, --base-url
     - Implement static mode flow: parse args → parse file → build tree → interpret → generate → write
     - Implement input validation: file existence check, output path writability check
@@ -142,19 +142,19 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - Test static mode end-to-end with fixture data
     - _Requirements: 10.1, 10.7, 10.8_
 
-- [ ] 8. Checkpoint — Static report generation working
+- [x] 8. Checkpoint — Static report generation working
   - Ensure all tests pass, ask the user if questions arise.
   - Verify `rf-trace-report tests/fixtures/pabot_trace.json -o test-report.html` produces a valid HTML file.
 
-- [ ] 9. Implement JS Viewer — Core application and tree view
-  - [ ] 9.1 Create `src/rf_trace_viewer/viewer/app.js`
+- [x] 9. Implement JS Viewer — Core application and tree view
+  - [x] 9.1 Create `src/rf_trace_viewer/viewer/app.js`
     - Implement main application initialization: load data from `#trace-data` script tag
     - Implement view tab switching (Tree, Timeline, Stats, Keywords, Flaky, Compare)
     - Implement event bus for inter-component communication
     - Implement `window.RFTraceViewer` API skeleton (setFilter, navigateTo, getState, on, registerPlugin)
     - _Requirements: 23.2, 24.4, 24.5_
 
-  - [ ] 9.2 Create `src/rf_trace_viewer/viewer/tree-view.js`
+  - [x] 9.2 Create `src/rf_trace_viewer/viewer/tree-view.js`
     - Implement expandable/collapsible tree rendering from span hierarchy
     - Implement status color coding (green=PASS, red=FAIL, yellow=SKIP)
     - Implement duration display per node
@@ -166,7 +166,7 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - Implement arrow key navigation (up/down/left/right)
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 13.2, 19.1_
 
-  - [ ] 9.3 Create `src/rf_trace_viewer/viewer/style.css`
+  - [x] 9.3 Create `src/rf_trace_viewer/viewer/style.css`
     - Implement base styles using CSS custom properties for all themeable values
     - Implement light theme (default) and dark theme via `[data-theme="dark"]`
     - Implement tree view styles, status colors, expand/collapse indicators
@@ -192,8 +192,8 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - Wire timeline span click → tree expand and scroll
     - _Requirements: 6.5, 6.6_
 
-- [ ] 11. Implement JS Viewer — Statistics and keyword stats
-  - [ ] 11.1 Create `src/rf_trace_viewer/viewer/stats.js`
+- [x] 11. Implement JS Viewer — Statistics and keyword stats
+  - [x] 11.1 Create `src/rf_trace_viewer/viewer/stats.js`
     - Implement pass/fail/skip count computation with percentages
     - Implement total duration computation
     - Implement per-suite breakdown table
