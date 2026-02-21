@@ -8,6 +8,29 @@
 (function () {
   'use strict';
 
+  // Event bus for inter-component communication
+  var eventBus = {
+    listeners: {},
+    on: function (event, callback) {
+      if (!this.listeners[event]) {
+        this.listeners[event] = [];
+      }
+      this.listeners[event].push(callback);
+    },
+    emit: function (event, data) {
+      if (this.listeners[event]) {
+        for (var i = 0; i < this.listeners[event].length; i++) {
+          this.listeners[event][i](data);
+        }
+      }
+    }
+  };
+
+  // Expose event bus on window.RFTraceViewer
+  window.RFTraceViewer = window.RFTraceViewer || {};
+  window.RFTraceViewer.on = eventBus.on.bind(eventBus);
+  window.RFTraceViewer.emit = eventBus.emit.bind(eventBus);
+
   document.addEventListener('DOMContentLoaded', function () {
     var data = window.__RF_TRACE_DATA__;
     if (!data) {

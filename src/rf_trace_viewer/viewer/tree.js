@@ -32,6 +32,9 @@ function renderTree(container, model) {
     treeRoot.appendChild(_renderSuiteNode(suites[i], 0));
   }
   container.appendChild(treeRoot);
+
+  // Set up synchronization with timeline
+  setupTreeSynchronization();
 }
 
 /** Render a suite node and its children recursively. */
@@ -43,7 +46,8 @@ function _renderSuiteNode(suite, depth) {
     status: suite.status,
     elapsed: suite.elapsed_time,
     hasChildren: hasChildren,
-    depth: depth
+    depth: depth,
+    id: suite.id
   });
 
   if (hasChildren) {
@@ -71,7 +75,8 @@ function _renderTestNode(test, depth) {
     status: test.status,
     elapsed: test.elapsed_time,
     hasChildren: hasKws,
-    depth: depth
+    depth: depth,
+    id: test.id
   });
 
   if (hasKws) {
@@ -94,7 +99,8 @@ function _renderKeywordNode(kw, depth) {
     hasChildren: hasChildren,
     depth: depth,
     kwType: kw.keyword_type,
-    kwArgs: kw.args
+    kwArgs: kw.args,
+    id: kw.id
   });
 
   // Error message for failed keywords
@@ -114,11 +120,14 @@ function _renderKeywordNode(kw, depth) {
 
 /**
  * Create a single tree node DOM element.
- * @param {Object} opts - { type, name, status, elapsed, hasChildren, depth, kwType?, kwArgs? }
+ * @param {Object} opts - { type, name, status, elapsed, hasChildren, depth, kwType?, kwArgs?, id? }
  */
 function _createTreeNode(opts) {
   var wrapper = document.createElement('div');
   wrapper.className = 'tree-node depth-' + opts.depth;
+  if (opts.id) {
+    wrapper.setAttribute('data-span-id', opts.id);
+  }
 
   var row = document.createElement('div');
   row.className = 'tree-row';
@@ -175,6 +184,13 @@ function _createTreeNode(opts) {
   if (opts.hasChildren) {
     row.addEventListener('click', function () { _toggleNode(wrapper); });
   }
+
+  // Emit event when node is clicked (for timeline synchronization)
+  row.addEventListener('click', function (e) {
+    if (opts.id && window.RFTraceViewer && window.RFTraceViewer.emit) {
+      window.RFTraceViewer.emit('span-selected', { spanId: opts.id, source: 'tree' });
+    }
+  });
 
   // Children container
   if (opts.hasChildren) {
@@ -243,3 +259,68 @@ function _statusIcon(status) {
     default: return '\u25cb';     // ○
   }
 }
+
+/**
+ * Highlight and scroll to a tree node by span ID.
+ * Called when a span is clicked in the timeline.
+ * @param {string} spanId - The span ID to highlight
+ */
+function highlightNodeInTree(spanId) {
+  // Clear previous highlights
+  var previousHighlights = document.querySelectorAll('.tree-node.highlighted');
+  for (var i = 0; i < previousHighlights.length; i++) {
+    previousHighlights[i].classList.remove('highlighted');
+  }
+
+  // Find the node with the matching span ID
+  var targetNode = document.querySelector('.tree-node[data-span-id="' + spanId + '"]');
+  if (!targetNode) return;
+
+  // Expand all parent nodes to make the target visible
+  var parent = targetNode.parentElement;
+  while (parent) {
+    if (parent.classList.contains('tree-children')) {
+      parent.classList.add('expanded');
+      // Update the toggle button
+      var parentNode = parent.parentElement;
+      if (parentNode && parentNode.classList.contains('tree-node')) {
+        var toggleBtn = parentNode.querySelector(':scope > .tree-row > .tree-toggle');
+        if (toggleBtn) {
+          toggleBtn.textContent = '\u25bc'; // ▼
+          toggleBtn.setAttribute('aria-label', 'Collapse');
+        }
+      }
+    }
+    parent = parent.parentElement;
+  }
+
+  // Highlight the target node
+  targetNode.classList.add('highlighted');
+
+  // Scroll the node into view
+  targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/**
+ * Set up event listeners for timeline synchronization.
+ * Should be called after the tree is rendered.
+ */
+function setupTreeSynchronization() {
+  if (window.RFTraceViewer && window.RFTraceViewer.on) {
+    window.RFTraceViewer.on('span-selected', function (data) {
+      // Only respond to events from the timeline
+      if (data.source === 'timeline' && data.spanId) {
+        highlightNodeInTree(data.spanId);
+      } else if (data.source === 'tree' && data.spanId) {
+        // Tree node was clicked, highlight in timeline
+        if (window.highlightSpanInTimeline) {
+          window.highlightSpanInTimeline(data.spanId);
+        }
+      }
+    });
+  }
+}
+
+// Expose public API
+window.highlightNodeInTree = highlightNodeInTree;
+window.setupTreeSynchronization = setupTreeSynchronization;

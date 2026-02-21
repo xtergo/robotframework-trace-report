@@ -187,7 +187,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement time markers at suite/test boundaries
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.7, 13.3_
 
-  - [ ] 10.2 Implement timeline ↔ tree view synchronization
+  - [x] 10.2 Implement timeline ↔ tree view synchronization
     - Wire tree node click → timeline highlight and scroll
     - Wire timeline span click → tree expand and scroll
     - _Requirements: 6.5, 6.6_

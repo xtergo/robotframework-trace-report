@@ -679,6 +679,18 @@
     for (var i = 0; i < timelineState.flatSpans.length; i++) {
       if (timelineState.flatSpans[i].id === spanId) {
         timelineState.selectedSpan = timelineState.flatSpans[i];
+        
+        // Scroll the span into view by adjusting pan
+        var span = timelineState.flatSpans[i];
+        var spanX = _timeToScreenX(span.startTime);
+        var canvas = timelineState.canvas;
+        var width = canvas.width / (window.devicePixelRatio || 1);
+        var centerX = width / 2;
+        
+        // Adjust panX to center the span
+        var targetPanX = centerX - spanX + timelineState.panX;
+        timelineState.panX = targetPanX;
+        
         _render();
         return;
       }

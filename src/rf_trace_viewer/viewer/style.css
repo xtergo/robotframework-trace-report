@@ -273,6 +273,12 @@
   background: var(--hover-bg);
 }
 
+.rf-trace-viewer .tree-node.highlighted > .tree-row {
+  background: rgba(0, 102, 204, 0.15);
+  border-left: 3px solid #0066cc;
+  padding-left: 3px;
+}
+
 .rf-trace-viewer .tree-toggle {
   width: 16px;
   height: 16px;
