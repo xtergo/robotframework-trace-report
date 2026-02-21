@@ -6,7 +6,6 @@
  * @param {Object} statistics - RunStatistics from RFRunModel
  */
 function renderStats(container, statistics) {
-  console.log('renderStats called with container:', container, 'statistics:', statistics);
   container.innerHTML = '';
 
   var total = statistics.total_tests || 0;
