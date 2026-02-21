@@ -133,9 +133,13 @@
    * Initialize all views with data.
    */
   function _initializeViews(data) {
+    console.log('Initializing views with data:', data);
+    
     // Initialize timeline view (always visible at top)
+    console.log('Checking for initTimeline:', typeof window.initTimeline);
     if (typeof window.initTimeline === 'function') {
       var timelineSection = document.querySelector('.timeline-section');
+      console.log('Timeline section found:', timelineSection);
       if (timelineSection) {
         window.initTimeline(timelineSection, data);
       }
@@ -143,12 +147,14 @@
 
     // Initialize tree view
     var treePanel = document.querySelector('.panel-tree');
+    console.log('Tree panel found:', treePanel, 'renderTree:', typeof renderTree);
     if (treePanel && typeof renderTree === 'function') {
       renderTree(treePanel, data);
     }
 
     // Initialize stats view
     var statsPanel = document.querySelector('.panel-stats');
+    console.log('Stats panel found:', statsPanel, 'renderStats:', typeof renderStats);
     if (statsPanel && typeof renderStats === 'function') {
       renderStats(statsPanel, data.statistics || {});
     }

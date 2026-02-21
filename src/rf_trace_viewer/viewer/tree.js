@@ -6,6 +6,7 @@
  * @param {Object} model - RFRunModel with suites array
  */
 function renderTree(container, model) {
+  console.log('renderTree called with container:', container, 'model:', model);
   container.innerHTML = '';
 
   // Controls: expand all / collapse all
@@ -28,10 +29,13 @@ function renderTree(container, model) {
   var treeRoot = document.createElement('div');
   treeRoot.className = 'tree-root';
   var suites = model.suites || [];
+  console.log('Rendering', suites.length, 'suites');
   for (var i = 0; i < suites.length; i++) {
+    console.log('Rendering suite', i, ':', suites[i].name);
     treeRoot.appendChild(_renderSuiteNode(suites[i], 0));
   }
   container.appendChild(treeRoot);
+  console.log('Tree root appended, innerHTML length:', container.innerHTML.length);
 
   // Set up synchronization with timeline
   setupTreeSynchronization();

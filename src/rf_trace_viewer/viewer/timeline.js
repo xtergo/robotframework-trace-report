@@ -52,10 +52,15 @@
    * @param {Object} data - The trace data with spans
    */
   window.initTimeline = function (container, data) {
-    if (!container || !data) return;
+    console.log('initTimeline called with container:', container, 'data:', data);
+    if (!container || !data) {
+      console.log('initTimeline: missing container or data, returning');
+      return;
+    }
 
     // Clear container
     container.innerHTML = '';
+    console.log('Timeline container cleared');
 
     // Create canvas
     var canvas = document.createElement('canvas');
@@ -63,24 +68,31 @@
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     canvas.style.cursor = 'crosshair';
+    canvas.style.background = '#fff'; // Temporary: make it visible
     container.appendChild(canvas);
+    console.log('Canvas created and appended, size:', canvas.width, 'x', canvas.height);
 
     // Initialize timeline state
     timelineState.canvas = canvas;
     timelineState.ctx = canvas.getContext('2d');
+    console.log('Timeline state initialized, ctx:', timelineState.ctx);
 
     // Set canvas size (now that ctx is initialized)
     _resizeCanvas(canvas);
     window.addEventListener('resize', function () { _resizeCanvas(canvas); });
 
     // Process data
+    console.log('Processing spans...');
     _processSpans(data);
+    console.log('Processed', timelineState.flatSpans.length, 'spans');
 
     // Set up event listeners
     _setupEventListeners(canvas);
 
     // Initial render
+    console.log('Rendering timeline...');
     _render();
+    console.log('Timeline render complete');
   };
 
   /**
