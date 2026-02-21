@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  browser-tests:
+    build:
+      context: ../..
+      dockerfile: tests/browser/Dockerfile
+    volumes:
+      - ../..:/workspace
+    environment:
+      - PYTHONPATH=/workspace/src
+    working_dir: /workspace
+    command: robot --outputdir /workspace/tests/browser/results /workspace/tests/browser/suites

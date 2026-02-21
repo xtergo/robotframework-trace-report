@@ -1,0 +1,8 @@
+# Test results
+results/
+*.html
+*.xml
+*.png
+
+# Generated reports
+report_test.html
