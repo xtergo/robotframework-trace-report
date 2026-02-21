@@ -65,12 +65,13 @@
     canvas.style.cursor = 'crosshair';
     container.appendChild(canvas);
 
-    // Set canvas size
-    _resizeCanvas(canvas);
-    window.addEventListener('resize', function () { _resizeCanvas(canvas); });
-
+    // Initialize timeline state
     timelineState.canvas = canvas;
     timelineState.ctx = canvas.getContext('2d');
+
+    // Set canvas size (now that ctx is initialized)
+    _resizeCanvas(canvas);
+    window.addEventListener('resize', function () { _resizeCanvas(canvas); });
 
     // Process data
     _processSpans(data);
@@ -92,8 +93,10 @@
     canvas.height = rect.height * dpr;
     canvas.style.width = rect.width + 'px';
     canvas.style.height = rect.height + 'px';
-    timelineState.ctx.scale(dpr, dpr);
-    _render();
+    if (timelineState.ctx) {
+      timelineState.ctx.scale(dpr, dpr);
+      _render();
+    }
   }
 
   /**
