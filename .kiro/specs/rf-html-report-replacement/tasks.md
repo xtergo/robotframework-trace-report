@@ -2,7 +2,7 @@
 
 ## Overview
 
-Incremental implementation of the robotframework-trace-viewer, building from core parsing through to the full interactive HTML report. Each task builds on previous work, with testing integrated alongside implementation. Python 3.8+ for backend, vanilla JS for frontend.
+Incremental implementation of the robotframework-trace-report, building from core parsing through to the full interactive HTML report. Each task builds on previous work, with testing integrated alongside implementation. Python 3.8+ for backend, vanilla JS for frontend.
 
 ## Tasks
 
@@ -176,7 +176,7 @@ Incremental implementation of the robotframework-trace-viewer, building from cor
     - _Requirements: 11.1, 22.3, 21.3, 19.4_
 
 - [ ] 10. Implement JS Viewer — Timeline view
-  - [ ] 10.1 Create `src/rf_trace_viewer/viewer/timeline.js`
+  - [x] 10.1 Create `src/rf_trace_viewer/viewer/timeline.js`
     - Implement Canvas-based Gantt chart rendering
     - Implement X-axis (wall-clock time) and Y-axis (span rows) layout
     - Implement status color-coded bars

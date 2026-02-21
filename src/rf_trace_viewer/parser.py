@@ -7,7 +7,7 @@ import json
 import sys
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, IO, List
+from typing import IO, Any
 
 
 @dataclass
@@ -21,13 +21,13 @@ class RawSpan:
     kind: str
     start_time_unix_nano: int
     end_time_unix_nano: int
-    attributes: Dict[str, Any] = field(default_factory=dict)
-    status: Dict[str, str] = field(default_factory=dict)
-    events: List[Dict] = field(default_factory=list)
-    resource_attributes: Dict[str, Any] = field(default_factory=dict)
+    attributes: dict[str, Any] = field(default_factory=dict)
+    status: dict[str, str] = field(default_factory=dict)
+    events: list[dict] = field(default_factory=list)
+    resource_attributes: dict[str, Any] = field(default_factory=dict)
 
 
-def flatten_attributes(attrs: List[Dict] | None) -> Dict[str, Any]:
+def flatten_attributes(attrs: list[dict] | None) -> dict[str, Any]:
     """Convert OTLP attribute list to a flat dict.
 
     Each attribute is ``{"key": "...", "value": {"string_value": "..."}}``.
@@ -36,7 +36,7 @@ def flatten_attributes(attrs: List[Dict] | None) -> Dict[str, Any]:
     """
     if not attrs:
         return {}
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     for attr in attrs:
         key = attr.get("key", "")
         value_obj = attr.get("value", {})
@@ -46,7 +46,7 @@ def flatten_attributes(attrs: List[Dict] | None) -> Dict[str, Any]:
     return result
 
 
-def _extract_value(value_obj: Dict[str, Any]) -> Any:
+def _extract_value(value_obj: dict[str, Any]) -> Any:
     """Extract a typed value from an OTLP attribute value object."""
     if "string_value" in value_obj:
         return value_obj["string_value"]
@@ -85,7 +85,7 @@ def normalize_id(raw_id: str | None) -> str:
     return raw_id.strip().lower()
 
 
-def parse_line(line: str) -> List[RawSpan]:
+def parse_line(line: str) -> list[RawSpan]:
     """Parse a single NDJSON line (ExportTraceServiceRequest).
 
     Returns a list of RawSpan objects extracted from the line.
@@ -101,7 +101,7 @@ def parse_line(line: str) -> List[RawSpan]:
     if resource_spans is None or not isinstance(resource_spans, list):
         raise ValueError("Missing or invalid resource_spans")
 
-    spans: List[RawSpan] = []
+    spans: list[RawSpan] = []
 
     for rs in resource_spans:
         if not isinstance(rs, dict):
@@ -137,13 +137,11 @@ def parse_line(line: str) -> List[RawSpan]:
     return spans
 
 
-def _parse_raw_span(raw: Dict[str, Any], resource_attrs: Dict[str, Any]) -> RawSpan:
+def _parse_raw_span(raw: dict[str, Any], resource_attrs: dict[str, Any]) -> RawSpan:
     """Convert a raw span dict into a RawSpan dataclass instance."""
     trace_id = normalize_id(raw.get("trace_id") or raw.get("traceId", ""))
     span_id = normalize_id(raw.get("span_id") or raw.get("spanId", ""))
-    parent_span_id = normalize_id(
-        raw.get("parent_span_id") or raw.get("parentSpanId", "")
-    )
+    parent_span_id = normalize_id(raw.get("parent_span_id") or raw.get("parentSpanId", ""))
     name = raw.get("name", "")
     kind = raw.get("kind", "")
 
@@ -176,12 +174,12 @@ def _parse_raw_span(raw: Dict[str, Any], resource_attrs: Dict[str, Any]) -> RawS
     )
 
 
-def parse_stream(stream: IO) -> List[RawSpan]:
+def parse_stream(stream: IO) -> list[RawSpan]:
     """Parse an NDJSON stream, returning all extracted spans.
 
     Skips malformed lines with warnings. Handles empty streams.
     """
-    spans: List[RawSpan] = []
+    spans: list[RawSpan] = []
     for line_num, line in enumerate(stream, start=1):
         if isinstance(line, bytes):
             line = line.decode("utf-8", errors="replace")
@@ -199,7 +197,7 @@ def parse_stream(stream: IO) -> List[RawSpan]:
     return spans
 
 
-def parse_file(path: str) -> List[RawSpan]:
+def parse_file(path: str) -> list[RawSpan]:
     """Parse an NDJSON trace file (plain or gzip-compressed).
 
     Supports:
@@ -214,5 +212,5 @@ def parse_file(path: str) -> List[RawSpan]:
         with gzip.open(path, "rt", encoding="utf-8") as f:
             return parse_stream(f)
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return parse_stream(f)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 
 from rf_trace_viewer.parser import RawSpan
 
@@ -14,19 +13,19 @@ class SpanNode:
     """A node in the span tree wrapping a RawSpan with parent/child links."""
 
     span: RawSpan
-    children: List[SpanNode] = field(default_factory=list)
-    parent: Optional[SpanNode] = field(default=None, repr=False)
+    children: list[SpanNode] = field(default_factory=list)
+    parent: SpanNode | None = field(default=None, repr=False)
 
 
-def group_by_trace(spans: List[RawSpan]) -> Dict[str, List[RawSpan]]:
+def group_by_trace(spans: list[RawSpan]) -> dict[str, list[RawSpan]]:
     """Group spans by trace_id into a dict."""
-    groups: Dict[str, List[RawSpan]] = {}
+    groups: dict[str, list[RawSpan]] = {}
     for span in spans:
         groups.setdefault(span.trace_id, []).append(span)
     return groups
 
 
-def build_tree(spans: List[RawSpan]) -> List[SpanNode]:
+def build_tree(spans: list[RawSpan]) -> list[SpanNode]:
     """Build span tree(s) from a flat span list.
 
     Returns a list of root SpanNode objects sorted by start_time_unix_nano.
@@ -41,11 +40,11 @@ def build_tree(spans: List[RawSpan]) -> List[SpanNode]:
     if not spans:
         return []
 
-    roots: List[SpanNode] = []
+    roots: list[SpanNode] = []
 
     for _trace_id, trace_spans in group_by_trace(spans).items():
         # Build nodes, handling duplicate span_ids by keeping first occurrence
-        nodes: Dict[str, SpanNode] = {}
+        nodes: dict[str, SpanNode] = {}
         for s in trace_spans:
             if s.span_id in nodes:
                 warnings.warn(

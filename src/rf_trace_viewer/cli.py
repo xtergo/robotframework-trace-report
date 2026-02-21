@@ -91,7 +91,7 @@ def main() -> int:
     except PermissionError as exc:
         print(f"Error: Permission denied — {exc}", file=sys.stderr)
         return 1
-    except IOError as exc:
+    except OSError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 

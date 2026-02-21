@@ -1,4 +1,4 @@
-# Contributing to Robot Framework Trace Viewer
+# Contributing to Robot Framework Trace Report
 
 Thank you for your interest in contributing! This document provides guidelines for contributing to the project.
 

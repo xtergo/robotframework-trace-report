@@ -6,17 +6,10 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 from rf_trace_viewer.rf_model import (
     RFRunModel,
-    RFSuite,
-    RFTest,
-    RFKeyword,
-    RFSignal,
-    RunStatistics,
-    SuiteStatistics,
-    Status,
 )
 
 # Order matters: stats.js and tree.js define functions used by app.js
@@ -29,7 +22,7 @@ _VIEWER_DIR = Path(__file__).parent / "viewer"
 class ReportOptions:
     """Options controlling report generation."""
 
-    title: Optional[str] = None
+    title: str | None = None
     theme: str = "system"  # "light", "dark", "system"
 
 
@@ -51,12 +44,12 @@ def embed_data(model: RFRunModel) -> str:
     return json.dumps(_serialize(model), separators=(",", ":"))
 
 
-def embed_viewer_assets() -> Tuple[str, str]:
+def embed_viewer_assets() -> tuple[str, str]:
     """Read and return (js_content, css_content) from the viewer/ directory.
 
     Raises FileNotFoundError if any expected asset file is missing.
     """
-    js_parts: List[str] = []
+    js_parts: list[str] = []
     for name in _JS_FILES:
         path = _VIEWER_DIR / name
         if not path.exists():
@@ -65,7 +58,7 @@ def embed_viewer_assets() -> Tuple[str, str]:
             )
         js_parts.append(path.read_text(encoding="utf-8"))
 
-    css_parts: List[str] = []
+    css_parts: list[str] = []
     for name in _CSS_FILES:
         path = _VIEWER_DIR / name
         if not path.exists():
@@ -116,8 +109,5 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
 def _escape_html(text: str) -> str:
     """Minimal HTML escaping for text content."""
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )

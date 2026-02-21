@@ -2,7 +2,7 @@
 
 ## Overview
 
-`robotframework-trace-viewer` is a standalone tool that reads OTLP NDJSON trace files produced by `robotframework-tracer` and generates interactive, self-contained HTML reports for Robot Framework test execution. It replaces RF's built-in `report.html` and `log.html` with a modern viewer featuring timeline visualization, live updates, parallel execution clarity, comparison views, and extensibility.
+`robotframework-trace-report` is a standalone tool that reads OTLP NDJSON trace files produced by `robotframework-tracer` and generates interactive, self-contained HTML reports for Robot Framework test execution. It replaces RF's built-in `report.html` and `log.html` with a modern viewer featuring timeline visualization, live updates, parallel execution clarity, comparison views, and extensibility.
 
 The system has two runtime modes:
 - **Static mode**: Python CLI reads trace file → builds span tree → interprets RF attributes → generates a single self-contained HTML file with embedded data and JS viewer
@@ -55,7 +55,7 @@ graph TD
 graph LR
     RF[Robot Framework] -->|listener API| T[robotframework-tracer]
     P[pabot] -->|parallel execution| RF
-    T -->|OTLP NDJSON| V[robotframework-trace-viewer]
+    T -->|OTLP NDJSON| V[robotframework-trace-report]
     T -->|OTLP HTTP| B[Jaeger / Tempo / Zipkin]
     SUT[System Under Test] -->|OTLP traces| V
     PW[Playwright / Browser Library] -->|trace.zip| V

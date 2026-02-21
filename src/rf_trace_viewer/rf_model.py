@@ -5,7 +5,6 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Union
 
 from rf_trace_viewer.parser import RawSpan
 from rf_trace_viewer.tree import SpanNode
@@ -33,7 +32,7 @@ class RFSuite:
     source: str
     status: Status
     elapsed_time: float
-    children: List[Union[RFSuite, RFTest]] = field(default_factory=list)
+    children: list[RFSuite | RFTest] = field(default_factory=list)
 
 
 @dataclass
@@ -42,8 +41,8 @@ class RFTest:
     id: str
     status: Status
     elapsed_time: float
-    keywords: List[RFKeyword] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    keywords: list[RFKeyword] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -53,7 +52,7 @@ class RFKeyword:
     args: str
     status: Status
     elapsed_time: float
-    children: List[RFKeyword] = field(default_factory=list)
+    children: list[RFKeyword] = field(default_factory=list)
 
 
 @dataclass
@@ -78,7 +77,7 @@ class RunStatistics:
     failed: int
     skipped: int
     total_duration_ms: float
-    suite_stats: List[SuiteStatistics] = field(default_factory=list)
+    suite_stats: list[SuiteStatistics] = field(default_factory=list)
 
 
 @dataclass
@@ -88,10 +87,8 @@ class RFRunModel:
     rf_version: str
     start_time: int
     end_time: int
-    suites: List[RFSuite] = field(default_factory=list)
-    statistics: RunStatistics = field(
-        default_factory=lambda: RunStatistics(0, 0, 0, 0, 0.0)
-    )
+    suites: list[RFSuite] = field(default_factory=list)
+    statistics: RunStatistics = field(default_factory=lambda: RunStatistics(0, 0, 0, 0, 0.0))
 
 
 _STATUS_MAP = {
@@ -146,9 +143,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
     """Convert a keyword SpanNode to an RFKeyword."""
     attrs = node.span.attributes
     children = [
-        _build_keyword(c)
-        for c in node.children
-        if classify_span(c.span) == SpanType.KEYWORD
+        _build_keyword(c) for c in node.children if classify_span(c.span) == SpanType.KEYWORD
     ]
     return RFKeyword(
         name=attrs.get("rf.keyword.name", node.span.name),
@@ -164,9 +159,7 @@ def _build_test(node: SpanNode) -> RFTest:
     """Convert a test SpanNode to an RFTest."""
     attrs = node.span.attributes
     keywords = [
-        _build_keyword(c)
-        for c in node.children
-        if classify_span(c.span) == SpanType.KEYWORD
+        _build_keyword(c) for c in node.children if classify_span(c.span) == SpanType.KEYWORD
     ]
     tags_raw = attrs.get("rf.test.tags", [])
     tags = tags_raw if isinstance(tags_raw, list) else []
@@ -183,7 +176,7 @@ def _build_test(node: SpanNode) -> RFTest:
 def _build_suite(node: SpanNode) -> RFSuite:
     """Convert a suite SpanNode to an RFSuite."""
     attrs = node.span.attributes
-    children: List[Union[RFSuite, RFTest]] = []
+    children: list[RFSuite | RFTest] = []
     for child in node.children:
         span_type = classify_span(child.span)
         if span_type == SpanType.SUITE:
@@ -202,7 +195,7 @@ def _build_suite(node: SpanNode) -> RFSuite:
     )
 
 
-def interpret_tree(roots: List[SpanNode]) -> RFRunModel:
+def interpret_tree(roots: list[SpanNode]) -> RFRunModel:
     """Convert span tree into RF model objects.
 
     Extracts run metadata from resource attributes of the first root span,
@@ -229,7 +222,7 @@ def interpret_tree(roots: List[SpanNode]) -> RFRunModel:
     end_time = max(r.span.end_time_unix_nano for r in roots)
 
     # Build suites from root nodes
-    suites: List[RFSuite] = []
+    suites: list[RFSuite] = []
     for root in roots:
         span_type = classify_span(root.span)
         if span_type == SpanType.SUITE:
@@ -249,7 +242,7 @@ def interpret_tree(roots: List[SpanNode]) -> RFRunModel:
     )
 
 
-def _count_tests(children: List[Union[RFSuite, RFTest]]) -> tuple[int, int, int, int]:
+def _count_tests(children: list[RFSuite | RFTest]) -> tuple[int, int, int, int]:
     """Recursively count total/passed/failed/skipped tests."""
     total = passed = failed = skipped = 0
     for child in children:
@@ -271,10 +264,10 @@ def _count_tests(children: List[Union[RFSuite, RFTest]]) -> tuple[int, int, int,
 
 
 def _collect_suite_stats(
-    suites: List[RFSuite],
-) -> List[SuiteStatistics]:
+    suites: list[RFSuite],
+) -> list[SuiteStatistics]:
     """Collect per-suite statistics (top-level suites only)."""
-    stats: List[SuiteStatistics] = []
+    stats: list[SuiteStatistics] = []
     for suite in suites:
         t, p, f, s = _count_tests(suite.children)
         stats.append(
@@ -290,7 +283,7 @@ def _collect_suite_stats(
 
 
 def compute_statistics(
-    suites: List[RFSuite],
+    suites: list[RFSuite],
     start_time: int = 0,
     end_time: int = 0,
 ) -> RunStatistics:

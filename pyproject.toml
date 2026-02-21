@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "Robot Framework Trace Viewer Contributors"}
+    {name = "Robot Framework Trace Report Contributors"}
 ]
 keywords = ["robotframework", "testing", "tracing", "opentelemetry", "report", "viewer", "timeline"]
 classifiers = [

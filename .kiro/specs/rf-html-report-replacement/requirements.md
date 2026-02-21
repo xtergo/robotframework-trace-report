@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document specifies the requirements for `robotframework-trace-viewer`, a standalone HTML report generator and live trace viewer for Robot Framework test execution. The system reads OTLP NDJSON trace files produced by `robotframework-tracer` and generates interactive, self-contained HTML reports that replace Robot Framework's built-in `report.html` and `log.html`. The system operates in two modes: static HTML generation and live serving with real-time updates.
+This document specifies the requirements for `robotframework-trace-report`, a standalone HTML report generator and live trace viewer for Robot Framework test execution. The system reads OTLP NDJSON trace files produced by `robotframework-tracer` and generates interactive, self-contained HTML reports that replace Robot Framework's built-in `report.html` and `log.html`. The system operates in two modes: static HTML generation and live serving with real-time updates.
 
 ## Glossary
 
