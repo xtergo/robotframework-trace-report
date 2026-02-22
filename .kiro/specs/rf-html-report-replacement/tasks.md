@@ -211,7 +211,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement click keyword → highlight in tree and timeline
     - _Requirements: 18.1, 18.2, 18.3, 18.4_
 
-  - [ ] 11.4 Write property test for keyword statistics
+  - [x] 11.4 Write property test for keyword statistics
     - **Property 22: Keyword statistics correctness** — count, min ≤ avg ≤ max, total = sum, avg = total/count
     - **Validates: Requirements 18.1, 18.2**
 
