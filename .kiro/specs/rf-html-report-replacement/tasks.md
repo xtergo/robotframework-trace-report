@@ -216,7 +216,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Validates: Requirements 18.1, 18.2**
 
 - [ ] 12. Implement JS Viewer — Search and filter
-  - [ ] 12.1 Create `src/rf_trace_viewer/viewer/search.js`
+  - [x] 12.1 Create `src/rf_trace_viewer/viewer/search.js`
     - Implement central filter state manager
     - Implement text search across name, attributes, log messages
     - Implement status filter toggles (PASS/FAIL/SKIP)
