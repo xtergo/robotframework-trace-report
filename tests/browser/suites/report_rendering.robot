@@ -132,6 +132,122 @@ Tree Node Click Should Work
     # Click it (should not throw error)
     Click    ${node}
 
+Keyword Statistics View Should Render And Be Functional
+    [Documentation]    Verify keyword statistics view aggregates keywords and displays sortable table
+    New Page    file://${REPORT_PATH}
+    
+    Wait For Load State    networkidle
+    
+    # Switch to Keywords tab
+    Click    .tab-btn[data-tab="keywords"]
+    
+    # Check keyword stats container exists
+    ${stats_exists}=    Run Keyword And Return Status    Get Element    .keyword-stats-header
+    Should Be True    ${stats_exists}    Keyword statistics view not found in DOM
+    
+    # Check table exists
+    ${table_exists}=    Run Keyword And Return Status    Get Element    .keyword-stats-table
+    Should Be True    ${table_exists}    Keyword statistics table not found
+    
+    # Verify table has header row with expected columns
+    ${headers}=    Get Elements    .keyword-stats-table thead th
+    ${header_count}=    Get Length    ${headers}
+    Should Be Equal As Integers    ${header_count}    6    Expected 6 columns (Keyword, Count, Min, Max, Avg, Total)
+    
+    # Verify table has data rows
+    ${rows}=    Get Element Count    .keyword-stats-table tbody tr
+    Should Be True    ${rows} > 0    No keyword statistics rows found
+    
+    # Verify first row has all cells
+    ${first_row_cells}=    Get Element Count    .keyword-stats-table tbody tr:first-child td
+    Should Be Equal As Integers    ${first_row_cells}    6    First row should have 6 cells
+    
+    # Verify sortable columns have cursor pointer
+    ${sortable_headers}=    Get Elements    .keyword-stats-table th.sortable
+    ${sortable_count}=    Get Length    ${sortable_headers}
+    Should Be True    ${sortable_count} > 0    No sortable column headers found
+    
+    # Test sorting by clicking a column header
+    ${count_header}=    Get Element    .keyword-stats-table th[data-sort-key="count"]
+    Click    ${count_header}
+    
+    # Verify sort indicator appears
+    ${sort_indicator}=    Run Keyword And Return Status    Get Element    .keyword-stats-table th.sort-asc, .keyword-stats-table th.sort-desc
+    Should Be True    ${sort_indicator}    Sort indicator not applied after clicking column
+    
+    # Test row click (should trigger highlight event)
+    ${first_row}=    Get Element    .keyword-stats-table tbody tr:first-child
+    Click    ${first_row}
+    
+    # Take screenshot for manual verification
+    Take Screenshot    keyword-stats-view
+
+Keyword Statistics Should Show Correct Data
+    [Documentation]    Verify keyword statistics calculations are correct
+    New Page    file://${REPORT_PATH}
+    
+    Wait For Load State    networkidle
+    
+    # Switch to Keywords tab
+    Click    .tab-btn[data-tab="keywords"]
+    
+    # Get first keyword row data
+    ${keyword_name}=    Get Text    .keyword-stats-table tbody tr:first-child .keyword-name
+    ${count}=    Get Text    .keyword-stats-table tbody tr:first-child .keyword-count
+    ${min_duration}=    Get Text    .keyword-stats-table tbody tr:first-child td:nth-child(3)
+    ${max_duration}=    Get Text    .keyword-stats-table tbody tr:first-child td:nth-child(4)
+    ${avg_duration}=    Get Text    .keyword-stats-table tbody tr:first-child td:nth-child(5)
+    ${total_duration}=    Get Text    .keyword-stats-table tbody tr:first-child .keyword-total
+    
+    Log    Keyword: ${keyword_name}
+    Log    Count: ${count}
+    Log    Min: ${min_duration}
+    Log    Max: ${max_duration}
+    Log    Avg: ${avg_duration}
+    Log    Total: ${total_duration}
+    
+    # Verify count is a positive integer
+    Should Match Regexp    ${count}    ^\\d+$    Count should be a positive integer
+    ${count_int}=    Convert To Integer    ${count}
+    Should Be True    ${count_int} > 0    Count should be greater than 0
+    
+    # Verify durations are formatted (contain numbers)
+    Should Match Regexp    ${min_duration}    \\d+    Min duration should contain numbers
+    Should Match Regexp    ${max_duration}    \\d+    Max duration should contain numbers
+    Should Match Regexp    ${avg_duration}    \\d+    Avg duration should contain numbers
+    Should Match Regexp    ${total_duration}    \\d+    Total duration should contain numbers
+
+Keyword Statistics Sorting Should Work
+    [Documentation]    Verify all sortable columns can be sorted
+    New Page    file://${REPORT_PATH}
+    
+    Wait For Load State    networkidle
+    
+    # Switch to Keywords tab
+    Click    .tab-btn[data-tab="keywords"]
+    
+    # Test sorting by each column
+    @{sort_keys}=    Create List    keyword    count    minDuration    maxDuration    avgDuration    totalDuration
+    
+    FOR    ${sort_key}    IN    @{sort_keys}
+        Log    Testing sort by: ${sort_key}
+        
+        # Click column header
+        ${header}=    Get Element    .keyword-stats-table th[data-sort-key="${sort_key}"]
+        Click    ${header}
+        
+        # Verify sort indicator appears
+        ${has_sort_class}=    Get Attribute    ${header}    class
+        Should Contain Any    ${has_sort_class}    sort-asc    sort-desc
+        
+        # Click again to toggle sort direction
+        Click    ${header}
+        
+        # Verify sort indicator toggled
+        ${new_sort_class}=    Get Attribute    ${header}    class
+        Should Contain Any    ${new_sort_class}    sort-asc    sort-desc
+    END
+
 *** Keywords ***
 Setup Test Environment
     [Documentation]    Generate report and set up browser

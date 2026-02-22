@@ -205,7 +205,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Property 15: Statistics computation correctness** — counts sum correctly, percentages are count/total*100, per-suite sums to total
     - **Validates: Requirements 7.1, 7.2, 7.3, 7.4**
 
-  - [ ] 11.3 Create `src/rf_trace_viewer/viewer/keyword-stats.js`
+  - [x] 11.3 Create `src/rf_trace_viewer/viewer/keyword-stats.js`
     - Implement keyword aggregation: group by name, compute count/min/max/avg/total
     - Implement sortable table columns
     - Implement click keyword → highlight in tree and timeline

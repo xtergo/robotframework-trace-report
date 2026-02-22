@@ -79,6 +79,58 @@
   font-weight: 600;
 }
 
+/* ── Tab Navigation ── */
+.rf-trace-viewer .tab-nav {
+  display: flex;
+  gap: 0;
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
+  padding: 0 16px;
+}
+
+.rf-trace-viewer .tab-btn {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.rf-trace-viewer .tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .tab-btn.active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+}
+
+/* ── Tab Content ── */
+.rf-trace-viewer .tab-content {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rf-trace-viewer .tab-pane {
+  display: none;
+  flex: 1;
+  overflow: auto;
+}
+
+.rf-trace-viewer .tab-pane.active {
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── View Tabs Navigation ── */
 .rf-trace-viewer .timeline-section {
   width: 100%;
@@ -371,4 +423,142 @@
   font-family: monospace;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ── Keyword Statistics View ── */
+.rf-trace-viewer .keyword-stats-section {
+  padding: 24px;
+  background: var(--bg-primary);
+  flex: 1;
+  overflow-y: auto;
+}
+
+.rf-trace-viewer .keyword-stats-header {
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .keyword-stats-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .keyword-stats-table-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 450px);
+}
+
+.rf-trace-viewer .keyword-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rf-trace-viewer .keyword-stats-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 10;
+}
+
+.rf-trace-viewer .keyword-stats-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .keyword-stats-table th.sortable {
+  user-select: none;
+  position: relative;
+  padding-right: 24px;
+}
+
+.rf-trace-viewer .keyword-stats-table th.sortable:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .keyword-stats-table th.sortable::after {
+  content: '⇅';
+  position: absolute;
+  right: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.rf-trace-viewer .keyword-stats-table th.sort-asc::after {
+  content: '↑';
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .keyword-stats-table th.sort-desc::after {
+  content: '↓';
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .keyword-stats-table tbody tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .keyword-stats-table tbody tr:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .keyword-stats-table td {
+  padding: 8px 12px;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .keyword-stats-table td:nth-child(odd) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.rf-trace-viewer .keyword-stats-table tbody tr:hover td {
+  background: var(--hover-bg);
+}
+
+[data-theme="dark"] .rf-trace-viewer .keyword-stats-table td:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .rf-trace-viewer .keyword-stats-table thead {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rf-trace-viewer .keyword-stats-table .keyword-name {
+  font-weight: 500;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .keyword-stats-table .keyword-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.rf-trace-viewer .keyword-stats-table .keyword-duration {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.rf-trace-viewer .keyword-stats-table .keyword-total {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .no-data {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
 }

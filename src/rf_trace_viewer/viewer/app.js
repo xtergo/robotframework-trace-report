@@ -101,14 +101,47 @@
     header.appendChild(toggleBtn);
     root.appendChild(header);
 
-    // Timeline section (full width at top)
+    // Tab navigation
+    var tabNav = document.createElement('nav');
+    tabNav.className = 'tab-nav';
+    
+    var tabs = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'keywords', label: 'Keywords' }
+    ];
+    
+    tabs.forEach(function(tab) {
+      var tabBtn = document.createElement('button');
+      tabBtn.className = 'tab-btn';
+      tabBtn.textContent = tab.label;
+      tabBtn.setAttribute('data-tab', tab.id);
+      if (tab.id === 'overview') {
+        tabBtn.classList.add('active');
+      }
+      tabBtn.addEventListener('click', function() {
+        _switchTab(tab.id);
+      });
+      tabNav.appendChild(tabBtn);
+    });
+    
+    root.appendChild(tabNav);
+
+    // Tab content container
+    var tabContent = document.createElement('div');
+    tabContent.className = 'tab-content';
+    root.appendChild(tabContent);
+
+    // Overview tab (timeline + stats + tree)
+    var overviewTab = document.createElement('div');
+    overviewTab.className = 'tab-pane active';
+    overviewTab.setAttribute('data-tab-pane', 'overview');
+    
     var timelineSection = document.createElement('section');
     timelineSection.className = 'timeline-section';
     timelineSection.style.height = '300px';
     timelineSection.style.borderBottom = '1px solid var(--border-color)';
-    root.appendChild(timelineSection);
+    overviewTab.appendChild(timelineSection);
 
-    // Body layout (stats + tree side by side)
     var body = document.createElement('div');
     body.className = 'viewer-body';
 
@@ -120,7 +153,20 @@
 
     body.appendChild(statsPanel);
     body.appendChild(treePanel);
-    root.appendChild(body);
+    overviewTab.appendChild(body);
+    
+    tabContent.appendChild(overviewTab);
+
+    // Keywords tab
+    var keywordsTab = document.createElement('div');
+    keywordsTab.className = 'tab-pane';
+    keywordsTab.setAttribute('data-tab-pane', 'keywords');
+    
+    var keywordStatsSection = document.createElement('section');
+    keywordStatsSection.className = 'keyword-stats-section';
+    keywordsTab.appendChild(keywordStatsSection);
+    
+    tabContent.appendChild(keywordsTab);
 
     // Initialize views
     _initializeViews(data);
@@ -152,6 +198,12 @@
     if (statsPanel && typeof renderStats === 'function') {
       renderStats(statsPanel, data.statistics || {});
     }
+
+    // Initialize keyword stats view
+    var keywordStatsSection = document.querySelector('.keyword-stats-section');
+    if (keywordStatsSection && typeof renderKeywordStats === 'function') {
+      renderKeywordStats(keywordStatsSection, data);
+    }
   }
 
   /** Detect OS color scheme preference. */
@@ -166,5 +218,30 @@
   function _applyTheme(root, theme) {
     root.classList.remove('theme-dark', 'theme-light');
     root.classList.add('theme-' + theme);
+  }
+
+  /** Switch between tabs. */
+  function _switchTab(tabId) {
+    // Update tab buttons
+    var tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(function(btn) {
+      if (btn.getAttribute('data-tab') === tabId) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    
+    // Update tab panes
+    var tabPanes = document.querySelectorAll('.tab-pane');
+    tabPanes.forEach(function(pane) {
+      if (pane.getAttribute('data-tab-pane') === tabId) {
+        pane.classList.add('active');
+      } else {
+        pane.classList.remove('active');
+      }
+    });
+    
+    eventBus.emit('tab-changed', { tabId: tabId });
   }
 })();
