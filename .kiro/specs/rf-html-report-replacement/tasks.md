@@ -34,7 +34,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement `parse_incremental()`: track file offset, read only new lines
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9_
 
-  - [ ] 2.2 Write property tests for NDJSON Parser
+  - [x] 2.2 Write property tests for NDJSON Parser
     - **Property 1: Parser output correctness** — for any valid OTLP NDJSON, parsed spans have hex IDs, correct float timestamps, and all attributes preserved
     - **Validates: Requirements 1.1, 1.6, 1.7, 1.8**
 
