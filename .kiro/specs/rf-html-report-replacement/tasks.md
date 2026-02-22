@@ -123,7 +123,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Property 26: Theme and branding embedding** — logo, theme CSS, and color overrides appear in generated HTML
     - **Validates: Requirements 4.2, 4.3, 4.4, 4.5, 22.1, 22.2, 22.4**
 
-  - [ ] 6.3 Write unit tests for generator
+  - [x] 6.3 Write unit tests for generator
     - Test static HTML generation end-to-end with simple_trace.json
     - Test title derivation, logo embedding, theme file embedding
     - _Requirements: 4.1, 4.4, 4.5_
