@@ -1,11 +1,13 @@
 *** Settings ***
 Documentation     Verify Gantt chart has no overlapping spans
 Library           Browser
-Suite Setup       Setup Browser
+Resource          ../resources/common.robot
+Suite Setup       Setup Test Environment
 Suite Teardown    Close Browser
 
 *** Variables ***
-${REPORT_PATH}    ${CURDIR}/../../../report_latest.html
+${REPORT_PATH}    ${CURDIR}/../../../test-reports/report_latest.html
+${TRACE_FILE}     ${CURDIR}/../../../tests/fixtures/diverse_trace.json
 
 *** Test Cases ***
 Timeline Should Not Have Overlapping Spans
@@ -125,7 +127,8 @@ Lane Assignment Should Be Efficient
     ...    Lane assignment is inefficient: max_lane=${max_lane}, span_count=${span_count}
 
 *** Keywords ***
-Setup Browser
-    [Documentation]    Set up browser for testing
+Setup Test Environment
+    [Documentation]    Generate report and set up browser
+    Generate Report From Trace    ${TRACE_FILE}    ${REPORT_PATH}
     New Browser    headless=True
     New Context

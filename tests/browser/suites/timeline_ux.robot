@@ -6,7 +6,7 @@ Suite Setup       Setup Test Environment
 Suite Teardown    Close Browser
 
 *** Variables ***
-${REPORT_PATH}    ${CURDIR}/../../../report_diverse.html
+${REPORT_PATH}    ${CURDIR}/../../../test-reports/report_diverse.html
 ${TRACE_FILE}     ${CURDIR}/../../../tests/fixtures/diverse_trace_full.json
 
 *** Test Cases ***
@@ -363,6 +363,8 @@ Setup Test Environment
 
 Generate Test Report
     [Documentation]    Generate a test report from fixture data
+    # Ensure test-reports directory exists
+    ${result}=    Run Process    mkdir    -p    ${CURDIR}/../../../test-reports
     ${result}=    Run Process    
     ...    python3    -m    rf_trace_viewer.cli
     ...    ${TRACE_FILE}

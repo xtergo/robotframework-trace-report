@@ -1,11 +1,13 @@
 *** Settings ***
 Documentation     Debug test to capture console logs and verify selection updates
 Library           Browser
-Suite Setup       Setup Browser
+Resource          ../resources/common.robot
+Suite Setup       Setup Test Environment
 Suite Teardown    Close Browser
 
 *** Variables ***
-${REPORT_PATH}    ${CURDIR}/../../../report_latest.html
+${REPORT_PATH}    ${CURDIR}/../../../test-reports/report_latest.html
+${TRACE_FILE}     ${CURDIR}/../../../tests/fixtures/diverse_trace.json
 
 *** Test Cases ***
 Debug Selection Update With Console Logs
@@ -206,7 +208,8 @@ Test Timeline Span Lookup
     Should Be True    ${span_found}[found]    Span not found in timeline flatSpans
 
 *** Keywords ***
-Setup Browser
-    [Documentation]    Set up browser for testing
+Setup Test Environment
+    [Documentation]    Generate report and set up browser
+    Generate Report From Trace    ${TRACE_FILE}    ${REPORT_PATH}
     New Browser    headless=True
     New Context

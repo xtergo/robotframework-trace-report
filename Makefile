@@ -44,14 +44,16 @@ check: ## Check code formatting and linting (CI-style)
 		ruff check src/"
 
 report: ## Generate HTML report from test fixture
+	@mkdir -p test-reports
 	@echo "Generating test report in Docker..."
 	@docker run --rm -v $$(pwd):/workspace -w /workspace python:3.11-slim bash -c "\
-		PYTHONPATH=src python3 -m rf_trace_viewer.cli tests/fixtures/pabot_trace.json -o report.html"
-	@echo "Report generated: report.html"
+		PYTHONPATH=src python3 -m rf_trace_viewer.cli tests/fixtures/pabot_trace.json -o test-reports/report.html"
+	@echo "Report generated: test-reports/report.html"
 
 clean: ## Clean up generated files
 	@echo "Cleaning up..."
-	@rm -rf htmlcov/ .coverage .pytest_cache/ report.html
+	@rm -rf htmlcov/ .coverage .pytest_cache/
+	@rm -rf test-reports/
 	@rm -rf tests/browser/results/
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@echo "Clean complete"

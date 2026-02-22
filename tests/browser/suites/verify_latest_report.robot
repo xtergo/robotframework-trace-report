@@ -1,11 +1,13 @@
 *** Settings ***
 Documentation     Quick verification that report_latest.html has the timeline fixes
 Library           Browser
-Suite Setup       Setup Browser
+Resource          ../resources/common.robot
+Suite Setup       Setup Test Environment
 Suite Teardown    Close Browser
 
 *** Variables ***
-${REPORT_PATH}    ${CURDIR}/../../../report_latest.html
+${REPORT_PATH}    ${CURDIR}/../../../test-reports/report_latest.html
+${TRACE_FILE}     ${CURDIR}/../../../tests/fixtures/diverse_trace.json
 
 *** Test Cases ***
 Report Latest Should Load Successfully
@@ -82,7 +84,8 @@ Multiple Clicks Should Not Cause Drift
     Take Screenshot    report-latest-after-clicks
 
 *** Keywords ***
-Setup Browser
-    [Documentation]    Set up browser for testing
+Setup Test Environment
+    [Documentation]    Generate report and set up browser
+    Generate Report From Trace    ${TRACE_FILE}    ${REPORT_PATH}
     New Browser    headless=True
     New Context

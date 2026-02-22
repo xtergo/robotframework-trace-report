@@ -62,3 +62,4 @@ ENV/
 # Generated reports
 *.html
 !src/rf_trace_viewer/viewer/*.html
+test-reports/
