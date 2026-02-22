@@ -934,19 +934,63 @@
         var span = timelineState.flatSpans[i];
         var canvas = timelineState.canvas;
         var width = canvas.width / (window.devicePixelRatio || 1);
+        var height = canvas.height / (window.devicePixelRatio || 1);
         var centerX = width / 2;
         
-        // Calculate where the span would be with NO pan offset
+        // Horizontal centering: Calculate where the span would be with NO pan offset
         var timelineWidth = width - timelineState.leftMargin - timelineState.rightMargin;
         var timeRange = timelineState.maxTime - timelineState.minTime;
         var normalizedX = (span.startTime - timelineState.minTime) / timeRange;
         var spanXNoPan = timelineState.leftMargin + normalizedX * timelineWidth * timelineState.zoom;
         
-        // Calculate pan needed to center the span (RESET, not accumulate)
+        // Calculate pan needed to center the span horizontally (RESET, not accumulate)
         timelineState.panX = centerX - spanXNoPan;
         
         // Apply bounds checking to prevent timeline drift
         _clampPan();
+        
+        // Vertical scrolling: Find the span's Y position and scroll container to center it
+        var workers = Object.keys(timelineState.workers);
+        var yOffset = timelineState.headerHeight + timelineState.topMargin;
+        var spanY = null;
+        
+        // Find which worker this span belongs to and calculate its Y position
+        for (var w = 0; w < workers.length; w++) {
+          var workerSpans = timelineState.workers[workers[w]];
+          var isInThisWorker = false;
+          
+          for (var j = 0; j < workerSpans.length; j++) {
+            if (workerSpans[j].id === spanId) {
+              isInThisWorker = true;
+              var lane = span.lane !== undefined ? span.lane : span.depth;
+              spanY = yOffset + lane * timelineState.rowHeight + timelineState.rowHeight / 2;
+              break;
+            }
+          }
+          
+          if (isInThisWorker) {
+            break;
+          }
+          
+          // Move to next worker lane
+          var maxLane = Math.max.apply(null, workerSpans.map(function (s) { 
+            return s.lane !== undefined ? s.lane : s.depth; 
+          }));
+          yOffset += (maxLane + 2) * timelineState.rowHeight;
+        }
+        
+        // Scroll the canvas container to center the span vertically
+        if (spanY !== null && canvas.parentElement) {
+          var container = canvas.parentElement;
+          var containerHeight = container.clientHeight;
+          var scrollTop = spanY - containerHeight / 2;
+          
+          // Smooth scroll to the span
+          container.scrollTo({
+            top: Math.max(0, scrollTop),
+            behavior: 'smooth'
+          });
+        }
         
         _render();
         return;
