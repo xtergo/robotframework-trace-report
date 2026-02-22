@@ -188,12 +188,13 @@ def test_property_22_keyword_statistics_correctness(suites):
         total_duration = sum(durations)
         avg_duration = total_duration / count
 
-        # Property (b): min ≤ avg ≤ max
+        # Property (b): min ≤ avg ≤ max (with small epsilon for floating-point tolerance)
+        epsilon = 1e-9
         assert (
-            min_duration <= avg_duration
+            min_duration <= avg_duration + epsilon
         ), f"Keyword {keyword_name}: min ({min_duration}) > avg ({avg_duration})"
         assert (
-            avg_duration <= max_duration
+            avg_duration <= max_duration + epsilon
         ), f"Keyword {keyword_name}: avg ({avg_duration}) > max ({max_duration})"
 
         # Property (c): total duration equals the sum of all individual durations
@@ -214,8 +215,9 @@ def test_property_22_keyword_statistics_correctness(suites):
         assert max_duration >= 0, f"Keyword {keyword_name}: negative max duration"
         assert total_duration >= 0, f"Keyword {keyword_name}: negative total duration"
 
-        # If all durations are the same, min = avg = max
+        # If all durations are the same, min ≈ avg ≈ max (with floating-point tolerance)
         if len(set(durations)) == 1:
             assert (
-                min_duration == avg_duration == max_duration
+                abs(min_duration - avg_duration) < epsilon
+                and abs(avg_duration - max_duration) < epsilon
             ), f"Keyword {keyword_name}: all durations equal but min/avg/max differ"

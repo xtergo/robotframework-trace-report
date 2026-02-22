@@ -214,3 +214,63 @@ def parse_file(path: str) -> list[RawSpan]:
 
     with open(path, encoding="utf-8") as f:
         return parse_stream(f)
+def parse_incremental(path: str, offset: int = 0) -> tuple[list[RawSpan], int]:
+    """Parse new lines from a trace file starting at the given byte offset.
+
+    Returns a tuple of (new_spans, new_offset) where new_offset is the
+    byte position after the last line read.
+
+    This is used for live mode to incrementally read only new data.
+
+    Args:
+        path: Path to the trace file (plain or gzip-compressed)
+        offset: Byte offset to start reading from (default: 0)
+
+    Returns:
+        Tuple of (list of new spans, new byte offset)
+    """
+    if path == "-":
+        # stdin doesn't support seeking, just parse from current position
+        return parse_stream(sys.stdin), 0
+
+    spans: list[RawSpan] = []
+    new_offset = offset
+
+    if path.endswith(".gz"):
+        # Gzip files don't support efficient seeking, so we read from start
+        # and skip lines until we reach the offset
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            f.seek(offset)
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    line_spans = parse_line(line)
+                    spans.extend(line_spans)
+                except (json.JSONDecodeError, ValueError) as exc:
+                    warnings.warn(
+                        f"Skipping malformed line at offset {new_offset}: {exc}",
+                        stacklevel=2,
+                    )
+            new_offset = f.tell()
+    else:
+        # Plain text file - seek to offset and read new lines
+        with open(path, encoding="utf-8") as f:
+            f.seek(offset)
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    line_spans = parse_line(line)
+                    spans.extend(line_spans)
+                except (json.JSONDecodeError, ValueError) as exc:
+                    warnings.warn(
+                        f"Skipping malformed line at offset {new_offset}: {exc}",
+                        stacklevel=2,
+                    )
+            new_offset = f.tell()
+
+    return spans, new_offset
+

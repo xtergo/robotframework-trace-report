@@ -42,11 +42,11 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Property 2: Gzip parsing transparency** — parsing plain and gzip versions produces identical results
     - **Validates: Requirements 1.2**
 
-  - [ ] 2.4 Write property test for malformed line resilience
+  - [x] 2.4 Write property test for malformed line resilience
     - **Property 3: Malformed line resilience** — injecting malformed lines doesn't affect valid span extraction
     - **Validates: Requirements 1.4, 1.5**
 
-  - [ ] 2.5 Write property test for incremental parsing
+  - [x] 2.5 Write property test for incremental parsing
     - **Property 4: Incremental parsing equivalence** — incremental parsing produces same results as full parsing
     - **Validates: Requirements 1.9**
 

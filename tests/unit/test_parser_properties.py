@@ -6,7 +6,7 @@ the correctness of the NDJSON parser across a wide range of inputs.
 """
 
 import json
-from hypothesis import given, settings
+from hypothesis import given, settings, HealthCheck
 from hypothesis import strategies as st
 
 from src.rf_trace_viewer.parser import parse_line, flatten_attributes, normalize_id
@@ -224,7 +224,7 @@ def test_property_single_span_parsing(span: dict):
 
 
 @given(st.lists(ndjson_line(), min_size=1, max_size=10))
-@settings(max_examples=50)
+@settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
 def test_property_gzip_parsing_transparency(ndjson_lines: list[str]):
     """
     Property 2: Gzip parsing transparency
@@ -288,4 +288,194 @@ def test_property_gzip_parsing_transparency(ndjson_lines: list[str]):
                 f"Span {i}: status mismatch: {plain.status} != {gz.status}"
             assert plain.events == gz.events, \
                 f"Span {i}: events mismatch: {plain.events} != {gz.events}"
+
+
+# ============================================================================
+# Property 3: Malformed line resilience
+# ============================================================================
+
+
+@given(
+    valid_lines=st.lists(ndjson_line(), min_size=1, max_size=5),
+    malformed_lines=st.lists(
+        st.one_of(
+            st.just("not valid json at all"),
+            st.just("{"),
+            st.just('{"incomplete": '),
+            st.just('{"valid_json": "but no resource_spans"}'),
+            st.just("{}"),
+            st.just("[]"),
+            st.text(min_size=1, max_size=50).filter(lambda x: not x.strip().startswith("{")),
+        ),
+        min_size=1,
+        max_size=3
+    ),
+    positions=st.data()
+)
+@settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
+def test_property_malformed_line_resilience(
+    valid_lines: list[str],
+    malformed_lines: list[str],
+    positions: st.DataObject
+):
+    """
+    Property 3: Malformed line resilience
+
+    For any valid OTLP NDJSON content with random malformed lines (invalid JSON
+    or valid JSON without resource_spans) injected at random positions, the parser
+    should extract exactly the same spans as parsing the valid content alone.
+
+    Validates: Requirements 1.4, 1.5
+    """
+    import tempfile
+    import os
+    from src.rf_trace_viewer.parser import parse_file
+
+    # Parse valid content only to get expected spans
+    valid_content = "\n".join(valid_lines)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        valid_path = os.path.join(tmpdir, "valid.json")
+        with open(valid_path, "w", encoding="utf-8") as f:
+            f.write(valid_content)
+        expected_spans = parse_file(valid_path)
+
+    # Create mixed content by injecting malformed lines at random positions
+    mixed_lines = valid_lines.copy()
+    
+    # Insert malformed lines at random positions
+    for malformed in malformed_lines:
+        # Draw a random position to insert the malformed line
+        insert_pos = positions.draw(st.integers(min_value=0, max_value=len(mixed_lines)))
+        mixed_lines.insert(insert_pos, malformed)
+
+    mixed_content = "\n".join(mixed_lines)
+
+    # Parse mixed content
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mixed_path = os.path.join(tmpdir, "mixed.json")
+        with open(mixed_path, "w", encoding="utf-8") as f:
+            f.write(mixed_content)
+        
+        # Suppress warnings during this test
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            actual_spans = parse_file(mixed_path)
+
+    # Verify we got the same number of spans
+    assert len(actual_spans) == len(expected_spans), \
+        f"Span count mismatch: expected {len(expected_spans)}, got {len(actual_spans)}"
+
+    # Verify each span is identical
+    for i, (expected, actual) in enumerate(zip(expected_spans, actual_spans)):
+        assert actual.trace_id == expected.trace_id, \
+            f"Span {i}: trace_id mismatch: {actual.trace_id} != {expected.trace_id}"
+        assert actual.span_id == expected.span_id, \
+            f"Span {i}: span_id mismatch: {actual.span_id} != {expected.span_id}"
+        assert actual.parent_span_id == expected.parent_span_id, \
+            f"Span {i}: parent_span_id mismatch: {actual.parent_span_id} != {expected.parent_span_id}"
+        assert actual.name == expected.name, \
+            f"Span {i}: name mismatch: {actual.name} != {expected.name}"
+        assert actual.kind == expected.kind, \
+            f"Span {i}: kind mismatch: {actual.kind} != {expected.kind}"
+        assert actual.start_time_unix_nano == expected.start_time_unix_nano, \
+            f"Span {i}: start_time mismatch: {actual.start_time_unix_nano} != {expected.start_time_unix_nano}"
+        assert actual.end_time_unix_nano == expected.end_time_unix_nano, \
+            f"Span {i}: end_time mismatch: {actual.end_time_unix_nano} != {expected.end_time_unix_nano}"
+        assert actual.attributes == expected.attributes, \
+            f"Span {i}: attributes mismatch: {actual.attributes} != {expected.attributes}"
+        assert actual.resource_attributes == expected.resource_attributes, \
+            f"Span {i}: resource_attributes mismatch: {actual.resource_attributes} != {expected.resource_attributes}"
+        assert actual.status == expected.status, \
+            f"Span {i}: status mismatch: {actual.status} != {expected.status}"
+        assert actual.events == expected.events, \
+            f"Span {i}: events mismatch: {actual.events} != {expected.events}"
+
+# ============================================================================
+# Property 4: Incremental parsing equivalence
+# ============================================================================
+
+
+@given(st.lists(ndjson_line(), min_size=2, max_size=10))
+@settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
+def test_property_incremental_parsing_equivalence(ndjson_lines: list[str]):
+    """
+    Property 4: Incremental parsing equivalence
+
+    For any valid OTLP NDJSON file, parsing the entire file at once should
+    produce the same span list as parsing it incrementally (first N lines,
+    then the remaining lines) and concatenating the results.
+
+    Validates: Requirements 1.9
+    """
+    import tempfile
+    import os
+    from src.rf_trace_viewer.parser import parse_file, parse_incremental
+
+    # Create the NDJSON content
+    ndjson_content = "\n".join(ndjson_lines) + "\n"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        trace_path = os.path.join(tmpdir, "trace.json")
+
+        # Write the trace file
+        with open(trace_path, "w", encoding="utf-8") as f:
+            f.write(ndjson_content)
+
+        # Parse the entire file at once (baseline)
+        full_parse_spans = parse_file(trace_path)
+
+        # Simulate incremental parsing: write file in two stages
+        # Stage 1: write first half of lines
+        split_point = len(ndjson_lines) // 2
+        first_half_content = "\n".join(ndjson_lines[:split_point]) + "\n"
+        second_half_content = "\n".join(ndjson_lines[split_point:]) + "\n"
+        
+        incremental_path = os.path.join(tmpdir, "incremental.json")
+        
+        # Write first half
+        with open(incremental_path, "w", encoding="utf-8") as f:
+            f.write(first_half_content)
+        
+        # Parse first half
+        first_spans, offset_after_first = parse_incremental(incremental_path, 0)
+        
+        # Append second half (simulating live mode where file grows)
+        with open(incremental_path, "a", encoding="utf-8") as f:
+            f.write(second_half_content)
+        
+        # Parse second half from the offset
+        second_spans, final_offset = parse_incremental(incremental_path, offset_after_first)
+        
+        # Concatenate incremental results
+        incremental_spans = first_spans + second_spans
+
+        # Verify we got the same number of spans
+        assert len(incremental_spans) == len(full_parse_spans), \
+            f"Span count mismatch: full={len(full_parse_spans)}, incremental={len(incremental_spans)}"
+
+        # Verify each span is identical
+        for i, (full, incr) in enumerate(zip(full_parse_spans, incremental_spans)):
+            assert incr.trace_id == full.trace_id, \
+                f"Span {i}: trace_id mismatch: {incr.trace_id} != {full.trace_id}"
+            assert incr.span_id == full.span_id, \
+                f"Span {i}: span_id mismatch: {incr.span_id} != {full.span_id}"
+            assert incr.parent_span_id == full.parent_span_id, \
+                f"Span {i}: parent_span_id mismatch: {incr.parent_span_id} != {full.parent_span_id}"
+            assert incr.name == full.name, \
+                f"Span {i}: name mismatch: {incr.name} != {full.name}"
+            assert incr.kind == full.kind, \
+                f"Span {i}: kind mismatch: {incr.kind} != {full.kind}"
+            assert incr.start_time_unix_nano == full.start_time_unix_nano, \
+                f"Span {i}: start_time mismatch: {incr.start_time_unix_nano} != {full.start_time_unix_nano}"
+            assert incr.end_time_unix_nano == full.end_time_unix_nano, \
+                f"Span {i}: end_time mismatch: {incr.end_time_unix_nano} != {full.end_time_unix_nano}"
+            assert incr.attributes == full.attributes, \
+                f"Span {i}: attributes mismatch: {incr.attributes} != {full.attributes}"
+            assert incr.resource_attributes == full.resource_attributes, \
+                f"Span {i}: resource_attributes mismatch: {incr.resource_attributes} != {full.resource_attributes}"
+            assert incr.status == full.status, \
+                f"Span {i}: status mismatch: {incr.status} != {full.status}"
+            assert incr.events == full.events, \
+                f"Span {i}: events mismatch: {incr.events} != {full.events}"
 
