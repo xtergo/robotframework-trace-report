@@ -87,7 +87,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement `map_status()`: OTLP status + rf.status → RFStatus
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
 
-  - [ ] 4.2 Write property tests for RF Attribute Interpreter
+  - [x] 4.2 Write property tests for RF Attribute Interpreter
     - **Property 9: Span classification correctness** — classification matches rf.* attribute presence
     - **Property 10: RF model field extraction** — model objects contain all specified fields from input
     - **Property 11: Generic span preservation** — non-RF spans classified as GENERIC with attributes preserved

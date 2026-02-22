@@ -1,5 +1,22 @@
 # Contributing to robotframework-trace-report
 
+## Quick Start
+
+```bash
+# See all available commands
+make help
+
+# Run unit tests
+make test-unit
+
+# Format and check code
+make format
+make check
+
+# Run browser tests
+make test-browser
+```
+
 ## Prerequisites
 
 **Only 2 things required:**
@@ -9,6 +26,8 @@
 
 That's it! No Python environment setup, no npm, no Playwright installation needed.
 
+**📖 For detailed testing documentation, see [docs/DOCKER_TESTING.md](docs/DOCKER_TESTING.md)**
+
 ## Development Workflow
 
 ### 1. Make Code Changes
@@ -17,6 +36,24 @@ Edit Python or JavaScript files as needed.
 
 ### 2. Run Tests
 
+**Using Makefile (recommended):**
+
+```bash
+# Run all unit tests with coverage
+make test-unit
+
+# Run property-based tests only
+make test-properties
+
+# Run browser tests
+make test-browser
+
+# Run specific test file
+make dev-test-file FILE=test_rf_model_properties.py
+```
+
+**Using Docker directly:**
+
 ```bash
 # Browser tests (validates HTML rendering)
 cd tests/browser
@@ -24,17 +61,32 @@ docker compose up --build
 
 # Unit tests (Python only)
 docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install pytest pytest-cov black ruff &&
-  PYTHONPATH=src pytest --cov=src/rf_trace_viewer
+  pip install -q pytest pytest-cov hypothesis &&
+  PYTHONPATH=src pytest tests/unit/ -v --cov=src/rf_trace_viewer
 "
 ```
 
 ### 3. Check Code Quality
 
+**Using Makefile (recommended):**
+
+```bash
+# Format code
+make format
+
+# Lint code
+make lint
+
+# Check formatting and linting (CI-style)
+make check
+```
+
+**Using Docker directly:**
+
 ```bash
 # Format and lint
 docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install black ruff &&
+  pip install -q black ruff &&
   black src/ tests/ &&
   ruff check src/
 "
@@ -42,11 +94,24 @@ docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
 
 ### 4. Generate Test Report
 
+**Using Makefile (recommended):**
+
 ```bash
-# Generate a report to manually inspect
+make report
+```
+
+**Using Docker directly:**
+
+```bash
 docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
   PYTHONPATH=src python3 -m rf_trace_viewer.cli tests/fixtures/pabot_trace.json -o report.html
 "
+```
+
+### 5. See All Available Commands
+
+```bash
+make help
 ```
 
 ## Why Docker-Only?
