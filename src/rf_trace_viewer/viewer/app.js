@@ -131,7 +131,7 @@
     tabContent.className = 'tab-content';
     root.appendChild(tabContent);
 
-    // Overview tab (timeline + stats + tree)
+    // Overview tab (timeline + stats + tree + filters)
     var overviewTab = document.createElement('div');
     overviewTab.className = 'tab-pane active';
     overviewTab.setAttribute('data-tab-pane', 'overview');
@@ -151,8 +151,12 @@
     var treePanel = document.createElement('main');
     treePanel.className = 'panel-tree';
 
+    var filterSidebar = document.createElement('aside');
+    filterSidebar.className = 'panel-filter';
+
     body.appendChild(statsPanel);
     body.appendChild(treePanel);
+    body.appendChild(filterSidebar);
     overviewTab.appendChild(body);
     
     tabContent.appendChild(overviewTab);
@@ -179,6 +183,12 @@
    * Initialize all views with data.
    */
   function _initializeViews(data) {
+    // Initialize filter/search view in right sidebar
+    var filterSidebar = document.querySelector('.panel-filter');
+    if (filterSidebar && typeof window.initSearch === 'function') {
+      window.initSearch(filterSidebar, data);
+    }
+
     // Initialize timeline view (always visible at top)
     if (typeof window.initTimeline === 'function') {
       var timelineSection = document.querySelector('.timeline-section');
