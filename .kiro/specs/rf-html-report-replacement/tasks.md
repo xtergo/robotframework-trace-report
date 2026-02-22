@@ -136,7 +136,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement error handling with descriptive messages and non-zero exit codes
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 9.9_
 
-  - [ ] 7.2 Write unit tests for CLI
+  - [x] 7.2 Write unit tests for CLI
     - Test argument parsing for all options
     - Test error cases: missing input file, unwritable output path
     - Test static mode end-to-end with fixture data
