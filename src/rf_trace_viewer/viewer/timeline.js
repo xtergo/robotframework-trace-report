@@ -390,6 +390,7 @@
         timelineState.panY += dy;
         timelineState.dragStartX = x;
         timelineState.dragStartY = y;
+        _clampPan();
         _render();
       } else if (timelineState.isSelecting) {
         timelineState.selectionEnd = _screenXToTime(x);
@@ -453,6 +454,33 @@
     var dx = touches[0].clientX - touches[1].clientX;
     var dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * Clamp pan values to prevent timeline from drifting off-screen.
+   */
+  function _clampPan() {
+    var canvas = timelineState.canvas;
+    var width = canvas.width / (window.devicePixelRatio || 1);
+    var timelineWidth = width - timelineState.leftMargin - timelineState.rightMargin;
+    
+    // Calculate the total width of the timeline at current zoom
+    var totalTimelineWidth = timelineWidth * timelineState.zoom;
+    
+    // Maximum pan: timeline start can't go past right edge
+    var maxPanX = timelineWidth - totalTimelineWidth;
+    
+    // Minimum pan: timeline end can't go past left edge  
+    var minPanX = 0;
+    
+    // Clamp panX to valid range
+    if (totalTimelineWidth > timelineWidth) {
+      // Timeline is wider than viewport - allow panning
+      timelineState.panX = Math.max(maxPanX, Math.min(minPanX, timelineState.panX));
+    } else {
+      // Timeline fits in viewport - center it
+      timelineState.panX = (timelineWidth - totalTimelineWidth) / 2;
+    }
   }
 
   /**
@@ -592,16 +620,22 @@
     var yOffset = timelineState.headerHeight + timelineState.topMargin + timelineState.panY;
     var textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary') || '#1a1a1a';
     var borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#d0d0d0';
+    
+    // Only show worker labels if there are multiple workers
+    var showWorkerLabels = workers.length > 1 || (workers.length === 1 && workers[0] !== 'default');
 
     for (var w = 0; w < workers.length; w++) {
       var workerId = workers[w];
       var workerSpans = timelineState.workers[workerId];
 
-      // Worker label
-      ctx.fillStyle = textColor;
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(workerId === 'default' ? 'Main' : 'Worker ' + workerId, 10, yOffset + 15);
+      // Worker label (only if multiple workers or non-default worker)
+      if (showWorkerLabels) {
+        ctx.fillStyle = textColor;
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'left';
+        var label = workerId === 'default' ? 'Main' : 'Worker ' + workerId;
+        ctx.fillText(label, 10, yOffset + 15);
+      }
 
       // Render spans for this worker
       for (var i = 0; i < workerSpans.length; i++) {
@@ -640,9 +674,16 @@
 
     // Highlight selected or hovered
     if (span === timelineState.selectedSpan) {
+      // Prominent selection highlight with thick border and glow
       ctx.strokeStyle = '#0066cc';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x1, y + 2, barWidth, barHeight);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x1 - 1, y + 1, barWidth + 2, barHeight + 2);
+      
+      // Add subtle glow effect
+      ctx.shadowColor = '#0066cc';
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(x1 - 1, y + 1, barWidth + 2, barHeight + 2);
+      ctx.shadowBlur = 0;
     } else if (span === timelineState.hoveredSpan) {
       ctx.strokeStyle = '#666666';
       ctx.lineWidth = 1;
@@ -789,16 +830,23 @@
       if (timelineState.flatSpans[i].id === spanId) {
         timelineState.selectedSpan = timelineState.flatSpans[i];
         
-        // Scroll the span into view by adjusting pan
+        // Center the span in the viewport
         var span = timelineState.flatSpans[i];
-        var spanX = _timeToScreenX(span.startTime);
         var canvas = timelineState.canvas;
         var width = canvas.width / (window.devicePixelRatio || 1);
         var centerX = width / 2;
         
-        // Adjust panX to center the span
-        var targetPanX = centerX - spanX + timelineState.panX;
-        timelineState.panX = targetPanX;
+        // Calculate where the span would be with NO pan offset
+        var timelineWidth = width - timelineState.leftMargin - timelineState.rightMargin;
+        var timeRange = timelineState.maxTime - timelineState.minTime;
+        var normalizedX = (span.startTime - timelineState.minTime) / timeRange;
+        var spanXNoPan = timelineState.leftMargin + normalizedX * timelineWidth * timelineState.zoom;
+        
+        // Calculate pan needed to center the span (RESET, not accumulate)
+        timelineState.panX = centerX - spanXNoPan;
+        
+        // Apply bounds checking to prevent timeline drift
+        _clampPan();
         
         _render();
         return;
