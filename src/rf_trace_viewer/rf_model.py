@@ -31,6 +31,8 @@ class RFSuite:
     id: str
     source: str
     status: Status
+    start_time: int
+    end_time: int
     elapsed_time: float
     children: list[RFSuite | RFTest] = field(default_factory=list)
 
@@ -40,6 +42,8 @@ class RFTest:
     name: str
     id: str
     status: Status
+    start_time: int
+    end_time: int
     elapsed_time: float
     keywords: list[RFKeyword] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
@@ -51,6 +55,8 @@ class RFKeyword:
     keyword_type: str
     args: str
     status: Status
+    start_time: int
+    end_time: int
     elapsed_time: float
     children: list[RFKeyword] = field(default_factory=list)
 
@@ -150,6 +156,8 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         keyword_type=attrs.get("rf.keyword.type", "KEYWORD"),
         args=str(attrs.get("rf.keyword.args", "")),
         status=extract_status(node.span),
+        start_time=node.span.start_time_unix_nano,
+        end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
         children=children,
     )
@@ -167,6 +175,8 @@ def _build_test(node: SpanNode) -> RFTest:
         name=attrs.get("rf.test.name", node.span.name),
         id=str(attrs.get("rf.test.id", "")),
         status=extract_status(node.span),
+        start_time=node.span.start_time_unix_nano,
+        end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
         keywords=keywords,
         tags=tags,
@@ -190,6 +200,8 @@ def _build_suite(node: SpanNode) -> RFSuite:
         id=str(attrs.get("rf.suite.id", "")),
         source=str(attrs.get("rf.suite.source", "")),
         status=extract_status(node.span),
+        start_time=node.span.start_time_unix_nano,
+        end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
         children=children,
     )

@@ -46,6 +46,62 @@
     bottomMargin: 20
   };
 
+  // Expose for debugging/testing
+  window.timelineState = timelineState;
+
+  // Debug API for testing
+  window.RFTraceViewer = window.RFTraceViewer || {};
+  window.RFTraceViewer.debug = window.RFTraceViewer.debug || {};
+  window.RFTraceViewer.debug.timeline = {
+    getState: function() { return timelineState; },
+    getSpanCount: function() { return timelineState.flatSpans.length; },
+    getWorkerCount: function() { return Object.keys(timelineState.workers).length; },
+    getTimeBounds: function() { 
+      return { 
+        min: timelineState.minTime, 
+        max: timelineState.maxTime,
+        range: timelineState.maxTime - timelineState.minTime
+      };
+    },
+    forceRender: function() { _render(); },
+    dumpState: function() {
+      // Avoid circular references by only including safe properties
+      var sampleSpan = timelineState.flatSpans[0];
+      var safeSample = null;
+      if (sampleSpan) {
+        safeSample = {
+          id: sampleSpan.id,
+          name: sampleSpan.name,
+          type: sampleSpan.type,
+          status: sampleSpan.status,
+          startTime: sampleSpan.startTime,
+          endTime: sampleSpan.endTime,
+          elapsed: sampleSpan.elapsed,
+          depth: sampleSpan.depth,
+          worker: sampleSpan.worker
+        };
+      }
+      
+      var state = {
+        spanCount: timelineState.flatSpans.length,
+        workerCount: Object.keys(timelineState.workers).length,
+        timeBounds: {
+          min: timelineState.minTime,
+          max: timelineState.maxTime,
+          range: timelineState.maxTime - timelineState.minTime
+        },
+        canvas: {
+          width: timelineState.canvas ? timelineState.canvas.width : 0,
+          height: timelineState.canvas ? timelineState.canvas.height : 0,
+          hasCtx: !!timelineState.ctx
+        },
+        sampleSpan: safeSample
+      };
+      console.log('Timeline State:', state);
+      return state;
+    }
+  };
+
   /**
    * Initialize the timeline view.
    * @param {HTMLElement} container - The container element
@@ -57,12 +113,19 @@
     // Clear container
     container.innerHTML = '';
 
+    // Process data first to know how many spans we have
+    _processSpans(data);
+
+    // Calculate required canvas height based on content
+    var requiredHeight = _calculateRequiredHeight();
+
     // Create canvas
     var canvas = document.createElement('canvas');
     canvas.className = 'timeline-canvas';
     canvas.style.width = '100%';
-    canvas.style.height = '100%';
+    canvas.style.height = requiredHeight + 'px';
     canvas.style.cursor = 'crosshair';
+    canvas.style.display = 'block';
     container.appendChild(canvas);
 
     // Initialize timeline state
@@ -73,15 +136,35 @@
     _resizeCanvas(canvas);
     window.addEventListener('resize', function () { _resizeCanvas(canvas); });
 
-    // Process data
-    _processSpans(data);
-
     // Set up event listeners
     _setupEventListeners(canvas);
 
     // Initial render
     _render();
   };
+
+  /**
+   * Calculate the required canvas height to fit all spans.
+   */
+  function _calculateRequiredHeight() {
+    var workers = Object.keys(timelineState.workers);
+    var totalHeight = timelineState.headerHeight + timelineState.topMargin + timelineState.bottomMargin;
+    
+    for (var w = 0; w < workers.length; w++) {
+      var workerSpans = timelineState.workers[workers[w]];
+      var maxDepth = 0;
+      for (var i = 0; i < workerSpans.length; i++) {
+        if (workerSpans[i].depth > maxDepth) {
+          maxDepth = workerSpans[i].depth;
+        }
+      }
+      // Add height for this worker lane (depth + 2 for spacing)
+      totalHeight += (maxDepth + 2) * timelineState.rowHeight;
+    }
+    
+    // Minimum height of 300px
+    return Math.max(300, totalHeight);
+  }
 
   /**
    * Resize canvas to match container size (with device pixel ratio).
@@ -105,6 +188,8 @@
   function _processSpans(data) {
     var suites = data.suites || [];
     var allSpans = [];
+
+    console.log('[Timeline] Processing data:', { suiteCount: suites.length, data: data });
 
     // Flatten the hierarchy
     function flattenSuite(suite, depth, parentWorker) {
@@ -194,10 +279,20 @@
     timelineState.spans = allSpans;
     timelineState.flatSpans = allSpans;
 
+    console.log('[Timeline] Processed spans:', { 
+      totalSpans: allSpans.length,
+      sampleSpan: allSpans[0]
+    });
+
     // Compute time bounds
     if (allSpans.length > 0) {
       timelineState.minTime = Math.min.apply(null, allSpans.map(function (s) { return s.startTime; }));
       timelineState.maxTime = Math.max.apply(null, allSpans.map(function (s) { return s.endTime; }));
+      console.log('[Timeline] Time bounds:', { 
+        minTime: timelineState.minTime, 
+        maxTime: timelineState.maxTime,
+        range: timelineState.maxTime - timelineState.minTime
+      });
     }
 
     // Detect workers
@@ -217,6 +312,7 @@
       workers[worker].push(spans[i]);
     }
     timelineState.workers = workers;
+    console.log('[Timeline] Detected workers:', Object.keys(workers));
   }
 
   /**
@@ -224,8 +320,11 @@
    */
   function _parseTime(timeStr) {
     if (!timeStr) return 0;
-    if (typeof timeStr === 'number') return timeStr;
-    // Assume ISO 8601 format
+    if (typeof timeStr === 'number') {
+      // Assume nanoseconds since epoch, convert to seconds
+      return timeStr / 1_000_000_000;
+    }
+    // Fallback: assume ISO 8601 format
     return new Date(timeStr).getTime() / 1000;
   }
 
@@ -413,6 +512,13 @@
     var canvas = timelineState.canvas;
     var width = canvas.width / (window.devicePixelRatio || 1);
     var height = canvas.height / (window.devicePixelRatio || 1);
+
+    console.log('[Timeline] Rendering:', { 
+      width: width, 
+      height: height, 
+      spanCount: timelineState.flatSpans.length,
+      workerCount: Object.keys(timelineState.workers).length
+    });
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);

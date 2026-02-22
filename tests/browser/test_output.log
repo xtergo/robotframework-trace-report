@@ -1,0 +1,33 @@
+Attaching to browser-tests-1
+browser-tests-1  | ==============================================================================
+browser-tests-1  | Suites                                                                        
+browser-tests-1  | ==============================================================================
+browser-tests-1  | Suites.Report Rendering :: Browser tests for RF Trace Report HTML rendering   
+browser-tests-1  | ==============================================================================
+browser-tests-1  | Report Should Load Without Errors :: Verify the report loads and b... | PASS |
+browser-tests-1  | ------------------------------------------------------------------------------
+browser-tests-1  | Timeline Section Should Be Visible And Render Gantt Chart :: Verif... | PASS |
+browser-tests-1  | ------------------------------------------------------------------------------
+browser-tests-1  | Tree Panel Should Render Content :: Verify tree panel renders suit... | PASS |
+browser-tests-1  | ------------------------------------------------------------------------------
+browser-tests-1  | Stats Panel Should Show Statistics :: Verify stats panel shows tes... | PASS |
+browser-tests-1  | ------------------------------------------------------------------------------
+browser-tests-1  | Timeline Should Render Canvas Content :: Verify timeline canvas is... | PASS |
+browser-tests-1  | ------------------------------------------------------------------------------
+browser-tests-1  | Console Logs Should Show Successful Initialization :: Verify key e... | PASS |
+browser-tests-1  | ------------------------------------------------------------------------------
+browser-tests-1  | Tree Node Click Should Work :: Verify tree nodes are clickable        | PASS |
+browser-tests-1  | ------------------------------------------------------------------------------
+browser-tests-1  | Suites.Report Rendering :: Browser tests for RF Trace Report HTML ... | PASS |
+browser-tests-1  | 7 tests, 7 passed, 0 failed
+browser-tests-1  | ==============================================================================
+browser-tests-1  | Suites                                                                | PASS |
+browser-tests-1  | 7 tests, 7 passed, 0 failed
+browser-tests-1  | ==============================================================================
+browser-tests-1  | Output:  /workspace/tests/browser/results/output.xml
+browser-tests-1  | Log:     /workspace/tests/browser/results/log.html
+browser-tests-1  | Report:  /workspace/tests/browser/results/report.html
+[Kbrowser-tests-1 exited with code 0
+Aborting on container exit...
+ Container browser-browser-tests-1  Stopping
+ Container browser-browser-tests-1  Stopped

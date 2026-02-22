@@ -85,12 +85,10 @@
   height: 300px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-color);
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* ── Main Content Area ── */
-}
-
 /* Layout with timeline at top, stats + tree below */
 .rf-trace-viewer .viewer-body {
   display: flex;
