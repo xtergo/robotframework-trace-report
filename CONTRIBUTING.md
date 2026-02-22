@@ -85,6 +85,16 @@ robotframework-trace-report/
 
 ## Testing Strategy
 
+### Automated Testing (Agent Hooks)
+
+The project has three agent hooks that automatically run when you save files:
+
+1. **Python Format Check** - Validates Black formatting and Ruff linting
+2. **Unit Tests with Coverage** - Runs pytest with 50% coverage requirement
+3. **Browser Regression Tests** - Runs Robot Framework UI tests in Docker
+
+See [docs/TESTING.md](docs/TESTING.md) for complete testing documentation.
+
 ### Browser Tests (Primary Validation)
 
 Located in `tests/browser/`, these tests:
@@ -99,7 +109,9 @@ cd tests/browser
 docker compose up --build
 ```
 
-**Results:** `tests/browser/results/log.html`
+**Results:** 
+- Main report: `tests/browser/results/report.html` (open in browser)
+- Detailed log: `tests/browser/results/log.html` (includes console output)
 
 ### Unit Tests (Python Logic)
 
@@ -107,15 +119,18 @@ Located in `tests/unit/`, these test:
 - Parser logic
 - Tree building
 - RF attribute interpretation
-- Generator output
+- Statistics calculations (with property-based tests)
 
 **Run them:**
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install pytest pytest-cov &&
-  PYTHONPATH=src pytest tests/unit/
-"
+PYTHONPATH=src python3 -m pytest tests/unit/ -v --cov=src/rf_trace_viewer
 ```
+
+**Results:**
+- Terminal output shows pass/fail
+- Coverage report: `htmlcov/index.html`
+
+For detailed testing documentation, see [docs/TESTING.md](docs/TESTING.md).
 
 ## Common Tasks
 

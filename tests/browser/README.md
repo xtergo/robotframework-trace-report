@@ -1,102 +1,126 @@
-# Browser Testing for RF Trace Report
+# Browser Tests
 
-This directory contains automated browser tests for the HTML report viewer using Robot Framework + Browser Library (Playwright).
+This directory contains end-to-end browser tests using Robot Framework and Playwright.
 
-## Purpose
-
-- **NOT part of the package installation** - only for development/verification
-- Automated testing of HTML report rendering
-- Captures console errors and logs automatically
-- Validates UI components are visible and functional
-
-## Setup
-
-### Using Docker (Recommended)
+## Quick Start
 
 ```bash
-# Build the test environment
 cd tests/browser
-docker-compose build
-
-# Run tests
-docker-compose up
-
-# Or run with docker directly
-docker-compose run --rm browser-tests
+docker compose run --rm browser-tests
 ```
 
-### Local Setup
+Results will be in `results/` directory:
+- **`results/report.html`** - Main test report (open this first)
+- **`results/log.html`** - Detailed execution log with console output
+- **`results/output.xml`** - Machine-readable results for CI/CD
+
+## Test Suites
+
+- **`suites/report_rendering.robot`** - Basic rendering and console error checks
+- **`suites/timeline_ux.robot`** - Timeline pan, zoom, selection behavior
+- **`suites/test_no_overlap.robot`** - Gantt chart lane assignment validation
+- **`suites/test_selection_simple.robot`** - Tree-timeline synchronization
+- **`suites/verify_latest_report.robot`** - Smoke test for generated reports
+
+## Running Specific Tests
 
 ```bash
-# Install dependencies
-pip install robotframework robotframework-browser
+# Run specific suite
+docker compose run --rm browser-tests robot --outputdir /workspace/tests/browser/results /workspace/tests/browser/suites/timeline_ux.robot
 
-# Initialize Browser library (downloads Playwright browsers)
-rfbrowser init
-
-# Run tests
-cd tests/browser
-robot --outputdir results suites/
+# Run specific test case
+docker compose run --rm browser-tests robot --outputdir /workspace/tests/browser/results --test "Timeline Should Render Without Errors" /workspace/tests/browser/suites/
 ```
 
-## Test Structure
+## Automated Testing
 
-- `Dockerfile` - Test environment with Python + RF + Browser Library
-- `docker-compose.yml` - Easy test execution
-- `suites/report_rendering.robot` - Main test suite
-- `results/` - Test results (generated)
+The `browser-regression-tests` agent hook automatically runs these tests when you save files in:
+- `src/rf_trace_viewer/viewer/*.js`
+- `src/rf_trace_viewer/viewer/*.css`
+- `src/rf_trace_viewer/*.py`
 
-## What Gets Tested
+## Results Directory
 
-1. **Report Loading** - No console errors on page load
-2. **Timeline Section** - Visible with canvas element
-3. **Tree Panel** - Renders suite/test nodes
-4. **Stats Panel** - Shows test statistics
-5. **Canvas Rendering** - Timeline canvas has dimensions
-6. **Console Logs** - All components initialized successfully
-7. **Interactivity** - Tree nodes are clickable
+The `results/` directory contains test output:
 
-## Output
+### After Test Run
 
-Test results include:
-- `log.html` - Detailed test execution log with console errors/logs
-- `report.html` - Test summary
-- `output.xml` - Machine-readable results
+- **`report.html`** - High-level summary (green=pass, red=fail)
+- **`log.html`** - Detailed log with console output and screenshots
+- **`output.xml`** - XML format for CI/CD integration
+- **`playwright-log.txt`** - Browser automation logs
 
-## Integration with Development
-
-### Future: Agent Hook
-
-This will be integrated with a Kiro agent hook that:
-1. Runs tests automatically after code changes
-2. Feeds console errors directly to the agent
-3. Enables faster iteration without manual copy-paste
-
-### Current Usage
+### Viewing Results
 
 ```bash
-# Generate report
-PYTHONPATH=src python3 -m rf_trace_viewer.cli tests/fixtures/pabot_trace.json -o report_test.html
+# Linux
+xdg-open results/report.html
 
-# Run browser tests
-cd tests/browser
-docker-compose up
+# macOS
+open results/report.html
 
-# Check results
-open results/log.html
+# Windows
+start results/report.html
 ```
 
-## Troubleshooting
+### Interpreting Results
 
-### Docker build fails
-- Ensure Docker is installed and running
-- Check internet connection (downloads Playwright browsers)
+**All tests passed:**
+- All tests green in report.html
+- No console errors in log.html
+- Ready to commit!
 
-### Tests fail with "Browser not found"
-- Run `rfbrowser init` to download browsers
-- Or rebuild Docker image: `docker-compose build --no-cache`
+**Tests failed:**
+1. Open `report.html` to see which tests failed
+2. Click failed test name for detailed log
+3. Check console errors and screenshots
+4. Fix issue and re-run
 
-### Report generation fails
-- Ensure you're in the project root
-- Check PYTHONPATH is set correctly
-- Verify fixture file exists: `tests/fixtures/pabot_trace.json`
+## Docker Setup
+
+- **`Dockerfile`** - Test environment with Python, Robot Framework, Playwright
+- **`docker-compose.yml`** - Easy test runner configuration
+
+The Docker image includes:
+- Python 3.11
+- Robot Framework
+- Browser library (Playwright)
+- Chromium browser (headless)
+
+## Adding New Tests
+
+1. Create `.robot` file in `suites/`
+2. Follow Robot Framework syntax:
+   ```robot
+   *** Settings ***
+   Library    Browser
+   
+   *** Test Cases ***
+   My Test
+       [Documentation]    What this validates
+       New Page    file://${REPORT_PATH}
+       # Add test steps
+   ```
+3. Run tests to verify
+4. Commit
+
+## Debugging
+
+**Test timeout:**
+- Increase timeout: `Wait For Load State    networkidle    timeout=30s`
+
+**Element not found:**
+- Check selector in browser DevTools
+- Update selector in test
+
+**Console errors:**
+- Check `log.html` for JavaScript errors
+- Fix errors in source code
+
+**Docker issues:**
+- Rebuild: `docker compose build --no-cache`
+- Check Docker is running
+
+## Documentation
+
+See [docs/TESTING.md](../../docs/TESTING.md) for complete testing guide.
