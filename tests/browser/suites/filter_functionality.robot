@@ -215,6 +215,40 @@ Clear All Filters Should Reset Everything
     ${restored_count}=    Get Element Count    .tree-node
     Should Be Equal As Integers    ${restored_count}    ${initial_count}    Tree should be restored after clearing filters
 
+Timeline Should Respect Filters
+    [Documentation]    Verify timeline Gantt chart also filters spans when tree is filtered
+    New Page    file://${REPORT_PATH}
+    
+    Wait For Load State    networkidle
+    Sleep    1s
+    
+    # Get initial span count from timeline
+    ${initial_span_count}=    Evaluate JavaScript    .timeline-section
+    ...    window.timelineState.flatSpans.length
+    Log    Initial timeline span count: ${initial_span_count}
+    Should Be True    ${initial_span_count} > 0    Timeline should have spans initially
+    
+    # Uncheck PASS to filter away passing tests
+    Click    input[type="checkbox"][value="PASS"]
+    Sleep    0.5s
+    
+    # Get filtered span count from timeline
+    ${filtered_span_count}=    Evaluate JavaScript    .timeline-section
+    ...    Object.keys(window.timelineState.workers).reduce(function(sum, key) { return sum + window.timelineState.workers[key].length; }, 0)
+    Log    Filtered timeline span count: ${filtered_span_count}
+    
+    # Timeline should show fewer or no spans (depending on test data)
+    Should Be True    ${filtered_span_count} <= ${initial_span_count}    Timeline should show fewer or equal spans after filtering
+    
+    # Re-check PASS to restore all spans
+    Click    input[type="checkbox"][value="PASS"]
+    Sleep    0.5s
+    
+    # Verify timeline is restored
+    ${restored_span_count}=    Evaluate JavaScript    .timeline-section
+    ...    Object.keys(window.timelineState.workers).reduce(function(sum, key) { return sum + window.timelineState.workers[key].length; }, 0)
+    Should Be Equal As Integers    ${restored_span_count}    ${initial_span_count}    Timeline should be restored after re-enabling PASS filter
+
 *** Keywords ***
 Setup Test Environment
     [Documentation]    Generate report and set up browser

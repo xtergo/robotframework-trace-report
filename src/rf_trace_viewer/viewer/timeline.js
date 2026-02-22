@@ -23,8 +23,10 @@
     canvas: null,
     ctx: null,
     spans: [],
-    flatSpans: [],  // Flattened list for rendering
-    workers: {},    // worker_id -> spans[]
+    flatSpans: [],  // Flattened list for rendering (all spans)
+    filteredSpans: [],  // Currently filtered spans (subset of flatSpans)
+    workers: {},    // worker_id -> spans[] (current view, may be filtered)
+    allWorkers: null,  // Original unfiltered workers (stored when filter is applied)
     minTime: 0,
     maxTime: 0,
     zoom: 1.0,
@@ -138,6 +140,13 @@
 
     // Set up event listeners
     _setupEventListeners(canvas);
+
+    // Listen for filter changes
+    if (window.RFTraceViewer && window.RFTraceViewer.on) {
+      window.RFTraceViewer.on('filter-changed', function(event) {
+        _handleFilterChanged(event);
+      });
+    }
 
     // Initial render
     _render();
@@ -908,6 +917,87 @@
     if (window.RFTraceViewer && window.RFTraceViewer.emit) {
       window.RFTraceViewer.emit('span-selected', { spanId: span.id, source: 'timeline' });
     }
+  }
+
+  /**
+   * Handle filter-changed event from search/filter panel.
+   * Updates the timeline to show only filtered spans.
+   */
+  function _handleFilterChanged(event) {
+    console.log('[Timeline] Filter changed:', event);
+    
+    var filteredSpans = event.filteredSpans || [];
+    
+    // Store original workers if not already stored
+    if (!timelineState.allWorkers) {
+      timelineState.allWorkers = {};
+      var workers = Object.keys(timelineState.workers);
+      for (var w = 0; w < workers.length; w++) {
+        var workerId = workers[w];
+        timelineState.allWorkers[workerId] = timelineState.workers[workerId].slice(); // Copy array
+      }
+    }
+    
+    // If no filter is active (all spans visible), restore original workers
+    if (filteredSpans.length === timelineState.flatSpans.length) {
+      console.log('[Timeline] No filter active, restoring all workers');
+      timelineState.workers = {};
+      var allWorkers = Object.keys(timelineState.allWorkers);
+      for (var w = 0; w < allWorkers.length; w++) {
+        var workerId = allWorkers[w];
+        timelineState.workers[workerId] = timelineState.allWorkers[workerId].slice(); // Copy array
+      }
+      timelineState.filteredSpans = timelineState.flatSpans.slice();
+    } else {
+      // Create a Set of filtered span IDs for fast lookup
+      var filteredIds = {};
+      for (var i = 0; i < filteredSpans.length; i++) {
+        filteredIds[filteredSpans[i].id] = true;
+      }
+      
+      // Filter workers to only include filtered spans
+      var filteredWorkers = {};
+      var allWorkers = Object.keys(timelineState.allWorkers);
+      
+      for (var w = 0; w < allWorkers.length; w++) {
+        var workerId = allWorkers[w];
+        var workerSpans = timelineState.allWorkers[workerId];
+        var filtered = [];
+        
+        for (var s = 0; s < workerSpans.length; s++) {
+          var span = workerSpans[s];
+          if (filteredIds[span.id]) {
+            filtered.push(span);
+          }
+        }
+        
+        // Only include worker if it has filtered spans
+        if (filtered.length > 0) {
+          filteredWorkers[workerId] = filtered;
+        }
+      }
+      
+      // Store filtered spans and use filtered workers for rendering
+      timelineState.filteredSpans = filteredSpans;
+      timelineState.workers = filteredWorkers;
+      
+      console.log('[Timeline] Applied filter:', {
+        totalSpans: timelineState.flatSpans.length,
+        filteredSpans: filteredSpans.length,
+        filteredWorkers: Object.keys(filteredWorkers).length
+      });
+    }
+    
+    // Recalculate canvas height based on filtered content
+    var canvas = timelineState.canvas;
+    if (canvas) {
+      var requiredHeight = _calculateRequiredHeight();
+      canvas.style.height = requiredHeight + 'px';
+      _resizeCanvas(canvas);
+    }
+    
+    // Re-render with filtered spans
+    _render();
   }
 
   /**
