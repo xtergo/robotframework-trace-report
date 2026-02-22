@@ -1,11 +1,47 @@
 /* RF Trace Viewer — Expandable Tree View Renderer */
 
+// Store original model for re-rendering on filter changes
+var _originalModel = null;
+var _treeContainer = null;
+var _currentFilteredSpanIds = null;
+
 /**
  * Render the tree view into the given container.
  * @param {HTMLElement} container
  * @param {Object} model - RFRunModel with suites array
  */
 function renderTree(container, model) {
+  _originalModel = model;
+  _treeContainer = container;
+  _currentFilteredSpanIds = null; // null = show all
+  
+  _renderTreeWithFilter(container, model, null);
+
+  // Set up synchronization with timeline
+  setupTreeSynchronization();
+  
+  // Listen for filter changes
+  if (window.RFTraceViewer && window.RFTraceViewer.on) {
+    window.RFTraceViewer.on('filter-changed', function (data) {
+      var filteredSpanIds = {};
+      if (data.filteredSpans) {
+        for (var i = 0; i < data.filteredSpans.length; i++) {
+          filteredSpanIds[data.filteredSpans[i].id] = true;
+        }
+      }
+      _currentFilteredSpanIds = filteredSpanIds;
+      _renderTreeWithFilter(container, model, filteredSpanIds);
+    });
+  }
+}
+
+/**
+ * Render tree with optional filtering.
+ * @param {HTMLElement} container
+ * @param {Object} model
+ * @param {Object|null} filteredSpanIds - Map of span IDs to show, or null for all
+ */
+function _renderTreeWithFilter(container, model, filteredSpanIds) {
   container.innerHTML = '';
 
   // Controls: expand all / collapse all
@@ -29,16 +65,21 @@ function renderTree(container, model) {
   treeRoot.className = 'tree-root';
   var suites = model.suites || [];
   for (var i = 0; i < suites.length; i++) {
-    treeRoot.appendChild(_renderSuiteNode(suites[i], 0));
+    var suiteNode = _renderSuiteNode(suites[i], 0, filteredSpanIds);
+    if (suiteNode) {
+      treeRoot.appendChild(suiteNode);
+    }
   }
   container.appendChild(treeRoot);
-
-  // Set up synchronization with timeline
-  setupTreeSynchronization();
 }
 
 /** Render a suite node and its children recursively. */
-function _renderSuiteNode(suite, depth) {
+function _renderSuiteNode(suite, depth, filteredSpanIds) {
+  // If filtering is active and this suite is not in the filtered list, skip it
+  if (filteredSpanIds !== null && !filteredSpanIds[suite.id]) {
+    return null;
+  }
+
   var hasChildren = suite.children && suite.children.length > 0;
   var node = _createTreeNode({
     type: 'suite',
@@ -54,12 +95,16 @@ function _renderSuiteNode(suite, depth) {
     var childrenEl = node.querySelector('.tree-children');
     for (var i = 0; i < suite.children.length; i++) {
       var child = suite.children[i];
+      var childNode = null;
       if (child.keywords !== undefined) {
         // It's a test
-        childrenEl.appendChild(_renderTestNode(child, depth + 1));
+        childNode = _renderTestNode(child, depth + 1, filteredSpanIds);
       } else {
         // It's a nested suite
-        childrenEl.appendChild(_renderSuiteNode(child, depth + 1));
+        childNode = _renderSuiteNode(child, depth + 1, filteredSpanIds);
+      }
+      if (childNode) {
+        childrenEl.appendChild(childNode);
       }
     }
   }
@@ -67,7 +112,12 @@ function _renderSuiteNode(suite, depth) {
 }
 
 /** Render a test node and its keywords. */
-function _renderTestNode(test, depth) {
+function _renderTestNode(test, depth, filteredSpanIds) {
+  // If filtering is active and this test is not in the filtered list, skip it
+  if (filteredSpanIds !== null && !filteredSpanIds[test.id]) {
+    return null;
+  }
+
   var hasKws = test.keywords && test.keywords.length > 0;
   var node = _createTreeNode({
     type: 'test',
@@ -82,14 +132,22 @@ function _renderTestNode(test, depth) {
   if (hasKws) {
     var childrenEl = node.querySelector('.tree-children');
     for (var i = 0; i < test.keywords.length; i++) {
-      childrenEl.appendChild(_renderKeywordNode(test.keywords[i], depth + 1));
+      var kwNode = _renderKeywordNode(test.keywords[i], depth + 1, filteredSpanIds);
+      if (kwNode) {
+        childrenEl.appendChild(kwNode);
+      }
     }
   }
   return node;
 }
 
 /** Render a keyword node and its nested keywords. */
-function _renderKeywordNode(kw, depth) {
+function _renderKeywordNode(kw, depth, filteredSpanIds) {
+  // If filtering is active and this keyword is not in the filtered list, skip it
+  if (filteredSpanIds !== null && !filteredSpanIds[kw.id]) {
+    return null;
+  }
+
   var hasChildren = kw.children && kw.children.length > 0;
   var node = _createTreeNode({
     type: 'keyword',
@@ -112,7 +170,10 @@ function _renderKeywordNode(kw, depth) {
   if (hasChildren) {
     var childrenEl = node.querySelector('.tree-children');
     for (var i = 0; i < kw.children.length; i++) {
-      childrenEl.appendChild(_renderKeywordNode(kw.children[i], depth + 1));
+      var childNode = _renderKeywordNode(kw.children[i], depth + 1, filteredSpanIds);
+      if (childNode) {
+        childrenEl.appendChild(childNode);
+      }
     }
   }
   return node;
