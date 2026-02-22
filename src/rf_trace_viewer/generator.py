@@ -78,7 +78,8 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
     if options is None:
         options = ReportOptions()
 
-    title = options.title or model.title or "RF Trace Report"
+    # Strip whitespace and use default if empty
+    title = (options.title or "").strip() or (model.title or "").strip() or "RF Trace Report"
     data_json = embed_data(model)
     js_content, css_content = embed_viewer_assets()
 

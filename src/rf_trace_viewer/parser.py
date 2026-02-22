@@ -214,6 +214,8 @@ def parse_file(path: str) -> list[RawSpan]:
 
     with open(path, encoding="utf-8") as f:
         return parse_stream(f)
+
+
 def parse_incremental(path: str, offset: int = 0) -> tuple[list[RawSpan], int]:
     """Parse new lines from a trace file starting at the given byte offset.
 
@@ -273,4 +275,3 @@ def parse_incremental(path: str, offset: int = 0) -> tuple[list[RawSpan], int]:
             new_offset = f.tell()
 
     return spans, new_offset
-

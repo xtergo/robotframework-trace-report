@@ -99,7 +99,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Test all keyword types: KEYWORD, SETUP, TEARDOWN, FOR, IF, TRY, WHILE
     - _Requirements: 3.1, 3.4_
 
-- [ ] 5. Checkpoint — Core data pipeline
+- [x] 5. Checkpoint — Core data pipeline
   - Ensure all tests pass, ask the user if questions arise.
   - Verify parser → tree builder → RF interpreter pipeline works end-to-end with fixture data.
 
@@ -117,7 +117,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement `write()`: write HTML string to output file
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 22.1, 22.2, 22.3, 22.4, 22.5_
 
-  - [ ] 6.2 Write property tests for Report Generator
+  - [x] 6.2 Write property tests for Report Generator
     - **Property 13: HTML data embedding round-trip** — embedded JSON parses back to equivalent data, no external resource refs
     - **Property 14: Title embedding correctness** — HTML title matches provided title or root suite name
     - **Property 26: Theme and branding embedding** — logo, theme CSS, and color overrides appear in generated HTML

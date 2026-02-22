@@ -16,26 +16,26 @@ class TestEmptyFile:
         """Empty file should return empty span list."""
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("")
-        
+
         spans = parse_file(str(empty_file))
-        
+
         assert spans == []
 
     def test_empty_stream_returns_empty_list(self):
         """Empty stream should return empty span list."""
         stream = io.StringIO("")
-        
+
         spans = parse_stream(stream)
-        
+
         assert spans == []
 
     def test_whitespace_only_file_returns_empty_list(self, tmp_path):
         """File with only whitespace should return empty span list."""
         whitespace_file = tmp_path / "whitespace.json"
         whitespace_file.write_text("   \n\n  \t  \n")
-        
+
         spans = parse_file(str(whitespace_file))
-        
+
         assert spans == []
 
 
@@ -53,9 +53,9 @@ class TestSingleLineFile:
             '"start_time_unix_nano":"1000000000","end_time_unix_nano":"2000000000",'
             '"attributes":[],"status":{"code":"STATUS_CODE_OK"}}]}]}]}\n'
         )
-        
+
         spans = parse_file(str(single_line))
-        
+
         assert len(spans) == 1
         assert spans[0].name == "Test Span"
         assert spans[0].trace_id == "abc123"
@@ -76,9 +76,9 @@ class TestSingleLineFile:
             '"start_time_unix_nano":"1500000000","end_time_unix_nano":"1800000000",'
             '"attributes":[],"status":{}}]}]}]}\n'
         )
-        
+
         spans = parse_file(str(single_line))
-        
+
         assert len(spans) == 2
         assert spans[0].name == "Span 1"
         assert spans[1].name == "Span 2"
@@ -99,9 +99,9 @@ class TestStdinInput:
             '"attributes":[],"status":{}}]}]}]}\n'
         )
         monkeypatch.setattr("sys.stdin", io.StringIO(stdin_data))
-        
+
         spans = parse_file("-")
-        
+
         assert len(spans) == 1
         assert spans[0].name == "Stdin Span"
         assert spans[0].trace_id == "stdin123"
@@ -123,9 +123,9 @@ class TestStdinInput:
             '"attributes":[],"status":{}}]}]}]}\n'
         )
         monkeypatch.setattr("sys.stdin", io.StringIO(stdin_data))
-        
+
         spans = parse_file("-")
-        
+
         assert len(spans) == 2
         assert spans[0].name == "Line 1"
         assert spans[1].name == "Line 2"
@@ -133,9 +133,9 @@ class TestStdinInput:
     def test_stdin_with_empty_input(self, monkeypatch):
         """Stdin with empty input should return empty list."""
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
-        
+
         spans = parse_file("-")
-        
+
         assert spans == []
 
 
@@ -145,22 +145,22 @@ class TestFixtureFiles:
     def test_simple_trace_fixture(self):
         """simple_trace.json should parse correctly."""
         fixture_path = Path("tests/fixtures/simple_trace.json")
-        
+
         spans = parse_file(str(fixture_path))
-        
+
         # simple_trace.json has 1 suite + 1 test + 2 keywords = 4 spans
         assert len(spans) == 4
-        
+
         # Verify suite span
         suite_span = next(s for s in spans if "rf.suite.name" in s.attributes)
         assert suite_span.attributes["rf.suite.name"] == "Simple Suite"
         assert suite_span.trace_id == "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
-        
+
         # Verify test span
         test_span = next(s for s in spans if "rf.test.name" in s.attributes)
         assert test_span.attributes["rf.test.name"] == "Simple Test"
         assert test_span.parent_span_id == suite_span.span_id
-        
+
         # Verify keyword spans
         keyword_spans = [s for s in spans if "rf.keyword.name" in s.attributes]
         assert len(keyword_spans) == 2
@@ -170,21 +170,21 @@ class TestFixtureFiles:
     def test_pabot_trace_fixture(self):
         """pabot_trace.json should parse correctly with multiple lines."""
         fixture_path = Path("tests/fixtures/pabot_trace.json")
-        
+
         spans = parse_file(str(fixture_path))
-        
+
         # pabot_trace.json has multiple NDJSON lines with various spans
         assert len(spans) > 0
-        
+
         # All spans should have the same trace_id (pabot run)
         trace_ids = {s.trace_id for s in spans}
         assert len(trace_ids) == 1
         assert "0d077f083a9f42acdc3c862ebd202521" in trace_ids
-        
+
         # Should have signal spans
         signal_spans = [s for s in spans if "rf.signal" in s.attributes]
         assert len(signal_spans) > 0
-        
+
         # Should have test spans
         test_spans = [s for s in spans if "rf.test.name" in s.attributes]
         assert len(test_spans) > 0
@@ -192,14 +192,14 @@ class TestFixtureFiles:
     def test_malformed_trace_fixture(self):
         """malformed_trace.json should skip bad lines and parse valid ones."""
         fixture_path = Path("tests/fixtures/malformed_trace.json")
-        
+
         # Should not raise, should skip malformed lines with warnings
         with pytest.warns(UserWarning):
             spans = parse_file(str(fixture_path))
-        
+
         # Should have parsed the valid lines
         assert len(spans) > 0
-        
+
         # All parsed spans should be valid
         for span in spans:
             assert span.trace_id
@@ -221,9 +221,9 @@ class TestEdgeCases:
             '"start_time_unix_nano":"1000000000","end_time_unix_nano":"2000000000",'
             '"attributes":[],"status":{}}]}]}]}\n\n\n\n'
         )
-        
+
         spans = parse_file(str(file_path))
-        
+
         assert len(spans) == 1
 
     def test_file_with_blank_lines_between_records(self, tmp_path):
@@ -236,8 +236,8 @@ class TestEdgeCases:
             '"name":"Span 1","kind":"SPAN_KIND_INTERNAL",'
             '"start_time_unix_nano":"1000000000","end_time_unix_nano":"2000000000",'
             '"attributes":[],"status":{}}]}]}]}\n'
-            '\n'
-            '\n'
+            "\n"
+            "\n"
             '{"resource_spans":[{"resource":{"attributes":[]},'
             '"scope_spans":[{"scope":{"name":"test"},"spans":[{'
             '"trace_id":"t2","span_id":"s2","parent_span_id":"",'
@@ -245,9 +245,9 @@ class TestEdgeCases:
             '"start_time_unix_nano":"3000000000","end_time_unix_nano":"4000000000",'
             '"attributes":[],"status":{}}]}]}]}\n'
         )
-        
+
         spans = parse_file(str(file_path))
-        
+
         assert len(spans) == 2
 
     def test_nonexistent_file_raises_error(self):
@@ -262,9 +262,9 @@ class TestEdgeCases:
             '{"resource_spans":[{"resource":{"attributes":[]},'
             '"scope_spans":[{"scope":{"name":"test"},"spans":[]}]}]}\n'
         )
-        
+
         spans = parse_file(str(file_path))
-        
+
         assert spans == []
 
     def test_mixed_case_trace_ids_normalized(self, tmp_path):
@@ -278,9 +278,9 @@ class TestEdgeCases:
             '"start_time_unix_nano":"1000000000","end_time_unix_nano":"2000000000",'
             '"attributes":[],"status":{}}]}]}]}\n'
         )
-        
+
         spans = parse_file(str(file_path))
-        
+
         assert len(spans) == 1
         assert spans[0].trace_id == "abc123def"
         assert spans[0].span_id == "ghi456jkl"

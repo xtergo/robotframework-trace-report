@@ -1,0 +1,17 @@
+# Dockerfile for test environment with all dependencies pre-installed
+FROM python:3.11-slim
+
+# Install test dependencies
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-cov \
+    pytest-xdist \
+    hypothesis \
+    black \
+    ruff
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["pytest"]

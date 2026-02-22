@@ -32,7 +32,6 @@ from tests.conftest import (
     rf_test_span,
 )
 
-
 # ============================================================================
 # Property 9: Span classification correctness
 # ============================================================================
@@ -46,10 +45,10 @@ class TestProperty9_SpanClassification:
         """Any span with rf.suite.name should be classified as SUITE."""
         # Convert dict to RawSpan
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify it has rf.suite.name
         assert "rf.suite.name" in raw_span.attributes
-        
+
         # Verify classification
         assert classify_span(raw_span) == SpanType.SUITE
 
@@ -58,10 +57,10 @@ class TestProperty9_SpanClassification:
         """Any span with rf.test.name should be classified as TEST."""
         # Convert dict to RawSpan
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify it has rf.test.name
         assert "rf.test.name" in raw_span.attributes
-        
+
         # Verify classification
         assert classify_span(raw_span) == SpanType.TEST
 
@@ -70,10 +69,10 @@ class TestProperty9_SpanClassification:
         """Any span with rf.keyword.name should be classified as KEYWORD."""
         # Convert dict to RawSpan
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify it has rf.keyword.name
         assert "rf.keyword.name" in raw_span.attributes
-        
+
         # Verify classification
         assert classify_span(raw_span) == SpanType.KEYWORD
 
@@ -82,10 +81,10 @@ class TestProperty9_SpanClassification:
         """Any span with rf.signal should be classified as SIGNAL (or TEST if it also has rf.test.name)."""
         # Convert dict to RawSpan
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify it has rf.signal
         assert "rf.signal" in raw_span.attributes
-        
+
         # Classification depends on whether it also has rf.test.name
         # (SUITE > TEST > KEYWORD > SIGNAL priority)
         classification = classify_span(raw_span)
@@ -98,22 +97,16 @@ class TestProperty9_SpanClassification:
         else:
             assert classification == SpanType.SIGNAL
 
-    @given(otlp_span())
+    @given(otlp_span(exclude_rf_attrs=True))
     def test_generic_span_classified_as_generic(self, span_dict):
         """Any span without rf.* attributes should be classified as GENERIC."""
-        # Filter out any accidental rf.* attributes from the generated span
-        span_dict["attributes"] = [
-            attr for attr in span_dict["attributes"]
-            if not attr["key"].startswith("rf.")
-        ]
-        
         # Convert dict to RawSpan
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify it has no RF attributes
         rf_attrs = [k for k in raw_span.attributes if k.startswith("rf.")]
         assert len(rf_attrs) == 0
-        
+
         # Verify classification
         assert classify_span(raw_span) == SpanType.GENERIC
 
@@ -129,11 +122,11 @@ class TestProperty9_SpanClassification:
     def test_classification_is_deterministic(self, span_dict):
         """Classification should be deterministic for the same span."""
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Classify twice
         classification1 = classify_span(raw_span)
         classification2 = classify_span(raw_span)
-        
+
         # Should be identical
         assert classification1 == classification2
 
@@ -150,7 +143,7 @@ class TestProperty9_SpanClassification:
         """Classification should always return a valid SpanType."""
         raw_span = _dict_to_raw_span(span_dict)
         classification = classify_span(raw_span)
-        
+
         # Should be one of the valid SpanType values
         assert classification in [
             SpanType.SUITE,
@@ -175,12 +168,12 @@ class TestProperty10_FieldExtraction:
         # Build a minimal tree with just the suite
         raw_span = _dict_to_raw_span(span_dict)
         node = SpanNode(span=raw_span, children=[])
-        
+
         # Import the internal builder function
         from rf_trace_viewer.rf_model import _build_suite
-        
+
         suite = _build_suite(node)
-        
+
         # Verify all required fields are present and match input
         assert isinstance(suite, RFSuite)
         assert suite.name == raw_span.attributes.get("rf.suite.name", raw_span.name)
@@ -198,12 +191,12 @@ class TestProperty10_FieldExtraction:
         # Build a minimal tree with just the test
         raw_span = _dict_to_raw_span(span_dict)
         node = SpanNode(span=raw_span, children=[])
-        
+
         # Import the internal builder function
         from rf_trace_viewer.rf_model import _build_test
-        
+
         test = _build_test(node)
-        
+
         # Verify all required fields are present and match input
         assert isinstance(test, RFTest)
         assert test.name == raw_span.attributes.get("rf.test.name", raw_span.name)
@@ -221,12 +214,12 @@ class TestProperty10_FieldExtraction:
         # Build a minimal tree with just the keyword
         raw_span = _dict_to_raw_span(span_dict)
         node = SpanNode(span=raw_span, children=[])
-        
+
         # Import the internal builder function
         from rf_trace_viewer.rf_model import _build_keyword
-        
+
         keyword = _build_keyword(node)
-        
+
         # Verify all required fields are present and match input
         assert isinstance(keyword, RFKeyword)
         assert keyword.name == raw_span.attributes.get("rf.keyword.name", raw_span.name)
@@ -244,11 +237,11 @@ class TestProperty10_FieldExtraction:
         """Test tags should be preserved in the model."""
         raw_span = _dict_to_raw_span(span_dict)
         node = SpanNode(span=raw_span, children=[])
-        
+
         from rf_trace_viewer.rf_model import _build_test
-        
+
         test = _build_test(node)
-        
+
         # If tags were in the input, they should be in the output
         tags_raw = raw_span.attributes.get("rf.test.tags", [])
         if isinstance(tags_raw, list):
@@ -262,19 +255,17 @@ class TestProperty10_FieldExtraction:
         """Keyword type should be preserved in the model."""
         raw_span = _dict_to_raw_span(span_dict)
         node = SpanNode(span=raw_span, children=[])
-        
+
         from rf_trace_viewer.rf_model import _build_keyword
-        
+
         keyword = _build_keyword(node)
-        
+
         # Keyword type should match input or default to "KEYWORD"
         expected_type = raw_span.attributes.get("rf.keyword.type", "KEYWORD")
         assert keyword.keyword_type == expected_type
-        
+
         # Should be one of the valid keyword types
-        assert keyword.keyword_type in [
-            "KEYWORD", "SETUP", "TEARDOWN", "FOR", "IF", "TRY", "WHILE"
-        ]
+        assert keyword.keyword_type in ["KEYWORD", "SETUP", "TEARDOWN", "FOR", "IF", "TRY", "WHILE"]
 
 
 # ============================================================================
@@ -285,55 +276,43 @@ class TestProperty10_FieldExtraction:
 class TestProperty11_GenericSpanPreservation:
     """Property 11: Non-RF spans classified as GENERIC with attributes preserved."""
 
-    @given(otlp_span())
+    @given(otlp_span(exclude_rf_attrs=True))
     def test_generic_span_attributes_preserved(self, span_dict):
         """Generic spans should preserve all original attributes."""
-        # Filter out any accidental rf.* attributes from the generated span
-        span_dict["attributes"] = [
-            attr for attr in span_dict["attributes"]
-            if not attr["key"].startswith("rf.")
-        ]
-        
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify no RF attributes
         rf_attrs = [k for k in raw_span.attributes if k.startswith("rf.")]
         assert len(rf_attrs) == 0
-        
+
         # Verify classification
         assert classify_span(raw_span) == SpanType.GENERIC
-        
+
         # Verify all attributes are preserved in the RawSpan
         for attr in span_dict["attributes"]:
             attr_key = attr["key"]
             # The attribute should be in the flattened attributes dict
             assert attr_key in raw_span.attributes
 
-    @given(otlp_span())
+    @given(otlp_span(exclude_rf_attrs=True))
     def test_generic_span_name_preserved(self, span_dict):
         """Generic spans should preserve the original span name."""
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify classification
         assert classify_span(raw_span) == SpanType.GENERIC
-        
+
         # Verify name is preserved
         assert raw_span.name == span_dict["name"]
 
-    @given(otlp_span())
+    @given(otlp_span(exclude_rf_attrs=True))
     def test_generic_span_timing_preserved(self, span_dict):
         """Generic spans should preserve timing information."""
-        # Filter out any accidental rf.* attributes from the generated span
-        span_dict["attributes"] = [
-            attr for attr in span_dict["attributes"]
-            if not attr["key"].startswith("rf.")
-        ]
-        
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Verify classification
         assert classify_span(raw_span) == SpanType.GENERIC
-        
+
         # Verify timing is preserved (converted to nanoseconds)
         assert raw_span.start_time_unix_nano == int(span_dict["start_time_unix_nano"])
         assert raw_span.end_time_unix_nano == int(span_dict["end_time_unix_nano"])
@@ -367,10 +346,10 @@ class TestProperty12_StatusMapping:
             ],
             "status": {"code": otlp_status},
         }
-        
+
         raw_span = _dict_to_raw_span(span_dict)
         status = extract_status(raw_span)
-        
+
         # Verify mapping based on rf.status
         if rf_status == "PASS":
             assert status == Status.PASS
@@ -386,13 +365,12 @@ class TestProperty12_StatusMapping:
         """Status mapping should default to NOT_RUN when rf.status is missing."""
         # Ensure no rf.status attribute
         span_dict["attributes"] = [
-            attr for attr in span_dict["attributes"]
-            if attr["key"] != "rf.status"
+            attr for attr in span_dict["attributes"] if attr["key"] != "rf.status"
         ]
-        
+
         raw_span = _dict_to_raw_span(span_dict)
         status = extract_status(raw_span)
-        
+
         # Should default to NOT_RUN
         assert status == Status.NOT_RUN
 
@@ -401,10 +379,10 @@ class TestProperty12_StatusMapping:
         """Suite status should be correctly mapped."""
         raw_span = _dict_to_raw_span(span_dict)
         status = extract_status(raw_span)
-        
+
         # Should be one of the valid statuses
         assert status in [Status.PASS, Status.FAIL, Status.SKIP, Status.NOT_RUN]
-        
+
         # Should match the rf.status attribute
         rf_status = raw_span.attributes.get("rf.status", "")
         if rf_status == "PASS":
@@ -419,10 +397,10 @@ class TestProperty12_StatusMapping:
         """Test status should be correctly mapped."""
         raw_span = _dict_to_raw_span(span_dict)
         status = extract_status(raw_span)
-        
+
         # Should be one of the valid statuses
         assert status in [Status.PASS, Status.FAIL, Status.SKIP, Status.NOT_RUN]
-        
+
         # Should match the rf.status attribute
         rf_status = raw_span.attributes.get("rf.status", "")
         if rf_status == "PASS":
@@ -437,10 +415,10 @@ class TestProperty12_StatusMapping:
         """Keyword status should be correctly mapped."""
         raw_span = _dict_to_raw_span(span_dict)
         status = extract_status(raw_span)
-        
+
         # Should be one of the valid statuses
         assert status in [Status.PASS, Status.FAIL, Status.SKIP, Status.NOT_RUN]
-        
+
         # Should match the rf.status attribute
         rf_status = raw_span.attributes.get("rf.status", "")
         if rf_status == "PASS":
@@ -464,15 +442,16 @@ class TestProperty12_StatusMapping:
             ],
             "status": {"code": "STATUS_CODE_UNSET"},
         }
-        
+
         raw_span = _dict_to_raw_span(span_dict)
-        
+
         # Should default to NOT_RUN and emit a warning
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             status = extract_status(raw_span)
-            
+
             assert status == Status.NOT_RUN
             # Should have emitted a warning
             assert len(w) == 1
@@ -486,7 +465,7 @@ class TestProperty12_StatusMapping:
 
 def _dict_to_raw_span(span_dict: dict) -> RawSpan:
     """Convert a span dictionary to a RawSpan object.
-    
+
     This helper function flattens OTLP attributes and converts the span
     dictionary format used by Hypothesis strategies into the RawSpan format
     used by the parser.
@@ -496,7 +475,7 @@ def _dict_to_raw_span(span_dict: dict) -> RawSpan:
     for attr in span_dict.get("attributes", []):
         key = attr["key"]
         value_dict = attr["value"]
-        
+
         # Extract the actual value based on type
         if "string_value" in value_dict:
             value = value_dict["string_value"]
@@ -508,9 +487,9 @@ def _dict_to_raw_span(span_dict: dict) -> RawSpan:
             value = value_dict["bool_value"]
         else:
             value = None
-        
+
         attributes[key] = value
-    
+
     # Create RawSpan
     return RawSpan(
         trace_id=span_dict["trace_id"],
