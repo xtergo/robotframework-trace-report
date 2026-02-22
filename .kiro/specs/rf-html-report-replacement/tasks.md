@@ -62,17 +62,17 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement `merge()`: incrementally add new spans to existing trees (for live mode)
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-  - [ ] 3.2 Write property tests for Span Tree Builder
+  - [x] 3.2 Write property tests for Span Tree Builder
     - **Property 5: Tree reconstruction round-trip** — flatten then rebuild preserves parent-child relationships
     - **Validates: Requirements 2.1**
 
-  - [ ] 3.3 Write property tests for root identification and child ordering
+  - [x] 3.3 Write property tests for root identification and child ordering
     - **Property 6: Root span identification** — roots are exactly spans with no/orphaned parent
     - **Property 7: Child sort order invariant** — children always sorted by start_time
     - **Property 8: Trace grouping correctness** — N trace_ids produce N tree groups
     - **Validates: Requirements 2.2, 2.3, 2.4, 2.5**
 
-  - [ ] 3.4 Write unit tests for tree builder edge cases
+  - [x] 3.4 Write unit tests for tree builder edge cases
     - Test single span (root only), deeply nested tree, multiple traces, all orphans
     - Test with pabot_trace.json fixture
     - _Requirements: 2.1, 2.2, 2.5_
@@ -94,7 +94,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Property 12: Status mapping correctness** — OTLP + rf.status maps to correct RFStatus
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7**
 
-  - [ ] 4.3 Write unit tests for RF model with fixture data
+  - [x] 4.3 Write unit tests for RF model with fixture data
     - Test classification and interpretation with all_types_trace.json and pabot_trace.json
     - Test all keyword types: KEYWORD, SETUP, TEARDOWN, FOR, IF, TRY, WHILE
     - _Requirements: 3.1, 3.4_
