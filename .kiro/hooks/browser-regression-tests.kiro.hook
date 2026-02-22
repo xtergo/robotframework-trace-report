@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Browser Regression Tests",
+  "description": "Run all Robot Framework browser tests in Docker to verify UI functionality",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/rf_trace_viewer/viewer/*.js",
+      "src/rf_trace_viewer/viewer/*.css",
+      "src/rf_trace_viewer/*.py"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "cd tests/browser && docker compose run --rm browser-tests",
+    "timeout": 120
+  }
+}

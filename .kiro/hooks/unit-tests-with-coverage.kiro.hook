@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "name": "Unit Tests with Coverage",
+  "description": "Run unit tests with coverage check (minimum 50% required)",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/rf_trace_viewer/*.py",
+      "tests/unit/*.py"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "PYTHONPATH=src python3 -m pytest tests/unit/ -v --cov=src/rf_trace_viewer --cov-report=term-missing --cov-fail-under=50",
+    "timeout": 60
+  }
+}

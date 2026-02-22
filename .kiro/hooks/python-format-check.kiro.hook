@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "name": "Python Format Check (Black)",
+  "description": "Check Python formatting with Black (line length 100) and Ruff linting",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.py",
+      "tests/**/*.py"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "python3 -m black --check --line-length 100 src/ tests/ && python3 -m ruff check src/",
+    "timeout": 30
+  }
+}
