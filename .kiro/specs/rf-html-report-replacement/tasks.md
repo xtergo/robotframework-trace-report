@@ -50,7 +50,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Property 4: Incremental parsing equivalence** — incremental parsing produces same results as full parsing
     - **Validates: Requirements 1.9**
 
-  - [ ] 2.6 Write unit tests for parser edge cases
+  - [x] 2.6 Write unit tests for parser edge cases
     - Test empty file, single-line file, stdin input
     - Test fixture files: simple_trace.json, pabot_trace.json, malformed_trace.json
     - _Requirements: 1.1, 1.3, 1.4_
