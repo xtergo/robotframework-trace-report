@@ -248,13 +248,16 @@ function _createTreeNode(opts) {
 
   // Emit event when node is clicked (for timeline synchronization)
   row.addEventListener('click', function (e) {
-    console.log('[Tree] Node clicked:', opts.name, 'id:', opts.id);
-    if (opts.id && window.RFTraceViewer && window.RFTraceViewer.emit) {
-      console.log('[Tree] Emitting span-selected event for id:', opts.id);
-      window.RFTraceViewer.emit('span-selected', { spanId: opts.id, source: 'tree' });
+    var capturedId = opts.id;
+    var capturedName = opts.name;
+    console.log('[Tree] Node clicked:', capturedName, 'id:', capturedId);
+    console.log('[Tree] opts object:', JSON.stringify({ id: opts.id, name: opts.name, type: opts.type }));
+    if (capturedId && window.RFTraceViewer && window.RFTraceViewer.emit) {
+      console.log('[Tree] Emitting span-selected event for id:', capturedId);
+      window.RFTraceViewer.emit('span-selected', { spanId: capturedId, source: 'tree' });
     } else {
       console.warn('[Tree] Cannot emit event - missing id or RFTraceViewer:', { 
-        hasId: !!opts.id, 
+        hasId: !!capturedId, 
         hasRFTraceViewer: !!window.RFTraceViewer,
         hasEmit: !!(window.RFTraceViewer && window.RFTraceViewer.emit)
       });

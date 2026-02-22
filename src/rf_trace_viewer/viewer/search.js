@@ -48,6 +48,9 @@
 
   // Reference to all spans (set during initialization)
   var allSpans = [];
+  
+  // Parent-child relationships (spanId -> parentId)
+  var spanParents = {};
 
   /**
    * Initialize the search and filter system.
@@ -88,7 +91,7 @@
     var spans = [];
     var suites = data.suites || [];
 
-    function extractFromSuite(suite) {
+    function extractFromSuite(suite, parentId) {
       spans.push({
         id: suite.id,
         name: suite.name,
@@ -102,20 +105,24 @@
         attributes: suite.attributes || {},
         events: suite.events || []
       });
+      
+      if (parentId) {
+        spanParents[suite.id] = parentId;
+      }
 
       if (suite.children) {
         for (var i = 0; i < suite.children.length; i++) {
           var child = suite.children[i];
           if (child.keywords !== undefined) {
-            extractFromTest(child, suite.name);
+            extractFromTest(child, suite.name, suite.id);
           } else {
-            extractFromSuite(child);
+            extractFromSuite(child, suite.id);
           }
         }
       }
     }
 
-    function extractFromTest(test, suiteName) {
+    function extractFromTest(test, suiteName, parentId) {
       spans.push({
         id: test.id,
         name: test.name,
@@ -129,15 +136,19 @@
         attributes: test.attributes || {},
         events: test.events || []
       });
+      
+      if (parentId) {
+        spanParents[test.id] = parentId;
+      }
 
       if (test.keywords) {
         for (var i = 0; i < test.keywords.length; i++) {
-          extractFromKeyword(test.keywords[i], suiteName);
+          extractFromKeyword(test.keywords[i], suiteName, test.id);
         }
       }
     }
 
-    function extractFromKeyword(kw, suiteName) {
+    function extractFromKeyword(kw, suiteName, parentId) {
       spans.push({
         id: kw.id,
         name: kw.name,
@@ -153,10 +164,14 @@
         events: kw.events || [],
         args: kw.args || ''
       });
+      
+      if (parentId) {
+        spanParents[kw.id] = parentId;
+      }
 
       if (kw.children) {
         for (var i = 0; i < kw.children.length; i++) {
-          extractFromKeyword(kw.children[i], suiteName);
+          extractFromKeyword(kw.children[i], suiteName, kw.id);
         }
       }
     }
@@ -550,6 +565,35 @@
   }
 
   /**
+   * Find the test ancestor of a span (or return the span itself if it's a test).
+   * Returns null if no test ancestor is found.
+   */
+  function _findTestAncestor(spanId) {
+    // Build span lookup map if not already built
+    if (!window._spanLookup) {
+      window._spanLookup = {};
+      for (var i = 0; i < allSpans.length; i++) {
+        window._spanLookup[allSpans[i].id] = allSpans[i];
+      }
+    }
+    
+    var current = window._spanLookup[spanId];
+    if (!current) return null;
+    
+    // Walk up the parent chain until we find a test or run out of parents
+    while (current) {
+      if (current.type === 'test') {
+        return current;
+      }
+      var parentId = spanParents[current.id];
+      if (!parentId) break;
+      current = window._spanLookup[parentId];
+    }
+    
+    return null;
+  }
+
+  /**
    * Apply all active filters and emit filter-changed event.
    */
   function _applyFilters() {
@@ -563,9 +607,24 @@
         continue;
       }
 
-      // Status filter
-      if (filterState.statuses.length > 0 && filterState.statuses.indexOf(span.status) === -1) {
-        continue;
+      // Status filter - use hierarchical filtering
+      // For keywords and child spans, check the parent test's status instead of the span's own status
+      if (filterState.statuses.length > 0) {
+        var statusToCheck = span.status;
+        
+        // If this is a keyword or nested span, find its test ancestor
+        if (span.type === 'keyword') {
+          var testAncestor = _findTestAncestor(span.id);
+          if (testAncestor) {
+            // Use the test's status for filtering
+            statusToCheck = testAncestor.status;
+          }
+        }
+        
+        // Check if the status matches the filter
+        if (filterState.statuses.indexOf(statusToCheck) === -1) {
+          continue;
+        }
       }
 
       // Tag filter (if tags specified, span must have at least one matching tag)

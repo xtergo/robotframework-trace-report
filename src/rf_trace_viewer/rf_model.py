@@ -175,7 +175,7 @@ def _build_test(node: SpanNode) -> RFTest:
     tags = tags_raw if isinstance(tags_raw, list) else []
     return RFTest(
         name=attrs.get("rf.test.name", node.span.name),
-        id=str(attrs.get("rf.test.id", "")),
+        id=node.span.span_id,  # Use unique span_id instead of rf.test.id
         status=extract_status(node.span),
         start_time=node.span.start_time_unix_nano,
         end_time=node.span.end_time_unix_nano,
@@ -199,7 +199,7 @@ def _build_suite(node: SpanNode) -> RFSuite:
         # Signals and generic spans are not added to the suite children
     return RFSuite(
         name=attrs.get("rf.suite.name", node.span.name),
-        id=str(attrs.get("rf.suite.id", "")),
+        id=node.span.span_id,  # Use unique span_id instead of rf.suite.id
         source=str(attrs.get("rf.suite.source", "")),
         status=extract_status(node.span),
         start_time=node.span.start_time_unix_nano,
