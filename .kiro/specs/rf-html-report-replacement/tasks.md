@@ -231,7 +231,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Emit filter-changed events via event bus
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10_
 
-  - [ ] 12.2 Write property test for filter logic
+  - [x] 12.2 Write property test for filter logic
     - **Property 16: Filter logic correctness** — every filtered span satisfies all active criteria, no qualifying span excluded
     - **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8**
 
