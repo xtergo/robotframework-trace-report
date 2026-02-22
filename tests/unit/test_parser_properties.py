@@ -216,3 +216,76 @@ def test_property_single_span_parsing(span: dict):
     assert parsed.name == span["name"]
     assert parsed.start_time_unix_nano == int(span["start_time_unix_nano"])
     assert parsed.end_time_unix_nano == int(span["end_time_unix_nano"])
+
+
+# ============================================================================
+# Property 2: Gzip parsing transparency
+# ============================================================================
+
+
+@given(st.lists(ndjson_line(), min_size=1, max_size=10))
+@settings(max_examples=50)
+def test_property_gzip_parsing_transparency(ndjson_lines: list[str]):
+    """
+    Property 2: Gzip parsing transparency
+
+    For any valid OTLP NDJSON content, parsing the content directly and parsing
+    a gzip-compressed version of the same content should produce identical
+    ParsedSpan lists.
+
+    Validates: Requirements 1.2
+    """
+    import gzip
+    import tempfile
+    import os
+    from src.rf_trace_viewer.parser import parse_file
+
+    # Create the NDJSON content
+    ndjson_content = "\n".join(ndjson_lines)
+
+    # Create temporary files for plain and gzipped versions
+    with tempfile.TemporaryDirectory() as tmpdir:
+        plain_path = os.path.join(tmpdir, "trace.json")
+        gzip_path = os.path.join(tmpdir, "trace.json.gz")
+
+        # Write plain version
+        with open(plain_path, "w", encoding="utf-8") as f:
+            f.write(ndjson_content)
+
+        # Write gzipped version
+        with gzip.open(gzip_path, "wt", encoding="utf-8") as f:
+            f.write(ndjson_content)
+
+        # Parse both versions
+        plain_spans = parse_file(plain_path)
+        gzip_spans = parse_file(gzip_path)
+
+        # Verify we got the same number of spans
+        assert len(plain_spans) == len(gzip_spans), \
+            f"Span count mismatch: plain={len(plain_spans)}, gzip={len(gzip_spans)}"
+
+        # Verify each span is identical
+        for i, (plain, gz) in enumerate(zip(plain_spans, gzip_spans)):
+            assert plain.trace_id == gz.trace_id, \
+                f"Span {i}: trace_id mismatch: {plain.trace_id} != {gz.trace_id}"
+            assert plain.span_id == gz.span_id, \
+                f"Span {i}: span_id mismatch: {plain.span_id} != {gz.span_id}"
+            assert plain.parent_span_id == gz.parent_span_id, \
+                f"Span {i}: parent_span_id mismatch: {plain.parent_span_id} != {gz.parent_span_id}"
+            assert plain.name == gz.name, \
+                f"Span {i}: name mismatch: {plain.name} != {gz.name}"
+            assert plain.kind == gz.kind, \
+                f"Span {i}: kind mismatch: {plain.kind} != {gz.kind}"
+            assert plain.start_time_unix_nano == gz.start_time_unix_nano, \
+                f"Span {i}: start_time mismatch: {plain.start_time_unix_nano} != {gz.start_time_unix_nano}"
+            assert plain.end_time_unix_nano == gz.end_time_unix_nano, \
+                f"Span {i}: end_time mismatch: {plain.end_time_unix_nano} != {gz.end_time_unix_nano}"
+            assert plain.attributes == gz.attributes, \
+                f"Span {i}: attributes mismatch: {plain.attributes} != {gz.attributes}"
+            assert plain.resource_attributes == gz.resource_attributes, \
+                f"Span {i}: resource_attributes mismatch: {plain.resource_attributes} != {gz.resource_attributes}"
+            assert plain.status == gz.status, \
+                f"Span {i}: status mismatch: {plain.status} != {gz.status}"
+            assert plain.events == gz.events, \
+                f"Span {i}: events mismatch: {plain.events} != {gz.events}"
+

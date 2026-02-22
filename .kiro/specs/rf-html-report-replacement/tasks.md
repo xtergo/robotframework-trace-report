@@ -38,7 +38,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Property 1: Parser output correctness** — for any valid OTLP NDJSON, parsed spans have hex IDs, correct float timestamps, and all attributes preserved
     - **Validates: Requirements 1.1, 1.6, 1.7, 1.8**
 
-  - [ ] 2.3 Write property test for gzip transparency
+  - [x] 2.3 Write property test for gzip transparency
     - **Property 2: Gzip parsing transparency** — parsing plain and gzip versions produces identical results
     - **Validates: Requirements 1.2**
 
