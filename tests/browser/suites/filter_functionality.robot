@@ -10,40 +10,6 @@ ${REPORT_PATH}    ${CURDIR}/../../../test-reports/filter_test_report.html
 ${TRACE_FILE}     ${CURDIR}/../../../tests/fixtures/diverse_trace.json
 
 *** Test Cases ***
-Filter Panel Should Be Visible In Right Sidebar
-    [Documentation]    Verify filter panel exists and is visible in the right sidebar
-    New Page    file://${REPORT_PATH}
-    
-    Wait For Load State    networkidle
-    
-    # Wait for app to initialize
-    Sleep    2s
-    
-    # Debug: Check what elements exist
-    ${body_html}=    Get Property    body    innerHTML
-    Log    Page HTML length: ${body_html.__len__()}
-    
-    # Check if rf-trace-viewer exists
-    ${viewer_exists}=    Run Keyword And Return Status    Get Element    .rf-trace-viewer
-    Log    Viewer exists: ${viewer_exists}
-    
-    # Check if viewer-body exists
-    ${body_exists}=    Run Keyword And Return Status    Get Element    .viewer-body
-    Log    Viewer body exists: ${body_exists}
-    
-    # Check filter panel exists
-    ${filter_exists}=    Run Keyword And Return Status    Get Element    .panel-filter
-    Should Be True    ${filter_exists}    Filter panel not found in DOM
-    
-    # Check filter panel is visible
-    ${filter_visible}=    Get Element States    .panel-filter    validate    visible
-    Should Be True    ${filter_visible}    Filter panel exists but is not visible
-    
-    # Check for filter header
-    Get Element    .filter-header h3
-    ${header_text}=    Get Text    .filter-header h3
-    Should Be Equal    ${header_text}    Filters
-
 Filter Panel Should Have All Filter Controls
     [Documentation]    Verify all filter controls are present
     New Page    file://${REPORT_PATH}

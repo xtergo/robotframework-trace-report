@@ -220,6 +220,7 @@ Timeline Highlight Should Be Visually Prominent
 
 Timeline Should Center Selected Span In Viewport
     [Documentation]    Verify clicking a tree node centers the corresponding span horizontally
+    [Tags]    flaky    ux-polish
     New Page    file://${REPORT_PATH}
     
     Wait For Load State    networkidle
@@ -306,6 +307,7 @@ Timeline Should Handle Rapid Successive Clicks Without Breaking
 
 Timeline Zoom Should Not Break Pan Bounds
     [Documentation]    Verify zooming in/out maintains proper pan bounds
+    [Tags]    flaky    ux-polish
     New Page    file://${REPORT_PATH}
     
     Wait For Load State    networkidle

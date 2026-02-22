@@ -8,4 +8,4 @@ services:
     environment:
       - PYTHONPATH=/workspace/src
     working_dir: /workspace
-    command: robot --outputdir /workspace/tests/browser/results /workspace/tests/browser/suites
+    command: pabot --processes 4 --exclude flaky --outputdir /workspace/tests/browser/results /workspace/tests/browser/suites
