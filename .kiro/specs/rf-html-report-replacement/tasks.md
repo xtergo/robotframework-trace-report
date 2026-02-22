@@ -7,13 +7,13 @@ Incremental implementation of the robotframework-trace-report, building from cor
 ## Tasks
 
 - [ ] 1. Set up project foundation and test infrastructure
-  - [ ] 1.1 Create Hypothesis test strategies in `tests/conftest.py`
+  - [x] 1.1 Create Hypothesis test strategies in `tests/conftest.py`
     - Implement custom strategies for generating valid OTLP spans, NDJSON lines, RF-specific attributes, and span trees
     - Include strategies for: `hex_id`, `otlp_attribute`, `otlp_span`, `ndjson_line`, `rf_suite_span`, `rf_test_span`, `rf_keyword_span`, `rf_signal_span`
     - Add `hypothesis` to dev dependencies in `pyproject.toml`
     - _Requirements: 25.2, 25.6_
 
-  - [ ] 1.2 Create test fixture files
+  - [x] 1.2 Create test fixture files
     - Create `tests/fixtures/simple_trace.json` — single suite with one passing test and two keywords
     - Create `tests/fixtures/malformed_trace.json` — mix of valid lines, invalid JSON lines, and valid JSON without resource_spans
     - Create `tests/fixtures/all_types_trace.json` — suite, test, keyword, signal, and generic spans
@@ -235,7 +235,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - **Property 16: Filter logic correctness** — every filtered span satisfies all active criteria, no qualifying span excluded
     - **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8**
 
-- [ ] 13. Checkpoint — Interactive report with tree, timeline, stats, and filtering
+- [x] 13. Checkpoint — Interactive report with tree, timeline, stats, and filtering
   - Ensure all tests pass, ask the user if questions arise.
   - Verify generated report opens in browser with working tree view, timeline, statistics, and filtering.
 
