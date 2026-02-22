@@ -152,14 +152,15 @@
     
     for (var w = 0; w < workers.length; w++) {
       var workerSpans = timelineState.workers[workers[w]];
-      var maxDepth = 0;
+      var maxLane = 0;
       for (var i = 0; i < workerSpans.length; i++) {
-        if (workerSpans[i].depth > maxDepth) {
-          maxDepth = workerSpans[i].depth;
+        var lane = workerSpans[i].lane !== undefined ? workerSpans[i].lane : workerSpans[i].depth;
+        if (lane > maxLane) {
+          maxLane = lane;
         }
       }
-      // Add height for this worker lane (depth + 2 for spacing)
-      totalHeight += (maxDepth + 2) * timelineState.rowHeight;
+      // Add height for this worker lane (maxLane + 2 for spacing)
+      totalHeight += (maxLane + 2) * timelineState.rowHeight;
     }
     
     // Minimum height of 300px
@@ -297,6 +298,98 @@
 
     // Detect workers
     _detectWorkers(allSpans);
+    
+    // Assign lanes to prevent overlap
+    _assignLanes(allSpans);
+  }
+
+  /**
+   * Assign lanes to spans to prevent visual overlap.
+   * Uses greedy algorithm: assign each span to the first available lane.
+   */
+  function _assignLanes(spans) {
+    // Group spans by worker and type for hierarchical lane assignment
+    var workers = {};
+    
+    for (var i = 0; i < spans.length; i++) {
+      var span = spans[i];
+      var worker = span.worker;
+      
+      if (!workers[worker]) {
+        workers[worker] = {
+          suites: [],
+          tests: [],
+          keywords: []
+        };
+      }
+      
+      if (span.type === 'suite') {
+        workers[worker].suites.push(span);
+      } else if (span.type === 'test') {
+        workers[worker].tests.push(span);
+      } else if (span.type === 'keyword') {
+        workers[worker].keywords.push(span);
+      }
+    }
+    
+    // Assign lanes within each worker and type
+    for (var workerId in workers) {
+      var workerSpans = workers[workerId];
+      var laneOffset = 0;
+      
+      // Assign lanes for suites
+      if (workerSpans.suites.length > 0) {
+        _assignLanesForGroup(workerSpans.suites, laneOffset);
+        var maxSuiteLane = Math.max.apply(null, workerSpans.suites.map(function(s) { return s.lane; }));
+        laneOffset = maxSuiteLane + 1;
+      }
+      
+      // Assign lanes for tests
+      if (workerSpans.tests.length > 0) {
+        _assignLanesForGroup(workerSpans.tests, laneOffset);
+        var maxTestLane = Math.max.apply(null, workerSpans.tests.map(function(s) { return s.lane; }));
+        laneOffset = maxTestLane + 1;
+      }
+      
+      // Assign lanes for keywords
+      if (workerSpans.keywords.length > 0) {
+        _assignLanesForGroup(workerSpans.keywords, laneOffset);
+      }
+    }
+    
+    console.log('[Timeline] Lane assignment complete');
+  }
+
+  /**
+   * Assign lanes to a group of spans using greedy algorithm.
+   */
+  function _assignLanesForGroup(spans, laneOffset) {
+    // Sort by start time
+    spans.sort(function(a, b) { return a.startTime - b.startTime; });
+    
+    var lanes = [];  // Each lane tracks its end time
+    
+    for (var i = 0; i < spans.length; i++) {
+      var span = spans[i];
+      var assigned = false;
+      
+      // Try to fit in existing lane
+      for (var lane = 0; lane < lanes.length; lane++) {
+        if (span.startTime >= lanes[lane]) {
+          // No overlap, assign to this lane
+          span.lane = laneOffset + lane;
+          lanes[lane] = span.endTime;
+          assigned = true;
+          break;
+        }
+      }
+      
+      // Need new lane
+      if (!assigned) {
+        span.lane = laneOffset + lanes.length;
+        lanes.push(span.endTime);
+      }
+    }
   }
 
   /**
@@ -644,8 +737,10 @@
       }
 
       // Lane separator
-      var maxDepth = Math.max.apply(null, workerSpans.map(function (s) { return s.depth; }));
-      var laneHeight = (maxDepth + 2) * timelineState.rowHeight;
+      var maxLane = Math.max.apply(null, workerSpans.map(function (s) { 
+        return s.lane !== undefined ? s.lane : s.depth; 
+      }));
+      var laneHeight = (maxLane + 2) * timelineState.rowHeight;
       yOffset += laneHeight;
 
       ctx.strokeStyle = borderColor;
@@ -661,7 +756,9 @@
    * Render a single span bar.
    */
   function _renderSpan(ctx, span, yOffset) {
-    var y = yOffset + span.depth * timelineState.rowHeight;
+    // Use lane for Y position (prevents overlap), fallback to depth if lane not assigned
+    var lane = span.lane !== undefined ? span.lane : span.depth;
+    var y = yOffset + lane * timelineState.rowHeight;
     var x1 = _timeToScreenX(span.startTime);
     var x2 = _timeToScreenX(span.endTime);
     var barWidth = Math.max(x2 - x1, 2);
