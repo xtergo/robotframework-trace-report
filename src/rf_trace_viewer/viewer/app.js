@@ -107,7 +107,7 @@
     
     var tabs = [
       { id: 'overview', label: 'Overview' },
-      { id: 'keywords', label: 'Keywords' }
+      { id: 'statistics', label: 'Statistics' }
     ];
     
     tabs.forEach(function(tab) {
@@ -131,46 +131,55 @@
     tabContent.className = 'tab-content';
     root.appendChild(tabContent);
 
-    // Overview tab (timeline + stats + tree + filters)
+    // Overview tab (timeline + tree + filters, no stats)
     var overviewTab = document.createElement('div');
     overviewTab.className = 'tab-pane active';
     overviewTab.setAttribute('data-tab-pane', 'overview');
+    
+    var body = document.createElement('div');
+    body.className = 'viewer-body';
+
+    // Center column: timeline + tree
+    var centerColumn = document.createElement('div');
+    centerColumn.className = 'panel-center';
     
     var timelineSection = document.createElement('section');
     timelineSection.className = 'timeline-section';
     timelineSection.style.height = '300px';
     timelineSection.style.borderBottom = '1px solid var(--border-color)';
-    overviewTab.appendChild(timelineSection);
-
-    var body = document.createElement('div');
-    body.className = 'viewer-body';
-
-    var statsPanel = document.createElement('aside');
-    statsPanel.className = 'panel-stats';
-
+    centerColumn.appendChild(timelineSection);
+    
     var treePanel = document.createElement('main');
     treePanel.className = 'panel-tree';
+    centerColumn.appendChild(treePanel);
 
     var filterSidebar = document.createElement('aside');
     filterSidebar.className = 'panel-filter';
 
-    body.appendChild(statsPanel);
-    body.appendChild(treePanel);
+    body.appendChild(centerColumn);
     body.appendChild(filterSidebar);
     overviewTab.appendChild(body);
-    
-    tabContent.appendChild(overviewTab);
 
-    // Keywords tab
-    var keywordsTab = document.createElement('div');
-    keywordsTab.className = 'tab-pane';
-    keywordsTab.setAttribute('data-tab-pane', 'keywords');
+    // Statistics tab (overall stats + suite breakdown + keyword stats)
+    var statisticsTab = document.createElement('div');
+    statisticsTab.className = 'tab-pane';
+    statisticsTab.setAttribute('data-tab-pane', 'statistics');
+    
+    var statsBody = document.createElement('div');
+    statsBody.className = 'statistics-body';
+    
+    var statsPanel = document.createElement('aside');
+    statsPanel.className = 'panel-stats';
+    statsBody.appendChild(statsPanel);
     
     var keywordStatsSection = document.createElement('section');
     keywordStatsSection.className = 'keyword-stats-section';
-    keywordsTab.appendChild(keywordStatsSection);
+    statsBody.appendChild(keywordStatsSection);
     
-    tabContent.appendChild(keywordsTab);
+    statisticsTab.appendChild(statsBody);
+    
+    tabContent.appendChild(overviewTab);
+    tabContent.appendChild(statisticsTab);
 
     // Initialize views
     _initializeViews(data);

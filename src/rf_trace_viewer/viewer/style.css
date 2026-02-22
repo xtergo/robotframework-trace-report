@@ -141,20 +141,34 @@
 }
 
 /* ── Main Content Area ── */
-/* Layout: stats (left) + tree (center) + filters (right) */
+/* Layout for Overview tab: center (timeline + tree) + filters (right) */
 .rf-trace-viewer .viewer-body {
   display: flex;
   gap: 0;
-  height: calc(100vh - 350px); /* Account for header (50px) + timeline (300px) */
+  height: calc(100vh - 100px); /* Account for header + tabs */
+}
+
+/* Layout for Statistics tab: stats (left) + keyword stats (right) */
+.rf-trace-viewer .statistics-body {
+  display: flex;
+  gap: 0;
+  height: calc(100vh - 100px); /* Account for header + tabs */
 }
 
 .rf-trace-viewer .panel-stats {
-  width: 280px;
-  min-width: 220px;
+  width: 320px;
+  min-width: 280px;
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
   padding: 16px;
   background: var(--bg-secondary);
+}
+
+.rf-trace-viewer .panel-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .rf-trace-viewer .panel-tree {
@@ -436,9 +450,9 @@
 
 /* ── Keyword Statistics View ── */
 .rf-trace-viewer .keyword-stats-section {
+  flex: 1;
   padding: 24px;
   background: var(--bg-primary);
-  flex: 1;
   overflow-y: auto;
 }
 
