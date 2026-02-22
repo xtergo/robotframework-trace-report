@@ -826,8 +826,11 @@
    * Public API: Highlight a span by ID (called from tree view).
    */
   window.highlightSpanInTimeline = function (spanId) {
+    console.log('[Timeline] highlightSpanInTimeline called with spanId:', spanId);
+    
     for (var i = 0; i < timelineState.flatSpans.length; i++) {
       if (timelineState.flatSpans[i].id === spanId) {
+        console.log('[Timeline] Found span:', timelineState.flatSpans[i].name);
         timelineState.selectedSpan = timelineState.flatSpans[i];
         
         // Center the span in the viewport
@@ -852,6 +855,8 @@
         return;
       }
     }
+    
+    console.warn('[Timeline] Span not found with id:', spanId);
   };
 
   /**

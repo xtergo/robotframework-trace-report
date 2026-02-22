@@ -58,6 +58,7 @@ class RFKeyword:
     start_time: int
     end_time: int
     elapsed_time: float
+    id: str = ""  # Added: span ID for timeline synchronization
     children: list[RFKeyword] = field(default_factory=list)
 
 
@@ -159,6 +160,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         start_time=node.span.start_time_unix_nano,
         end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
+        id=node.span.span_id,  # Added: use span ID for timeline synchronization
         children=children,
     )
 
