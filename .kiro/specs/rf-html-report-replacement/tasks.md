@@ -201,7 +201,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Wire to filter state (recompute on filter change)
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ] 11.2 Write property test for statistics computation
+  - [x] 11.2 Write property test for statistics computation
     - **Property 15: Statistics computation correctness** — counts sum correctly, percentages are count/total*100, per-suite sums to total
     - **Validates: Requirements 7.1, 7.2, 7.3, 7.4**
 
