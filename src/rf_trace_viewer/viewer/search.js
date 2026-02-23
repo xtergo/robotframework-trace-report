@@ -23,7 +23,8 @@
   // Filter state
   var filterState = {
     text: '',
-    statuses: ['PASS', 'FAIL', 'SKIP'],  // NOT_RUN hidden by default
+    testStatuses: ['PASS', 'FAIL', 'SKIP'],  // Test-level status filter
+    kwStatuses: ['PASS', 'FAIL', 'NOT_RUN'],  // Keyword-level status filter
     tags: [],           // Empty = all tags
     suites: [],         // Empty = all suites
     keywordTypes: [],   // Empty = all types
@@ -244,9 +245,13 @@
     var searchSection = _buildTextSearch();
     container.appendChild(searchSection);
 
-    // Status filters
-    var statusSection = _buildStatusFilters();
-    container.appendChild(statusSection);
+    // Test status filters
+    var testStatusSection = _buildTestStatusFilters();
+    container.appendChild(testStatusSection);
+
+    // Keyword status filters
+    var kwStatusSection = _buildKwStatusFilters();
+    container.appendChild(kwStatusSection);
 
     // Tag filters
     if (availableOptions.tags.length > 0) {
@@ -301,23 +306,18 @@
   }
 
   /**
-   * Build status filter toggles.
+   * Build test status filter toggles.
    */
-  function _buildStatusFilters() {
+  function _buildTestStatusFilters() {
     var section = document.createElement('div');
     section.className = 'filter-section';
 
     var label = document.createElement('label');
-    label.textContent = 'Status';
+    label.textContent = 'Test Status';
     section.appendChild(label);
 
-    var statuses = ['PASS', 'FAIL', 'SKIP', 'NOT_RUN'];
-    var statusLabels = {
-      'PASS': 'Pass',
-      'FAIL': 'Fail',
-      'SKIP': 'Skip',
-      'NOT_RUN': 'Not Run'
-    };
+    var statuses = ['PASS', 'FAIL', 'SKIP'];
+    var statusLabels = { 'PASS': 'Pass', 'FAIL': 'Fail', 'SKIP': 'Skip' };
 
     var checkboxContainer = document.createElement('div');
     checkboxContainer.className = 'filter-checkbox-group';
@@ -330,14 +330,63 @@
       var checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.value = status;
-      checkbox.checked = filterState.statuses.indexOf(status) !== -1;
+      checkbox.checked = filterState.testStatuses.indexOf(status) !== -1;
       checkbox.addEventListener('change', function (e) {
-        var status = e.target.value;
-        var idx = filterState.statuses.indexOf(status);
+        var s = e.target.value;
+        var idx = filterState.testStatuses.indexOf(s);
         if (e.target.checked && idx === -1) {
-          filterState.statuses.push(status);
+          filterState.testStatuses.push(s);
         } else if (!e.target.checked && idx !== -1) {
-          filterState.statuses.splice(idx, 1);
+          filterState.testStatuses.splice(idx, 1);
+        }
+        _applyFilters();
+      });
+      checkboxWrapper.appendChild(checkbox);
+
+      var labelText = document.createElement('span');
+      labelText.textContent = statusLabels[status];
+      checkboxWrapper.appendChild(labelText);
+
+      checkboxContainer.appendChild(checkboxWrapper);
+    }
+
+    section.appendChild(checkboxContainer);
+    return section;
+  }
+
+  /**
+   * Build keyword status filter toggles.
+   */
+  function _buildKwStatusFilters() {
+    var section = document.createElement('div');
+    section.className = 'filter-section';
+
+    var label = document.createElement('label');
+    label.textContent = 'Keyword Status';
+    section.appendChild(label);
+
+    var statuses = ['PASS', 'FAIL', 'NOT_RUN'];
+    var statusLabels = { 'PASS': 'Pass', 'FAIL': 'Fail', 'NOT_RUN': 'Not Run' };
+
+    var checkboxContainer = document.createElement('div');
+    checkboxContainer.className = 'filter-checkbox-group';
+
+    for (var i = 0; i < statuses.length; i++) {
+      var status = statuses[i];
+      var checkboxWrapper = document.createElement('label');
+      checkboxWrapper.className = 'filter-checkbox-label';
+
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = status;
+      checkbox.checked = filterState.kwStatuses.indexOf(status) !== -1;
+      checkbox.addEventListener('change', function (e) {
+        var s = e.target.value;
+        var idx = filterState.kwStatuses.indexOf(s);
+        if (e.target.checked && idx === -1) {
+          filterState.kwStatuses.push(s);
+        } else if (!e.target.checked && idx !== -1) {
+          filterState.kwStatuses.splice(idx, 1);
         }
         _applyFilters();
       });
@@ -607,28 +656,27 @@
         continue;
       }
 
-      // Status filter - use hierarchical filtering
-      // For suites and tests: include if own status matches.
-      // For keywords: include if own status matches AND parent test's status
-      // is also in the filter. This prevents NOT_RUN keywords from a FAIL test
-      // showing up when FAIL is unchecked.
-      if (filterState.statuses.length > 0) {
-        var ownMatch = filterState.statuses.indexOf(span.status) !== -1;
-
-        if (span.type === 'keyword') {
+      // Status filter — split into test-level and keyword-level
+      // Suites/tests: checked against testStatuses
+      // Keywords: parent test must pass testStatuses, keyword itself must pass kwStatuses
+      if (span.type === 'suite' || span.type === 'test') {
+        if (filterState.testStatuses.length > 0 &&
+            filterState.testStatuses.indexOf(span.status) === -1) {
+          continue;
+        }
+      } else if (span.type === 'keyword') {
+        // Keyword must pass kwStatuses
+        if (filterState.kwStatuses.length > 0 &&
+            filterState.kwStatuses.indexOf(span.status) === -1) {
+          continue;
+        }
+        // Parent test must pass testStatuses
+        if (filterState.testStatuses.length > 0) {
           var testAncestor = _findTestAncestor(span.id);
-          if (testAncestor) {
-            var parentMatch = filterState.statuses.indexOf(testAncestor.status) !== -1;
-            if (!parentMatch) {
-              continue;
-            }
-            // If parent matches, include keyword regardless of own status
-            // (e.g. NOT_RUN keywords under a PASS test when PASS is selected)
-          } else if (!ownMatch) {
+          if (testAncestor &&
+              filterState.testStatuses.indexOf(testAncestor.status) === -1) {
             continue;
           }
-        } else if (!ownMatch) {
-          continue;
         }
       }
 
@@ -750,7 +798,8 @@
    */
   function _clearAllFilters() {
     filterState.text = '';
-    filterState.statuses = ['PASS', 'FAIL', 'SKIP'];
+    filterState.testStatuses = ['PASS', 'FAIL', 'SKIP'];
+    filterState.kwStatuses = ['PASS', 'FAIL', 'NOT_RUN'];
     filterState.tags = [];
     filterState.suites = [];
     filterState.keywordTypes = [];
@@ -765,7 +814,7 @@
 
     var checkboxes = document.querySelectorAll('.filter-checkbox-group input[type="checkbox"]');
     for (var i = 0; i < checkboxes.length; i++) {
-      checkboxes[i].checked = filterState.statuses.indexOf(checkboxes[i].value) !== -1;
+      checkboxes[i].checked = true;
     }
 
     var multiselects = document.querySelectorAll('.filter-multiselect');
@@ -862,7 +911,10 @@
    */
   window.setFilterState = function (newState) {
     if (newState.text !== undefined) filterState.text = newState.text;
-    if (newState.statuses !== undefined) filterState.statuses = newState.statuses;
+    if (newState.testStatuses !== undefined) filterState.testStatuses = newState.testStatuses;
+    if (newState.kwStatuses !== undefined) filterState.kwStatuses = newState.kwStatuses;
+    // Backward compat: old 'statuses' field sets testStatuses
+    if (newState.statuses !== undefined) filterState.testStatuses = newState.statuses;
     if (newState.tags !== undefined) filterState.tags = newState.tags;
     if (newState.suites !== undefined) filterState.suites = newState.suites;
     if (newState.keywordTypes !== undefined) filterState.keywordTypes = newState.keywordTypes;
