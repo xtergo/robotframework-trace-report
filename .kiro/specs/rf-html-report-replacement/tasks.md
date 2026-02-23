@@ -462,7 +462,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Verify backward compatibility: if fields are at their default values, they should still be present in JSON (the JS viewer will check for them)
     - _Requirements: 31.9, 31.10_
 
-  - [ ] 28.6 Write property tests for enriched data model
+  - [x] 28.6 Write property tests for enriched data model
     - **Property 27: Enriched model field extraction** — for any span with `rf.keyword.lineno`, `rf.keyword.doc`, events, and `status.message`, the interpreted `RFKeyword` model contains matching values; for spans without these attributes, defaults are used
     - **Property 28: Suite metadata collection** — for any suite span with `rf.suite.metadata.*` attributes, the `RFSuite.metadata` dict contains all metadata keys with prefix stripped
     - **Property 29: Status message passthrough** — for any span with a non-empty `status.message`, the corresponding model object's `status_message` field matches the span's status message

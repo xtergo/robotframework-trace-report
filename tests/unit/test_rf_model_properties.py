@@ -8,6 +8,9 @@ Properties tested:
 - Property 10: RF model field extraction
 - Property 11: Generic span preservation
 - Property 12: Status mapping correctness
+- Property 27: Enriched model field extraction
+- Property 28: Suite metadata collection
+- Property 29: Status message passthrough
 """
 
 from hypothesis import given, strategies as st
@@ -502,5 +505,342 @@ def _dict_to_raw_span(span_dict: dict) -> RawSpan:
         attributes=attributes,
         resource_attributes={},
         status=span_dict["status"],
-        events=[],
+        events=span_dict.get("events", []),
     )
+
+
+# ============================================================================
+# Property 27: Enriched model field extraction
+# ============================================================================
+
+
+class TestProperty27_EnrichedModelFieldExtraction:
+    """Property 27: Enriched keyword/test/suite fields are extracted correctly."""
+
+    @given(rf_keyword_span())
+    def test_keyword_lineno_extracted(self, span_dict):
+        """Keyword lineno should match rf.keyword.lineno attribute."""
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+
+        expected_lineno = int(raw_span.attributes.get("rf.keyword.lineno", 0))
+        assert keyword.lineno == expected_lineno
+
+    @given(rf_keyword_span())
+    def test_keyword_doc_extracted(self, span_dict):
+        """Keyword doc should match rf.keyword.doc attribute or default to empty."""
+        # Optionally add a doc attribute
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+
+        expected_doc = str(raw_span.attributes.get("rf.keyword.doc", ""))
+        assert keyword.doc == expected_doc
+
+    @given(rf_keyword_span(), st.text(min_size=0, max_size=200))
+    def test_keyword_doc_with_explicit_value(self, span_dict, doc_text):
+        """When rf.keyword.doc is present, keyword.doc should contain it."""
+        span_dict["attributes"].append(
+            {"key": "rf.keyword.doc", "value": {"string_value": doc_text}}
+        )
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+        assert keyword.doc == doc_text
+
+    @given(rf_keyword_span())
+    def test_keyword_events_extracted(self, span_dict):
+        """Keyword events should be passed through from span events."""
+        # Add some events to the span
+        events = [
+            {
+                "time_unix_nano": "1700000000500000000",
+                "name": "log",
+                "attributes": [
+                    {"key": "level", "value": {"string_value": "INFO"}},
+                    {"key": "message", "value": {"string_value": "Test log message"}},
+                ],
+            },
+        ]
+        span_dict["events"] = events
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+        assert keyword.events == events
+
+    @given(rf_keyword_span())
+    def test_keyword_events_default_empty(self, span_dict):
+        """When span has no events, keyword.events should be empty list."""
+        span_dict.pop("events", None)
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+        assert keyword.events == []
+
+    @given(rf_keyword_span(), st.text(min_size=1, max_size=200))
+    def test_keyword_status_message_extracted(self, span_dict, message):
+        """Keyword status_message should match status.message from span."""
+        span_dict["status"]["message"] = message
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+        assert keyword.status_message == message
+
+    @given(rf_keyword_span())
+    def test_keyword_status_message_default_empty(self, span_dict):
+        """When status has no message, keyword.status_message should be empty."""
+        span_dict["status"].pop("message", None)
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+        assert keyword.status_message == ""
+
+    @given(rf_test_span(), st.text(min_size=0, max_size=200))
+    def test_test_doc_extracted(self, span_dict, doc_text):
+        """Test doc should match rf.test.doc attribute."""
+        span_dict["attributes"].append({"key": "rf.test.doc", "value": {"string_value": doc_text}})
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_test
+
+        test = _build_test(node)
+        assert test.doc == doc_text
+
+    @given(rf_test_span())
+    def test_test_doc_default_empty(self, span_dict):
+        """When rf.test.doc is absent, test.doc should default to empty string."""
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_test
+
+        test = _build_test(node)
+        expected_doc = str(raw_span.attributes.get("rf.test.doc", ""))
+        assert test.doc == expected_doc
+
+    @given(rf_test_span(), st.text(min_size=1, max_size=200))
+    def test_test_status_message_extracted(self, span_dict, message):
+        """Test status_message should match status.message from span."""
+        span_dict["status"]["message"] = message
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_test
+
+        test = _build_test(node)
+        assert test.status_message == message
+
+    @given(rf_suite_span(), st.text(min_size=0, max_size=200))
+    def test_suite_doc_extracted(self, span_dict, doc_text):
+        """Suite doc should match rf.suite.doc attribute."""
+        span_dict["attributes"].append({"key": "rf.suite.doc", "value": {"string_value": doc_text}})
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_suite
+
+        suite = _build_suite(node)
+        assert suite.doc == doc_text
+
+    @given(rf_suite_span())
+    def test_suite_doc_default_empty(self, span_dict):
+        """When rf.suite.doc is absent, suite.doc should default to empty string."""
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_suite
+
+        suite = _build_suite(node)
+        expected_doc = str(raw_span.attributes.get("rf.suite.doc", ""))
+        assert suite.doc == expected_doc
+
+
+# ============================================================================
+# Property 28: Suite metadata collection
+# ============================================================================
+
+
+class TestProperty28_SuiteMetadataCollection:
+    """Property 28: Suite metadata from rf.suite.metadata.* attributes."""
+
+    @given(
+        rf_suite_span(),
+        st.dictionaries(
+            keys=st.text(
+                min_size=1,
+                max_size=30,
+                alphabet=st.characters(
+                    whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="_-"
+                ),
+            ),
+            values=st.text(min_size=0, max_size=100),
+            min_size=1,
+            max_size=5,
+        ),
+    )
+    def test_metadata_keys_collected_with_prefix_stripped(self, span_dict, metadata):
+        """Suite metadata dict should contain all rf.suite.metadata.* keys with prefix stripped."""
+        # Add metadata attributes to the span
+        for key, value in metadata.items():
+            span_dict["attributes"].append(
+                {"key": f"rf.suite.metadata.{key}", "value": {"string_value": value}}
+            )
+
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_suite
+
+        suite = _build_suite(node)
+
+        # Every metadata key should be present with prefix stripped
+        for key, value in metadata.items():
+            assert key in suite.metadata
+            assert suite.metadata[key] == value
+
+    @given(rf_suite_span())
+    def test_no_metadata_produces_empty_dict(self, span_dict):
+        """Suite without rf.suite.metadata.* attributes should have empty metadata."""
+        # Remove any metadata attributes that might have been randomly generated
+        span_dict["attributes"] = [
+            attr
+            for attr in span_dict["attributes"]
+            if not attr["key"].startswith("rf.suite.metadata.")
+        ]
+
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_suite
+
+        suite = _build_suite(node)
+
+        # Filter out any metadata that came from randomly generated attributes
+        # (the strategy might generate keys starting with rf.suite.metadata. by chance)
+        expected_metadata = {
+            k[len("rf.suite.metadata.") :]: str(v)
+            for k, v in raw_span.attributes.items()
+            if k.startswith("rf.suite.metadata.")
+        }
+        assert suite.metadata == expected_metadata
+
+    @given(
+        rf_suite_span(),
+        st.text(
+            min_size=1,
+            max_size=30,
+            alphabet=st.characters(
+                whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="_-"
+            ),
+        ),
+        st.integers(min_value=0, max_value=9999),
+    )
+    def test_non_string_metadata_values_converted_to_string(self, span_dict, key, int_value):
+        """Non-string metadata values should be converted to string."""
+        span_dict["attributes"].append(
+            {"key": f"rf.suite.metadata.{key}", "value": {"int_value": int_value}}
+        )
+
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_suite
+
+        suite = _build_suite(node)
+
+        assert key in suite.metadata
+        assert suite.metadata[key] == str(int_value)
+
+
+# ============================================================================
+# Property 29: Status message passthrough
+# ============================================================================
+
+
+class TestProperty29_StatusMessagePassthrough:
+    """Property 29: status.message passes through to model's status_message field."""
+
+    @given(rf_keyword_span(), st.text(min_size=1, max_size=300))
+    def test_keyword_status_message_passthrough(self, span_dict, message):
+        """Keyword status_message should match span's status.message."""
+        span_dict["status"]["message"] = message
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword
+
+        keyword = _build_keyword(node)
+        assert keyword.status_message == message
+
+    @given(rf_test_span(), st.text(min_size=1, max_size=300))
+    def test_test_status_message_passthrough(self, span_dict, message):
+        """Test status_message should match span's status.message."""
+        span_dict["status"]["message"] = message
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_test
+
+        test = _build_test(node)
+        assert test.status_message == message
+
+    @given(
+        st.one_of(rf_keyword_span(), rf_test_span()),
+    )
+    def test_empty_status_message_when_absent(self, span_dict):
+        """When status has no message field, status_message should be empty string."""
+        span_dict["status"].pop("message", None)
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword, _build_test
+
+        if "rf.keyword.name" in raw_span.attributes:
+            model = _build_keyword(node)
+        else:
+            model = _build_test(node)
+
+        assert model.status_message == ""
+
+    @given(
+        st.one_of(rf_keyword_span(), rf_test_span()),
+        st.text(min_size=1, max_size=300),
+    )
+    def test_status_message_preserved_regardless_of_status_code(self, span_dict, message):
+        """Status message should be preserved regardless of the OTLP status code."""
+        span_dict["status"]["message"] = message
+        # Vary the status code
+        raw_span = _dict_to_raw_span(span_dict)
+        node = SpanNode(span=raw_span, children=[])
+
+        from rf_trace_viewer.rf_model import _build_keyword, _build_test
+
+        if "rf.keyword.name" in raw_span.attributes:
+            model = _build_keyword(node)
+        else:
+            model = _build_test(node)
+
+        assert model.status_message == message
