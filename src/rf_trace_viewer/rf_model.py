@@ -47,6 +47,8 @@ class RFTest:
     elapsed_time: float
     keywords: list[RFKeyword] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
+    doc: str = ""
+    status_message: str = ""
 
 
 @dataclass
@@ -190,6 +192,8 @@ def _build_test(node: SpanNode) -> RFTest:
         elapsed_time=_elapsed_ms(node.span),
         keywords=keywords,
         tags=tags,
+        doc=str(attrs.get("rf.test.doc", "")),
+        status_message=node.span.status.get("message", ""),
     )
 
 
