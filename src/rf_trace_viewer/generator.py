@@ -13,7 +13,15 @@ from rf_trace_viewer.rf_model import (
 )
 
 # Order matters: stats.js, tree.js, timeline.js, keyword-stats.js, and search.js define functions used by app.js
-_JS_FILES = ("stats.js", "tree.js", "timeline.js", "keyword-stats.js", "search.js", "theme.js", "app.js")
+_JS_FILES = (
+    "stats.js",
+    "tree.js",
+    "timeline.js",
+    "keyword-stats.js",
+    "search.js",
+    "theme.js",
+    "app.js",
+)
 _CSS_FILES = ("style.css",)
 _VIEWER_DIR = Path(__file__).parent / "viewer"
 
