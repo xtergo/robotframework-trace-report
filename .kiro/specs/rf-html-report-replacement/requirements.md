@@ -375,3 +375,72 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 1. WHEN multiple executions of the same test (matched by name and suite) appear within a single trace, THE JS_Viewer SHALL identify them as retries and display only the final execution result in the main views.
 2. THE JS_Viewer SHALL provide a retry indicator on tests that were retried, showing the number of attempts.
 3. WHEN a retried test is expanded, THE JS_Viewer SHALL display the execution history of all attempts with their individual statuses and durations.
+
+### Requirement 30: Tree View Detail Panels (RF log.html Parity)
+
+**User Story:** As a test engineer, I want expandable detail panels on each tree node (suite, test, keyword) that show the same rich information as Robot Framework's built-in log.html so that I can drill down into execution details without switching tools.
+
+#### Acceptance Criteria
+
+1. WHEN a suite node is expanded in the tree view, THE JS_Viewer SHALL display a detail panel showing: suite name, source file path, documentation (if available), metadata key-value pairs (if available), status, start/end times, and total duration.
+2. WHEN a test node is expanded in the tree view, THE JS_Viewer SHALL display a detail panel showing: test name, documentation (if available), tags, status, start/end times, duration, and error message with full traceback (if FAIL status).
+3. WHEN a keyword node is expanded in the tree view, THE JS_Viewer SHALL display a detail panel showing: keyword name, keyword type label (SETUP, TEARDOWN, FOR, IF, TRY, WHILE, or KEYWORD), arguments, documentation (if available), source file and line number, status, duration, and error message (if FAIL status).
+4. WHEN a keyword span contains events (log messages from the tracer), THE JS_Viewer SHALL display those events inline under the keyword node with level-based coloring: INFO in blue, WARN in yellow, ERROR/FAIL in red, and DEBUG in grey.
+5. THE JS_Viewer SHALL render detail panels as collapsible sections within each tree node, styled as bordered boxes that visually distinguish suite, test, and keyword types (similar to RF log.html's colored boxes).
+6. THE JS_Viewer SHALL display the keyword type as a prominent label/badge on each keyword node (e.g., "SETUP", "TEARDOWN", "FOR") so that the execution structure is immediately clear.
+7. WHEN a test or keyword has FAIL status, THE JS_Viewer SHALL display the `status.message` (error message from the OTLP span status) prominently in red within the detail panel, including any traceback text.
+8. THE detail panels SHALL be compatible with live mode, rendering incrementally as new spans arrive without disrupting already-expanded panels.
+
+### Requirement 31: Data Pipeline Enrichment for Detail Panels
+
+**User Story:** As a developer, I want the Python data pipeline to pass through all available span data (events, status messages, line numbers, documentation) so that the JS viewer has the information needed to render rich detail panels.
+
+#### Acceptance Criteria
+
+1. THE `RFKeyword` model SHALL include a `lineno` field populated from the `rf.keyword.lineno` span attribute, defaulting to 0 if the attribute is absent.
+2. THE `RFKeyword` model SHALL include a `doc` field populated from the `rf.keyword.doc` span attribute, defaulting to an empty string if the attribute is absent.
+3. THE `RFKeyword` model SHALL include an `events` field containing the span's events list (log messages emitted as OTLP span events by the tracer), defaulting to an empty list.
+4. THE `RFKeyword` model SHALL include a `status_message` field populated from the span's `status.message` field (error/failure messages), defaulting to an empty string.
+5. THE `RFTest` model SHALL include a `doc` field populated from the `rf.test.doc` span attribute, defaulting to an empty string if the attribute is absent.
+6. THE `RFTest` model SHALL include a `status_message` field populated from the span's `status.message` field, defaulting to an empty string.
+7. THE `RFSuite` model SHALL include a `doc` field populated from the `rf.suite.doc` span attribute, defaulting to an empty string if the attribute is absent.
+8. THE `RFSuite` model SHALL include a `metadata` field populated from the `rf.suite.metadata.*` span attributes (collected as a key-value dict), defaulting to an empty dict.
+9. THE Report_Generator SHALL include the enriched fields (`lineno`, `doc`, `events`, `status_message`, `metadata`) in the JSON data embedded in the HTML report so that the JS viewer can render detail panels.
+10. THE enriched data pipeline SHALL preserve backward compatibility: existing reports generated without the new attributes SHALL continue to render correctly, with missing fields treated as their default values.
+
+### Requirement 32: Suite Navigation and Breadcrumb
+
+**User Story:** As a test engineer working with large multi-suite test runs, I want to quickly navigate between suites and see my current position in the suite hierarchy so that I can efficiently drill down into specific areas of the test run.
+
+#### Acceptance Criteria
+
+1. THE JS_Viewer SHALL display a suite breadcrumb bar above the tree view showing the path from the root suite to the currently focused suite (e.g., "Root Suite > Sub Suite A > Nested Suite").
+2. WHEN a breadcrumb segment is clicked, THE JS_Viewer SHALL navigate the tree view to that suite level, collapsing deeper nodes and expanding the selected suite.
+3. THE JS_Viewer SHALL provide a suite selector dropdown (or sidebar list) that lists all suites in the trace, allowing the user to jump directly to any suite regardless of current tree position.
+4. WHEN a suite is selected via the suite selector, THE JS_Viewer SHALL expand the tree to that suite, scroll it into view, and update the breadcrumb accordingly.
+5. THE suite breadcrumb and selector SHALL update in live mode as new suites arrive in the trace data.
+
+### Requirement 33: Suite-Level Setup and Teardown Visibility
+
+**User Story:** As a test engineer, I want to see suite-level setup and teardown keywords in the tree view so that I can debug failures that occur during suite initialization or cleanup.
+
+#### Acceptance Criteria
+
+1. WHEN a suite span has child keyword spans with `rf.keyword.type` of SETUP or TEARDOWN, THE JS_Viewer SHALL display those keywords as direct children of the suite node in the tree view, clearly labeled as "Suite Setup" or "Suite Teardown".
+2. THE `_build_suite` function in `rf_model.py` SHALL include SETUP and TEARDOWN keyword children of suite nodes in the `RFSuite.children` list (currently these are skipped).
+3. WHEN a suite setup or teardown keyword has FAIL status, THE JS_Viewer SHALL prominently indicate the failure on the suite node itself, since suite setup failures typically cause all contained tests to fail.
+
+### Requirement 34: UX Superiority Over RF Core log.html
+
+**User Story:** As a test engineer switching from Robot Framework's built-in log.html, I want the trace viewer to feel faster, more navigable, and more informative so that I never need to fall back to the old report.
+
+#### Acceptance Criteria
+
+1. WHEN a tree node is expanded, THE JS_Viewer SHALL render the detail panel immediately without lazy-loading delays, using pre-parsed data already available in the embedded JSON (unlike RF log.html which uses jQuery template rendering on demand).
+2. THE JS_Viewer SHALL provide instant text search across all node names, keyword arguments, log messages, and error messages, with results highlighted in the tree as the user types (RF log.html has no search capability).
+3. WHEN the user clicks a failed test in any view (tree, timeline, statistics, execution flow table), THE JS_Viewer SHALL cross-navigate to that test in all other views simultaneously, keeping context synchronized (RF log.html has no cross-view navigation).
+4. THE JS_Viewer SHALL render the full tree structure within 500ms for traces containing up to 5,000 spans, using virtual scrolling for larger traces (RF log.html becomes sluggish above ~2,000 elements due to jQuery DOM manipulation).
+5. WHEN multiple filters are active, THE JS_Viewer SHALL show a persistent filter summary bar indicating which filters are applied and how many results match, with one-click removal of individual filters (RF log.html has no filtering).
+6. THE JS_Viewer SHALL provide a "failures only" quick-filter toggle prominently placed near the tree controls that instantly collapses all passing branches and shows only the path to failed tests and keywords (the most common debugging workflow, which RF log.html requires manual expand/collapse to achieve).
+7. WHEN a keyword has FAIL status, THE JS_Viewer SHALL auto-expand the failure path from suite → test → failing keyword on initial load, so the user sees the first failure immediately without any clicks (RF log.html starts fully collapsed).
+8. THE JS_Viewer SHALL display a mini-timeline sparkline next to each test node in the tree showing relative duration compared to siblings, providing at-a-glance performance context without switching to the timeline view (RF log.html shows only a text duration).

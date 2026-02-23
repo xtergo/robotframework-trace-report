@@ -430,6 +430,183 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Run `black --check` and `ruff check` to verify code quality.
   - Generate a report from pabot_trace.json and verify all features work in browser.
 
+- [ ] 28. Enrich Python data models for detail panels
+  - [ ] 28.1 Add `lineno`, `doc`, `events`, and `status_message` fields to `RFKeyword` in `src/rf_trace_viewer/rf_model.py`
+    - Add `lineno: int = 0` field, populated from `rf.keyword.lineno` attribute (already present in tracer output but currently dropped during model building)
+    - Add `doc: str = ""` field, populated from `rf.keyword.doc` attribute (requires tracer to emit this; default empty)
+    - Add `events: list[dict] = field(default_factory=list)` field, populated from `node.span.events` (the `RawSpan.events` field exists but is never passed to the model)
+    - Add `status_message: str = ""` field, populated from `node.span.status.get("message", "")` (error/failure text from OTLP status)
+    - Update `_build_keyword()` to extract and pass these four new fields
+    - _Requirements: 31.1, 31.2, 31.3, 31.4_
+
+  - [ ] 28.2 Add `doc` and `status_message` fields to `RFTest` in `src/rf_trace_viewer/rf_model.py`
+    - Add `doc: str = ""` field, populated from `rf.test.doc` attribute
+    - Add `status_message: str = ""` field, populated from `node.span.status.get("message", "")`
+    - Update `_build_test()` to extract and pass these two new fields
+    - _Requirements: 31.5, 31.6_
+
+  - [ ] 28.3 Add `doc` and `metadata` fields to `RFSuite` in `src/rf_trace_viewer/rf_model.py`
+    - Add `doc: str = ""` field, populated from `rf.suite.doc` attribute
+    - Add `metadata: dict[str, str] = field(default_factory=dict)` field, populated by collecting all `rf.suite.metadata.*` attributes into a dict (strip the prefix to get keys)
+    - Update `_build_suite()` to extract and pass these two new fields
+    - _Requirements: 31.7, 31.8_
+
+  - [ ] 28.4 Include suite-level SETUP/TEARDOWN keywords in `RFSuite.children`
+    - Modify `_build_suite()` in `src/rf_trace_viewer/rf_model.py` to include child keyword spans where `rf.keyword.type` is SETUP or TEARDOWN in the `children` list (currently the comment says "Keywords directly under a suite (setup/teardown) are skipped at suite level")
+    - These should appear as `RFKeyword` objects in `RFSuite.children` alongside `RFSuite` and `RFTest` entries
+    - Update the `RFSuite.children` type hint to `list[RFSuite | RFTest | RFKeyword]`
+    - _Requirements: 33.2_
+
+  - [ ] 28.5 Update generator JSON serialization to include enriched fields
+    - Ensure `src/rf_trace_viewer/generator.py` serializes the new fields (`lineno`, `doc`, `events`, `status_message`, `metadata`) into the embedded JSON data
+    - Verify backward compatibility: if fields are at their default values, they should still be present in JSON (the JS viewer will check for them)
+    - _Requirements: 31.9, 31.10_
+
+  - [ ] 28.6 Write property tests for enriched data model
+    - **Property 27: Enriched model field extraction** — for any span with `rf.keyword.lineno`, `rf.keyword.doc`, events, and `status.message`, the interpreted `RFKeyword` model contains matching values; for spans without these attributes, defaults are used
+    - **Property 28: Suite metadata collection** — for any suite span with `rf.suite.metadata.*` attributes, the `RFSuite.metadata` dict contains all metadata keys with prefix stripped
+    - **Property 29: Status message passthrough** — for any span with a non-empty `status.message`, the corresponding model object's `status_message` field matches the span's status message
+    - Add tests in `tests/unit/test_rf_model.py`
+    - _Validates: Requirements 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8_
+
+  - [ ] 28.7 Write unit tests for enriched data model with fixture data
+    - Test that `_build_keyword()` extracts `lineno` from `rf.keyword.lineno` attribute in existing fixture files (verify `pabot_trace.json` contains this attribute)
+    - Test that `events` from `RawSpan` are passed through to `RFKeyword.events`
+    - Test that `status.message` is extracted for FAIL spans
+    - Test that suite metadata attributes are collected correctly
+    - Test that suite SETUP/TEARDOWN keywords appear in `RFSuite.children`
+    - Test backward compatibility: spans without new attributes produce models with default values
+    - Add tests in `tests/unit/test_rf_model.py`
+    - _Requirements: 31.1, 31.3, 31.4, 31.8, 33.2_
+
+- [ ] 29. Implement tree view detail panels in JS viewer
+  - [ ] 29.1 Add detail panel rendering to `src/rf_trace_viewer/viewer/tree-view.js`
+    - Add collapsible detail panel section inside each tree node (rendered when node is expanded)
+    - Suite detail panel: source path, documentation, metadata table, status badge, start/end times, duration
+    - Test detail panel: documentation, tags as badges, status badge, start/end times, duration, error message block (if FAIL)
+    - Keyword detail panel: keyword type badge (SETUP/TEARDOWN/FOR/IF/TRY/WHILE/KEYWORD), arguments formatted, documentation, source file + line number, status badge, duration, error message block (if FAIL)
+    - Style panels as bordered boxes with type-specific colors (matching RF log.html aesthetic: blue border for suites, green/red for tests based on status, grey for keywords)
+    - _Requirements: 30.1, 30.2, 30.3, 30.5, 30.6_
+
+  - [ ] 29.2 Add inline log message (events) display to keyword detail panels
+    - Render span events under keyword nodes as a list of log entries
+    - Each event shows: timestamp, level (extracted from event name or attributes), message body
+    - Color-code by level: INFO=blue, WARN=yellow, ERROR/FAIL=red, DEBUG=grey
+    - Events section is collapsible, collapsed by default if more than 5 events
+    - _Requirements: 30.4_
+
+  - [ ] 29.3 Add error message display with status.message
+    - For FAIL status nodes, render `status_message` prominently in a red-bordered box within the detail panel
+    - Include full traceback text if present (preserve whitespace/newlines with `<pre>` formatting)
+    - Show error on both the tree node summary line (truncated) and in the expanded detail panel (full)
+    - _Requirements: 30.7_
+
+  - [ ] 29.4 Add detail panel styles to `src/rf_trace_viewer/viewer/style.css`
+    - Add CSS for `.detail-panel`, `.detail-panel--suite`, `.detail-panel--test`, `.detail-panel--keyword`
+    - Add CSS for `.keyword-type-badge` with type-specific colors
+    - Add CSS for `.log-events` list with level-based coloring
+    - Add CSS for `.error-message` block (red border, monospace font for tracebacks)
+    - Add CSS for `.metadata-table` (key-value pairs)
+    - Ensure dark mode compatibility via CSS custom properties
+    - Ensure detail panels work with virtual scrolling (panels should be part of the node's rendered height)
+    - _Requirements: 30.5, 30.7_
+
+  - [ ] 29.5 Ensure detail panels work with live mode
+    - Verify that expanding a node during live updates doesn't collapse or re-render the detail panel
+    - New spans arriving should add to the tree without disrupting already-expanded panels
+    - Test with the live polling mechanism in `live.js`
+    - _Requirements: 30.8_
+
+- [ ] 30. Implement suite breadcrumb and navigation
+  - [ ] 30.1 Add suite breadcrumb component to `src/rf_trace_viewer/viewer/tree-view.js`
+    - Render a breadcrumb bar above the tree view showing the path from root suite to the currently focused/expanded suite
+    - Format: "Root Suite > Sub Suite A > Nested Suite" with clickable segments
+    - Update breadcrumb when user expands/collapses suite nodes or navigates the tree
+    - Clicking a breadcrumb segment collapses deeper nodes and scrolls to that suite
+    - _Requirements: 32.1, 32.2_
+
+  - [ ] 30.2 Add suite selector dropdown to `src/rf_trace_viewer/viewer/tree-view.js`
+    - Add a dropdown/combobox control that lists all suites in the trace (flattened from the suite hierarchy)
+    - Selecting a suite expands the tree path to that suite, scrolls it into view, and updates the breadcrumb
+    - Include suite status indicator (pass/fail icon) in the dropdown list
+    - Support type-ahead filtering in the dropdown for large suite lists
+    - _Requirements: 32.3, 32.4_
+
+  - [ ] 30.3 Add breadcrumb and selector styles to `src/rf_trace_viewer/viewer/style.css`
+    - Add CSS for `.suite-breadcrumb` bar (horizontal, above tree, with separator chevrons)
+    - Add CSS for `.suite-selector` dropdown
+    - Ensure dark mode compatibility
+    - _Requirements: 32.1_
+
+  - [ ] 30.4 Wire breadcrumb and selector to live mode updates
+    - When new suites arrive during live polling, update the suite selector dropdown list
+    - Breadcrumb should remain stable unless the user navigates
+    - _Requirements: 32.5_
+
+- [ ] 31. Update design document with new correctness properties
+  - [ ] 31.1 Add Properties 27-29 to the Correctness Properties section in `.kiro/specs/rf-html-report-replacement/design.md`
+    - **Property 27: Enriched model field extraction** — for any span with rf.keyword.lineno, rf.keyword.doc, events, and status.message, the interpreted model contains matching values; defaults used when attributes absent
+    - **Property 28: Suite metadata collection** — for any suite span with rf.suite.metadata.* attributes, the metadata dict contains all keys with prefix stripped
+    - **Property 29: Status message passthrough** — for any span with non-empty status.message, the model's status_message matches
+    - _Validates: Requirements 31.1-31.8_
+
+- [ ] 32. Implement UX superiority features over RF log.html
+  - [ ] 32.1 Add "failures only" quick-filter toggle to tree controls in `src/rf_trace_viewer/viewer/tree.js`
+    - Add a prominent toggle button next to Expand All / Collapse All labeled "Failures Only"
+    - When active, collapse all passing branches and show only the path from suite → test → failing keyword
+    - Integrate with the existing filter system in `search.js` (set status filter to FAIL only)
+    - Toggle should be visually distinct (red/highlighted when active) so the user knows it's filtering
+    - _Requirements: 34.6_
+
+  - [ ] 32.2 Auto-expand failure path on initial load in `src/rf_trace_viewer/viewer/tree.js`
+    - On initial render, walk the tree to find the first FAIL status node
+    - Expand all ancestor nodes from root suite down to the first failing keyword
+    - Scroll the failing node into view
+    - If no failures exist, start with the tree collapsed as today
+    - _Requirements: 34.7_
+
+  - [ ] 32.3 Add cross-view synchronized navigation in `src/rf_trace_viewer/viewer/app.js`
+    - When a test/keyword is clicked in any view (tree, timeline, stats, flow table), emit a `navigate-to-span` event
+    - All views listen for this event and highlight/scroll to the corresponding element
+    - Ensure the tree expands the path to the node, timeline scrolls and highlights the bar, stats highlights the row
+    - This extends the existing `span-selected` event to work across all views, not just tree ↔ timeline
+    - _Requirements: 34.3_
+
+  - [ ] 32.4 Add mini-timeline sparkline to tree nodes in `src/rf_trace_viewer/viewer/tree.js`
+    - For each test node in the tree, render a small inline horizontal bar showing relative duration compared to sibling tests
+    - Use a thin colored bar (width proportional to duration / max sibling duration) next to the duration text
+    - Color the bar by status (green=pass, red=fail, yellow=skip)
+    - Keep it subtle — this is a visual hint, not a full chart
+    - Add CSS for `.tree-sparkline` in `style.css`
+    - _Requirements: 34.8_
+
+  - [ ] 32.5 Add persistent filter summary bar in `src/rf_trace_viewer/viewer/search.js`
+    - When any filter is active, show a horizontal bar above the tree listing active filters as removable chips/tags
+    - Each chip shows the filter type and value (e.g., "Status: FAIL", "Tag: smoke", "Duration: >5s")
+    - Clicking the × on a chip removes that specific filter
+    - Show "N of M results" count in the bar
+    - Bar is hidden when no filters are active
+    - _Requirements: 34.5_
+
+  - [ ] 32.6 Ensure rendering performance target in `src/rf_trace_viewer/viewer/tree.js`
+    - Profile tree rendering with a 5,000-span trace and ensure initial render completes within 500ms
+    - If needed, implement virtual scrolling: only render nodes visible in the viewport plus a buffer
+    - Use `requestAnimationFrame` for batch DOM updates during expand/collapse operations
+    - Test with the large_trace.json fixture (create one if it doesn't exist with 5,000+ spans)
+    - _Requirements: 34.4_
+
+- [ ] 33. Checkpoint — Tree detail panels, suite navigation, and UX superiority
+  - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
+  - Verify enriched data model fields appear in generated HTML JSON data
+  - Verify tree detail panels render correctly for suites, tests, and keywords
+  - Verify suite breadcrumb updates when navigating the tree
+  - Verify error messages display prominently for FAIL status nodes
+  - Verify backward compatibility with existing trace files that lack new attributes
+  - Verify "failures only" toggle works and auto-expand shows first failure on load
+  - Verify cross-view navigation works between tree, timeline, stats, and flow table
+  - Verify mini-timeline sparklines appear on test nodes
+  - Verify filter summary bar shows active filters with removable chips
+
 ## Notes
 
 - All tasks are required for comprehensive coverage
