@@ -23,7 +23,7 @@
   // Filter state
   var filterState = {
     text: '',
-    statuses: ['PASS', 'FAIL', 'SKIP', 'NOT_RUN'],  // All enabled by default
+    statuses: ['PASS', 'FAIL', 'SKIP'],  // NOT_RUN hidden by default
     tags: [],           // Empty = all tags
     suites: [],         // Empty = all suites
     keywordTypes: [],   // Empty = all types
@@ -609,10 +609,16 @@
 
       // Status filter - use hierarchical filtering
       // For keywords and child spans, check the parent test's status instead of the span's own status
+      // But also filter out keywords by their own status (e.g., NOT_RUN keywords under a PASS test)
       if (filterState.statuses.length > 0) {
+        // First check the span's own status — this hides NOT_RUN keywords regardless of parent
+        if (filterState.statuses.indexOf(span.status) === -1) {
+          continue;
+        }
+
         var statusToCheck = span.status;
         
-        // If this is a keyword or nested span, find its test ancestor
+        // If this is a keyword or nested span, also check the parent test's status
         if (span.type === 'keyword') {
           var testAncestor = _findTestAncestor(span.id);
           if (testAncestor) {
@@ -621,7 +627,7 @@
           }
         }
         
-        // Check if the status matches the filter
+        // Check if the parent status matches the filter
         if (filterState.statuses.indexOf(statusToCheck) === -1) {
           continue;
         }
@@ -745,7 +751,7 @@
    */
   function _clearAllFilters() {
     filterState.text = '';
-    filterState.statuses = ['PASS', 'FAIL', 'SKIP', 'NOT_RUN'];
+    filterState.statuses = ['PASS', 'FAIL', 'SKIP'];
     filterState.tags = [];
     filterState.suites = [];
     filterState.keywordTypes = [];
@@ -760,7 +766,7 @@
 
     var checkboxes = document.querySelectorAll('.filter-checkbox-group input[type="checkbox"]');
     for (var i = 0; i < checkboxes.length; i++) {
-      checkboxes[i].checked = true;
+      checkboxes[i].checked = filterState.statuses.indexOf(checkboxes[i].value) !== -1;
     }
 
     var multiselects = document.querySelectorAll('.filter-multiselect');

@@ -41,6 +41,124 @@ function renderTree(container, model) {
  * @param {Object} model
  * @param {Object|null} filteredSpanIds - Map of span IDs to show, or null for all
  */
+
+/**
+ * Merge same-name sibling suites into single nodes.
+ * Handles pabot traces where each worker produces a separate suite span
+ * with the same name but different tests. Also applied recursively to
+ * nested suites. No-op when all suite names are unique.
+ */
+function _mergeSameNameSuites(suites) {
+  if (!suites || suites.length <= 1) return suites;
+
+  var groups = {};
+  var order = [];
+  for (var i = 0; i < suites.length; i++) {
+    var s = suites[i];
+    var key = s.name;
+    if (!groups[key]) {
+      groups[key] = [];
+      order.push(key);
+    }
+    groups[key].push(s);
+  }
+
+  var result = [];
+  for (var g = 0; g < order.length; g++) {
+    var group = groups[order[g]];
+    if (group.length === 1) {
+      // Unique name — recurse into children for nested suites
+      var solo = group[0];
+      solo.children = _mergeSameNameChildren(solo.children);
+      result.push(solo);
+    } else {
+      // Multiple same-name suites — merge into one
+      result.push(_mergeGroup(group));
+    }
+  }
+  return result;
+}
+
+/** Merge children arrays, applying suite merging to any nested suites. */
+function _mergeSameNameChildren(children) {
+  if (!children || children.length === 0) return children;
+
+  // Separate suites from non-suites (tests, keywords)
+  var childSuites = [];
+  var others = [];
+  for (var i = 0; i < children.length; i++) {
+    var c = children[i];
+    // Suites have 'source' and 'children' but no 'keyword_type' or 'tags'
+    if (c.children !== undefined && c.keyword_type === undefined && c.tags === undefined) {
+      childSuites.push(c);
+    } else {
+      others.push(c);
+    }
+  }
+
+  // Merge same-name child suites
+  var mergedSuites = _mergeSameNameSuites(childSuites);
+
+  // Recombine: merged suites first, then tests/keywords in original order
+  return mergedSuites.concat(others);
+}
+
+/** Merge a group of same-name suites into a single virtual suite. */
+function _mergeGroup(group) {
+  var merged = {};
+  var first = group[0];
+
+  // Copy base fields from first suite
+  merged.name = first.name;
+  merged.id = first.id;
+  merged.source = first.source;
+  merged.doc = first.doc || '';
+  merged.metadata = {};
+
+  // Aggregate: earliest start, latest end, sum elapsed
+  var minStart = first.start_time;
+  var maxEnd = first.end_time;
+  var totalElapsed = 0;
+  var worstStatus = 'PASS';
+  var statusPriority = { 'FAIL': 3, 'SKIP': 2, 'NOT RUN': 1, 'PASS': 0 };
+
+  var allChildren = [];
+  for (var i = 0; i < group.length; i++) {
+    var s = group[i];
+    if (s.start_time < minStart) minStart = s.start_time;
+    if (s.end_time > maxEnd) maxEnd = s.end_time;
+    totalElapsed += s.elapsed_time || 0;
+
+    if ((statusPriority[s.status] || 0) > (statusPriority[worstStatus] || 0)) {
+      worstStatus = s.status;
+    }
+
+    // Merge metadata
+    if (s.metadata) {
+      var keys = Object.keys(s.metadata);
+      for (var k = 0; k < keys.length; k++) {
+        merged.metadata[keys[k]] = s.metadata[keys[k]];
+      }
+    }
+
+    // Collect children
+    if (s.children) {
+      for (var j = 0; j < s.children.length; j++) {
+        allChildren.push(s.children[j]);
+      }
+    }
+  }
+
+  merged.start_time = minStart;
+  merged.end_time = maxEnd;
+  merged.elapsed_time = totalElapsed;
+  merged.status = worstStatus;
+  merged.children = _mergeSameNameChildren(allChildren);
+  merged._merged_count = group.length;
+
+  return merged;
+}
+
 function _renderTreeWithFilter(container, model, filteredSpanIds) {
   container.innerHTML = '';
 
@@ -63,7 +181,7 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   // Render suites
   var treeRoot = document.createElement('div');
   treeRoot.className = 'tree-root';
-  var suites = model.suites || [];
+  var suites = _mergeSameNameSuites(model.suites || []);
   for (var i = 0; i < suites.length; i++) {
     var suiteNode = _renderSuiteNode(suites[i], 0, filteredSpanIds);
     if (suiteNode) {
@@ -81,9 +199,13 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
   }
 
   var hasChildren = suite.children && suite.children.length > 0;
+  var displayName = suite.name;
+  if (suite._merged_count && suite._merged_count > 1) {
+    displayName += ' (' + suite._merged_count + ' workers)';
+  }
   var node = _createTreeNode({
     type: 'suite',
-    name: suite.name,
+    name: displayName,
     status: suite.status,
     elapsed: suite.elapsed_time,
     hasChildren: hasChildren,
