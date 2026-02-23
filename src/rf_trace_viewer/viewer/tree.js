@@ -369,14 +369,7 @@ function _renderSuiteDetail(panel, data) {
   if (data.metadata && Object.keys(data.metadata).length > 0) {
     _addMetadataTable(panel, data.metadata);
   }
-  _addStatusRow(panel, data.status);
-  if (data.start_time) {
-    _addDetailRow(panel, 'Start', _formatTimestamp(data.start_time));
-  }
-  if (data.end_time) {
-    _addDetailRow(panel, 'End', _formatTimestamp(data.end_time));
-  }
-  _addDetailRow(panel, 'Duration', formatDuration(data.elapsed_time || 0));
+  _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
@@ -390,14 +383,7 @@ function _renderTestDetail(panel, data) {
   if (data.tags && data.tags.length > 0) {
     _addTagsRow(panel, data.tags);
   }
-  _addStatusRow(panel, data.status);
-  if (data.start_time) {
-    _addDetailRow(panel, 'Start', _formatTimestamp(data.start_time));
-  }
-  if (data.end_time) {
-    _addDetailRow(panel, 'End', _formatTimestamp(data.end_time));
-  }
-  _addDetailRow(panel, 'Duration', formatDuration(data.elapsed_time || 0));
+  _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
@@ -418,14 +404,44 @@ function _renderKeywordDetail(panel, data) {
     var sourceText = data.source ? data.source + ':' + data.lineno : 'Line ' + data.lineno;
     _addDetailRow(panel, 'Source', sourceText);
   }
-  _addStatusRow(panel, data.status);
-  _addDetailRow(panel, 'Duration', formatDuration(data.elapsed_time || 0));
+  _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
   if (data.events && data.events.length > 0) {
     _renderEventsSection(panel, data.events);
   }
+}
+
+/** Add a compact info bar with status, duration, and timestamps on one line. */
+function _addCompactInfoBar(panel, data) {
+  var bar = document.createElement('div');
+  bar.className = 'detail-info-bar';
+
+  // Status badge
+  var statusCls = _statusClass(data.status);
+  var badge = document.createElement('span');
+  badge.className = 'detail-badge' + (statusCls ? ' ' + statusCls : '');
+  badge.textContent = data.status || 'UNKNOWN';
+  bar.appendChild(badge);
+
+  // Duration
+  var dur = document.createElement('span');
+  dur.className = 'detail-info-item';
+  dur.textContent = formatDuration(data.elapsed_time || 0);
+  bar.appendChild(dur);
+
+  // Timestamps (compact)
+  if (data.start_time) {
+    var timeSpan = document.createElement('span');
+    timeSpan.className = 'detail-info-time';
+    var startStr = _formatTimestamp(data.start_time);
+    var endStr = data.end_time ? _formatTimestamp(data.end_time) : '';
+    timeSpan.textContent = startStr + (endStr ? ' \u2192 ' + endStr : '');
+    bar.appendChild(timeSpan);
+  }
+
+  panel.appendChild(bar);
 }
 
 /** Add a label/value row to the detail panel. */

@@ -1123,3 +1123,25 @@
     overflow: visible;
   }
 }
+
+/* ── Compact Info Bar (status + duration + timestamps on one line) ── */
+.rf-trace-viewer .detail-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  flex-wrap: wrap;
+}
+
+.rf-trace-viewer .detail-info-item {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-trace-viewer .detail-info-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
