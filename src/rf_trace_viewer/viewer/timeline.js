@@ -47,7 +47,8 @@
     leftMargin: 200,
     rightMargin: 20,
     topMargin: 10,
-    bottomMargin: 20
+    bottomMargin: 20,
+    showTimeMarkers: false
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -179,6 +180,22 @@
     zoomReset.textContent = 'Reset';
     zoomReset.setAttribute('aria-label', 'Reset zoom');
     zoomBar.appendChild(zoomReset);
+
+    // Time markers toggle
+    var markerToggle = document.createElement('label');
+    markerToggle.className = 'timeline-marker-toggle';
+    markerToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
+    var markerCb = document.createElement('input');
+    markerCb.type = 'checkbox';
+    markerCb.checked = false;
+    markerCb.setAttribute('aria-label', 'Show time marker lines');
+    markerCb.addEventListener('change', function () {
+      timelineState.showTimeMarkers = markerCb.checked;
+      _render();
+    });
+    markerToggle.appendChild(markerCb);
+    markerToggle.appendChild(document.createTextNode('Grid lines'));
+    zoomBar.appendChild(markerToggle);
 
     headerEl.appendChild(zoomBar);
 
@@ -866,8 +883,15 @@
     // Render worker lanes
     _renderWorkerLanes(ctx, width, height);
 
-    // Render time markers
-    _renderTimeMarkers(ctx, width, height);
+    // Render time markers (only when toggle is on)
+    if (timelineState.showTimeMarkers) {
+      _renderTimeMarkers(ctx, width, height);
+    }
+
+    // Render red dotted line at selected span start
+    if (timelineState.selectedSpan) {
+      _renderSelectedSpanLine(ctx, height);
+    }
 
     // Render selection overlay
     if (timelineState.isSelecting && timelineState.selectionStart !== null) {
@@ -1150,6 +1174,28 @@
     }
 
     ctx.setLineDash([]);
+  }
+
+  /**
+   * Render a red dotted vertical line at the selected span's start time.
+   */
+  function _renderSelectedSpanLine(ctx, height) {
+    var span = timelineState.selectedSpan;
+    if (!span) return;
+    var x = _timeToScreenX(span.startTime);
+    var canvasWidth = timelineState.canvas.width / (window.devicePixelRatio || 1);
+    if (x < timelineState.leftMargin || x > canvasWidth - timelineState.rightMargin) return;
+
+    ctx.save();
+    ctx.strokeStyle = '#ff0000';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   /**
