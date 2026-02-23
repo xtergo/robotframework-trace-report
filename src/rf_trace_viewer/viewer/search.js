@@ -608,27 +608,21 @@
       }
 
       // Status filter - use hierarchical filtering
-      // For keywords and child spans, check the parent test's status instead of the span's own status
-      // But also filter out keywords by their own status (e.g., NOT_RUN keywords under a PASS test)
+      // A span is included if its own status matches OR its parent test's status matches.
+      // This ensures NOT_RUN keywords under a PASS test are visible when NOT_RUN is selected,
+      // and also that PASS keywords are visible when their parent test is PASS.
       if (filterState.statuses.length > 0) {
-        // First check the span's own status — this hides NOT_RUN keywords regardless of parent
-        if (filterState.statuses.indexOf(span.status) === -1) {
-          continue;
-        }
+        var ownMatch = filterState.statuses.indexOf(span.status) !== -1;
+        var parentMatch = false;
 
-        var statusToCheck = span.status;
-        
-        // If this is a keyword or nested span, also check the parent test's status
         if (span.type === 'keyword') {
           var testAncestor = _findTestAncestor(span.id);
           if (testAncestor) {
-            // Use the test's status for filtering
-            statusToCheck = testAncestor.status;
+            parentMatch = filterState.statuses.indexOf(testAncestor.status) !== -1;
           }
         }
-        
-        // Check if the parent status matches the filter
-        if (filterState.statuses.indexOf(statusToCheck) === -1) {
+
+        if (!ownMatch && !parentMatch) {
           continue;
         }
       }

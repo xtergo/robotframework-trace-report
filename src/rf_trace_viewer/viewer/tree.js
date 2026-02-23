@@ -207,45 +207,55 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
 
 /** Render a suite node and its children recursively. */
 function _renderSuiteNode(suite, depth, filteredSpanIds) {
-  // If filtering is active and this suite is not in the filtered list, skip it
-  if (filteredSpanIds !== null && !filteredSpanIds[suite.id]) {
-    return null;
-  }
+  // If filtering is active and this suite is not in the filtered list,
+  // still render it if any descendant matches (so the tree structure is preserved).
+  var suiteMatchesFilter = (filteredSpanIds === null || filteredSpanIds[suite.id]);
 
   var hasChildren = suite.children && suite.children.length > 0;
   var displayName = suite.name;
   if (suite._merged_count && suite._merged_count > 1) {
     displayName += ' (' + suite._merged_count + ' workers)';
   }
+
+  // Render children first to check if any match the filter
+  var renderedChildren = [];
+  if (hasChildren) {
+    for (var i = 0; i < suite.children.length; i++) {
+      var child = suite.children[i];
+      var childNode = null;
+      if (child.keyword_type !== undefined) {
+        childNode = _renderKeywordNode(child, depth + 1, filteredSpanIds);
+      } else if (child.keywords !== undefined) {
+        childNode = _renderTestNode(child, depth + 1, filteredSpanIds);
+      } else {
+        childNode = _renderSuiteNode(child, depth + 1, filteredSpanIds);
+      }
+      if (childNode) {
+        renderedChildren.push(childNode);
+      }
+    }
+  }
+
+  // Skip this suite if it doesn't match and has no matching descendants
+  if (!suiteMatchesFilter && renderedChildren.length === 0) {
+    return null;
+  }
+
   var node = _createTreeNode({
     type: 'suite',
     name: displayName,
     status: suite.status,
     elapsed: suite.elapsed_time,
-    hasChildren: hasChildren,
+    hasChildren: renderedChildren.length > 0,
     depth: depth,
     id: suite.id,
     data: suite
   });
 
-  if (hasChildren) {
+  if (renderedChildren.length > 0) {
     var childrenEl = node.querySelector('.tree-children');
-    for (var i = 0; i < suite.children.length; i++) {
-      var child = suite.children[i];
-      var childNode = null;
-      if (child.keyword_type !== undefined) {
-        // It's a keyword (SETUP/TEARDOWN at suite level)
-        childNode = _renderKeywordNode(child, depth + 1, filteredSpanIds);
-      } else if (child.keywords !== undefined) {
-        // It's a test
-        childNode = _renderTestNode(child, depth + 1, filteredSpanIds);
-      } else {
-        // It's a nested suite
-        childNode = _renderSuiteNode(child, depth + 1, filteredSpanIds);
-      }
-      if (childNode) {
-        childrenEl.appendChild(childNode);
-      }
+    for (var c = 0; c < renderedChildren.length; c++) {
+      childrenEl.appendChild(renderedChildren[c]);
     }
   }
   return node;
@@ -253,30 +263,41 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
 
 /** Render a test node and its keywords. */
 function _renderTestNode(test, depth, filteredSpanIds) {
-  // If filtering is active and this test is not in the filtered list, skip it
-  if (filteredSpanIds !== null && !filteredSpanIds[test.id]) {
+  var testMatchesFilter = (filteredSpanIds === null || filteredSpanIds[test.id]);
+
+  var hasKws = test.keywords && test.keywords.length > 0;
+
+  // Render keywords first to check if any match the filter
+  var renderedKws = [];
+  if (hasKws) {
+    for (var i = 0; i < test.keywords.length; i++) {
+      var kwNode = _renderKeywordNode(test.keywords[i], depth + 1, filteredSpanIds);
+      if (kwNode) {
+        renderedKws.push(kwNode);
+      }
+    }
+  }
+
+  // Skip this test if it doesn't match and has no matching descendants
+  if (!testMatchesFilter && renderedKws.length === 0) {
     return null;
   }
 
-  var hasKws = test.keywords && test.keywords.length > 0;
   var node = _createTreeNode({
     type: 'test',
     name: test.name,
     status: test.status,
     elapsed: test.elapsed_time,
-    hasChildren: hasKws,
+    hasChildren: renderedKws.length > 0,
     depth: depth,
     id: test.id,
     data: test
   });
 
-  if (hasKws) {
+  if (renderedKws.length > 0) {
     var childrenEl = node.querySelector('.tree-children');
-    for (var i = 0; i < test.keywords.length; i++) {
-      var kwNode = _renderKeywordNode(test.keywords[i], depth + 1, filteredSpanIds);
-      if (kwNode) {
-        childrenEl.appendChild(kwNode);
-      }
+    for (var k = 0; k < renderedKws.length; k++) {
+      childrenEl.appendChild(renderedKws[k]);
     }
   }
   return node;
@@ -284,18 +305,32 @@ function _renderTestNode(test, depth, filteredSpanIds) {
 
 /** Render a keyword node and its nested keywords. */
 function _renderKeywordNode(kw, depth, filteredSpanIds) {
-  // If filtering is active and this keyword is not in the filtered list, skip it
-  if (filteredSpanIds !== null && !filteredSpanIds[kw.id]) {
+  var kwMatchesFilter = (filteredSpanIds === null || filteredSpanIds[kw.id]);
+
+  var hasChildren = kw.children && kw.children.length > 0;
+
+  // Render children first to check if any match the filter
+  var renderedChildren = [];
+  if (hasChildren) {
+    for (var i = 0; i < kw.children.length; i++) {
+      var childNode = _renderKeywordNode(kw.children[i], depth + 1, filteredSpanIds);
+      if (childNode) {
+        renderedChildren.push(childNode);
+      }
+    }
+  }
+
+  // Skip this keyword if it doesn't match and has no matching descendants
+  if (!kwMatchesFilter && renderedChildren.length === 0) {
     return null;
   }
 
-  var hasChildren = kw.children && kw.children.length > 0;
   var node = _createTreeNode({
     type: 'keyword',
     name: kw.name,
     status: kw.status,
     elapsed: kw.elapsed_time,
-    hasChildren: hasChildren,
+    hasChildren: renderedChildren.length > 0,
     depth: depth,
     kwType: kw.keyword_type,
     kwArgs: kw.args,
@@ -303,13 +338,10 @@ function _renderKeywordNode(kw, depth, filteredSpanIds) {
     data: kw
   });
 
-  if (hasChildren) {
+  if (renderedChildren.length > 0) {
     var childrenEl = node.querySelector('.tree-children');
-    for (var i = 0; i < kw.children.length; i++) {
-      var childNode = _renderKeywordNode(kw.children[i], depth + 1, filteredSpanIds);
-      if (childNode) {
-        childrenEl.appendChild(childNode);
-      }
+    for (var c = 0; c < renderedChildren.length; c++) {
+      childrenEl.appendChild(renderedChildren[c]);
     }
   }
   return node;
