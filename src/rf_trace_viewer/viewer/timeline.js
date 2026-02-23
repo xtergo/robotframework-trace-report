@@ -55,6 +55,12 @@
     return document.querySelector('.rf-trace-viewer') || document.documentElement;
   }
 
+  /** Read a CSS custom property value, trimmed, with fallback. */
+  function _css(prop, fallback) {
+    var val = getComputedStyle(_getThemeRoot()).getPropertyValue(prop);
+    return (val && val.trim()) || fallback;
+  }
+
   // Expose for debugging/testing
   window.timelineState = timelineState;
 
@@ -854,7 +860,7 @@
     ctx.clearRect(0, 0, width, height);
 
     // Background
-    ctx.fillStyle = getComputedStyle(_getThemeRoot()).getPropertyValue('--bg-primary') || '#ffffff';
+    ctx.fillStyle = _css('--bg-primary', '#ffffff');
     ctx.fillRect(0, 0, width, height);
 
     // Render worker lanes
@@ -882,13 +888,13 @@
 
     var width = headerCanvas.width / (window.devicePixelRatio || 1);
     var height = headerCanvas.height / (window.devicePixelRatio || 1);
-    var textColor = getComputedStyle(_getThemeRoot()).getPropertyValue('--text-primary') || '#1a1a1a';
-    var borderColor = getComputedStyle(_getThemeRoot()).getPropertyValue('--border-color') || '#d0d0d0';
+    var textColor = _css('--text-primary', '#1a1a1a');
+    var borderColor = _css('--border-color', '#d0d0d0');
 
     // Clear header canvas
     ctx.clearRect(0, 0, width, height);
 
-    ctx.fillStyle = getComputedStyle(_getThemeRoot()).getPropertyValue('--bg-secondary') || '#f5f5f5';
+    ctx.fillStyle = _css('--bg-secondary', '#f5f5f5');
     ctx.fillRect(0, 0, width, height);
 
     ctx.strokeStyle = borderColor;
@@ -929,8 +935,8 @@
   function _renderWorkerLanes(ctx, width, height) {
     var workers = Object.keys(timelineState.workers);
     var yOffset = timelineState.topMargin + timelineState.panY;
-    var textColor = getComputedStyle(_getThemeRoot()).getPropertyValue('--text-primary') || '#1a1a1a';
-    var borderColor = getComputedStyle(_getThemeRoot()).getPropertyValue('--border-color') || '#d0d0d0';
+    var textColor = _css('--text-primary', '#1a1a1a');
+    var borderColor = _css('--border-color', '#d0d0d0');
     
     // Only show worker labels if there are multiple workers
     var showWorkerLabels = workers.length > 1 || (workers.length === 1 && workers[0] !== 'default');
@@ -1095,16 +1101,15 @@
    * Get status color from CSS variables.
    */
   function _getStatusColor(status) {
-    var root = _getThemeRoot();
     switch (status) {
       case 'PASS':
-        return getComputedStyle(root).getPropertyValue('--status-pass') || '#2e7d32';
+        return _css('--status-pass', '#2e7d32');
       case 'FAIL':
-        return getComputedStyle(root).getPropertyValue('--status-fail') || '#c62828';
+        return _css('--status-fail', '#c62828');
       case 'SKIP':
-        return getComputedStyle(root).getPropertyValue('--status-skip') || '#f9a825';
+        return _css('--status-skip', '#f9a825');
       default:
-        return getComputedStyle(root).getPropertyValue('--status-not-run') || '#757575';
+        return _css('--status-not-run', '#757575');
     }
   }
 
@@ -1112,7 +1117,7 @@
    * Render time markers at suite/test boundaries.
    */
   function _renderTimeMarkers(ctx, width, height) {
-    var borderColor = getComputedStyle(_getThemeRoot()).getPropertyValue('--border-color') || '#d0d0d0';
+    var borderColor = _css('--border-color', '#d0d0d0');
     
     // Find suite and test boundaries
     var markers = [];

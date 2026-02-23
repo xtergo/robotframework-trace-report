@@ -19,10 +19,7 @@
    * @returns {'dark'|'light'}
    */
   function _detectOSPreference() {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
+    return 'dark';
   }
 
   /**
@@ -44,11 +41,14 @@
     }
 
     // Re-render canvas-based views so they pick up new CSS variable values
-    if (window.RFTraceViewer && window.RFTraceViewer.debug &&
-        window.RFTraceViewer.debug.timeline &&
-        typeof window.RFTraceViewer.debug.timeline.forceRender === 'function') {
-      window.RFTraceViewer.debug.timeline.forceRender();
-    }
+    // Use requestAnimationFrame to ensure styles are recalculated after class change
+    requestAnimationFrame(function () {
+      if (window.RFTraceViewer && window.RFTraceViewer.debug &&
+          window.RFTraceViewer.debug.timeline &&
+          typeof window.RFTraceViewer.debug.timeline.forceRender === 'function') {
+        window.RFTraceViewer.debug.timeline.forceRender();
+      }
+    });
 
     // Emit theme-changed event
     if (window.RFTraceViewer && typeof window.RFTraceViewer.emit === 'function') {
