@@ -880,3 +880,94 @@
 .rf-trace-viewer .detail-metadata-table tr:last-child td {
   border-bottom: none;
 }
+
+/* ── Events (Log Messages) Section ── */
+.rf-trace-viewer .events-section {
+  margin-top: 8px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 6px;
+}
+
+.rf-trace-viewer .events-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 2px 0;
+}
+
+.rf-trace-viewer .events-header:hover {
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .events-header:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.rf-trace-viewer .events-toggle {
+  font-size: 10px;
+  width: 12px;
+  display: inline-block;
+}
+
+.rf-trace-viewer .events-list {
+  margin-top: 4px;
+}
+
+.rf-trace-viewer .event-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-family: monospace;
+  border-radius: 2px;
+}
+
+.rf-trace-viewer .event-entry:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .event-time {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.rf-trace-viewer .event-level {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 11px;
+  min-width: 40px;
+}
+
+.rf-trace-viewer .event-message {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* Event level colors */
+.rf-trace-viewer .event-level-info .event-level { color: #1565c0; }
+.rf-trace-viewer .event-level-warn .event-level { color: #f9a825; }
+.rf-trace-viewer .event-level-error .event-level { color: var(--status-fail); }
+.rf-trace-viewer .event-level-fail .event-level { color: var(--status-fail); }
+.rf-trace-viewer .event-level-debug .event-level { color: #757575; }
+
+.rf-trace-viewer .event-level-error,
+.rf-trace-viewer .event-level-fail {
+  background: var(--status-fail-bg);
+}
+
+.rf-trace-viewer .event-level-warn {
+  background: var(--status-skip-bg);
+}
+
+/* Dark theme adjustments for event levels */
+.rf-trace-viewer.theme-dark .event-level-info .event-level { color: #42a5f5; }
+.rf-trace-viewer.theme-dark .event-level-debug .event-level { color: #9e9e9e; }

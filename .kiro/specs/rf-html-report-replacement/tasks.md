@@ -488,7 +488,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Style panels as bordered boxes with type-specific colors (matching RF log.html aesthetic: blue border for suites, green/red for tests based on status, grey for keywords)
     - _Requirements: 30.1, 30.2, 30.3, 30.5, 30.6_
 
-  - [ ] 29.2 Add inline log message (events) display to keyword detail panels
+  - [x] 29.2 Add inline log message (events) display to keyword detail panels
     - Render span events under keyword nodes as a list of log entries
     - Each event shows: timestamp, level (extracted from event name or attributes), message body
     - Color-code by level: INFO=blue, WARN=yellow, ERROR/FAIL=red, DEBUG=grey

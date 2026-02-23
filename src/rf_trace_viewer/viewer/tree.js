@@ -284,6 +284,9 @@ function _renderKeywordDetail(panel, data) {
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
+  if (data.events && data.events.length > 0) {
+    _renderEventsSection(panel, data.events);
+  }
 }
 
 /** Add a label/value row to the detail panel. */
@@ -383,6 +386,151 @@ function _addErrorBlock(panel, message) {
   errorEl.className = 'detail-error';
   errorEl.textContent = message;
   panel.appendChild(errorEl);
+}
+
+/**
+ * Render span events as a collapsible log entries section.
+ * Collapsed by default if more than 5 events.
+ * @param {HTMLElement} panel - The detail panel to append to
+ * @param {Array} events - Array of OTLP event objects
+ */
+function _renderEventsSection(panel, events) {
+  var section = document.createElement('div');
+  section.className = 'events-section';
+
+  var header = document.createElement('button');
+  header.className = 'events-header';
+  var collapsed = events.length > 5;
+  header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  header.innerHTML = '<span class="events-toggle">' + (collapsed ? '\u25b6' : '\u25bc') + '</span> Log Messages (' + events.length + ')';
+  header.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var list = section.querySelector('.events-list');
+    var isHidden = list.style.display === 'none';
+    list.style.display = isHidden ? 'block' : 'none';
+    var toggleSpan = header.querySelector('.events-toggle');
+    toggleSpan.textContent = isHidden ? '\u25bc' : '\u25b6';
+    header.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+  });
+  section.appendChild(header);
+
+  var list = document.createElement('div');
+  list.className = 'events-list';
+  list.style.display = collapsed ? 'none' : 'block';
+
+  for (var i = 0; i < events.length; i++) {
+    var evt = events[i];
+    var entry = document.createElement('div');
+
+    // Extract level from event name or attributes
+    var level = _extractEventLevel(evt);
+    entry.className = 'event-entry event-level-' + level.toLowerCase();
+
+    // Timestamp
+    var timeStr = '';
+    if (evt.time_unix_nano) {
+      timeStr = _formatTimestamp(evt.time_unix_nano);
+    } else if (evt.timeUnixNano) {
+      timeStr = _formatTimestamp(evt.timeUnixNano);
+    }
+
+    // Message from attributes
+    var message = _extractEventMessage(evt);
+
+    var timeEl = document.createElement('span');
+    timeEl.className = 'event-time';
+    timeEl.textContent = timeStr;
+    entry.appendChild(timeEl);
+
+    var levelEl = document.createElement('span');
+    levelEl.className = 'event-level';
+    levelEl.textContent = level;
+    entry.appendChild(levelEl);
+
+    var msgEl = document.createElement('span');
+    msgEl.className = 'event-message';
+    msgEl.textContent = message;
+    entry.appendChild(msgEl);
+
+    list.appendChild(entry);
+  }
+
+  section.appendChild(list);
+  panel.appendChild(section);
+}
+
+/**
+ * Extract log level from an OTLP event.
+ * Checks event name and attributes for level indicators.
+ * @param {Object} evt - OTLP event object
+ * @returns {string} Log level: INFO, WARN, ERROR, FAIL, or DEBUG
+ */
+function _extractEventLevel(evt) {
+  var name = (evt.name || '').toLowerCase();
+
+  // Check event name for level hints
+  if (name.indexOf('fail') !== -1 || name.indexOf('error') !== -1) return 'ERROR';
+  if (name.indexOf('warn') !== -1) return 'WARN';
+  if (name.indexOf('debug') !== -1) return 'DEBUG';
+
+  // Check attributes for rf.status or level
+  var attrs = evt.attributes;
+  if (attrs) {
+    // Attributes may be OTLP array format or already flattened dict
+    if (Array.isArray(attrs)) {
+      for (var i = 0; i < attrs.length; i++) {
+        var key = attrs[i].key;
+        if (key === 'rf.status' || key === 'level') {
+          var val = '';
+          if (attrs[i].value && attrs[i].value.string_value) {
+            val = attrs[i].value.string_value;
+          } else if (typeof attrs[i].value === 'string') {
+            val = attrs[i].value;
+          }
+          val = val.toUpperCase();
+          if (val === 'FAIL' || val === 'ERROR') return 'ERROR';
+          if (val === 'WARN' || val === 'WARNING') return 'WARN';
+          if (val === 'DEBUG') return 'DEBUG';
+          if (val === 'PASS' || val === 'INFO') return 'INFO';
+        }
+      }
+    } else if (typeof attrs === 'object') {
+      var rfStatus = attrs['rf.status'] || attrs['level'] || '';
+      rfStatus = rfStatus.toUpperCase();
+      if (rfStatus === 'FAIL' || rfStatus === 'ERROR') return 'ERROR';
+      if (rfStatus === 'WARN' || rfStatus === 'WARNING') return 'WARN';
+      if (rfStatus === 'DEBUG') return 'DEBUG';
+    }
+  }
+
+  return 'INFO';
+}
+
+/**
+ * Extract the message body from an OTLP event.
+ * @param {Object} evt - OTLP event object
+ * @returns {string} The event message
+ */
+function _extractEventMessage(evt) {
+  var attrs = evt.attributes;
+  if (attrs) {
+    if (Array.isArray(attrs)) {
+      for (var i = 0; i < attrs.length; i++) {
+        if (attrs[i].key === 'message') {
+          if (attrs[i].value && attrs[i].value.string_value) {
+            return attrs[i].value.string_value;
+          }
+          if (typeof attrs[i].value === 'string') {
+            return attrs[i].value;
+          }
+        }
+      }
+    } else if (typeof attrs === 'object' && attrs.message) {
+      return String(attrs.message);
+    }
+  }
+  // Fallback to event name
+  return evt.name || '';
 }
 
 /**
