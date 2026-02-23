@@ -451,7 +451,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Update `_build_suite()` to extract and pass these two new fields
     - _Requirements: 31.7, 31.8_
 
-  - [ ] 28.4 Include suite-level SETUP/TEARDOWN keywords in `RFSuite.children`
+  - [x] 28.4 Include suite-level SETUP/TEARDOWN keywords in `RFSuite.children`
     - Modify `_build_suite()` in `src/rf_trace_viewer/rf_model.py` to include child keyword spans where `rf.keyword.type` is SETUP or TEARDOWN in the `children` list (currently the comment says "Keywords directly under a suite (setup/teardown) are skipped at suite level")
     - These should appear as `RFKeyword` objects in `RFSuite.children` alongside `RFSuite` and `RFTest` entries
     - Update the `RFSuite.children` type hint to `list[RFSuite | RFTest | RFKeyword]`

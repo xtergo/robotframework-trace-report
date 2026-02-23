@@ -224,17 +224,19 @@ class TestInterpretation:
         suite = model.suites[0]
         assert isinstance(suite, RFSuite)
         assert suite.name == "All Types Suite"
-        assert suite.id == "s1"
+        assert suite.id == "1000000000000001"  # Uses span_id, not rf.suite.id
         assert suite.source == "/tests/all_types.robot"
         assert suite.status == Status.PASS
 
         # Check test structure - suite has 2 children (signal span + actual test)
-        assert len(suite.children) == 2
-        # Get the actual test (the one with an id)
-        test = next(t for t in suite.children if t.id == "s1-t1")
+        # Filter to only RFTest children (suite may also contain RFKeyword for SETUP/TEARDOWN)
+        test_children = [c for c in suite.children if isinstance(c, RFTest)]
+        assert len(test_children) == 2
+        # Get the actual test (the one with keywords)
+        test = next(t for t in test_children if len(t.keywords) > 0)
         assert isinstance(test, RFTest)
         assert test.name == "Example Test"
-        assert test.id == "s1-t1"
+        assert test.id == "1000000000000003"  # Uses span_id, not rf.test.id
         assert test.status == Status.PASS
         assert test.tags == ["smoke", "regression"]
 
@@ -423,17 +425,17 @@ class TestEdgeCases:
         # They are classified as TEST (priority: SUITE > TEST > KEYWORD > SIGNAL)
         suite = model.suites[0]
 
-        # Suite has 2 children: signal span (classified as test) and actual test
-        assert len(suite.children) == 2
+        # Filter to only RFTest children
+        test_children = [c for c in suite.children if isinstance(c, RFTest)]
+        assert len(test_children) == 2
 
-        # One should be the signal (no id, no keywords)
-        signal_test = next((t for t in suite.children if not t.id), None)
+        # One should be the signal (no keywords)
+        signal_test = next((t for t in test_children if len(t.keywords) == 0), None)
         assert signal_test is not None
         assert signal_test.name == "Example Test"
-        assert len(signal_test.keywords) == 0
 
-        # One should be the actual test (has id and keywords)
-        actual_test = next((t for t in suite.children if t.id), None)
+        # One should be the actual test (has keywords)
+        actual_test = next((t for t in test_children if len(t.keywords) > 0), None)
         assert actual_test is not None
-        assert actual_test.id == "s1-t1"
+        assert actual_test.id == "1000000000000003"  # Uses span_id
         assert len(actual_test.keywords) > 0

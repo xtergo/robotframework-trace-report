@@ -36,7 +36,7 @@ class RFSuite:
     elapsed_time: float
     doc: str = ""
     metadata: dict[str, str] = field(default_factory=dict)
-    children: list[RFSuite | RFTest] = field(default_factory=list)
+    children: list[RFSuite | RFTest | RFKeyword] = field(default_factory=list)
 
 
 @dataclass
@@ -202,14 +202,17 @@ def _build_test(node: SpanNode) -> RFTest:
 def _build_suite(node: SpanNode) -> RFSuite:
     """Convert a suite SpanNode to an RFSuite."""
     attrs = node.span.attributes
-    children: list[RFSuite | RFTest] = []
+    children: list[RFSuite | RFTest | RFKeyword] = []
     for child in node.children:
         span_type = classify_span(child.span)
         if span_type == SpanType.SUITE:
             children.append(_build_suite(child))
         elif span_type == SpanType.TEST:
             children.append(_build_test(child))
-        # Keywords directly under a suite (setup/teardown) are skipped at suite level
+        elif span_type == SpanType.KEYWORD:
+            kw_type = child.span.attributes.get("rf.keyword.type", "KEYWORD")
+            if kw_type in ("SETUP", "TEARDOWN"):
+                children.append(_build_keyword(child))
         # Signals and generic spans are not added to the suite children
 
     # Collect suite metadata from rf.suite.metadata.* attributes
@@ -280,7 +283,7 @@ def interpret_tree(roots: list[SpanNode]) -> RFRunModel:
     )
 
 
-def _count_tests(children: list[RFSuite | RFTest]) -> tuple[int, int, int, int]:
+def _count_tests(children: list[RFSuite | RFTest | RFKeyword]) -> tuple[int, int, int, int]:
     """Recursively count total/passed/failed/skipped tests."""
     total = passed = failed = skipped = 0
     for child in children:

@@ -177,7 +177,7 @@ class TestProperty10_FieldExtraction:
         # Verify all required fields are present and match input
         assert isinstance(suite, RFSuite)
         assert suite.name == raw_span.attributes.get("rf.suite.name", raw_span.name)
-        assert suite.id == str(raw_span.attributes.get("rf.suite.id", ""))
+        assert suite.id == raw_span.span_id  # Uses span_id, not rf.suite.id
         assert suite.source == str(raw_span.attributes.get("rf.suite.source", ""))
         assert isinstance(suite.status, Status)
         assert suite.start_time == raw_span.start_time_unix_nano
@@ -200,7 +200,7 @@ class TestProperty10_FieldExtraction:
         # Verify all required fields are present and match input
         assert isinstance(test, RFTest)
         assert test.name == raw_span.attributes.get("rf.test.name", raw_span.name)
-        assert test.id == str(raw_span.attributes.get("rf.test.id", ""))
+        assert test.id == raw_span.span_id  # Uses span_id, not rf.test.id
         assert isinstance(test.status, Status)
         assert test.start_time == raw_span.start_time_unix_nano
         assert test.end_time == raw_span.end_time_unix_nano

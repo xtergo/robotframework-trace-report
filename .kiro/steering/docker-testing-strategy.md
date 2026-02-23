@@ -120,6 +120,10 @@ When implementing or testing code:
 5. **Fix issues** if tests fail
 6. **Verify again** before marking task complete
 
+## Critical Rule: All Tests Must Pass Before Committing
+
+**NEVER commit code with failing tests.** Before any commit, run `make test-unit` and confirm all tests pass with zero failures. If any tests fail — whether caused by your changes or pre-existing and unrelated — investigate and fix them before committing. This includes updating test assertions when intentional model or API changes make old assertions stale.
+
 ## Troubleshooting
 
 ### "rf-trace-test:latest not found"
