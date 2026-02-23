@@ -831,6 +831,23 @@ function _toggleNode(nodeEl) {
       toggleBtn.textContent = '\u25bc'; // ▼
       toggleBtn.setAttribute('aria-label', 'Collapse');
     }
+    // Scroll so the clicked node is at the top of the visible area,
+    // revealing its newly expanded children below.
+    // Only scrolls if the node would otherwise be near the bottom;
+    // never scrolls the node above the top of the scroll container.
+    requestAnimationFrame(function () {
+      var row = nodeEl.querySelector(':scope > .tree-row');
+      if (!row) return;
+      var scrollParent = row.closest('.panel-tree') || row.parentElement;
+      if (!scrollParent) return;
+      var containerRect = scrollParent.getBoundingClientRect();
+      var rowRect = row.getBoundingClientRect();
+      // If the row is in the bottom half of the container, scroll it to the top
+      if (rowRect.top > containerRect.top + containerRect.height * 0.4) {
+        var offset = rowRect.top - containerRect.top + scrollParent.scrollTop;
+        scrollParent.scrollTo({ top: offset, behavior: 'smooth' });
+      }
+    });
   }
 }
 
