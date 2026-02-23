@@ -241,6 +241,9 @@ function _renderSuiteDetail(panel, data) {
     _addDetailRow(panel, 'End', _formatTimestamp(data.end_time));
   }
   _addDetailRow(panel, 'Duration', formatDuration(data.elapsed_time || 0));
+  if (data.status === 'FAIL' && data.status_message) {
+    _addErrorBlock(panel, data.status_message);
+  }
 }
 
 /** Render test-specific detail rows. */
@@ -384,7 +387,10 @@ function _addMetadataTable(panel, metadata) {
 function _addErrorBlock(panel, message) {
   var errorEl = document.createElement('div');
   errorEl.className = 'detail-error';
-  errorEl.textContent = message;
+  var preEl = document.createElement('pre');
+  preEl.className = 'detail-error-pre';
+  preEl.textContent = message;
+  errorEl.appendChild(preEl);
   panel.appendChild(errorEl);
 }
 
@@ -592,6 +598,23 @@ function _createTreeNode(opts) {
   row.appendChild(durEl);
 
   wrapper.appendChild(row);
+
+  // Inline error snippet for FAIL nodes (always visible, truncated)
+  if (opts.status === 'FAIL' && opts.data && opts.data.status_message) {
+    var errorSnippet = document.createElement('div');
+    errorSnippet.className = 'tree-error-snippet';
+    var truncated = opts.data.status_message;
+    // Truncate to first line, max 150 chars
+    var newlineIdx = truncated.indexOf('\n');
+    if (newlineIdx !== -1) {
+      truncated = truncated.substring(0, newlineIdx);
+    }
+    if (truncated.length > 150) {
+      truncated = truncated.substring(0, 150) + '\u2026';
+    }
+    errorSnippet.textContent = truncated;
+    wrapper.appendChild(errorSnippet);
+  }
 
   // Detail panel — inserted between row and children
   var detailPanel = _renderDetailPanel({

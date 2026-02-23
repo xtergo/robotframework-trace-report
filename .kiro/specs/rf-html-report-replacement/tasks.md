@@ -495,7 +495,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Events section is collapsible, collapsed by default if more than 5 events
     - _Requirements: 30.4_
 
-  - [ ] 29.3 Add error message display with status.message
+  - [x] 29.3 Add error message display with status.message
     - For FAIL status nodes, render `status_message` prominently in a red-bordered box within the detail panel
     - Include full traceback text if present (preserve whitespace/newlines with `<pre>` formatting)
     - Show error on both the tree node summary line (truncated) and in the expanded detail panel (full)

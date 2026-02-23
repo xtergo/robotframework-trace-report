@@ -843,14 +843,22 @@
 
 .rf-trace-viewer .detail-error {
   margin-top: 6px;
-  padding: 8px 10px;
+  padding: 0;
   background: var(--status-fail-bg);
-  color: var(--status-fail);
+  border: 1px solid var(--status-fail);
   border-radius: 3px;
+  overflow: hidden;
+}
+
+.rf-trace-viewer .detail-error-pre {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--status-fail);
   font-family: monospace;
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.4;
 }
 
 .rf-trace-viewer .detail-metadata-table {
@@ -971,3 +979,16 @@
 /* Dark theme adjustments for event levels */
 .rf-trace-viewer.theme-dark .event-level-info .event-level { color: #42a5f5; }
 .rf-trace-viewer.theme-dark .event-level-debug .event-level { color: #9e9e9e; }
+
+/* Truncated error snippet on tree summary line (always visible) */
+.rf-trace-viewer .tree-error-snippet {
+  margin: 1px 0 2px 38px;
+  padding: 2px 8px;
+  color: var(--status-fail);
+  font-size: 11px;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
