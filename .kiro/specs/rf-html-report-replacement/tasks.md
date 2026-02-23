@@ -457,7 +457,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Update the `RFSuite.children` type hint to `list[RFSuite | RFTest | RFKeyword]`
     - _Requirements: 33.2_
 
-  - [ ] 28.5 Update generator JSON serialization to include enriched fields
+  - [x] 28.5 Update generator JSON serialization to include enriched fields
     - Ensure `src/rf_trace_viewer/generator.py` serializes the new fields (`lineno`, `doc`, `events`, `status_message`, `metadata`) into the embedded JSON data
     - Verify backward compatibility: if fields are at their default values, they should still be present in JSON (the JS viewer will check for them)
     - _Requirements: 31.9, 31.10_

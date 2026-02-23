@@ -347,3 +347,111 @@ class TestThemeFileEmbedding:
         """When theme file doesn't exist, should handle gracefully."""
         # TODO: Implement when generator supports --theme-file option
         pass
+
+
+class TestEnrichedFieldSerialization:
+    """Verify enriched model fields (lineno, doc, events, status_message, metadata) are serialized."""
+
+    def _load_model(self):
+        fixture_path = Path(__file__).parent.parent / "fixtures" / "simple_trace.json"
+        spans = parse_file(str(fixture_path))
+        trees = build_tree(spans)
+        return interpret_tree(trees)
+
+    def _embed_and_parse(self, model):
+        return json.loads(embed_data(model))
+
+    def _find_first_keyword(self, data):
+        """Walk suites → children/tests → keywords to find the first keyword."""
+        for suite in data.get("suites", []):
+            for child in suite.get("children", []):
+                # child could be a test (has "keywords") or nested suite
+                for kw in child.get("keywords", []):
+                    return kw
+        return None
+
+    def _find_first_test(self, data):
+        for suite in data.get("suites", []):
+            for child in suite.get("children", []):
+                if "keywords" in child:
+                    return child
+        return None
+
+    def test_keyword_enriched_fields_present_with_defaults(self):
+        """Keyword fields lineno, doc, status_message, events appear even at defaults."""
+        model = self._load_model()
+        data = self._embed_and_parse(model)
+        kw = self._find_first_keyword(data)
+        assert kw is not None, "No keyword found in serialized data"
+        assert "lineno" in kw
+        assert "doc" in kw
+        assert "status_message" in kw
+        assert "events" in kw
+        # simple_trace has rf.keyword.lineno=6 for the first keyword
+        assert kw["lineno"] == 6
+        # No doc/status_message/events in fixture → defaults
+        assert kw["doc"] == ""
+        assert kw["status_message"] == ""
+        assert isinstance(kw["events"], list)
+
+    def test_test_enriched_fields_present_with_defaults(self):
+        """Test fields doc and status_message appear even at defaults."""
+        model = self._load_model()
+        data = self._embed_and_parse(model)
+        test = self._find_first_test(data)
+        assert test is not None, "No test found in serialized data"
+        assert "doc" in test
+        assert "status_message" in test
+        assert test["doc"] == ""
+        assert test["status_message"] == ""
+
+    def test_suite_enriched_fields_present_with_defaults(self):
+        """Suite fields doc and metadata appear even at defaults."""
+        model = self._load_model()
+        data = self._embed_and_parse(model)
+        assert len(data["suites"]) > 0
+        suite = data["suites"][0]
+        assert "doc" in suite
+        assert "metadata" in suite
+        assert suite["doc"] == ""
+        assert isinstance(suite["metadata"], dict)
+
+    def test_keyword_enriched_fields_with_values(self):
+        """When enriched fields have non-default values, they serialize correctly."""
+        model = self._load_model()
+        # Manually set enriched values on the first keyword
+        suite = model.suites[0]
+        test = [c for c in suite.children if hasattr(c, "keywords")][0]
+        kw = test.keywords[0]
+        kw.doc = "This keyword logs a message"
+        kw.status_message = "All good"
+        kw.events = [{"name": "log", "attributes": {"level": "INFO", "message": "hello"}}]
+
+        data = self._embed_and_parse(model)
+        serialized_kw = self._find_first_keyword(data)
+        assert serialized_kw["doc"] == "This keyword logs a message"
+        assert serialized_kw["status_message"] == "All good"
+        assert len(serialized_kw["events"]) == 1
+        assert serialized_kw["events"][0]["name"] == "log"
+
+    def test_suite_metadata_with_values(self):
+        """Suite metadata dict serializes correctly with entries."""
+        model = self._load_model()
+        model.suites[0].metadata = {"version": "1.0", "env": "staging"}
+
+        data = self._embed_and_parse(model)
+        suite = data["suites"][0]
+        assert suite["metadata"] == {"version": "1.0", "env": "staging"}
+
+    def test_test_enriched_fields_with_values(self):
+        """Test doc and status_message serialize correctly with values."""
+        model = self._load_model()
+        suite = model.suites[0]
+        test = [c for c in suite.children if hasattr(c, "keywords")][0]
+        test.doc = "Verifies basic functionality"
+        test.status_message = "Test passed successfully"
+
+        data = self._embed_and_parse(model)
+        serialized_test = self._find_first_test(data)
+        assert serialized_test["doc"] == "Verifies basic functionality"
+        assert serialized_test["status_message"] == "Test passed successfully"
