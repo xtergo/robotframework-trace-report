@@ -159,7 +159,21 @@
     centerColumn.appendChild(treePanel);
 
     var filterSidebar = document.createElement('aside');
-    filterSidebar.className = 'panel-filter';
+    filterSidebar.className = 'panel-filter collapsed';
+
+    var filterToggle = document.createElement('button');
+    filterToggle.className = 'filter-toggle-btn';
+    filterToggle.setAttribute('aria-label', 'Toggle filters panel');
+    filterToggle.textContent = '\u25c0 Filters';
+    filterToggle.addEventListener('click', function () {
+      var isCollapsed = filterSidebar.classList.toggle('collapsed');
+      filterToggle.textContent = isCollapsed ? '\u25c0 Filters' : '\u25b6 Filters';
+    });
+    filterSidebar.appendChild(filterToggle);
+
+    var filterContent = document.createElement('div');
+    filterContent.className = 'filter-content';
+    filterSidebar.appendChild(filterContent);
 
     body.appendChild(centerColumn);
     body.appendChild(filterSidebar);
@@ -198,9 +212,9 @@
    */
   function _initializeViews(data) {
     // Initialize filter/search view in right sidebar
-    var filterSidebar = document.querySelector('.panel-filter');
-    if (filterSidebar && typeof window.initSearch === 'function') {
-      window.initSearch(filterSidebar, data);
+    var filterContent = document.querySelector('.panel-filter .filter-content');
+    if (filterContent && typeof window.initSearch === 'function') {
+      window.initSearch(filterContent, data);
     }
 
     // Initialize timeline view (always visible at top)
