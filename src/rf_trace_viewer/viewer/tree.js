@@ -330,7 +330,7 @@ function _addBadgeRow(panel, label, value) {
   labelEl.className = 'detail-label';
   labelEl.textContent = label + ':';
   var badge = document.createElement('span');
-  badge.className = 'detail-badge';
+  badge.className = 'detail-badge' + (label === 'Type' ? ' kw-type-' + value.toLowerCase() : '');
   badge.textContent = value;
   row.appendChild(labelEl);
   row.appendChild(badge);

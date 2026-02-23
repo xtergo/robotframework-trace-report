@@ -501,7 +501,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Show error on both the tree node summary line (truncated) and in the expanded detail panel (full)
     - _Requirements: 30.7_
 
-  - [ ] 29.4 Add detail panel styles to `src/rf_trace_viewer/viewer/style.css`
+  - [x] 29.4 Add detail panel styles to `src/rf_trace_viewer/viewer/style.css`
     - Add CSS for `.detail-panel`, `.detail-panel--suite`, `.detail-panel--test`, `.detail-panel--keyword`
     - Add CSS for `.keyword-type-badge` with type-specific colors
     - Add CSS for `.log-events` list with level-based coloring
