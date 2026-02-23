@@ -189,6 +189,20 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
     }
   }
   container.appendChild(treeRoot);
+
+  // Auto-expand root-level suites so tests are visible immediately
+  var rootNodes = treeRoot.querySelectorAll(':scope > .tree-node.depth-0');
+  for (var j = 0; j < rootNodes.length; j++) {
+    var childrenEl = rootNodes[j].querySelector(':scope > .tree-children');
+    var detailEl = rootNodes[j].querySelector(':scope > .detail-panel');
+    var toggleBtn = rootNodes[j].querySelector(':scope > .tree-row > .tree-toggle');
+    if (childrenEl) childrenEl.classList.add('expanded');
+    if (detailEl) detailEl.classList.add('expanded');
+    if (toggleBtn) {
+      toggleBtn.textContent = '\u25bc'; // ▼
+      toggleBtn.setAttribute('aria-label', 'Collapse');
+    }
+  }
 }
 
 /** Render a suite node and its children recursively. */
