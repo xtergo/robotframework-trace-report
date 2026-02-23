@@ -88,7 +88,8 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
     elapsed: suite.elapsed_time,
     hasChildren: hasChildren,
     depth: depth,
-    id: suite.id
+    id: suite.id,
+    data: suite
   });
 
   if (hasChildren) {
@@ -96,7 +97,10 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
     for (var i = 0; i < suite.children.length; i++) {
       var child = suite.children[i];
       var childNode = null;
-      if (child.keywords !== undefined) {
+      if (child.keyword_type !== undefined) {
+        // It's a keyword (SETUP/TEARDOWN at suite level)
+        childNode = _renderKeywordNode(child, depth + 1, filteredSpanIds);
+      } else if (child.keywords !== undefined) {
         // It's a test
         childNode = _renderTestNode(child, depth + 1, filteredSpanIds);
       } else {
@@ -126,7 +130,8 @@ function _renderTestNode(test, depth, filteredSpanIds) {
     elapsed: test.elapsed_time,
     hasChildren: hasKws,
     depth: depth,
-    id: test.id
+    id: test.id,
+    data: test
   });
 
   if (hasKws) {
@@ -158,14 +163,9 @@ function _renderKeywordNode(kw, depth, filteredSpanIds) {
     depth: depth,
     kwType: kw.keyword_type,
     kwArgs: kw.args,
-    id: kw.id
+    id: kw.id,
+    data: kw
   });
-
-  // Error message for failed keywords
-  if (kw.status === 'FAIL' && kw.args) {
-    // We show error inline; the status message is typically in the span events
-    // but for the model we rely on status + args display
-  }
 
   if (hasChildren) {
     var childrenEl = node.querySelector('.tree-children');
@@ -180,8 +180,214 @@ function _renderKeywordNode(kw, depth, filteredSpanIds) {
 }
 
 /**
+ * Format a nanosecond timestamp to a readable datetime string.
+ * @param {number} nanos - Timestamp in nanoseconds
+ * @returns {string} Formatted datetime string
+ */
+function _formatTimestamp(nanos) {
+  if (!nanos) return '';
+  var ms = nanos / 1000000;
+  var d = new Date(ms);
+  if (isNaN(d.getTime())) return '';
+  var year = d.getFullYear();
+  var month = ('0' + (d.getMonth() + 1)).slice(-2);
+  var day = ('0' + d.getDate()).slice(-2);
+  var hours = ('0' + d.getHours()).slice(-2);
+  var minutes = ('0' + d.getMinutes()).slice(-2);
+  var seconds = ('0' + d.getSeconds()).slice(-2);
+  var millis = ('00' + d.getMilliseconds()).slice(-3);
+  return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds + '.' + millis;
+}
+
+/**
+ * Render a detail panel for a tree node based on its type.
+ * Only renders fields that have actual content.
+ * @param {Object} opts - { type, data, status }
+ * @returns {HTMLElement} The detail panel div
+ */
+function _renderDetailPanel(opts) {
+  var data = opts.data || {};
+  var panel = document.createElement('div');
+  var statusCls = _statusClass(opts.status);
+  panel.className = 'detail-panel ' + opts.type + '-detail' + (statusCls ? ' ' + statusCls : '');
+
+  if (opts.type === 'suite') {
+    _renderSuiteDetail(panel, data);
+  } else if (opts.type === 'test') {
+    _renderTestDetail(panel, data);
+  } else if (opts.type === 'keyword') {
+    _renderKeywordDetail(panel, data);
+  }
+
+  return panel;
+}
+
+/** Render suite-specific detail rows. */
+function _renderSuiteDetail(panel, data) {
+  if (data.source) {
+    _addDetailRow(panel, 'Source', data.source);
+  }
+  if (data.doc) {
+    _addDetailRow(panel, 'Documentation', data.doc);
+  }
+  if (data.metadata && Object.keys(data.metadata).length > 0) {
+    _addMetadataTable(panel, data.metadata);
+  }
+  _addStatusRow(panel, data.status);
+  if (data.start_time) {
+    _addDetailRow(panel, 'Start', _formatTimestamp(data.start_time));
+  }
+  if (data.end_time) {
+    _addDetailRow(panel, 'End', _formatTimestamp(data.end_time));
+  }
+  _addDetailRow(panel, 'Duration', formatDuration(data.elapsed_time || 0));
+}
+
+/** Render test-specific detail rows. */
+function _renderTestDetail(panel, data) {
+  if (data.doc) {
+    _addDetailRow(panel, 'Documentation', data.doc);
+  }
+  if (data.tags && data.tags.length > 0) {
+    _addTagsRow(panel, data.tags);
+  }
+  _addStatusRow(panel, data.status);
+  if (data.start_time) {
+    _addDetailRow(panel, 'Start', _formatTimestamp(data.start_time));
+  }
+  if (data.end_time) {
+    _addDetailRow(panel, 'End', _formatTimestamp(data.end_time));
+  }
+  _addDetailRow(panel, 'Duration', formatDuration(data.elapsed_time || 0));
+  if (data.status === 'FAIL' && data.status_message) {
+    _addErrorBlock(panel, data.status_message);
+  }
+}
+
+/** Render keyword-specific detail rows. */
+function _renderKeywordDetail(panel, data) {
+  if (data.keyword_type) {
+    _addBadgeRow(panel, 'Type', data.keyword_type);
+  }
+  if (data.args) {
+    _addDetailRow(panel, 'Arguments', data.args);
+  }
+  if (data.doc) {
+    _addDetailRow(panel, 'Documentation', data.doc);
+  }
+  if (data.lineno && data.lineno > 0) {
+    var sourceText = data.source ? data.source + ':' + data.lineno : 'Line ' + data.lineno;
+    _addDetailRow(panel, 'Source', sourceText);
+  }
+  _addStatusRow(panel, data.status);
+  _addDetailRow(panel, 'Duration', formatDuration(data.elapsed_time || 0));
+  if (data.status === 'FAIL' && data.status_message) {
+    _addErrorBlock(panel, data.status_message);
+  }
+}
+
+/** Add a label/value row to the detail panel. */
+function _addDetailRow(panel, label, value) {
+  var row = document.createElement('div');
+  row.className = 'detail-panel-row';
+  var labelEl = document.createElement('span');
+  labelEl.className = 'detail-label';
+  labelEl.textContent = label + ':';
+  var valueEl = document.createElement('span');
+  valueEl.className = 'detail-value';
+  valueEl.textContent = value;
+  row.appendChild(labelEl);
+  row.appendChild(valueEl);
+  panel.appendChild(row);
+}
+
+/** Add a status badge row. */
+function _addStatusRow(panel, status) {
+  var row = document.createElement('div');
+  row.className = 'detail-panel-row';
+  var labelEl = document.createElement('span');
+  labelEl.className = 'detail-label';
+  labelEl.textContent = 'Status:';
+  var badge = document.createElement('span');
+  badge.className = 'detail-badge ' + _statusClass(status);
+  badge.textContent = status || 'NOT_RUN';
+  row.appendChild(labelEl);
+  row.appendChild(badge);
+  panel.appendChild(row);
+}
+
+/** Add a badge row (for keyword type etc). */
+function _addBadgeRow(panel, label, value) {
+  var row = document.createElement('div');
+  row.className = 'detail-panel-row';
+  var labelEl = document.createElement('span');
+  labelEl.className = 'detail-label';
+  labelEl.textContent = label + ':';
+  var badge = document.createElement('span');
+  badge.className = 'detail-badge';
+  badge.textContent = value;
+  row.appendChild(labelEl);
+  row.appendChild(badge);
+  panel.appendChild(row);
+}
+
+/** Add tags as badges. */
+function _addTagsRow(panel, tags) {
+  var row = document.createElement('div');
+  row.className = 'detail-panel-row';
+  var labelEl = document.createElement('span');
+  labelEl.className = 'detail-label';
+  labelEl.textContent = 'Tags:';
+  var tagsContainer = document.createElement('span');
+  tagsContainer.className = 'detail-tags';
+  for (var i = 0; i < tags.length; i++) {
+    var badge = document.createElement('span');
+    badge.className = 'detail-badge tag-badge';
+    badge.textContent = tags[i];
+    tagsContainer.appendChild(badge);
+  }
+  row.appendChild(labelEl);
+  row.appendChild(tagsContainer);
+  panel.appendChild(row);
+}
+
+/** Add a metadata table for suites. */
+function _addMetadataTable(panel, metadata) {
+  var row = document.createElement('div');
+  row.className = 'detail-panel-row';
+  var labelEl = document.createElement('span');
+  labelEl.className = 'detail-label';
+  labelEl.textContent = 'Metadata:';
+  row.appendChild(labelEl);
+  panel.appendChild(row);
+
+  var table = document.createElement('table');
+  table.className = 'detail-metadata-table';
+  var keys = Object.keys(metadata);
+  for (var i = 0; i < keys.length; i++) {
+    var tr = document.createElement('tr');
+    var th = document.createElement('th');
+    th.textContent = keys[i];
+    var td = document.createElement('td');
+    td.textContent = metadata[keys[i]];
+    tr.appendChild(th);
+    tr.appendChild(td);
+    table.appendChild(tr);
+  }
+  panel.appendChild(table);
+}
+
+/** Add a red error message block. */
+function _addErrorBlock(panel, message) {
+  var errorEl = document.createElement('div');
+  errorEl.className = 'detail-error';
+  errorEl.textContent = message;
+  panel.appendChild(errorEl);
+}
+
+/**
  * Create a single tree node DOM element.
- * @param {Object} opts - { type, name, status, elapsed, hasChildren, depth, kwType?, kwArgs?, id? }
+ * @param {Object} opts - { type, name, status, elapsed, hasChildren, depth, kwType?, kwArgs?, id?, data? }
  */
 function _createTreeNode(opts) {
   var wrapper = document.createElement('div');
@@ -196,14 +402,12 @@ function _createTreeNode(opts) {
   // Toggle arrow (or spacer)
   var toggle = document.createElement('button');
   toggle.className = 'tree-toggle';
-  toggle.setAttribute('aria-label', opts.hasChildren ? 'Expand' : '');
-  if (opts.hasChildren) {
-    toggle.textContent = '\u25b6'; // ▶
-    toggle.addEventListener('click', function (e) {
-      e.stopPropagation();
-      _toggleNode(wrapper);
-    });
-  }
+  toggle.textContent = '\u25b6'; // ▶
+  toggle.setAttribute('aria-label', 'Expand');
+  toggle.addEventListener('click', function (e) {
+    e.stopPropagation();
+    _toggleNode(wrapper);
+  });
   row.appendChild(toggle);
 
   // Status icon
@@ -241,10 +445,16 @@ function _createTreeNode(opts) {
 
   wrapper.appendChild(row);
 
-  // Click row to toggle
-  if (opts.hasChildren) {
-    row.addEventListener('click', function () { _toggleNode(wrapper); });
-  }
+  // Detail panel — inserted between row and children
+  var detailPanel = _renderDetailPanel({
+    type: opts.type,
+    status: opts.status,
+    data: opts.data
+  });
+  wrapper.appendChild(detailPanel);
+
+  // Click row to toggle (all nodes have detail panels)
+  row.addEventListener('click', function () { _toggleNode(wrapper); });
 
   // Emit event when node is clicked (for timeline synchronization)
   row.addEventListener('click', function (e) {
@@ -277,24 +487,34 @@ function _createTreeNode(opts) {
 /** Toggle expand/collapse on a tree node. */
 function _toggleNode(nodeEl) {
   var childrenEl = nodeEl.querySelector(':scope > .tree-children');
+  var detailEl = nodeEl.querySelector(':scope > .detail-panel');
   var toggleBtn = nodeEl.querySelector(':scope > .tree-row > .tree-toggle');
-  if (!childrenEl) return;
+  // Need either children or detail panel to toggle
+  if (!childrenEl && !detailEl) return;
 
-  var isExpanded = childrenEl.classList.contains('expanded');
+  var isExpanded = (childrenEl && childrenEl.classList.contains('expanded')) ||
+                   (detailEl && detailEl.classList.contains('expanded'));
   if (isExpanded) {
-    childrenEl.classList.remove('expanded');
-    toggleBtn.textContent = '\u25b6'; // ▶
-    toggleBtn.setAttribute('aria-label', 'Expand');
+    if (childrenEl) childrenEl.classList.remove('expanded');
+    if (detailEl) detailEl.classList.remove('expanded');
+    if (toggleBtn) {
+      toggleBtn.textContent = '\u25b6'; // ▶
+      toggleBtn.setAttribute('aria-label', 'Expand');
+    }
   } else {
-    childrenEl.classList.add('expanded');
-    toggleBtn.textContent = '\u25bc'; // ▼
-    toggleBtn.setAttribute('aria-label', 'Collapse');
+    if (childrenEl) childrenEl.classList.add('expanded');
+    if (detailEl) detailEl.classList.add('expanded');
+    if (toggleBtn) {
+      toggleBtn.textContent = '\u25bc'; // ▼
+      toggleBtn.setAttribute('aria-label', 'Collapse');
+    }
   }
 }
 
 /** Expand or collapse all nodes in the tree. */
 function _setAllExpanded(container, expand) {
   var childrenEls = container.querySelectorAll('.tree-children');
+  var detailEls = container.querySelectorAll('.detail-panel');
   var toggleBtns = container.querySelectorAll('.tree-toggle');
 
   for (var i = 0; i < childrenEls.length; i++) {
@@ -302,6 +522,13 @@ function _setAllExpanded(container, expand) {
       childrenEls[i].classList.add('expanded');
     } else {
       childrenEls[i].classList.remove('expanded');
+    }
+  }
+  for (var i = 0; i < detailEls.length; i++) {
+    if (expand) {
+      detailEls[i].classList.add('expanded');
+    } else {
+      detailEls[i].classList.remove('expanded');
     }
   }
   for (var j = 0; j < toggleBtns.length; j++) {
@@ -353,9 +580,11 @@ function highlightNodeInTree(spanId) {
   while (parent) {
     if (parent.classList.contains('tree-children')) {
       parent.classList.add('expanded');
-      // Update the toggle button
+      // Also expand sibling detail panels
       var parentNode = parent.parentElement;
       if (parentNode && parentNode.classList.contains('tree-node')) {
+        var detailEl = parentNode.querySelector(':scope > .detail-panel');
+        if (detailEl) detailEl.classList.add('expanded');
         var toggleBtn = parentNode.querySelector(':scope > .tree-row > .tree-toggle');
         if (toggleBtn) {
           toggleBtn.textContent = '\u25bc'; // ▼

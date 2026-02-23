@@ -741,3 +741,142 @@
 .rf-trace-viewer .filter-time-range-clear:hover {
   background: var(--hover-bg);
 }
+
+/* ── Detail Panel ── */
+.rf-trace-viewer .detail-panel {
+  display: none;
+  padding: 8px 12px;
+  margin: 2px 0 4px 38px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--border-color);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.rf-trace-viewer .detail-panel.expanded {
+  display: block;
+}
+
+.rf-trace-viewer .detail-panel.suite-detail {
+  border-left-color: #1565c0;
+}
+
+.rf-trace-viewer .detail-panel.test-detail.pass {
+  border-left-color: var(--status-pass);
+}
+
+.rf-trace-viewer .detail-panel.test-detail.fail {
+  border-left-color: var(--status-fail);
+}
+
+.rf-trace-viewer .detail-panel.test-detail.skip {
+  border-left-color: var(--status-skip);
+}
+
+.rf-trace-viewer .detail-panel.keyword-detail {
+  border-left-color: #757575;
+}
+
+.rf-trace-viewer .detail-panel-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.rf-trace-viewer .detail-label {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 90px;
+}
+
+.rf-trace-viewer .detail-value {
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.rf-trace-viewer .detail-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.rf-trace-viewer .detail-badge.pass {
+  background: var(--status-pass-bg);
+  color: var(--status-pass);
+}
+
+.rf-trace-viewer .detail-badge.fail {
+  background: var(--status-fail-bg);
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .detail-badge.skip {
+  background: var(--status-skip-bg);
+  color: var(--status-skip);
+}
+
+.rf-trace-viewer .detail-badge.not-run {
+  background: var(--status-not-run-bg);
+  color: var(--status-not-run);
+}
+
+.rf-trace-viewer .detail-badge.tag-badge {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 500;
+  text-transform: none;
+}
+
+.rf-trace-viewer .detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rf-trace-viewer .detail-error {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--status-fail-bg);
+  color: var(--status-fail);
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rf-trace-viewer .detail-metadata-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.rf-trace-viewer .detail-metadata-table th {
+  text-align: left;
+  padding: 3px 10px 3px 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .detail-metadata-table td {
+  padding: 3px 0;
+  color: var(--text-primary);
+  word-break: break-word;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .detail-metadata-table tr:last-child th,
+.rf-trace-viewer .detail-metadata-table tr:last-child td {
+  border-bottom: none;
+}

@@ -480,7 +480,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - _Requirements: 31.1, 31.3, 31.4, 31.8, 33.2_
 
 - [ ] 29. Implement tree view detail panels in JS viewer
-  - [ ] 29.1 Add detail panel rendering to `src/rf_trace_viewer/viewer/tree-view.js`
+  - [x] 29.1 Add detail panel rendering to `src/rf_trace_viewer/viewer/tree-view.js`
     - Add collapsible detail panel section inside each tree node (rendered when node is expanded)
     - Suite detail panel: source path, documentation, metadata table, status badge, start/end times, duration
     - Test detail panel: documentation, tags as badges, status badge, start/end times, duration, error message block (if FAIL)
