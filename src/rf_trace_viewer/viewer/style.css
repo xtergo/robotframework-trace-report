@@ -140,6 +140,20 @@
   overflow: auto;
 }
 
+/* Sticky time axis header for the Gantt chart */
+.rf-trace-viewer .timeline-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .timeline-header-canvas {
+  display: block;
+  width: 100%;
+}
+
 /* ── Main Content Area ── */
 /* Layout for Overview tab: center (timeline + tree) + filters (right) */
 .rf-trace-viewer .viewer-body {

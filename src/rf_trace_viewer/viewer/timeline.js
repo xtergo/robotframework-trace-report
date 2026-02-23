@@ -118,10 +118,21 @@
     // Process data first to know how many spans we have
     _processSpans(data);
 
-    // Calculate required canvas height based on content
+    // Calculate required canvas height based on content (no header in canvas)
     var requiredHeight = _calculateRequiredHeight();
 
-    // Create canvas
+    // Create sticky header element for time axis
+    var headerEl = document.createElement('div');
+    headerEl.className = 'timeline-sticky-header';
+    var headerCanvas = document.createElement('canvas');
+    headerCanvas.className = 'timeline-header-canvas';
+    headerCanvas.style.width = '100%';
+    headerCanvas.style.height = timelineState.headerHeight + 'px';
+    headerCanvas.style.display = 'block';
+    headerEl.appendChild(headerCanvas);
+    container.appendChild(headerEl);
+
+    // Create main canvas (spans only, no header)
     var canvas = document.createElement('canvas');
     canvas.className = 'timeline-canvas';
     canvas.style.width = '100%';
@@ -133,21 +144,19 @@
     // Initialize timeline state
     timelineState.canvas = canvas;
     timelineState.ctx = canvas.getContext('2d');
+    timelineState.headerCanvas = headerCanvas;
+    timelineState.headerCtx = headerCanvas.getContext('2d');
 
-    // Set canvas size (now that ctx is initialized)
+    // Set canvas sizes
     _resizeCanvas(canvas);
-    window.addEventListener('resize', function () { _resizeCanvas(canvas); });
+    _resizeHeaderCanvas(headerCanvas);
+    window.addEventListener('resize', function () {
+      _resizeCanvas(canvas);
+      _resizeHeaderCanvas(headerCanvas);
+    });
 
     // Set up event listeners
     _setupEventListeners(canvas);
-
-    // Re-render on scroll so the sticky header stays in place
-    var scrollParent = container.parentElement || container;
-    scrollParent.addEventListener('scroll', function () {
-      timelineState.scrollTop = scrollParent.scrollTop;
-      _render();
-    });
-    timelineState.scrollTop = 0;
 
     // Listen for filter changes
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
@@ -165,7 +174,7 @@
    */
   function _calculateRequiredHeight() {
     var workers = Object.keys(timelineState.workers);
-    var totalHeight = timelineState.headerHeight + timelineState.topMargin + timelineState.bottomMargin;
+    var totalHeight = timelineState.topMargin + timelineState.bottomMargin;
     
     for (var w = 0; w < workers.length; w++) {
       var workerSpans = timelineState.workers[workers[w]];
@@ -197,6 +206,22 @@
     if (timelineState.ctx) {
       timelineState.ctx.scale(dpr, dpr);
       _render();
+    }
+  }
+
+  /**
+   * Resize the sticky header canvas to match container width.
+   */
+  function _resizeHeaderCanvas(headerCanvas) {
+    var rect = headerCanvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    headerCanvas.width = rect.width * dpr;
+    headerCanvas.height = rect.height * dpr;
+    headerCanvas.style.width = rect.width + 'px';
+    headerCanvas.style.height = rect.height + 'px';
+    if (timelineState.headerCtx) {
+      timelineState.headerCtx.scale(dpr, dpr);
+      _renderHeader();
     }
   }
 
@@ -618,7 +643,7 @@
    */
   function _getSpanAtPoint(x, y) {
     var workers = Object.keys(timelineState.workers);
-    var yOffset = timelineState.headerHeight + timelineState.topMargin + timelineState.panY;
+    var yOffset = timelineState.topMargin + timelineState.panY;
 
     for (var w = 0; w < workers.length; w++) {
       var workerSpans = timelineState.workers[workers[w]];
@@ -665,7 +690,7 @@
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary') || '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Render worker lanes (behind the header)
+    // Render worker lanes
     _renderWorkerLanes(ctx, width, height);
 
     // Render time markers
@@ -676,27 +701,34 @@
       _renderSelection(ctx, height);
     }
 
-    // Render header LAST so it draws on top, at the scroll offset (sticky)
-    var scrollY = timelineState.scrollTop || 0;
-    _renderHeader(ctx, width, scrollY);
+    // Render the sticky header on its own canvas
+    _renderHeader();
   }
 
   /**
    * Render timeline header with time axis.
    */
-  function _renderHeader(ctx, width, scrollY) {
-    var y = scrollY || 0;
+  function _renderHeader() {
+    var headerCanvas = timelineState.headerCanvas;
+    var ctx = timelineState.headerCtx;
+    if (!headerCanvas || !ctx) return;
+
+    var width = headerCanvas.width / (window.devicePixelRatio || 1);
+    var height = headerCanvas.height / (window.devicePixelRatio || 1);
     var textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary') || '#1a1a1a';
     var borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#d0d0d0';
 
+    // Clear header canvas
+    ctx.clearRect(0, 0, width, height);
+
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-secondary') || '#f5f5f5';
-    ctx.fillRect(0, y, width, timelineState.headerHeight);
+    ctx.fillRect(0, 0, width, height);
 
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, y + timelineState.headerHeight);
-    ctx.lineTo(width, y + timelineState.headerHeight);
+    ctx.moveTo(0, height);
+    ctx.lineTo(width, height);
     ctx.stroke();
 
     // Time axis labels
@@ -712,13 +744,13 @@
       var time = timelineState.minTime + i * tickInterval;
       var x = _timeToScreenX(time);
       if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
-        ctx.fillText(_formatTime(time), x, y + timelineState.headerHeight - 10);
+        ctx.fillText(_formatTime(time), x, height - 10);
         
         // Tick mark
         ctx.strokeStyle = borderColor;
         ctx.beginPath();
-        ctx.moveTo(x, y + timelineState.headerHeight - 5);
-        ctx.lineTo(x, y + timelineState.headerHeight);
+        ctx.moveTo(x, height - 5);
+        ctx.lineTo(x, height);
         ctx.stroke();
       }
     }
@@ -729,7 +761,7 @@
    */
   function _renderWorkerLanes(ctx, width, height) {
     var workers = Object.keys(timelineState.workers);
-    var yOffset = timelineState.headerHeight + timelineState.topMargin + timelineState.panY;
+    var yOffset = timelineState.topMargin + timelineState.panY;
     var textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary') || '#1a1a1a';
     var borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#d0d0d0';
     
@@ -862,7 +894,7 @@
       var x = _timeToScreenX(markers[i].time);
       if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
         ctx.beginPath();
-        ctx.moveTo(x, timelineState.headerHeight);
+        ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
       }
@@ -881,11 +913,11 @@
     var right = Math.max(x1, x2);
 
     ctx.fillStyle = 'rgba(0, 102, 204, 0.2)';
-    ctx.fillRect(left, timelineState.headerHeight, right - left, height - timelineState.headerHeight);
+    ctx.fillRect(left, 0, right - left, height);
 
     ctx.strokeStyle = '#0066cc';
     ctx.lineWidth = 2;
-    ctx.strokeRect(left, timelineState.headerHeight, right - left, height - timelineState.headerHeight);
+    ctx.strokeRect(left, 0, right - left, height);
   }
 
   /**
@@ -1004,6 +1036,9 @@
       var requiredHeight = _calculateRequiredHeight();
       canvas.style.height = requiredHeight + 'px';
       _resizeCanvas(canvas);
+      if (timelineState.headerCanvas) {
+        _resizeHeaderCanvas(timelineState.headerCanvas);
+      }
     }
     
     // Re-render with filtered spans
@@ -1051,7 +1086,7 @@
         
         // Vertical scrolling: Find the span's Y position and scroll container to center it
         var workers = Object.keys(timelineState.workers);
-        var yOffset = timelineState.headerHeight + timelineState.topMargin;
+        var yOffset = timelineState.topMargin;
         var spanY = null;
         
         // Find which worker this span belongs to and calculate its Y position
