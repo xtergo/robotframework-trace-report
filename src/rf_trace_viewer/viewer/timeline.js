@@ -141,6 +141,14 @@
     // Set up event listeners
     _setupEventListeners(canvas);
 
+    // Re-render on scroll so the sticky header stays in place
+    var scrollParent = container.parentElement || container;
+    scrollParent.addEventListener('scroll', function () {
+      timelineState.scrollTop = scrollParent.scrollTop;
+      _render();
+    });
+    timelineState.scrollTop = 0;
+
     // Listen for filter changes
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
       window.RFTraceViewer.on('filter-changed', function(event) {
@@ -657,10 +665,7 @@
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary') || '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Render header
-    _renderHeader(ctx, width);
-
-    // Render worker lanes
+    // Render worker lanes (behind the header)
     _renderWorkerLanes(ctx, width, height);
 
     // Render time markers
@@ -670,23 +675,28 @@
     if (timelineState.isSelecting && timelineState.selectionStart !== null) {
       _renderSelection(ctx, height);
     }
+
+    // Render header LAST so it draws on top, at the scroll offset (sticky)
+    var scrollY = timelineState.scrollTop || 0;
+    _renderHeader(ctx, width, scrollY);
   }
 
   /**
    * Render timeline header with time axis.
    */
-  function _renderHeader(ctx, width) {
+  function _renderHeader(ctx, width, scrollY) {
+    var y = scrollY || 0;
     var textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary') || '#1a1a1a';
     var borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#d0d0d0';
 
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-secondary') || '#f5f5f5';
-    ctx.fillRect(0, 0, width, timelineState.headerHeight);
+    ctx.fillRect(0, y, width, timelineState.headerHeight);
 
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, timelineState.headerHeight);
-    ctx.lineTo(width, timelineState.headerHeight);
+    ctx.moveTo(0, y + timelineState.headerHeight);
+    ctx.lineTo(width, y + timelineState.headerHeight);
     ctx.stroke();
 
     // Time axis labels
@@ -702,13 +712,13 @@
       var time = timelineState.minTime + i * tickInterval;
       var x = _timeToScreenX(time);
       if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
-        ctx.fillText(_formatTime(time), x, timelineState.headerHeight - 10);
+        ctx.fillText(_formatTime(time), x, y + timelineState.headerHeight - 10);
         
         // Tick mark
         ctx.strokeStyle = borderColor;
         ctx.beginPath();
-        ctx.moveTo(x, timelineState.headerHeight - 5);
-        ctx.lineTo(x, timelineState.headerHeight);
+        ctx.moveTo(x, y + timelineState.headerHeight - 5);
+        ctx.lineTo(x, y + timelineState.headerHeight);
         ctx.stroke();
       }
     }
