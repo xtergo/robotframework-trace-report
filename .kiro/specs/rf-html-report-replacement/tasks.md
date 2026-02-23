@@ -439,13 +439,13 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Update `_build_keyword()` to extract and pass these four new fields
     - _Requirements: 31.1, 31.2, 31.3, 31.4_
 
-  - [ ] 28.2 Add `doc` and `status_message` fields to `RFTest` in `src/rf_trace_viewer/rf_model.py`
+  - [x] 28.2 Add `doc` and `status_message` fields to `RFTest` in `src/rf_trace_viewer/rf_model.py`
     - Add `doc: str = ""` field, populated from `rf.test.doc` attribute
     - Add `status_message: str = ""` field, populated from `node.span.status.get("message", "")`
     - Update `_build_test()` to extract and pass these two new fields
     - _Requirements: 31.5, 31.6_
 
-  - [ ] 28.3 Add `doc` and `metadata` fields to `RFSuite` in `src/rf_trace_viewer/rf_model.py`
+  - [x] 28.3 Add `doc` and `metadata` fields to `RFSuite` in `src/rf_trace_viewer/rf_model.py`
     - Add `doc: str = ""` field, populated from `rf.suite.doc` attribute
     - Add `metadata: dict[str, str] = field(default_factory=dict)` field, populated by collecting all `rf.suite.metadata.*` attributes into a dict (strip the prefix to get keys)
     - Update `_build_suite()` to extract and pass these two new fields

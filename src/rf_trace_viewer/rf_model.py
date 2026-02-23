@@ -34,6 +34,8 @@ class RFSuite:
     start_time: int
     end_time: int
     elapsed_time: float
+    doc: str = ""
+    metadata: dict[str, str] = field(default_factory=dict)
     children: list[RFSuite | RFTest] = field(default_factory=list)
 
 
@@ -209,6 +211,14 @@ def _build_suite(node: SpanNode) -> RFSuite:
             children.append(_build_test(child))
         # Keywords directly under a suite (setup/teardown) are skipped at suite level
         # Signals and generic spans are not added to the suite children
+
+    # Collect suite metadata from rf.suite.metadata.* attributes
+    metadata: dict[str, str] = {}
+    prefix = "rf.suite.metadata."
+    for key, value in attrs.items():
+        if key.startswith(prefix):
+            metadata[key[len(prefix) :]] = str(value)
+
     return RFSuite(
         name=attrs.get("rf.suite.name", node.span.name),
         id=node.span.span_id,  # Use unique span_id instead of rf.suite.id
@@ -217,6 +227,8 @@ def _build_suite(node: SpanNode) -> RFSuite:
         start_time=node.span.start_time_unix_nano,
         end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
+        doc=str(attrs.get("rf.suite.doc", "")),
+        metadata=metadata,
         children=children,
     )
 
