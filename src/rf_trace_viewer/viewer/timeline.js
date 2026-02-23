@@ -1098,11 +1098,16 @@
         ? { top: '#1565c0', bottom: '#0d47a1', border: 'rgba(255,255,255,0.12)', text: '#e3f2fd' }
         : { top: '#1976d2', bottom: '#1565c0', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
     }
-    // keyword — red for FAIL, grey otherwise
+    // keyword — red for FAIL, muted purple for NOT_RUN, grey otherwise
     if (span.status === 'FAIL') {
       return isDark
         ? { top: '#c62828', bottom: '#a11b1b', border: 'rgba(255,255,255,0.1)', text: '#ffcdd2' }
         : { top: '#ef5350', bottom: '#d32f2f', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
+    }
+    if (span.status === 'NOT_RUN') {
+      return isDark
+        ? { top: '#5c4a8a', bottom: '#453670', border: 'rgba(255,255,255,0.1)', text: '#d1c4e9' }
+        : { top: '#9575cd', bottom: '#7e57c2', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
     }
     return isDark
       ? { top: '#4a4a4a', bottom: '#3a3a3a', border: 'rgba(255,255,255,0.08)', text: '#cccccc' }
@@ -1117,6 +1122,7 @@
       case 'PASS': return '#43a047';
       case 'FAIL': return '#e53935';
       case 'SKIP': return '#fdd835';
+      case 'NOT_RUN': return '#7e57c2';
       default: return '#9e9e9e';
     }
   }
