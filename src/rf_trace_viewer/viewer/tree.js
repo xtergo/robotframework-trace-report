@@ -921,8 +921,16 @@ function highlightNodeInTree(spanId) {
   // Highlight the target node
   targetNode.classList.add('highlighted');
 
-  // Scroll the node into view
-  targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Scroll only within the tree panel container (not the whole page)
+  var treePanel = document.querySelector('.panel-tree');
+  if (treePanel) {
+    var panelRect = treePanel.getBoundingClientRect();
+    var nodeRect = targetNode.getBoundingClientRect();
+    var scrollOffset = nodeRect.top - panelRect.top - panelRect.height / 2 + nodeRect.height / 2;
+    treePanel.scrollBy({ top: scrollOffset, behavior: 'smooth' });
+  } else {
+    targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 /**

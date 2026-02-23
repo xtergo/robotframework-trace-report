@@ -29,6 +29,8 @@
     allWorkers: null,  // Original unfiltered workers (stored when filter is applied)
     minTime: 0,
     maxTime: 0,
+    viewStart: 0,
+    viewEnd: 0,
     zoom: 1.0,
     panX: 0,
     panY: 0,
@@ -121,9 +123,104 @@
     // Calculate required canvas height based on content (no header in canvas)
     var requiredHeight = _calculateRequiredHeight();
 
-    // Create sticky header element for time axis
+    // Create sticky header element for time axis + zoom control
     var headerEl = document.createElement('div');
     headerEl.className = 'timeline-sticky-header';
+
+    // Zoom control bar
+    var zoomBar = document.createElement('div');
+    zoomBar.className = 'timeline-zoom-bar';
+
+    var zoomLabel = document.createElement('span');
+    zoomLabel.className = 'timeline-zoom-label';
+    zoomLabel.textContent = 'Zoom';
+    zoomBar.appendChild(zoomLabel);
+
+    var zoomOut = document.createElement('button');
+    zoomOut.className = 'timeline-zoom-btn';
+    zoomOut.textContent = '−';
+    zoomOut.setAttribute('aria-label', 'Zoom out');
+    zoomBar.appendChild(zoomOut);
+
+    var zoomSlider = document.createElement('input');
+    zoomSlider.type = 'range';
+    zoomSlider.className = 'timeline-zoom-slider';
+    zoomSlider.min = '-10';
+    zoomSlider.max = '80';
+    zoomSlider.value = '0';
+    zoomSlider.step = '1';
+    zoomSlider.setAttribute('aria-label', 'Timeline zoom');
+    zoomBar.appendChild(zoomSlider);
+
+    var zoomIn = document.createElement('button');
+    zoomIn.className = 'timeline-zoom-btn';
+    zoomIn.textContent = '+';
+    zoomIn.setAttribute('aria-label', 'Zoom in');
+    zoomBar.appendChild(zoomIn);
+
+    var zoomPct = document.createElement('span');
+    zoomPct.className = 'timeline-zoom-pct';
+    zoomPct.textContent = '100%';
+    zoomBar.appendChild(zoomPct);
+
+    var zoomReset = document.createElement('button');
+    zoomReset.className = 'timeline-zoom-btn timeline-zoom-reset';
+    zoomReset.textContent = 'Reset';
+    zoomReset.setAttribute('aria-label', 'Reset zoom');
+    zoomBar.appendChild(zoomReset);
+
+    headerEl.appendChild(zoomBar);
+
+    // Zoom slider ↔ state synchronization
+    // Slider uses logarithmic scale: value 0 = zoom 1.0, each step = ~12% change
+    function sliderToZoom(val) { return Math.pow(1.12, parseFloat(val)); }
+    function zoomToSlider(z) { return Math.log(z) / Math.log(1.12); }
+    function syncSlider() {
+      var val = zoomToSlider(timelineState.zoom);
+      zoomSlider.value = Math.round(val);
+      zoomPct.textContent = Math.round(timelineState.zoom * 100) + '%';
+    }
+
+    // Apply zoom around the center of the current viewport
+    function zoomAroundCenter(newZoom) {
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var viewMid = (timelineState.viewStart + timelineState.viewEnd) / 2;
+      var newHalfRange = (totalRange / newZoom) / 2;
+      timelineState.viewStart = Math.max(timelineState.minTime, viewMid - newHalfRange);
+      timelineState.viewEnd = Math.min(timelineState.maxTime, viewMid + newHalfRange);
+      timelineState.zoom = newZoom;
+    }
+
+    zoomSlider.addEventListener('input', function () {
+      zoomAroundCenter(sliderToZoom(this.value));
+      zoomPct.textContent = Math.round(timelineState.zoom * 100) + '%';
+      _applyZoom();
+    });
+
+    zoomOut.addEventListener('click', function () {
+      zoomAroundCenter(Math.max(0.1, timelineState.zoom * 0.8));
+      syncSlider();
+      _applyZoom();
+    });
+
+    zoomIn.addEventListener('click', function () {
+      zoomAroundCenter(Math.min(10000, timelineState.zoom * 1.25));
+      syncSlider();
+      _applyZoom();
+    });
+
+    zoomReset.addEventListener('click', function () {
+      timelineState.zoom = 1.0;
+      timelineState.viewStart = timelineState.minTime;
+      timelineState.viewEnd = timelineState.maxTime;
+      syncSlider();
+      _applyZoom();
+    });
+
+    // Store syncSlider so wheel zoom can update the slider too
+    timelineState._syncSlider = syncSlider;
+
+    // Time axis header canvas
     var headerCanvas = document.createElement('canvas');
     headerCanvas.className = 'timeline-header-canvas';
     headerCanvas.style.width = '100%';
@@ -197,12 +294,13 @@
    * Resize canvas to match container size (with device pixel ratio).
    */
   function _resizeCanvas(canvas) {
-    var rect = canvas.getBoundingClientRect();
+    var container = canvas.parentElement;
+    var containerWidth = container ? container.clientWidth : canvas.getBoundingClientRect().width;
     var dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvas.style.width = rect.width + 'px';
-    canvas.style.height = rect.height + 'px';
+    var height = parseFloat(canvas.style.height) || canvas.getBoundingClientRect().height;
+    canvas.width = containerWidth * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = containerWidth + 'px';
     if (timelineState.ctx) {
       timelineState.ctx.scale(dpr, dpr);
       _render();
@@ -213,16 +311,25 @@
    * Resize the sticky header canvas to match container width.
    */
   function _resizeHeaderCanvas(headerCanvas) {
-    var rect = headerCanvas.getBoundingClientRect();
+    var container = headerCanvas.parentElement ? headerCanvas.parentElement.parentElement : null;
+    var containerWidth = container ? container.clientWidth : headerCanvas.getBoundingClientRect().width;
     var dpr = window.devicePixelRatio || 1;
-    headerCanvas.width = rect.width * dpr;
-    headerCanvas.height = rect.height * dpr;
-    headerCanvas.style.width = rect.width + 'px';
-    headerCanvas.style.height = rect.height + 'px';
+    var height = parseFloat(headerCanvas.style.height) || headerCanvas.getBoundingClientRect().height;
+    headerCanvas.width = containerWidth * dpr;
+    headerCanvas.height = height * dpr;
+    headerCanvas.style.width = containerWidth + 'px';
     if (timelineState.headerCtx) {
       timelineState.headerCtx.scale(dpr, dpr);
       _renderHeader();
     }
+  }
+
+  /**
+   * Update the visible time window after zoom change and re-render.
+   */
+  function _applyZoom() {
+    _render();
+    _renderHeader();
   }
 
   /**
@@ -331,6 +438,8 @@
     if (allSpans.length > 0) {
       timelineState.minTime = Math.min.apply(null, allSpans.map(function (s) { return s.startTime; }));
       timelineState.maxTime = Math.max.apply(null, allSpans.map(function (s) { return s.endTime; }));
+      timelineState.viewStart = timelineState.minTime;
+      timelineState.viewEnd = timelineState.maxTime;
       console.log('[Timeline] Time bounds:', { 
         minTime: timelineState.minTime, 
         maxTime: timelineState.maxTime,
@@ -511,10 +620,33 @@
     // Mouse wheel for zoom
     canvas.addEventListener('wheel', function (e) {
       e.preventDefault();
-      var delta = e.deltaY > 0 ? 0.9 : 1.1;
-      timelineState.zoom *= delta;
-      timelineState.zoom = Math.max(0.1, Math.min(timelineState.zoom, 100));
-      _render();
+      var rect = canvas.getBoundingClientRect();
+      var mouseX = e.clientX - rect.left;
+      // Zoom centered on mouse position
+      var mouseTime = _screenXToTime(mouseX);
+      var factor = e.deltaY > 0 ? 0.9 : 1.1;
+      var newZoom = timelineState.zoom * factor;
+      newZoom = Math.max(0.1, Math.min(newZoom, 10000));
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var newRange = totalRange / newZoom;
+      // Keep mouse position anchored
+      var canvasWidth = canvas.width / (window.devicePixelRatio || 1);
+      var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
+      var mouseRatio = (mouseX - timelineState.leftMargin) / timelineWidth;
+      timelineState.viewStart = mouseTime - mouseRatio * newRange;
+      timelineState.viewEnd = timelineState.viewStart + newRange;
+      // Clamp to data bounds
+      if (timelineState.viewStart < timelineState.minTime) {
+        timelineState.viewStart = timelineState.minTime;
+        timelineState.viewEnd = timelineState.viewStart + newRange;
+      }
+      if (timelineState.viewEnd > timelineState.maxTime) {
+        timelineState.viewEnd = timelineState.maxTime;
+        timelineState.viewStart = timelineState.viewEnd - newRange;
+      }
+      timelineState.zoom = newZoom;
+      if (timelineState._syncSlider) timelineState._syncSlider();
+      _applyZoom();
     }, { passive: false });
 
     // Mouse down: start drag or selection
@@ -532,18 +664,12 @@
         return;
       }
 
-      // Start selection or pan
-      if (e.shiftKey) {
-        // Shift + drag = time range selection
-        timelineState.isSelecting = true;
-        timelineState.selectionStart = _screenXToTime(x);
-        timelineState.selectionEnd = timelineState.selectionStart;
-      } else {
-        // Drag = pan
-        timelineState.isDragging = true;
-        timelineState.dragStartX = x;
-        timelineState.dragStartY = y;
-      }
+      // Start zoom selection (drag to zoom into a time range)
+      timelineState.isSelecting = true;
+      timelineState.selectionStartX = x;
+      timelineState.selectionEndX = x;
+      timelineState.selectionStart = _screenXToTime(x);
+      timelineState.selectionEnd = timelineState.selectionStart;
     });
 
     // Mouse move: update drag or selection
@@ -552,16 +678,8 @@
       var x = e.clientX - rect.left;
       var y = e.clientY - rect.top;
 
-      if (timelineState.isDragging) {
-        var dx = x - timelineState.dragStartX;
-        var dy = y - timelineState.dragStartY;
-        timelineState.panX += dx;
-        timelineState.panY += dy;
-        timelineState.dragStartX = x;
-        timelineState.dragStartY = y;
-        _clampPan();
-        _render();
-      } else if (timelineState.isSelecting) {
+      if (timelineState.isSelecting) {
+        timelineState.selectionEndX = x;
         timelineState.selectionEnd = _screenXToTime(x);
         _render();
       } else {
@@ -578,10 +696,27 @@
     // Mouse up: end drag or selection
     canvas.addEventListener('mouseup', function (e) {
       if (timelineState.isSelecting) {
-        // Emit time range selection event
-        var start = Math.min(timelineState.selectionStart, timelineState.selectionEnd);
-        var end = Math.max(timelineState.selectionStart, timelineState.selectionEnd);
-        _emitTimeRangeSelected(start, end);
+        var startTime = Math.min(timelineState.selectionStart, timelineState.selectionEnd);
+        var endTime = Math.max(timelineState.selectionStart, timelineState.selectionEnd);
+        var totalRange = timelineState.maxTime - timelineState.minTime;
+        var selectedRange = endTime - startTime;
+
+        // Only zoom if the selection is meaningful (more than 1% of current view)
+        var viewRange = timelineState.viewEnd - timelineState.viewStart;
+        if (selectedRange > viewRange * 0.01) {
+          // Set viewport to the selected range
+          timelineState.viewStart = startTime;
+          timelineState.viewEnd = endTime;
+          timelineState.zoom = totalRange / selectedRange;
+          if (timelineState._syncSlider) timelineState._syncSlider();
+        }
+
+        // Clear selection
+        timelineState.selectionStart = null;
+        timelineState.selectionEnd = null;
+        timelineState.selectionStartX = null;
+        timelineState.selectionEndX = null;
+        _applyZoom();
       }
       timelineState.isDragging = false;
       timelineState.isSelecting = false;
@@ -589,6 +724,13 @@
 
     // Mouse leave: cancel drag/selection
     canvas.addEventListener('mouseleave', function () {
+      if (timelineState.isSelecting) {
+        timelineState.selectionStart = null;
+        timelineState.selectionEnd = null;
+        timelineState.selectionStartX = null;
+        timelineState.selectionEndX = null;
+        _render();
+      }
       timelineState.isDragging = false;
       timelineState.isSelecting = false;
       timelineState.hoveredSpan = null;
@@ -609,9 +751,15 @@
         var distance = _getTouchDistance(e.touches);
         var delta = distance / lastTouchDistance;
         timelineState.zoom *= delta;
-        timelineState.zoom = Math.max(0.1, Math.min(timelineState.zoom, 100));
+        timelineState.zoom = Math.max(0.1, Math.min(timelineState.zoom, 10000));
+        var totalRange = timelineState.maxTime - timelineState.minTime;
+        var viewMid = (timelineState.viewStart + timelineState.viewEnd) / 2;
+        var newHalfRange = (totalRange / timelineState.zoom) / 2;
+        timelineState.viewStart = Math.max(timelineState.minTime, viewMid - newHalfRange);
+        timelineState.viewEnd = Math.min(timelineState.maxTime, viewMid + newHalfRange);
         lastTouchDistance = distance;
-        _render();
+        if (timelineState._syncSlider) timelineState._syncSlider();
+        _applyZoom();
       }
     }, { passive: false });
   }
@@ -626,50 +774,27 @@
   }
 
   /**
-   * Clamp pan values to prevent timeline from drifting off-screen.
-   */
-  function _clampPan() {
-    var canvas = timelineState.canvas;
-    var width = canvas.width / (window.devicePixelRatio || 1);
-    var timelineWidth = width - timelineState.leftMargin - timelineState.rightMargin;
-    
-    // Calculate the total width of the timeline at current zoom
-    var totalTimelineWidth = timelineWidth * timelineState.zoom;
-    
-    // Maximum pan: timeline start can't go past right edge
-    var maxPanX = timelineWidth - totalTimelineWidth;
-    
-    // Minimum pan: timeline end can't go past left edge  
-    var minPanX = 0;
-    
-    // Clamp panX to valid range
-    if (totalTimelineWidth > timelineWidth) {
-      // Timeline is wider than viewport - allow panning
-      timelineState.panX = Math.max(maxPanX, Math.min(minPanX, timelineState.panX));
-    } else {
-      // Timeline fits in viewport - center it
-      timelineState.panX = (timelineWidth - totalTimelineWidth) / 2;
-    }
-  }
-
-  /**
    * Convert screen X coordinate to time value.
    */
   function _screenXToTime(screenX) {
-    var timelineWidth = timelineState.canvas.width / (window.devicePixelRatio || 1) - timelineState.leftMargin - timelineState.rightMargin;
-    var timeRange = timelineState.maxTime - timelineState.minTime;
-    var normalizedX = (screenX - timelineState.leftMargin - timelineState.panX) / (timelineWidth * timelineState.zoom);
-    return timelineState.minTime + normalizedX * timeRange;
+    var canvasWidth = timelineState.canvas.width / (window.devicePixelRatio || 1);
+    var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
+    var viewRange = timelineState.viewEnd - timelineState.viewStart;
+    if (timelineWidth === 0) return timelineState.viewStart;
+    var normalizedX = (screenX - timelineState.leftMargin) / timelineWidth;
+    return timelineState.viewStart + normalizedX * viewRange;
   }
 
   /**
    * Convert time value to screen X coordinate.
    */
   function _timeToScreenX(time) {
-    var timelineWidth = timelineState.canvas.width / (window.devicePixelRatio || 1) - timelineState.leftMargin - timelineState.rightMargin;
-    var timeRange = timelineState.maxTime - timelineState.minTime;
-    var normalizedX = (time - timelineState.minTime) / timeRange;
-    return timelineState.leftMargin + normalizedX * timelineWidth * timelineState.zoom + timelineState.panX;
+    var canvasWidth = timelineState.canvas.width / (window.devicePixelRatio || 1);
+    var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
+    var viewRange = timelineState.viewEnd - timelineState.viewStart;
+    if (viewRange === 0) return timelineState.leftMargin;
+    var normalizedX = (time - timelineState.viewStart) / viewRange;
+    return timelineState.leftMargin + normalizedX * timelineWidth;
   }
 
   /**
@@ -684,7 +809,8 @@
       
       for (var i = 0; i < workerSpans.length; i++) {
         var span = workerSpans[i];
-        var spanY = yOffset + span.depth * timelineState.rowHeight;
+        var lane = span.lane !== undefined ? span.lane : span.depth;
+        var spanY = yOffset + lane * timelineState.rowHeight;
         var spanX1 = _timeToScreenX(span.startTime);
         var spanX2 = _timeToScreenX(span.endTime);
 
@@ -694,8 +820,10 @@
       }
 
       // Move to next worker lane
-      var maxDepth = Math.max.apply(null, workerSpans.map(function (s) { return s.depth; }));
-      yOffset += (maxDepth + 2) * timelineState.rowHeight;
+      var maxLane = Math.max.apply(null, workerSpans.map(function (s) { 
+        return s.lane !== undefined ? s.lane : s.depth; 
+      }));
+      yOffset += (maxLane + 2) * timelineState.rowHeight;
     }
 
     return null;
@@ -770,12 +898,12 @@
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
 
-    var timeRange = timelineState.maxTime - timelineState.minTime;
+    var timeRange = timelineState.viewEnd - timelineState.viewStart;
     var numTicks = 10;
     var tickInterval = timeRange / numTicks;
 
     for (var i = 0; i <= numTicks; i++) {
-      var time = timelineState.minTime + i * tickInterval;
+      var time = timelineState.viewStart + i * tickInterval;
       var x = _timeToScreenX(time);
       if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
         ctx.fillText(_formatTime(time), x, height - 10);
@@ -1023,10 +1151,10 @@
     var left = Math.min(x1, x2);
     var right = Math.max(x1, x2);
 
-    ctx.fillStyle = 'rgba(0, 102, 204, 0.2)';
+    ctx.fillStyle = 'rgba(76, 175, 80, 0.2)';
     ctx.fillRect(left, 0, right - left, height);
 
-    ctx.strokeStyle = '#0066cc';
+    ctx.strokeStyle = '#43a047';
     ctx.lineWidth = 2;
     ctx.strokeRect(left, 0, right - left, height);
   }
@@ -1183,17 +1311,20 @@
         var height = canvas.height / (window.devicePixelRatio || 1);
         var centerX = width / 2;
         
-        // Horizontal centering: Calculate where the span would be with NO pan offset
-        var timelineWidth = width - timelineState.leftMargin - timelineState.rightMargin;
-        var timeRange = timelineState.maxTime - timelineState.minTime;
-        var normalizedX = (span.startTime - timelineState.minTime) / timeRange;
-        var spanXNoPan = timelineState.leftMargin + normalizedX * timelineWidth * timelineState.zoom;
-        
-        // Calculate pan needed to center the span horizontally (RESET, not accumulate)
-        timelineState.panX = centerX - spanXNoPan;
-        
-        // Apply bounds checking to prevent timeline drift
-        _clampPan();
+        // Horizontal centering: adjust viewport to center the span
+        var viewRange = timelineState.viewEnd - timelineState.viewStart;
+        var spanMid = (span.startTime + span.endTime) / 2;
+        timelineState.viewStart = spanMid - viewRange / 2;
+        timelineState.viewEnd = spanMid + viewRange / 2;
+        // Clamp to data bounds
+        if (timelineState.viewStart < timelineState.minTime) {
+          timelineState.viewStart = timelineState.minTime;
+          timelineState.viewEnd = timelineState.viewStart + viewRange;
+        }
+        if (timelineState.viewEnd > timelineState.maxTime) {
+          timelineState.viewEnd = timelineState.maxTime;
+          timelineState.viewStart = timelineState.viewEnd - viewRange;
+        }
         
         // Vertical scrolling: Find the span's Y position and scroll container to center it
         var workers = Object.keys(timelineState.workers);
