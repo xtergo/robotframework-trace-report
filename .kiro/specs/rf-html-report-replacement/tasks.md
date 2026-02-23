@@ -431,7 +431,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Generate a report from pabot_trace.json and verify all features work in browser.
 
 - [ ] 28. Enrich Python data models for detail panels
-  - [ ] 28.1 Add `lineno`, `doc`, `events`, and `status_message` fields to `RFKeyword` in `src/rf_trace_viewer/rf_model.py`
+  - [x] 28.1 Add `lineno`, `doc`, `events`, and `status_message` fields to `RFKeyword` in `src/rf_trace_viewer/rf_model.py`
     - Add `lineno: int = 0` field, populated from `rf.keyword.lineno` attribute (already present in tracer output but currently dropped during model building)
     - Add `doc: str = ""` field, populated from `rf.keyword.doc` attribute (requires tracer to emit this; default empty)
     - Add `events: list[dict] = field(default_factory=list)` field, populated from `node.span.events` (the `RawSpan.events` field exists but is never passed to the model)

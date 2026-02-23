@@ -17,12 +17,12 @@ class TestArgumentParsing:
     def test_minimal_arguments(self, monkeypatch, tmp_path):
         """CLI with only input file should use defaults."""
         output_file = tmp_path / "trace-report.html"
-        
+
         monkeypatch.setattr(
             "sys.argv",
             ["rf-trace-report", "tests/fixtures/simple_trace.json"],
         )
-        
+
         # Change to tmp_path so default output goes there
         monkeypatch.chdir(tmp_path)
 
@@ -282,7 +282,10 @@ class TestStaticModeEndToEnd:
         """Generate report from simple_trace.json fixture."""
         output_file = tmp_path / "simple-report.html"
 
-        with patch("sys.argv", ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)]):
+        with patch(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
+        ):
             exit_code = main()
 
         assert exit_code == 0
@@ -299,7 +302,10 @@ class TestStaticModeEndToEnd:
         """Generate report from pabot_trace.json fixture."""
         output_file = tmp_path / "pabot-report.html"
 
-        with patch("sys.argv", ["rf-trace-report", "tests/fixtures/pabot_trace.json", "-o", str(output_file)]):
+        with patch(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/pabot_trace.json", "-o", str(output_file)],
+        ):
             exit_code = main()
 
         assert exit_code == 0
@@ -315,7 +321,10 @@ class TestStaticModeEndToEnd:
         """Generate report from all_types_trace.json fixture."""
         output_file = tmp_path / "all-types-report.html"
 
-        with patch("sys.argv", ["rf-trace-report", "tests/fixtures/all_types_trace.json", "-o", str(output_file)]):
+        with patch(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/all_types_trace.json", "-o", str(output_file)],
+        ):
             exit_code = main()
 
         assert exit_code == 0
@@ -331,7 +340,10 @@ class TestStaticModeEndToEnd:
         """Generate report from malformed_trace.json fixture (should skip bad lines)."""
         output_file = tmp_path / "malformed-report.html"
 
-        with patch("sys.argv", ["rf-trace-report", "tests/fixtures/malformed_trace.json", "-o", str(output_file)]):
+        with patch(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/malformed_trace.json", "-o", str(output_file)],
+        ):
             # Should succeed despite malformed lines
             exit_code = main()
 
@@ -391,7 +403,10 @@ class TestStaticModeEndToEnd:
         """CLI should print summary message with test counts."""
         output_file = tmp_path / "report.html"
 
-        with patch("sys.argv", ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)]):
+        with patch(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
+        ):
             exit_code = main()
 
         assert exit_code == 0
@@ -411,7 +426,10 @@ class TestCLIPipeline:
         """CLI should call all pipeline components in correct order."""
         output_file = tmp_path / "pipeline-report.html"
 
-        with patch("sys.argv", ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)]):
+        with patch(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
+        ):
             with patch("rf_trace_viewer.cli.parse_file") as mock_parse:
                 with patch("rf_trace_viewer.cli.build_tree") as mock_tree:
                     with patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret:
@@ -448,7 +466,10 @@ class TestCLIPipeline:
         """CLI should propagate data correctly through pipeline."""
         output_file = tmp_path / "data-report.html"
 
-        with patch("sys.argv", ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)]):
+        with patch(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
+        ):
             with patch("rf_trace_viewer.cli.parse_file") as mock_parse:
                 with patch("rf_trace_viewer.cli.build_tree") as mock_tree:
                     with patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret:

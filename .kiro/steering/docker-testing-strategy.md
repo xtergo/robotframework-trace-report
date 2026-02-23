@@ -8,13 +8,14 @@ inclusion: auto
 
 **NEVER run raw Python commands directly on the host system.** This project uses a Docker-only development workflow to ensure consistency across all environments.
 
-## Why Docker-Only?
+## Critical Rule: Use the Pre-Built Test Image
 
-1. **Consistent environment** - Same results for everyone, every time
-2. **No dependency hell** - No Python venv, pip install, or system packages needed
-3. **Easy onboarding** - New contributors start immediately with just Docker
-4. **CI/CD ready** - Same Docker images in development and CI
-5. **Reproducible** - Tests run identically on all machines
+**NEVER use `python:3.11-slim` with `pip install` at runtime.** The project has a pre-built Docker image (`rf-trace-test:latest`) with all dependencies baked in via `Dockerfile.test`. Use the Makefile targets or the pre-built image directly.
+
+If the image doesn't exist yet, build it first:
+```bash
+make docker-build-test
+```
 
 ## Prerequisites
 
@@ -24,104 +25,88 @@ Only 2 things are required:
 
 That's it! No Python installation, no pip, no virtual environments.
 
-## Running Tests
+## Running Tests — Use Makefile Targets
 
-### Unit Tests (Python)
-
-**ALWAYS use this Docker command:**
-
+### Unit Tests with Coverage
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest pytest-cov hypothesis black ruff &&
-  PYTHONPATH=src pytest tests/unit/ -v --cov=src/rf_trace_viewer
-"
+make test-unit
 ```
 
-**For a specific test file:**
-
+### Property-Based Tests Only
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest pytest-cov hypothesis &&
-  PYTHONPATH=src pytest tests/unit/test_rf_model_properties.py -v
-"
+make test-properties
 ```
 
-**For property-based tests (with Hypothesis):**
-
+### Specific Test File
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest hypothesis &&
-  PYTHONPATH=src pytest tests/unit/test_*_properties.py -v
-"
+make dev-test-file FILE=test_rf_model.py
 ```
 
-### Browser Tests (Robot Framework)
-
-**ALWAYS use docker-compose:**
-
+### Quick Unit Tests (No Coverage)
 ```bash
-cd tests/browser
-docker compose up --build
+make dev-test
 ```
 
-**For a specific test suite:**
-
+### Browser Tests
 ```bash
-cd tests/browser
-docker compose run --rm browser-tests robot --outputdir /workspace/tests/browser/results /workspace/tests/browser/suites/timeline_ux.robot
+make test-browser
 ```
 
 ## Code Quality Checks
 
-### Format and Lint
-
+### Format Code
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q black ruff &&
-  black src/ tests/ &&
-  ruff check src/
-"
+make format
 ```
 
-### Format Check Only (CI-style)
-
+### Lint Code
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q black ruff &&
-  black --check src/ tests/ &&
-  ruff check src/
-"
+make lint
+```
+
+### CI-Style Check (Format + Lint)
+```bash
+make check
 ```
 
 ## Generating Test Reports
+```bash
+make report
+```
+
+## Direct Docker Commands (When Makefile Isn't Enough)
+
+If you need a custom command, use the pre-built image:
 
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  PYTHONPATH=src python3 -m rf_trace_viewer.cli tests/fixtures/pabot_trace.json -o report.html
-"
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
+  PYTHONPATH=src pytest tests/unit/test_rf_model.py -v --cov=src/rf_trace_viewer --cov-report=term-missing -n auto"
 ```
 
 ## What NOT to Do
 
 ❌ **NEVER do this:**
 ```bash
-# DON'T run raw Python commands
+# DON'T run raw Python commands on host
 python3 -m pytest tests/
-PYTHONPATH=src python3 -m pytest tests/
-
-# DON'T install packages on host
 pip install pytest
-pip3 install hypothesis
+
+# DON'T use python:3.11-slim with pip install at runtime
+docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
+  pip install -q pytest hypothesis && ..."
 
 # DON'T use virtual environments
 python -m venv venv
-source venv/bin/activate
 ```
 
 ✅ **ALWAYS do this:**
 ```bash
-# DO use Docker
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "..."
+# DO use Makefile targets (preferred)
+make test-unit
+make check
+
+# OR use the pre-built image directly
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "..."
 ```
 
 ## Testing Workflow for Kiro
@@ -129,53 +114,21 @@ docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "...
 When implementing or testing code:
 
 1. **Write the code** in `src/` or `tests/`
-2. **Run tests with Docker** using the commands above
-3. **Check output** - all tests should pass
-4. **Fix issues** if tests fail
-5. **Verify with Docker again** before marking task complete
-
-## Property-Based Testing with Hypothesis
-
-This project uses Hypothesis for property-based testing. When running property tests:
-
-1. **Always include hypothesis** in the pip install command
-2. **Use appropriate test file patterns**: `test_*_properties.py`
-3. **Expect longer run times** - Hypothesis generates many test cases
-4. **Check for falsifying examples** - Hypothesis will show minimal failing cases
-
-Example:
-```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest hypothesis &&
-  PYTHONPATH=src pytest tests/unit/test_rf_model_properties.py -v
-"
-```
+2. **Ensure image exists**: `make docker-build-test` (only needed once or after Dockerfile.test changes)
+3. **Run tests**: `make test-unit` or `make dev-test-file FILE=<test_file>.py`
+4. **Check quality**: `make check`
+5. **Fix issues** if tests fail
+6. **Verify again** before marking task complete
 
 ## Troubleshooting
 
+### "rf-trace-test:latest not found"
+- Run `make docker-build-test` to build the image
+
 ### "Module not found" errors
-- Ensure `PYTHONPATH=src` is set in the Docker command
-- Verify the file structure matches the imports
+- The Makefile sets `PYTHONPATH=src` automatically
+- If using direct docker commands, ensure `PYTHONPATH=src` is set
 
-### "Docker not found"
-- Install Docker: https://docs.docker.com/get-docker/
-- Ensure Docker daemon is running
-
-### Tests pass locally but fail in Docker
-- This shouldn't happen with Docker-only workflow
-- If it does, the test has environment-specific assumptions that need fixing
-
-### Slow Docker builds
-- Use `-q` flag with pip to reduce output
-- Docker images are cached after first pull
-- Consider using `--no-cache` if you suspect stale dependencies
-
-## CI/CD Integration
-
-The same Docker commands run in CI pipelines. See `.github/workflows/` for examples.
-
-## Summary
-
-**Remember: Docker is the ONLY way to run tests in this project.**
-
-If you find yourself typing `python`, `pip`, or `pytest` directly, STOP and use the Docker commands above instead.
+### "unrecognized arguments: -n"
+- The pre-built image includes `pytest-xdist` for parallel execution
+- If you see this, you're using the wrong image — use `rf-trace-test:latest`
