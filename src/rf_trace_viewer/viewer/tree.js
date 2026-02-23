@@ -707,7 +707,7 @@ function _createTreeNode(opts) {
 
   // Toggle arrow (or spacer)
   var toggle = document.createElement('button');
-  toggle.className = 'tree-toggle';
+  toggle.className = 'tree-toggle toggle-' + opts.type + ' ' + _statusClass(opts.status);
   toggle.textContent = '\u25b6'; // ▶
   toggle.setAttribute('aria-label', 'Expand');
   toggle.addEventListener('click', function (e) {

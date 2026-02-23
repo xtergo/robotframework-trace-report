@@ -347,59 +347,95 @@
 
   /**
    * Assign lanes to spans to prevent visual overlap.
-   * Uses greedy algorithm: assign each span to the first available lane.
+   * Uses hierarchical layout: suite → its tests → each test's keywords,
+   * so related spans are visually grouped together.
    */
   function _assignLanes(spans) {
-    // Group spans by worker and type for hierarchical lane assignment
-    var workers = {};
-    
+    // Group spans by worker
+    var workerSpans = {};
     for (var i = 0; i < spans.length; i++) {
       var span = spans[i];
       var worker = span.worker;
-      
-      if (!workers[worker]) {
-        workers[worker] = {
-          suites: [],
-          tests: [],
-          keywords: []
-        };
+      if (!workerSpans[worker]) workerSpans[worker] = [];
+      workerSpans[worker].push(span);
+    }
+
+    for (var workerId in workerSpans) {
+      var wSpans = workerSpans[workerId];
+
+      // Separate into suites, tests, keywords
+      var suites = [];
+      var tests = [];
+      var keywords = [];
+      for (var i = 0; i < wSpans.length; i++) {
+        if (wSpans[i].type === 'suite') suites.push(wSpans[i]);
+        else if (wSpans[i].type === 'test') tests.push(wSpans[i]);
+        else keywords.push(wSpans[i]);
       }
-      
-      if (span.type === 'suite') {
-        workers[worker].suites.push(span);
-      } else if (span.type === 'test') {
-        workers[worker].tests.push(span);
-      } else if (span.type === 'keyword') {
-        workers[worker].keywords.push(span);
+
+      // Sort suites and tests by start time
+      suites.sort(function(a, b) { return a.startTime - b.startTime; });
+      tests.sort(function(a, b) { return a.startTime - b.startTime; });
+
+      var lane = 0;
+
+      // Assign suites first (they span the widest time ranges)
+      _assignLanesForGroup(suites, 0);
+      if (suites.length > 0) {
+        var maxSuiteLane = 0;
+        for (var i = 0; i < suites.length; i++) {
+          if (suites[i].lane > maxSuiteLane) maxSuiteLane = suites[i].lane;
+        }
+        lane = maxSuiteLane + 1;
+      }
+
+      // Now assign tests and their keywords in sequence.
+      // For each test, place the test bar, then its child keywords directly below.
+      // Tests that don't overlap can share lanes (greedy packing).
+      var testLanes = [];  // Each entry: { endTime, nextKeywordLane }
+
+      for (var t = 0; t < tests.length; t++) {
+        var test = tests[t];
+
+        // Find the test's keywords (children)
+        var testKeywords = [];
+        for (var k = 0; k < keywords.length; k++) {
+          if (keywords[k].parent === test) {
+            testKeywords.push(keywords[k]);
+          }
+        }
+        testKeywords.sort(function(a, b) { return a.startTime - b.startTime; });
+
+        // Assign test to a lane
+        test.lane = lane;
+
+        // Assign keywords to lanes directly below the test
+        var kwBaseLane = lane + 1;
+        if (testKeywords.length > 0) {
+          _assignLanesForGroup(testKeywords, kwBaseLane);
+          var maxKwLane = kwBaseLane;
+          for (var k = 0; k < testKeywords.length; k++) {
+            if (testKeywords[k].lane > maxKwLane) maxKwLane = testKeywords[k].lane;
+          }
+          lane = maxKwLane + 1;
+        } else {
+          lane = lane + 1;
+        }
+      }
+
+      // Handle orphan keywords (no parent test — shouldn't happen but be safe)
+      var orphanKws = [];
+      for (var k = 0; k < keywords.length; k++) {
+        if (keywords[k].lane === undefined) {
+          orphanKws.push(keywords[k]);
+        }
+      }
+      if (orphanKws.length > 0) {
+        _assignLanesForGroup(orphanKws, lane);
       }
     }
-    
-    // Assign lanes within each worker and type
-    for (var workerId in workers) {
-      var workerSpans = workers[workerId];
-      var laneOffset = 0;
-      
-      // Assign lanes for suites
-      if (workerSpans.suites.length > 0) {
-        _assignLanesForGroup(workerSpans.suites, laneOffset);
-        var maxSuiteLane = Math.max.apply(null, workerSpans.suites.map(function(s) { return s.lane; }));
-        laneOffset = maxSuiteLane + 1;
-      }
-      
-      // Assign lanes for tests
-      if (workerSpans.tests.length > 0) {
-        _assignLanesForGroup(workerSpans.tests, laneOffset);
-        var maxTestLane = Math.max.apply(null, workerSpans.tests.map(function(s) { return s.lane; }));
-        laneOffset = maxTestLane + 1;
-      }
-      
-      // Assign lanes for keywords
-      if (workerSpans.keywords.length > 0) {
-        _assignLanesForGroup(workerSpans.keywords, laneOffset);
-      }
-    }
-    
-    console.log('[Timeline] Lane assignment complete');
+
+    console.log('[Timeline] Hierarchical lane assignment complete');
   }
 
   /**

@@ -396,6 +396,21 @@
   padding: 0;
 }
 
+.rf-trace-viewer .tree-toggle.toggle-suite.pass,
+.rf-trace-viewer .tree-toggle.toggle-test.pass { color: var(--status-pass); }
+
+.rf-trace-viewer .tree-toggle.toggle-suite.fail,
+.rf-trace-viewer .tree-toggle.toggle-test.fail { color: var(--status-fail); }
+
+.rf-trace-viewer .tree-toggle.toggle-suite.skip,
+.rf-trace-viewer .tree-toggle.toggle-test.skip { color: var(--status-skip); }
+
+.rf-trace-viewer .tree-toggle.toggle-suite.not-run,
+.rf-trace-viewer .tree-toggle.toggle-test.not-run { color: var(--status-not-run); }
+
+.rf-trace-viewer.theme-dark .tree-toggle.toggle-suite { color: #64b5f6; }
+.rf-trace-viewer.theme-dark .tree-toggle.toggle-test { color: #42a5f5; }
+
 .rf-trace-viewer .tree-toggle:focus-visible {
   outline: 2px solid var(--focus-outline);
   outline-offset: 1px;
