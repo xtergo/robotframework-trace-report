@@ -76,8 +76,8 @@
       document.body.appendChild(root);
     }
 
-    // Detect OS theme preference and apply
-    var theme = _detectTheme();
+    // Initialize theme manager (detects OS preference, sets data-theme on <html>)
+    var theme = typeof window.initTheme === 'function' ? window.initTheme() : _detectTheme();
     _applyTheme(root, theme);
 
     // Build header
@@ -93,9 +93,14 @@
     toggleBtn.textContent = theme === 'dark' ? '\u2600 Light' : '\u263e Dark';
     toggleBtn.setAttribute('aria-label', 'Toggle theme');
     toggleBtn.addEventListener('click', function () {
-      var isDark = root.classList.contains('theme-dark');
-      var newTheme = isDark ? 'light' : 'dark';
-      _applyTheme(root, newTheme);
+      var newTheme;
+      if (typeof window.toggleTheme === 'function') {
+        newTheme = window.toggleTheme();
+      } else {
+        var isDark = root.classList.contains('theme-dark');
+        newTheme = isDark ? 'light' : 'dark';
+        _applyTheme(root, newTheme);
+      }
       toggleBtn.textContent = newTheme === 'dark' ? '\u2600 Light' : '\u263e Dark';
     });
     header.appendChild(toggleBtn);

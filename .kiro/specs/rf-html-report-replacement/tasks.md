@@ -263,8 +263,8 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Test offset-based incremental serving
     - _Requirements: 9.1, 9.5_
 
-- [ ] 15. Implement Theme Manager and Dark Mode
-  - [ ] 15.1 Create `src/rf_trace_viewer/viewer/theme.js`
+- [x] 15. Implement Theme Manager and Dark Mode
+  - [x] 15.1 Create `src/rf_trace_viewer/viewer/theme.js`
     - Implement `prefers-color-scheme` detection
     - Implement manual light/dark toggle
     - Implement `data-theme` attribute switching on `<html>`
