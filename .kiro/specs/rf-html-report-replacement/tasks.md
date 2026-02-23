@@ -469,7 +469,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add tests in `tests/unit/test_rf_model.py`
     - _Validates: Requirements 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8_
 
-  - [ ] 28.7 Write unit tests for enriched data model with fixture data
+  - [x] 28.7 Write unit tests for enriched data model with fixture data
     - Test that `_build_keyword()` extracts `lineno` from `rf.keyword.lineno` attribute in existing fixture files (verify `pabot_trace.json` contains this attribute)
     - Test that `events` from `RawSpan` are passed through to `RFKeyword.events`
     - Test that `status.message` is extracted for FAIL spans

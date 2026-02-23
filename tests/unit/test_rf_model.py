@@ -2,19 +2,22 @@
 
 import pytest
 
-from rf_trace_viewer.parser import parse_file
+from rf_trace_viewer.parser import RawSpan, parse_file
 from rf_trace_viewer.rf_model import (
     RFKeyword,
     RFSuite,
     RFTest,
     SpanType,
     Status,
+    _build_keyword,
+    _build_suite,
+    _build_test,
     classify_span,
     compute_statistics,
     extract_status,
     interpret_tree,
 )
-from rf_trace_viewer.tree import build_tree
+from rf_trace_viewer.tree import SpanNode, build_tree
 
 
 class TestClassification:
@@ -439,3 +442,599 @@ class TestEdgeCases:
         assert actual_test is not None
         assert actual_test.id == "1000000000000003"  # Uses span_id
         assert len(actual_test.keywords) > 0
+
+
+class TestEnrichedDataModel:
+    """Unit tests for enriched data model fields (task 28.7)."""
+
+    # --- lineno extraction from fixture data ---
+
+    def test_keyword_lineno_from_pabot_trace(self):
+        """Test that _build_keyword extracts lineno from rf.keyword.lineno in pabot_trace.json."""
+        spans = parse_file("tests/fixtures/pabot_trace.json")
+        roots = build_tree(spans)
+        model = interpret_tree(roots)
+
+        # Collect all keywords across all suites/tests
+        all_keywords = []
+        for suite in model.suites:
+            for child in suite.children:
+                if isinstance(child, RFTest):
+                    all_keywords.extend(child.keywords)
+
+        # pabot_trace.json keywords have rf.keyword.lineno set
+        keywords_with_lineno = [kw for kw in all_keywords if kw.lineno > 0]
+        assert len(keywords_with_lineno) > 0, "Expected keywords with non-zero lineno"
+
+        # Verify all keywords with lineno have positive values
+        for kw in keywords_with_lineno:
+            assert kw.lineno > 0, f"Expected positive lineno for {kw.name}"
+
+        # Verify known top-level Log keywords include expected lineno values
+        log_keywords = [kw for kw in all_keywords if kw.name == "Log"]
+        assert len(log_keywords) >= 3  # At least one per test
+        log_linenos = {kw.lineno for kw in log_keywords}
+        # Each test's first Log keyword has lineno 7, 13, or 19
+        assert {7, 13, 19}.issubset(log_linenos)
+
+        # Verify Sleep keywords include expected lineno values
+        sleep_keywords = [kw for kw in all_keywords if kw.name == "Sleep"]
+        assert len(sleep_keywords) >= 3
+        sleep_linenos = {kw.lineno for kw in sleep_keywords}
+        assert {8, 14, 20}.issubset(sleep_linenos)
+
+    def test_keyword_lineno_from_all_types_trace(self):
+        """Test lineno extraction from all_types_trace.json."""
+        spans = parse_file("tests/fixtures/all_types_trace.json")
+        roots = build_tree(spans)
+        model = interpret_tree(roots)
+
+        suite = model.suites[0]
+        test = next(c for c in suite.children if isinstance(c, RFTest) and len(c.keywords) > 0)
+        setup_kw = next(kw for kw in test.keywords if kw.keyword_type == "SETUP")
+        # all_types_trace.json has lineno=6 for Suite Setup
+        assert setup_kw.lineno == 6
+
+    # --- events passthrough ---
+
+    def test_events_passthrough_to_keyword(self):
+        """Test that RawSpan.events are passed through to RFKeyword.events."""
+        events = [
+            {
+                "time_unix_nano": "1700000001000000000",
+                "name": "log",
+                "attributes": [
+                    {"key": "message", "value": {"string_value": "Hello"}},
+                    {"key": "level", "value": {"string_value": "INFO"}},
+                ],
+            }
+        ]
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="cc01",
+            parent_span_id="",
+            name="My Keyword",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.keyword.name": "My Keyword",
+                "rf.keyword.type": "KEYWORD",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+            events=events,
+        )
+        node = SpanNode(span=span)
+        kw = _build_keyword(node)
+
+        assert kw.events == events
+        assert len(kw.events) == 1
+        assert kw.events[0]["name"] == "log"
+
+    def test_events_empty_by_default(self):
+        """Test that keywords without events have an empty events list."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="cc02",
+            parent_span_id="",
+            name="No Events KW",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.keyword.name": "No Events KW",
+                "rf.keyword.type": "KEYWORD",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        node = SpanNode(span=span)
+        kw = _build_keyword(node)
+
+        assert kw.events == []
+
+    def test_events_from_diverse_trace_fail_span(self):
+        """Test that events are preserved on FAIL keyword spans from diverse_trace.json."""
+        spans = parse_file("tests/fixtures/diverse_trace.json")
+        roots = build_tree(spans)
+        model = interpret_tree(roots)
+
+        # Find keywords with events across all suites
+        keywords_with_events = []
+        for suite in model.suites:
+            for child in suite.children:
+                if isinstance(child, RFTest):
+                    for kw in child.keywords:
+                        if kw.events:
+                            keywords_with_events.append(kw)
+                        # Also check nested children
+                        for nested in kw.children:
+                            if nested.events:
+                                keywords_with_events.append(nested)
+
+        assert len(keywords_with_events) > 0, "Expected at least one keyword with events"
+        # The diverse_trace has "test.failed" events
+        event_names = {ev["name"] for kw in keywords_with_events for ev in kw.events}
+        assert "test.failed" in event_names
+
+    # --- status_message extraction ---
+
+    def test_status_message_for_fail_keyword(self):
+        """Test that status.message is extracted for FAIL spans."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="cc03",
+            parent_span_id="",
+            name="Failing KW",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.keyword.name": "Failing KW",
+                "rf.keyword.type": "KEYWORD",
+                "rf.status": "FAIL",
+            },
+            status={"message": "Expected 1 but got 0", "code": "STATUS_CODE_ERROR"},
+        )
+        node = SpanNode(span=span)
+        kw = _build_keyword(node)
+
+        assert kw.status_message == "Expected 1 but got 0"
+        assert kw.status == Status.FAIL
+
+    def test_status_message_empty_for_pass(self):
+        """Test that status_message is empty for PASS spans."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="cc04",
+            parent_span_id="",
+            name="Passing KW",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.keyword.name": "Passing KW",
+                "rf.keyword.type": "KEYWORD",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        node = SpanNode(span=span)
+        kw = _build_keyword(node)
+
+        assert kw.status_message == ""
+
+    def test_status_message_on_test(self):
+        """Test that status_message is extracted for RFTest."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="cc05",
+            parent_span_id="",
+            name="Failing Test",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.test.name": "Failing Test",
+                "rf.test.id": "s1-t1",
+                "rf.status": "FAIL",
+            },
+            status={"message": "Test assertion failed", "code": "STATUS_CODE_ERROR"},
+        )
+        node = SpanNode(span=span)
+        test = _build_test(node)
+
+        assert test.status_message == "Test assertion failed"
+        assert test.status == Status.FAIL
+
+    def test_status_message_from_diverse_trace(self):
+        """Test status_message extraction from diverse_trace.json FAIL spans."""
+        spans = parse_file("tests/fixtures/diverse_trace.json")
+        roots = build_tree(spans)
+        model = interpret_tree(roots)
+
+        # Find keywords with non-empty status_message
+        fail_keywords = []
+        for suite in model.suites:
+            for child in suite.children:
+                if isinstance(child, RFTest):
+                    for kw in child.keywords:
+                        if kw.status_message:
+                            fail_keywords.append(kw)
+                        for nested in kw.children:
+                            if nested.status_message:
+                                fail_keywords.append(nested)
+
+        assert len(fail_keywords) > 0, "Expected FAIL keywords with status_message"
+        # diverse_trace has "0 == 0" as the error message
+        messages = {kw.status_message for kw in fail_keywords}
+        assert "0 == 0" in messages
+
+    # --- suite metadata collection ---
+
+    def test_suite_metadata_collection(self):
+        """Test that rf.suite.metadata.* attributes are collected into RFSuite.metadata."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="dd01",
+            parent_span_id="",
+            name="Suite With Metadata",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000010000000000,
+            attributes={
+                "rf.suite.name": "Suite With Metadata",
+                "rf.suite.id": "s1",
+                "rf.suite.source": "/tests/meta.robot",
+                "rf.status": "PASS",
+                "rf.suite.metadata.Version": "1.2.3",
+                "rf.suite.metadata.Author": "Test Team",
+                "rf.suite.metadata.Environment": "staging",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        node = SpanNode(span=span)
+        suite = _build_suite(node)
+
+        assert suite.metadata == {
+            "Version": "1.2.3",
+            "Author": "Test Team",
+            "Environment": "staging",
+        }
+
+    def test_suite_metadata_empty_when_absent(self):
+        """Test that metadata is empty dict when no rf.suite.metadata.* attributes exist."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="dd02",
+            parent_span_id="",
+            name="Suite No Metadata",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000010000000000,
+            attributes={
+                "rf.suite.name": "Suite No Metadata",
+                "rf.suite.id": "s1",
+                "rf.suite.source": "/tests/no_meta.robot",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        node = SpanNode(span=span)
+        suite = _build_suite(node)
+
+        assert suite.metadata == {}
+
+    def test_suite_metadata_not_in_existing_fixtures(self):
+        """Verify existing fixtures produce suites with empty metadata (backward compat)."""
+        spans = parse_file("tests/fixtures/pabot_trace.json")
+        roots = build_tree(spans)
+        model = interpret_tree(roots)
+
+        for suite in model.suites:
+            assert suite.metadata == {}
+
+    # --- suite SETUP/TEARDOWN in children ---
+
+    def test_suite_setup_teardown_in_children(self):
+        """Test that suite-level SETUP/TEARDOWN keywords appear in RFSuite.children."""
+        suite_span = RawSpan(
+            trace_id="aabb",
+            span_id="ee01",
+            parent_span_id="",
+            name="Suite With Setup",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000020000000000,
+            attributes={
+                "rf.suite.name": "Suite With Setup",
+                "rf.suite.id": "s1",
+                "rf.suite.source": "/tests/setup.robot",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        setup_span = RawSpan(
+            trace_id="aabb",
+            span_id="ee02",
+            parent_span_id="ee01",
+            name="Suite Setup",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000001000000000,
+            end_time_unix_nano=1700000002000000000,
+            attributes={
+                "rf.keyword.name": "Suite Setup",
+                "rf.keyword.type": "SETUP",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        teardown_span = RawSpan(
+            trace_id="aabb",
+            span_id="ee03",
+            parent_span_id="ee01",
+            name="Suite Teardown",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000018000000000,
+            end_time_unix_nano=1700000019000000000,
+            attributes={
+                "rf.keyword.name": "Suite Teardown",
+                "rf.keyword.type": "TEARDOWN",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        test_span = RawSpan(
+            trace_id="aabb",
+            span_id="ee04",
+            parent_span_id="ee01",
+            name="My Test",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000003000000000,
+            end_time_unix_nano=1700000017000000000,
+            attributes={
+                "rf.test.name": "My Test",
+                "rf.test.id": "s1-t1",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+
+        suite_node = SpanNode(span=suite_span)
+        setup_node = SpanNode(span=setup_span, parent=suite_node)
+        teardown_node = SpanNode(span=teardown_span, parent=suite_node)
+        test_node = SpanNode(span=test_span, parent=suite_node)
+        suite_node.children = [setup_node, test_node, teardown_node]
+
+        suite = _build_suite(suite_node)
+
+        # Should have 3 children: SETUP keyword, test, TEARDOWN keyword
+        assert len(suite.children) == 3
+
+        # First child should be SETUP keyword (sorted by start_time)
+        assert isinstance(suite.children[0], RFKeyword)
+        assert suite.children[0].keyword_type == "SETUP"
+        assert suite.children[0].name == "Suite Setup"
+
+        # Second child should be the test
+        assert isinstance(suite.children[1], RFTest)
+        assert suite.children[1].name == "My Test"
+
+        # Third child should be TEARDOWN keyword
+        assert isinstance(suite.children[2], RFKeyword)
+        assert suite.children[2].keyword_type == "TEARDOWN"
+        assert suite.children[2].name == "Suite Teardown"
+
+    def test_suite_regular_keyword_not_in_children(self):
+        """Test that regular (non-SETUP/TEARDOWN) keywords under a suite are NOT included."""
+        suite_span = RawSpan(
+            trace_id="aabb",
+            span_id="ff01",
+            parent_span_id="",
+            name="Suite With Regular KW",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000010000000000,
+            attributes={
+                "rf.suite.name": "Suite With Regular KW",
+                "rf.suite.id": "s1",
+                "rf.suite.source": "/tests/regular.robot",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        regular_kw_span = RawSpan(
+            trace_id="aabb",
+            span_id="ff02",
+            parent_span_id="ff01",
+            name="Log",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000001000000000,
+            end_time_unix_nano=1700000002000000000,
+            attributes={
+                "rf.keyword.name": "Log",
+                "rf.keyword.type": "KEYWORD",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+
+        suite_node = SpanNode(span=suite_span)
+        kw_node = SpanNode(span=regular_kw_span, parent=suite_node)
+        suite_node.children = [kw_node]
+
+        suite = _build_suite(suite_node)
+
+        # Regular keywords should NOT be in suite children
+        assert len(suite.children) == 0
+
+    # --- suite doc ---
+
+    def test_suite_doc_extraction(self):
+        """Test that rf.suite.doc is extracted into RFSuite.doc."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="gg01",
+            parent_span_id="",
+            name="Documented Suite",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000010000000000,
+            attributes={
+                "rf.suite.name": "Documented Suite",
+                "rf.suite.id": "s1",
+                "rf.suite.source": "/tests/doc.robot",
+                "rf.status": "PASS",
+                "rf.suite.doc": "This suite tests documentation features.",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        node = SpanNode(span=span)
+        suite = _build_suite(node)
+
+        assert suite.doc == "This suite tests documentation features."
+
+    def test_suite_doc_empty_by_default(self):
+        """Test that suite doc defaults to empty string."""
+        spans = parse_file("tests/fixtures/pabot_trace.json")
+        roots = build_tree(spans)
+        model = interpret_tree(roots)
+
+        for suite in model.suites:
+            assert suite.doc == ""
+
+    # --- keyword doc ---
+
+    def test_keyword_doc_extraction(self):
+        """Test that rf.keyword.doc is extracted into RFKeyword.doc."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="hh01",
+            parent_span_id="",
+            name="Documented KW",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.keyword.name": "Documented KW",
+                "rf.keyword.type": "KEYWORD",
+                "rf.status": "PASS",
+                "rf.keyword.doc": "This keyword does something useful.",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        node = SpanNode(span=span)
+        kw = _build_keyword(node)
+
+        assert kw.doc == "This keyword does something useful."
+
+    def test_keyword_doc_empty_by_default(self):
+        """Test that keyword doc defaults to empty string."""
+        spans = parse_file("tests/fixtures/pabot_trace.json")
+        roots = build_tree(spans)
+        model = interpret_tree(roots)
+
+        for suite in model.suites:
+            for child in suite.children:
+                if isinstance(child, RFTest):
+                    for kw in child.keywords:
+                        assert kw.doc == ""
+
+    # --- test doc ---
+
+    def test_test_doc_extraction(self):
+        """Test that rf.test.doc is extracted into RFTest.doc."""
+        span = RawSpan(
+            trace_id="aabb",
+            span_id="ii01",
+            parent_span_id="",
+            name="Documented Test",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.test.name": "Documented Test",
+                "rf.test.id": "s1-t1",
+                "rf.status": "PASS",
+                "rf.test.doc": "This test verifies login flow.",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        node = SpanNode(span=span)
+        test = _build_test(node)
+
+        assert test.doc == "This test verifies login flow."
+
+    # --- backward compatibility ---
+
+    def test_backward_compat_defaults(self):
+        """Test that spans without enriched attributes produce models with default values."""
+        # Keyword with minimal attributes
+        kw_span = RawSpan(
+            trace_id="aabb",
+            span_id="jj01",
+            parent_span_id="",
+            name="Minimal KW",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.keyword.name": "Minimal KW",
+                "rf.keyword.type": "KEYWORD",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        kw_node = SpanNode(span=kw_span)
+        kw = _build_keyword(kw_node)
+
+        assert kw.lineno == 0
+        assert kw.doc == ""
+        assert kw.status_message == ""
+        assert kw.events == []
+
+        # Test with minimal attributes
+        test_span = RawSpan(
+            trace_id="aabb",
+            span_id="jj02",
+            parent_span_id="",
+            name="Minimal Test",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000001000000000,
+            attributes={
+                "rf.test.name": "Minimal Test",
+                "rf.test.id": "s1-t1",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        test_node = SpanNode(span=test_span)
+        test = _build_test(test_node)
+
+        assert test.doc == ""
+        assert test.status_message == ""
+
+        # Suite with minimal attributes
+        suite_span = RawSpan(
+            trace_id="aabb",
+            span_id="jj03",
+            parent_span_id="",
+            name="Minimal Suite",
+            kind="SPAN_KIND_INTERNAL",
+            start_time_unix_nano=1700000000000000000,
+            end_time_unix_nano=1700000010000000000,
+            attributes={
+                "rf.suite.name": "Minimal Suite",
+                "rf.suite.id": "s1",
+                "rf.suite.source": "/tests/minimal.robot",
+                "rf.status": "PASS",
+            },
+            status={"code": "STATUS_CODE_OK"},
+        )
+        suite_node = SpanNode(span=suite_span)
+        suite = _build_suite(suite_node)
+
+        assert suite.doc == ""
+        assert suite.metadata == {}
