@@ -363,75 +363,73 @@
     for (var workerId in workerSpans) {
       var wSpans = workerSpans[workerId];
 
-      // Separate into suites, tests, keywords
-      var suites = [];
-      var tests = [];
-      var keywords = [];
+      // Find root suites (suites with no parent, or parent not in this worker)
+      var rootSuites = [];
       for (var i = 0; i < wSpans.length; i++) {
-        if (wSpans[i].type === 'suite') suites.push(wSpans[i]);
-        else if (wSpans[i].type === 'test') tests.push(wSpans[i]);
-        else keywords.push(wSpans[i]);
+        if (wSpans[i].type === 'suite' && (!wSpans[i].parent || wSpans[i].depth === 0)) {
+          rootSuites.push(wSpans[i]);
+        }
       }
-
-      // Sort suites and tests by start time
-      suites.sort(function(a, b) { return a.startTime - b.startTime; });
-      tests.sort(function(a, b) { return a.startTime - b.startTime; });
+      rootSuites.sort(function(a, b) { return a.startTime - b.startTime; });
 
       var lane = 0;
 
-      // Assign suites first (they span the widest time ranges)
-      _assignLanesForGroup(suites, 0);
-      if (suites.length > 0) {
-        var maxSuiteLane = 0;
-        for (var i = 0; i < suites.length; i++) {
-          if (suites[i].lane > maxSuiteLane) maxSuiteLane = suites[i].lane;
-        }
-        lane = maxSuiteLane + 1;
-      }
+      // Recursively assign lanes: suite bar, then its children below
+      function assignHierarchy(node) {
+        node.lane = lane;
+        lane++;
 
-      // Now assign tests and their keywords in sequence.
-      // For each test, place the test bar, then its child keywords directly below.
-      // Tests that don't overlap can share lanes (greedy packing).
-      var testLanes = [];  // Each entry: { endTime, nextKeywordLane }
+        // Get children sorted by start time
+        var children = (node.children || []).slice();
+        children.sort(function(a, b) { return a.startTime - b.startTime; });
 
-      for (var t = 0; t < tests.length; t++) {
-        var test = tests[t];
-
-        // Find the test's keywords (children)
-        var testKeywords = [];
-        for (var k = 0; k < keywords.length; k++) {
-          if (keywords[k].parent === test) {
-            testKeywords.push(keywords[k]);
+        for (var c = 0; c < children.length; c++) {
+          var child = children[c];
+          if (child.type === 'suite') {
+            // Nested suite: recurse
+            assignHierarchy(child);
+          } else if (child.type === 'test') {
+            // Test: place test bar, then pack all its keywords (recursive) into minimal lanes
+            child.lane = lane;
+            lane++;
+            var allKws = [];
+            collectKeywords(child.children || [], allKws);
+            if (allKws.length > 0) {
+              _assignLanesForGroup(allKws, lane);
+              var maxKwLane = lane;
+              for (var k = 0; k < allKws.length; k++) {
+                if (allKws[k].lane > maxKwLane) maxKwLane = allKws[k].lane;
+              }
+              lane = maxKwLane + 1;
+            }
+          } else {
+            // Direct keyword child (e.g. suite setup/teardown)
+            child.lane = lane;
+            lane++;
           }
         }
-        testKeywords.sort(function(a, b) { return a.startTime - b.startTime; });
+      }
 
-        // Assign test to a lane
-        test.lane = lane;
-
-        // Assign keywords to lanes directly below the test
-        var kwBaseLane = lane + 1;
-        if (testKeywords.length > 0) {
-          _assignLanesForGroup(testKeywords, kwBaseLane);
-          var maxKwLane = kwBaseLane;
-          for (var k = 0; k < testKeywords.length; k++) {
-            if (testKeywords[k].lane > maxKwLane) maxKwLane = testKeywords[k].lane;
+      // Recursively collect all keywords into a flat list
+      function collectKeywords(kwList, result) {
+        for (var k = 0; k < kwList.length; k++) {
+          result.push(kwList[k]);
+          if (kwList[k].children && kwList[k].children.length > 0) {
+            collectKeywords(kwList[k].children, result);
           }
-          lane = maxKwLane + 1;
-        } else {
-          lane = lane + 1;
         }
       }
 
-      // Handle orphan keywords (no parent test — shouldn't happen but be safe)
-      var orphanKws = [];
-      for (var k = 0; k < keywords.length; k++) {
-        if (keywords[k].lane === undefined) {
-          orphanKws.push(keywords[k]);
-        }
+      for (var s = 0; s < rootSuites.length; s++) {
+        assignHierarchy(rootSuites[s]);
       }
-      if (orphanKws.length > 0) {
-        _assignLanesForGroup(orphanKws, lane);
+
+      // Handle any orphan spans not reached by the tree walk
+      for (var i = 0; i < wSpans.length; i++) {
+        if (wSpans[i].lane === undefined) {
+          wSpans[i].lane = lane;
+          lane++;
+        }
       }
     }
 
@@ -850,36 +848,113 @@
     var x2 = _timeToScreenX(span.endTime);
     var barWidth = Math.max(x2 - x1, 2);
     var barHeight = timelineState.rowHeight - 4;
+    var radius = 3;
+    var barY = y + 2;
 
-    // Status color
-    var color = _getStatusColor(span.status);
-    ctx.fillStyle = color;
-    ctx.fillRect(x1, y + 2, barWidth, barHeight);
+    // Type-based color scheme
+    var colors = _getSpanColors(span);
+
+    // Draw rounded rect with gradient
+    _roundRect(ctx, x1, barY, barWidth, barHeight, radius);
+    if (barWidth > 4) {
+      var grad = ctx.createLinearGradient(x1, barY, x1, barY + barHeight);
+      grad.addColorStop(0, colors.top);
+      grad.addColorStop(1, colors.bottom);
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = colors.bottom;
+    }
+    ctx.fill();
+
+    // Thin status accent on the left edge (3px wide) for suites and tests
+    if (span.type !== 'keyword' && barWidth > 6) {
+      var accentColor = _getStatusAccentColor(span.status);
+      _roundRect(ctx, x1, barY, 3, barHeight, radius > 1 ? 2 : 0);
+      ctx.fillStyle = accentColor;
+      ctx.fill();
+    }
+
+    // Subtle bottom border for depth
+    _roundRect(ctx, x1, barY, barWidth, barHeight, radius);
+    ctx.strokeStyle = colors.border;
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
 
     // Highlight selected or hovered
     if (span === timelineState.selectedSpan) {
-      // Prominent selection highlight with thick border and glow
-      ctx.strokeStyle = '#0066cc';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(x1 - 1, y + 1, barWidth + 2, barHeight + 2);
-      
-      // Add subtle glow effect
-      ctx.shadowColor = '#0066cc';
-      ctx.shadowBlur = 8;
-      ctx.strokeRect(x1 - 1, y + 1, barWidth + 2, barHeight + 2);
-      ctx.shadowBlur = 0;
+      _roundRect(ctx, x1 - 1, barY - 1, barWidth + 2, barHeight + 2, radius + 1);
+      ctx.strokeStyle = '#fdd835';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
     } else if (span === timelineState.hoveredSpan) {
-      ctx.strokeStyle = '#666666';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x1, y + 2, barWidth, barHeight);
+      _roundRect(ctx, x1, barY, barWidth, barHeight, radius);
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
 
     // Span name (if wide enough)
     if (barWidth > 50) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '10px sans-serif';
+      ctx.fillStyle = colors.text;
+      ctx.font = span.type === 'suite' ? 'bold 10px sans-serif' : '10px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(_truncateText(ctx, span.name, barWidth - 4), x1 + 2, y + 14);
+      ctx.fillText(_truncateText(ctx, span.name, barWidth - 8), x1 + 5, y + 14);
+    }
+  }
+
+  /**
+   * Draw a rounded rectangle path (does not fill or stroke).
+   */
+  function _roundRect(ctx, x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /**
+   * Get color scheme for a span based on its type.
+   * Returns { top, bottom, border, text } for gradient and label.
+   */
+  function _getSpanColors(span) {
+    var isDark = document.documentElement.classList.contains('theme-dark') ||
+                 document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+
+    if (span.type === 'suite') {
+      return isDark
+        ? { top: '#1a3a5c', bottom: '#0f2440', border: 'rgba(255,255,255,0.1)', text: '#c8ddf0' }
+        : { top: '#1e3a5f', bottom: '#142b47', border: 'rgba(0,0,0,0.15)', text: '#ffffff' };
+    }
+    if (span.type === 'test') {
+      return isDark
+        ? { top: '#1565c0', bottom: '#0d47a1', border: 'rgba(255,255,255,0.12)', text: '#e3f2fd' }
+        : { top: '#1976d2', bottom: '#1565c0', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
+    }
+    // keyword — red for FAIL, grey otherwise
+    if (span.status === 'FAIL') {
+      return isDark
+        ? { top: '#c62828', bottom: '#a11b1b', border: 'rgba(255,255,255,0.1)', text: '#ffcdd2' }
+        : { top: '#ef5350', bottom: '#d32f2f', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
+    }
+    return isDark
+      ? { top: '#4a4a4a', bottom: '#3a3a3a', border: 'rgba(255,255,255,0.08)', text: '#cccccc' }
+      : { top: '#c8c8c8', bottom: '#b0b0b0', border: 'rgba(0,0,0,0.1)', text: '#333333' };
+  }
+
+  /**
+   * Get status accent color for the left-edge indicator.
+   */
+  function _getStatusAccentColor(status) {
+    switch (status) {
+      case 'PASS': return '#43a047';
+      case 'FAIL': return '#e53935';
+      case 'SKIP': return '#fdd835';
+      default: return '#9e9e9e';
     }
   }
 
