@@ -1263,6 +1263,58 @@
   }
 
   /**
+   * Reassign lanes for filtered spans so they pack tightly without gaps.
+   * Uses greedy interval scheduling per worker.
+   */
+  function _reassignFilteredLanes(filteredWorkers) {
+    // Save original lanes if not already saved
+    if (!timelineState._originalLanes) {
+      timelineState._originalLanes = {};
+      for (var i = 0; i < timelineState.flatSpans.length; i++) {
+        var s = timelineState.flatSpans[i];
+        timelineState._originalLanes[s.id] = s.lane;
+      }
+    }
+
+    var workerIds = Object.keys(filteredWorkers);
+    for (var w = 0; w < workerIds.length; w++) {
+      var spans = filteredWorkers[workerIds[w]];
+      // Sort by start time
+      spans.sort(function (a, b) { return a.startTime - b.startTime; });
+      var laneEnds = []; // tracks end-time of each lane
+      for (var i = 0; i < spans.length; i++) {
+        var span = spans[i];
+        var placed = false;
+        for (var lane = 0; lane < laneEnds.length; lane++) {
+          if (span.startTime >= laneEnds[lane]) {
+            span.lane = lane;
+            laneEnds[lane] = span.endTime;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          span.lane = laneEnds.length;
+          laneEnds.push(span.endTime);
+        }
+      }
+    }
+  }
+
+  /**
+   * Restore original lane assignments after filter is cleared.
+   */
+  function _restoreOriginalLanes() {
+    if (!timelineState._originalLanes) return;
+    for (var i = 0; i < timelineState.flatSpans.length; i++) {
+      var s = timelineState.flatSpans[i];
+      if (timelineState._originalLanes[s.id] !== undefined) {
+        s.lane = timelineState._originalLanes[s.id];
+      }
+    }
+  }
+
+  /**
    * Handle filter-changed event from search/filter panel.
    * Updates the timeline to show only filtered spans.
    */
@@ -1288,9 +1340,11 @@
       var allWorkers = Object.keys(timelineState.allWorkers);
       for (var w = 0; w < allWorkers.length; w++) {
         var workerId = allWorkers[w];
-        timelineState.workers[workerId] = timelineState.allWorkers[workerId].slice(); // Copy array
+        timelineState.workers[workerId] = timelineState.allWorkers[workerId].slice();
       }
       timelineState.filteredSpans = timelineState.flatSpans.slice();
+      // Restore original lanes
+      _restoreOriginalLanes();
     } else {
       // Create a Set of filtered span IDs for fast lookup
       var filteredIds = {};
@@ -1329,6 +1383,9 @@
         filteredSpans: filteredSpans.length,
         filteredWorkers: Object.keys(filteredWorkers).length
       });
+
+      // Reassign lanes so filtered spans pack tightly without gaps
+      _reassignFilteredLanes(filteredWorkers);
     }
     
     // Recalculate canvas height based on filtered content
