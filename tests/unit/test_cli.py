@@ -118,7 +118,11 @@ class TestArgumentParsing:
 
                             assert exit_code == 0
                             mock_options.assert_called_once_with(
-                                title="Custom Report Title", compact=False, gzip_embed=False
+                                title="Custom Report Title",
+                                compact=False,
+                                gzip_embed=False,
+                                max_keyword_depth=None,
+                                exclude_passing_keywords=False,
                             )
 
     def test_live_mode_argument(self, monkeypatch, capsys):

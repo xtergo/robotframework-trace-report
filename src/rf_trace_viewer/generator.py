@@ -37,6 +37,7 @@ class ReportOptions:
     compact: bool = False  # omit default-value fields from embedded JSON
     gzip_embed: bool = False  # gzip-compress and base64-encode embedded JSON data
     max_keyword_depth: int | None = None  # if set, truncate keyword children beyond this depth
+    exclude_passing_keywords: bool = False  # if True, remove keyword spans with PASS status
 
 
 def _serialize(obj: Any) -> Any:
@@ -234,6 +235,8 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
     title = (options.title or "").strip() or (model.title or "").strip() or "RF Trace Report"
     if options.max_keyword_depth is not None:
         model = _truncate_depth(model, options.max_keyword_depth)
+    if options.exclude_passing_keywords:
+        model = _exclude_passing_keywords(model)
     data_json = embed_data(model, compact=options.compact)
     js_content, css_content = embed_viewer_assets()
 
@@ -307,6 +310,49 @@ def _truncate_depth(model: RFRunModel, max_depth: int) -> RFRunModel:
 
     for suite in model.suites:
         _trim_suite(suite)
+
+    return model
+
+
+def _exclude_passing_keywords(model: RFRunModel) -> RFRunModel:
+    """Return *model* with all PASS-status keyword spans removed.
+
+    Suite and test spans are always retained regardless of status.
+    FAIL, SKIP, and NOT_RUN keyword spans are kept so that failures remain
+    visible.  The function mutates the model in-place (acceptable because
+    ``generate_report`` owns the model).
+    """
+    from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest, Status
+
+    def _filter_kw_list(keywords: list[RFKeyword]) -> list[RFKeyword]:
+        kept = []
+        for kw in keywords:
+            if kw.status == Status.PASS:
+                continue
+            kw.children = _filter_kw_list(kw.children)
+            kept.append(kw)
+        return kept
+
+    def _process_suite(suite: RFSuite) -> None:
+        new_children = []
+        for child in suite.children:
+            if isinstance(child, RFSuite):
+                _process_suite(child)
+                new_children.append(child)
+            elif isinstance(child, RFTest):
+                child.keywords = _filter_kw_list(child.keywords)
+                new_children.append(child)
+            elif isinstance(child, RFKeyword):
+                # Suite-level setup/teardown keywords
+                if child.status != Status.PASS:
+                    child.children = _filter_kw_list(child.children)
+                    new_children.append(child)
+            else:
+                new_children.append(child)
+        suite.children = new_children
+
+    for suite in model.suites:
+        _process_suite(suite)
 
     return model
 

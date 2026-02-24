@@ -71,6 +71,11 @@ def main() -> int:
         metavar="N",
         help="Truncate keyword children beyond depth N (1 = only top-level keywords)",
     )
+    parser.add_argument(
+        "--exclude-passing-keywords",
+        action="store_true",
+        help="Exclude keyword spans with PASS status from the report (keeps FAIL/SKIP/NOT_RUN)",
+    )
 
     args = parser.parse_args()
 
@@ -90,6 +95,7 @@ def main() -> int:
             compact=args.compact_html,
             gzip_embed=args.gzip_embed,
             max_keyword_depth=args.max_keyword_depth,
+            exclude_passing_keywords=args.exclude_passing_keywords,
         )
         html = generate_report(model, options)
 
