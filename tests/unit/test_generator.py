@@ -488,21 +488,50 @@ from rf_trace_viewer.rf_model import (
     Status,
 )
 
-
 # ---------------------------------------------------------------------------
 # Python port of the JS decoder (expandNode / expandValue / decodeTraceData)
 # ---------------------------------------------------------------------------
 
 
-def _expand_value(v: Any, key_map: dict[str, str], intern_table: list[str]) -> Any:
+# Fields that always hold numeric values — never expand these as intern indices.
+_NUMERIC_FIELDS = {
+    "start_time",
+    "end_time",
+    "elapsed_time",
+    "lineno",
+    "total_tests",
+    "passed",
+    "failed",
+    "skipped",
+    "total_duration_ms",
+    # short-key aliases
+    "st",
+    "et",
+    "el",
+    "ln",
+}
+
+
+def _expand_value(
+    v: Any, key_map: dict[str, str], intern_table: list[str], field_key: str = ""
+) -> Any:
     """Python port of the JS expandValue function."""
-    if isinstance(v, int) and intern_table and 0 <= v < len(intern_table):
-        return intern_table[v]
+    if (
+        isinstance(v, int)
+        and not isinstance(v, bool)
+        and intern_table
+        and 0 <= v < len(intern_table)
+    ):
+        # Only expand as intern index if this field is NOT a known numeric field.
+        if not field_key or field_key not in _NUMERIC_FIELDS:
+            return intern_table[v]
     if isinstance(v, list):
         return [
-            _expand_node(item, key_map, intern_table)
-            if isinstance(item, dict)
-            else _expand_value(item, key_map, intern_table)
+            (
+                _expand_node(item, key_map, intern_table)
+                if isinstance(item, dict)
+                else _expand_value(item, key_map, intern_table)
+            )
             for item in v
         ]
     if isinstance(v, dict):
@@ -515,7 +544,7 @@ def _expand_node(node: dict, key_map: dict[str, str], intern_table: list[str]) -
     expanded = {}
     for k, v in node.items():
         full_key = key_map.get(k, k)
-        expanded[full_key] = _expand_value(v, key_map, intern_table)
+        expanded[full_key] = _expand_value(v, key_map, intern_table, field_key=k)
     return expanded
 
 
@@ -534,7 +563,11 @@ def _decode_trace_data(raw: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 _statuses = st.sampled_from([Status.PASS, Status.FAIL, Status.SKIP])
-_short_text = st.text(min_size=1, max_size=30, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters=" _-"))
+_short_text = st.text(
+    min_size=1,
+    max_size=30,
+    alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters=" _-"),
+)
 
 
 @st.composite
@@ -604,7 +637,9 @@ def rf_run_model(draw) -> RFRunModel:
         start_time=1_700_000_000_000,
         end_time=1_700_000_001_000,
         suites=suites,
-        statistics=RunStatistics(total_tests=1, passed=1, failed=0, skipped=0, total_duration_ms=1.0),
+        statistics=RunStatistics(
+            total_tests=1, passed=1, failed=0, skipped=0, total_duration_ms=1.0
+        ),
     )
 
 
@@ -684,9 +719,9 @@ class TestProperty27CompactSerializationRoundTrip:
         # km maps short → original; KEY_MAP maps original → short
         km = wrapper["km"]
         for short, original in km.items():
-            assert KEY_MAP.get(original) == short, (
-                f"km[{short!r}]={original!r} but KEY_MAP[{original!r}]={KEY_MAP.get(original)!r}"
-            )
+            assert (
+                KEY_MAP.get(original) == short
+            ), f"km[{short!r}]={original!r} but KEY_MAP[{original!r}]={KEY_MAP.get(original)!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -826,7 +861,9 @@ def rf_run_model_with_mixed_statuses(draw) -> RFRunModel:
         start_time=1_700_000_000_000,
         end_time=1_700_000_001_000,
         suites=[suite],
-        statistics=RunStatistics(total_tests=2, passed=1, failed=1, skipped=0, total_duration_ms=1.0),
+        statistics=RunStatistics(
+            total_tests=2, passed=1, failed=1, skipped=0, total_duration_ms=1.0
+        ),
     )
 
 
@@ -845,11 +882,11 @@ class TestProperty29SpanTruncationCorrectness:
         """
         truncated = _limit_spans(model, max_spans)
         actual_count = _count_spans_in_model(truncated)
-        assert actual_count <= max_spans, (
-            f"Expected at most {max_spans} spans, got {actual_count}"
-        )
+        assert actual_count <= max_spans, f"Expected at most {max_spans} spans, got {actual_count}"
 
-    @given(model=rf_run_model_with_mixed_statuses(), max_spans=st.integers(min_value=1, max_value=5))
+    @given(
+        model=rf_run_model_with_mixed_statuses(), max_spans=st.integers(min_value=1, max_value=5)
+    )
     @settings(max_examples=50)
     def test_fail_spans_prioritized_over_pass(self, model: RFRunModel, max_spans: int):
         """Feature: rf-html-report-replacement, Property 29: Span truncation correctness
@@ -886,6 +923,4 @@ class TestProperty29SpanTruncationCorrectness:
         large_limit = total + 100
         truncated = _limit_spans(model, large_limit)
         after_count = _count_spans_in_model(truncated)
-        assert after_count == total, (
-            f"Expected {total} spans (no truncation), got {after_count}"
-        )
+        assert after_count == total, f"Expected {total} spans (no truncation), got {after_count}"

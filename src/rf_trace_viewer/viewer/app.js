@@ -79,20 +79,32 @@
     return expandNode(data, keyMap, it);
   }
 
+  // Fields that always hold numeric values — never expand these as intern indices.
+  var NUMERIC_FIELDS = {
+    start_time: true, end_time: true, elapsed_time: true, lineno: true,
+    total_tests: true, passed: true, failed: true, skipped: true,
+    total_duration_ms: true,
+    // short-key aliases
+    st: true, et: true, el: true, ln: true
+  };
+
   function expandNode(node, keyMap, internTable) {
     var expanded = {};
     var keys = Object.keys(node);
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
       var fullKey = keyMap[k] || k;
-      expanded[fullKey] = expandValue(node[k], keyMap, internTable);
+      expanded[fullKey] = expandValue(node[k], keyMap, internTable, k);
     }
     return expanded;
   }
 
-  function expandValue(v, keyMap, internTable) {
+  function expandValue(v, keyMap, internTable, fieldKey) {
     if (typeof v === 'number' && Number.isInteger(v) && internTable && v >= 0 && v < internTable.length) {
-      return internTable[v];
+      // Only expand as intern index if this field is NOT a known numeric field.
+      if (!fieldKey || !NUMERIC_FIELDS[fieldKey]) {
+        return internTable[v];
+      }
     }
     if (Array.isArray(v)) {
       return v.map(function(item) {
