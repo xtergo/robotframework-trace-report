@@ -216,18 +216,71 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   }
   container.appendChild(treeRoot);
 
-  // Auto-expand root-level suites so tests are visible immediately
-  var rootNodes = treeRoot.querySelectorAll(':scope > .tree-node.depth-0');
-  for (var j = 0; j < rootNodes.length; j++) {
-    var childrenEl = rootNodes[j].querySelector(':scope > .tree-children');
-    var detailEl = rootNodes[j].querySelector(':scope > .detail-panel');
-    var toggleBtn = rootNodes[j].querySelector(':scope > .tree-row > .tree-toggle');
-    if (childrenEl) childrenEl.classList.add('expanded');
-    if (detailEl) detailEl.classList.add('expanded');
-    if (toggleBtn) {
-      toggleBtn.textContent = '\u25bc'; // ▼
-      toggleBtn.setAttribute('aria-label', 'Collapse');
+  // Auto-expand failure path or root suites on initial load
+  _autoExpandFirstFailure(treeRoot);
+}
+
+/**
+ * Auto-expand the path to the first failure on initial load.
+ * If no failures exist, expand only root-level suites (default behavior).
+ * @param {HTMLElement} treeRoot - The .tree-root container element
+ */
+function _autoExpandFirstFailure(treeRoot) {
+  // Find the first FAIL status icon in the tree (depth-first order matches DOM order)
+  var firstFailIcon = treeRoot.querySelector('.tree-status-icon.fail');
+
+  if (!firstFailIcon) {
+    // No failures — expand root suites only (original behavior)
+    var rootNodes = treeRoot.querySelectorAll(':scope > .tree-node.depth-0');
+    for (var j = 0; j < rootNodes.length; j++) {
+      _expandNodeOnly(rootNodes[j]);
     }
+    return;
+  }
+
+  // Walk up from the fail icon to find its .tree-node
+  var failNode = firstFailIcon.closest('.tree-node');
+  if (!failNode) return;
+
+  // Expand all ancestor nodes from root down to the failing node
+  var parent = failNode.parentElement;
+  while (parent && parent !== treeRoot) {
+    if (parent.classList.contains('tree-children')) {
+      parent.classList.add('expanded');
+      var parentNode = parent.parentElement;
+      if (parentNode && parentNode.classList.contains('tree-node')) {
+        _expandNodeOnly(parentNode);
+      }
+    }
+    parent = parent.parentElement;
+  }
+
+  // Scroll the failing node into view after the DOM settles
+  requestAnimationFrame(function () {
+    var treePanel = failNode.closest('.panel-tree');
+    if (treePanel) {
+      var panelRect = treePanel.getBoundingClientRect();
+      var nodeRect = failNode.getBoundingClientRect();
+      var scrollOffset = nodeRect.top - panelRect.top - panelRect.height / 3 + nodeRect.height / 2;
+      treePanel.scrollBy({ top: scrollOffset, behavior: 'smooth' });
+    } else {
+      failNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+}
+
+/**
+ * Expand a single tree node (toggle arrow + children container) without toggling.
+ * Does NOT expand detail panels — only structural children.
+ * @param {HTMLElement} nodeEl - A .tree-node element
+ */
+function _expandNodeOnly(nodeEl) {
+  var childrenEl = nodeEl.querySelector(':scope > .tree-children');
+  var toggleBtn = nodeEl.querySelector(':scope > .tree-row > .tree-toggle');
+  if (childrenEl) childrenEl.classList.add('expanded');
+  if (toggleBtn) {
+    toggleBtn.textContent = '\u25bc'; // ▼
+    toggleBtn.setAttribute('aria-label', 'Collapse');
   }
 }
 

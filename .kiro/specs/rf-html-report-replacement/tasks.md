@@ -558,7 +558,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Toggle should be visually distinct (red/highlighted when active) so the user knows it's filtering
     - _Requirements: 34.6_
 
-  - [ ] 32.2 Auto-expand failure path on initial load in `src/rf_trace_viewer/viewer/tree.js`
+  - [x] 32.2 Auto-expand failure path on initial load in `src/rf_trace_viewer/viewer/tree.js`
     - On initial render, walk the tree to find the first FAIL status node
     - Expand all ancestor nodes from root suite down to the first failing keyword
     - Scroll the failing node into view
