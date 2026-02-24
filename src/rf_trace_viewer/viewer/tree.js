@@ -4,6 +4,7 @@
 var _originalModel = null;
 var _treeContainer = null;
 var _currentFilteredSpanIds = null;
+var _failuresOnlyActive = false;
 
 /**
  * Render the tree view into the given container.
@@ -162,7 +163,7 @@ function _mergeGroup(group) {
 function _renderTreeWithFilter(container, model, filteredSpanIds) {
   container.innerHTML = '';
 
-  // Controls: expand all / collapse all
+  // Controls: expand all / collapse all / failures only
   var controls = document.createElement('div');
   controls.className = 'tree-controls';
 
@@ -174,8 +175,33 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   collapseBtn.textContent = 'Collapse All';
   collapseBtn.addEventListener('click', function () { _setAllExpanded(container, false); });
 
+  var failuresBtn = document.createElement('button');
+  failuresBtn.textContent = 'Failures Only';
+  failuresBtn.className = 'failures-only-toggle' + (_failuresOnlyActive ? ' active' : '');
+  failuresBtn.setAttribute('aria-pressed', _failuresOnlyActive ? 'true' : 'false');
+  failuresBtn.title = _failuresOnlyActive ? 'Show all test results' : 'Show only failing tests';
+  failuresBtn.addEventListener('click', function () {
+    _failuresOnlyActive = !_failuresOnlyActive;
+    if (_failuresOnlyActive) {
+      // Set filter to show only FAIL status
+      if (typeof window.setFilterState === 'function') {
+        window.setFilterState({ testStatuses: ['FAIL'] });
+      }
+      // Sync sidebar checkboxes
+      _syncStatusCheckboxes(['FAIL']);
+    } else {
+      // Restore filter to show all statuses
+      if (typeof window.setFilterState === 'function') {
+        window.setFilterState({ testStatuses: ['PASS', 'FAIL', 'SKIP'] });
+      }
+      // Sync sidebar checkboxes
+      _syncStatusCheckboxes(['PASS', 'FAIL', 'SKIP']);
+    }
+  });
+
   controls.appendChild(expandBtn);
   controls.appendChild(collapseBtn);
+  controls.appendChild(failuresBtn);
   container.appendChild(controls);
 
   // Render suites
@@ -907,6 +933,21 @@ function _setAllExpanded(container, expand) {
     if (toggleBtns[j].textContent) {
       toggleBtns[j].textContent = expand ? '\u25bc' : '\u25b6';
       toggleBtns[j].setAttribute('aria-label', expand ? 'Collapse' : 'Expand');
+    }
+  }
+}
+
+/**
+ * Sync sidebar test-status checkboxes to match the given active statuses.
+ * Keeps the filter panel UI consistent when Failures Only toggle changes state.
+ */
+function _syncStatusCheckboxes(activeStatuses) {
+  var checkboxes = document.querySelectorAll('.filter-checkbox-group input[type="checkbox"]');
+  for (var i = 0; i < checkboxes.length; i++) {
+    var cb = checkboxes[i];
+    // Only sync test-status checkboxes (PASS, FAIL, SKIP)
+    if (cb.value === 'PASS' || cb.value === 'FAIL' || cb.value === 'SKIP') {
+      cb.checked = activeStatuses.indexOf(cb.value) !== -1;
     }
   }
 }

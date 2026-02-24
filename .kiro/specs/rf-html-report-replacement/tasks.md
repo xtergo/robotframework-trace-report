@@ -551,7 +551,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - _Validates: Requirements 31.1-31.8_
 
 - [ ] 32. Implement UX superiority features over RF log.html
-  - [ ] 32.1 Add "failures only" quick-filter toggle to tree controls in `src/rf_trace_viewer/viewer/tree.js`
+  - [x] 32.1 Add "failures only" quick-filter toggle to tree controls in `src/rf_trace_viewer/viewer/tree.js`
     - Add a prominent toggle button next to Expand All / Collapse All labeled "Failures Only"
     - When active, collapse all passing branches and show only the path from suite → test → failing keyword
     - Integrate with the existing filter system in `search.js` (set status filter to FAIL only)

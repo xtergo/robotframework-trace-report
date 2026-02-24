@@ -474,6 +474,27 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline-offset: 2px;
 }
 
+.rf-trace-viewer .tree-controls .failures-only-toggle {
+  margin-left: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rf-trace-viewer .tree-controls .failures-only-toggle.active {
+  background: var(--status-fail);
+  border-color: var(--status-fail);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.rf-trace-viewer .tree-controls .failures-only-toggle:hover:not(.active) {
+  background: var(--status-fail-bg);
+  border-color: var(--status-fail);
+  color: var(--status-fail);
+}
+
 .rf-trace-viewer .tree-node {
   margin-left: 16px;
 }
