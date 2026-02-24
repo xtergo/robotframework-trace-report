@@ -897,8 +897,8 @@ function _createTreeNode(opts) {
     console.log('[Tree] Node clicked:', capturedName, 'id:', capturedId);
     console.log('[Tree] opts object:', JSON.stringify({ id: opts.id, name: opts.name, type: opts.type }));
     if (capturedId && window.RFTraceViewer && window.RFTraceViewer.emit) {
-      console.log('[Tree] Emitting span-selected event for id:', capturedId);
-      window.RFTraceViewer.emit('span-selected', { spanId: capturedId, source: 'tree' });
+      console.log('[Tree] Emitting navigate-to-span event for id:', capturedId);
+      window.RFTraceViewer.emit('navigate-to-span', { spanId: capturedId, source: 'tree' });
     } else {
       console.warn('[Tree] Cannot emit event - missing id or RFTraceViewer:', { 
         hasId: !!capturedId, 
@@ -1082,15 +1082,10 @@ function highlightNodeInTree(spanId) {
  */
 function setupTreeSynchronization() {
   if (window.RFTraceViewer && window.RFTraceViewer.on) {
-    window.RFTraceViewer.on('span-selected', function (data) {
-      // Only respond to events from the timeline
-      if (data.source === 'timeline' && data.spanId) {
+    window.RFTraceViewer.on('navigate-to-span', function (data) {
+      // Only respond when the event didn't originate from the tree
+      if (data.source !== 'tree' && data.spanId) {
         highlightNodeInTree(data.spanId);
-      } else if (data.source === 'tree' && data.spanId) {
-        // Tree node was clicked, highlight in timeline
-        if (window.highlightSpanInTimeline) {
-          window.highlightSpanInTimeline(data.spanId);
-        }
       }
     });
   }

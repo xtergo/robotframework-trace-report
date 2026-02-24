@@ -203,6 +203,42 @@
     // Initialize views
     _initializeViews(data);
 
+    // Central cross-view navigation coordinator
+    // All views emit 'navigate-to-span' and this routes to all views
+    eventBus.on('navigate-to-span', function (data) {
+      if (!data || !data.spanId) return;
+      var source = data.source || '';
+
+      // Highlight in tree (unless the event came from tree)
+      if (source !== 'tree' && typeof window.highlightNodeInTree === 'function') {
+        window.highlightNodeInTree(data.spanId);
+      }
+
+      // Highlight in timeline (unless the event came from timeline)
+      if (source !== 'timeline' && typeof window.highlightSpanInTimeline === 'function') {
+        window.highlightSpanInTimeline(data.spanId);
+      }
+
+      // Highlight in keyword stats (unless the event came from keyword-stats)
+      if (source !== 'keyword-stats' && typeof window.highlightSpanInKeywordStats === 'function') {
+        window.highlightSpanInKeywordStats(data.spanId);
+      }
+    });
+
+    // Bridge legacy span-selected events to navigate-to-span
+    eventBus.on('span-selected', function (data) {
+      if (data && data.spanId) {
+        eventBus.emit('navigate-to-span', { spanId: data.spanId, source: data.source || '' });
+      }
+    });
+
+    // Bridge keyword-selected to navigate to the first span of that keyword
+    eventBus.on('keyword-selected', function (data) {
+      if (data && data.spanIds && data.spanIds.length > 0) {
+        eventBus.emit('navigate-to-span', { spanId: data.spanIds[0], source: 'keyword-stats' });
+      }
+    });
+
     // Emit app-ready event
     eventBus.emit('app-ready', { data: data });
   });

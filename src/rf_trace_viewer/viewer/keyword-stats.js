@@ -204,6 +204,7 @@ function _renderTableBody(tbody, keywordStats) {
     var row = document.createElement('tr');
     row.className = 'keyword-stat-row';
     row.style.cursor = 'pointer';
+    row.setAttribute('data-span-ids', stat.spanIds.join(','));
     
     // Add click handler to highlight keyword in tree and timeline
     row.addEventListener('click', function() {
@@ -255,13 +256,20 @@ function _renderTableBody(tbody, keywordStats) {
  * Highlight all occurrences of a keyword in tree view and timeline.
  */
 function _highlightKeyword(stat) {
-  // Emit event via the global event bus
   if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+    // Emit keyword-selected for any keyword-specific listeners
     window.RFTraceViewer.emit('keyword-selected', {
       keyword: stat.keyword,
       spanIds: stat.spanIds,
       count: stat.count
     });
+    // Also navigate to the first occurrence for cross-view sync
+    if (stat.spanIds && stat.spanIds.length > 0) {
+      window.RFTraceViewer.emit('navigate-to-span', {
+        spanId: stat.spanIds[0],
+        source: 'keyword-stats'
+      });
+    }
   }
 }
 
@@ -282,3 +290,23 @@ function _formatDuration(ms) {
     return mins + 'm ' + secs + 's';
   }
 }
+
+/**
+ * Highlight a keyword stats row that contains the given span ID.
+ */
+window.highlightSpanInKeywordStats = function (spanId) {
+  var rows = document.querySelectorAll('.keyword-stat-row[data-span-ids]');
+  // Clear previous highlights
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].classList.remove('highlighted');
+  }
+  // Find and highlight the row containing this span ID
+  for (var i = 0; i < rows.length; i++) {
+    var ids = rows[i].getAttribute('data-span-ids');
+    if (ids && ids.indexOf(spanId) !== -1) {
+      rows[i].classList.add('highlighted');
+      rows[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      break;
+    }
+  }
+};

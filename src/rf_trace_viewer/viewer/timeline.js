@@ -290,6 +290,15 @@
       });
     }
 
+    // Listen for cross-view navigation
+    if (window.RFTraceViewer && window.RFTraceViewer.on) {
+      window.RFTraceViewer.on('navigate-to-span', function (data) {
+        if (data.source !== 'timeline' && data.spanId) {
+          window.highlightSpanInTimeline(data.spanId);
+        }
+      });
+    }
+
     // Initial render
     _render();
   };
@@ -1256,9 +1265,8 @@
    * Emit span selected event (for tree view synchronization).
    */
   function _emitSpanSelected(span) {
-    // Event bus integration
     if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-      window.RFTraceViewer.emit('span-selected', { spanId: span.id, source: 'timeline' });
+      window.RFTraceViewer.emit('navigate-to-span', { spanId: span.id, source: 'timeline' });
     }
   }
 

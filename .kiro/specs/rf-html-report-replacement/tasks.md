@@ -565,7 +565,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - If no failures exist, start with the tree collapsed as today
     - _Requirements: 34.7_
 
-  - [ ] 32.3 Add cross-view synchronized navigation in `src/rf_trace_viewer/viewer/app.js`
+  - [x] 32.3 Add cross-view synchronized navigation in `src/rf_trace_viewer/viewer/app.js`
     - When a test/keyword is clicked in any view (tree, timeline, stats, flow table), emit a `navigate-to-span` event
     - All views listen for this event and highlight/scroll to the corresponding element
     - Ensure the tree expands the path to the node, timeline scrolls and highlights the bar, stats highlights the row
