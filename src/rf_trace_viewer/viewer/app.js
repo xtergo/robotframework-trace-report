@@ -61,6 +61,54 @@
   };
 
   /**
+   * Decode compact trace data format back to full format.
+   * If the data has a `v` field, it was encoded with short keys and intern table.
+   * Otherwise, pass through unchanged (legacy uncompressed format).
+   */
+  function decodeTraceData(raw) {
+    if (!raw.v) return raw; // legacy uncompressed format
+    var km = raw.km;
+    var it = raw.it;
+    var data = raw.data;
+    // Build reverse key map: short → original
+    var keyMap = {};
+    var entries = Object.entries(km);
+    for (var i = 0; i < entries.length; i++) {
+      keyMap[entries[i][1]] = entries[i][0];
+    }
+    return expandNode(data, keyMap, it);
+  }
+
+  function expandNode(node, keyMap, internTable) {
+    var expanded = {};
+    var keys = Object.keys(node);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var fullKey = keyMap[k] || k;
+      expanded[fullKey] = expandValue(node[k], keyMap, internTable);
+    }
+    return expanded;
+  }
+
+  function expandValue(v, keyMap, internTable) {
+    if (typeof v === 'number' && Number.isInteger(v) && internTable && v >= 0 && v < internTable.length) {
+      return internTable[v];
+    }
+    if (Array.isArray(v)) {
+      return v.map(function(item) {
+        if (typeof item === 'object' && item !== null) {
+          return expandNode(item, keyMap, internTable);
+        }
+        return expandValue(item, keyMap, internTable);
+      });
+    }
+    if (typeof v === 'object' && v !== null) {
+      return expandNode(v, keyMap, internTable);
+    }
+    return v;
+  }
+
+  /**
    * Decompress gzip+base64 encoded trace data using DecompressionStream API.
    * Returns the parsed JSON object.
    */
@@ -95,7 +143,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     if (window.__RF_TRACE_DATA_GZ__) {
       decompressData(window.__RF_TRACE_DATA_GZ__).then(function(data) {
-        _initApp(data);
+        _initApp(decodeTraceData(data));
       }).catch(function(err) {
         document.body.textContent = 'Error: Failed to decompress trace data: ' + err.message;
       });
@@ -105,7 +153,7 @@
         document.body.textContent = 'Error: No trace data found.';
         return;
       }
-      _initApp(data);
+      _initApp(decodeTraceData(data));
     }
   });
 
