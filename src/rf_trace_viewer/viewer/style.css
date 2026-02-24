@@ -1176,6 +1176,15 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   opacity: 0.85;
 }
 
+/* Truncated keyword depth indicator */
+.rf-trace-viewer .tree-truncated-indicator {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  font-style: italic;
+  padding: 2px 0;
+  user-select: none;
+}
+
 /* ── Keyword Type Badges ── */
 .rf-trace-viewer .detail-badge.kw-type-setup {
   background: #e3f2fd;

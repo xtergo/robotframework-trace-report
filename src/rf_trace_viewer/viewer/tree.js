@@ -487,6 +487,13 @@ function _materializeChildren(nodeEl) {
         fragment.appendChild(nestedNode);
       }
     }
+    if (lazy.truncatedCount > 0) {
+      var truncEl = document.createElement('div');
+      truncEl.className = 'tree-truncated-indicator';
+      truncEl.style.paddingLeft = (lazy.depth * 16 + 24) + 'px';
+      truncEl.textContent = '\u2026 ' + lazy.truncatedCount + ' keyword' + (lazy.truncatedCount === 1 ? '' : 's') + ' hidden';
+      fragment.appendChild(truncEl);
+    }
   }
 
   childrenEl.appendChild(fragment);
@@ -598,7 +605,7 @@ function _renderTestNode(test, depth, filteredSpanIds, maxSiblingDuration) {
 function _renderKeywordNode(kw, depth, filteredSpanIds) {
   var kwMatchesFilter = (filteredSpanIds === null || filteredSpanIds[kw.id]);
 
-  var hasChildren = kw.children && kw.children.length > 0;
+  var hasChildren = (kw.children && kw.children.length > 0) || kw.truncated > 0;
 
   // Check if any descendant matches the filter (using DATA model)
   var hasMatchingDescendant = false;
@@ -627,10 +634,11 @@ function _renderKeywordNode(kw, depth, filteredSpanIds) {
   // Store lazy children data instead of rendering them now
   if (hasChildren) {
     node._lazyChildren = {
-      items: kw.children,
+      items: kw.children || [],
       type: 'keyword',
       filteredSpanIds: filteredSpanIds,
-      depth: depth + 1
+      depth: depth + 1,
+      truncatedCount: kw.truncated || 0
     };
   }
 

@@ -36,6 +36,7 @@ class ReportOptions:
     theme: str = "system"  # "light", "dark", "system"
     compact: bool = False  # omit default-value fields from embedded JSON
     gzip_embed: bool = False  # gzip-compress and base64-encode embedded JSON data
+    max_keyword_depth: int | None = None  # if set, truncate keyword children beyond this depth
 
 
 def _serialize(obj: Any) -> Any:
@@ -231,6 +232,8 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
 
     # Strip whitespace and use default if empty
     title = (options.title or "").strip() or (model.title or "").strip() or "RF Trace Report"
+    if options.max_keyword_depth is not None:
+        model = _truncate_depth(model, options.max_keyword_depth)
     data_json = embed_data(model, compact=options.compact)
     js_content, css_content = embed_viewer_assets()
 
@@ -264,6 +267,48 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
         "</body>\n"
         "</html>\n"
     )
+
+
+def _truncate_depth(model: RFRunModel, max_depth: int) -> RFRunModel:
+    """Return a copy of *model* with keyword children truncated beyond *max_depth*.
+
+    Depth is counted from 1 at the first keyword level (direct children of a
+    test or suite).  Keyword nodes whose children would exceed *max_depth* have
+    their children replaced with an empty list and gain a ``truncated`` field
+    set to the number of hidden children.
+
+    The function mutates the model in-place (the caller already owns it) rather
+    than deep-copying, which is acceptable because ``generate_report`` creates
+    the model fresh for each invocation.
+    """
+    from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest
+
+    def _trim_kw(kw: RFKeyword, current_depth: int) -> None:
+        if not kw.children:
+            return
+        if current_depth >= max_depth:
+            # Record how many children are being hidden, then drop them.
+            kw.truncated = len(kw.children)  # type: ignore[attr-defined]
+            kw.children = []
+        else:
+            for child in kw.children:
+                _trim_kw(child, current_depth + 1)
+
+    def _trim_suite(suite: Any) -> None:
+        for child in suite.children:
+            if isinstance(child, RFSuite):
+                _trim_suite(child)
+            elif isinstance(child, RFTest):
+                for kw in child.keywords:
+                    _trim_kw(kw, 1)
+            elif isinstance(child, RFKeyword):
+                # Suite-level setup/teardown keywords
+                _trim_kw(child, 1)
+
+    for suite in model.suites:
+        _trim_suite(suite)
+
+    return model
 
 
 def _escape_html(text: str) -> str:

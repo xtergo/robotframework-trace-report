@@ -634,7 +634,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add the `decompressData()` JS function (using `DecompressionStream`) to `src/rf_trace_viewer/viewer/app.js`
     - _Requirements: 35.5_
 
-  - [ ] 34.5 Implement `--max-keyword-depth` CLI filter in `src/rf_trace_viewer/generator.py`
+  - [x] 34.5 Implement `--max-keyword-depth` CLI filter in `src/rf_trace_viewer/generator.py`
     - Add `--max-keyword-depth N` CLI flag in `src/rf_trace_viewer/cli.py`
     - Add `_truncate_depth(tree, max_depth)` function that removes keyword children beyond depth N
     - Mark truncated parent nodes with a `truncated: true` field so the JS viewer can show a visual indicator

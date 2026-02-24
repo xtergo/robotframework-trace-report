@@ -64,6 +64,13 @@ def main() -> int:
         action="store_true",
         help="Gzip-compress and base64-encode embedded JSON data to reduce file size",
     )
+    parser.add_argument(
+        "--max-keyword-depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Truncate keyword children beyond depth N (1 = only top-level keywords)",
+    )
 
     args = parser.parse_args()
 
@@ -82,6 +89,7 @@ def main() -> int:
             title=args.title,
             compact=args.compact_html,
             gzip_embed=args.gzip_embed,
+            max_keyword_depth=args.max_keyword_depth,
         )
         html = generate_report(model, options)
 
