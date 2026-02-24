@@ -641,25 +641,25 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Update the JS viewer (`tree.js`) to render a "… N keywords hidden" indicator on truncated nodes
     - _Requirements: 35.6_
 
-  - [ ] 34.6 Implement `--exclude-passing-keywords` CLI filter in `src/rf_trace_viewer/generator.py`
+  - [x] 34.6 Implement `--exclude-passing-keywords` CLI filter in `src/rf_trace_viewer/generator.py`
     - Add `--exclude-passing-keywords` CLI flag in `src/rf_trace_viewer/cli.py`
     - Add `_exclude_passing_keywords(tree)` function that removes keyword spans with PASS status, retaining suite and test spans always
     - _Requirements: 35.7_
 
-  - [ ] 34.7 Implement `--max-spans` CLI filter in `src/rf_trace_viewer/generator.py`
+  - [x] 34.7 Implement `--max-spans` CLI filter in `src/rf_trace_viewer/generator.py`
     - Add `--max-spans N` CLI flag in `src/rf_trace_viewer/cli.py`
     - Add `_limit_spans(tree, max_spans)` function that prioritizes FAIL spans, then SKIP, then PASS (shallowest first), and truncates to N total spans
     - Emit a warning to stderr: "Warning: trace truncated to N spans (M spans omitted)"
     - _Requirements: 35.8_
 
-  - [ ] 34.8 Implement JS compact format decoder in `src/rf_trace_viewer/viewer/app.js`
+  - [x] 34.8 Implement JS compact format decoder in `src/rf_trace_viewer/viewer/app.js`
     - Add `decodeTraceData(raw)` function that detects the `v` field and expands short keys and intern indices back to full format
     - Add `expandNode()` and `expandValue()` helper functions (see design.md for implementation)
     - Call `decodeTraceData()` on the raw embedded data before passing to the viewer components
     - Ensure backward compatibility: if `v` field is absent, pass data through unchanged
     - _Requirements: 35.9, 35.10_
 
-  - [ ] 34.9 Write property tests for compact serialization
+  - [x] 34.9 Write property tests for compact serialization
     - **Property 27: Compact serialization round-trip** — serialize with compact format then decode with JS decoder logic (ported to Python for testing) produces equivalent data to original
     - **Property 28: Gzip embed round-trip** — gzip+base64 encode then decode produces original JSON bytes
     - **Property 29: Span truncation correctness** — `--max-spans N` produces at most N spans, FAIL spans prioritized over PASS

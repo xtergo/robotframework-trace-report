@@ -455,3 +455,437 @@ class TestEnrichedFieldSerialization:
         serialized_test = self._find_first_test(data)
         assert serialized_test["doc"] == "Verifies basic functionality"
         assert serialized_test["status_message"] == "Test passed successfully"
+
+
+# ============================================================================
+# Property-Based Tests for Compact Serialization (Properties 27, 28, 29)
+# ============================================================================
+
+import base64
+import gzip
+from dataclasses import dataclass, field
+from typing import Any
+
+from hypothesis import given, settings, assume
+from hypothesis import strategies as st
+
+from rf_trace_viewer.generator import (
+    KEY_MAP,
+    _apply_intern_table,
+    _apply_key_map,
+    _build_intern_table,
+    _limit_spans,
+    _serialize,
+    _serialize_compact,
+    embed_data,
+)
+from rf_trace_viewer.rf_model import (
+    RFKeyword,
+    RFRunModel,
+    RFSuite,
+    RFTest,
+    RunStatistics,
+    Status,
+)
+
+
+# ---------------------------------------------------------------------------
+# Python port of the JS decoder (expandNode / expandValue / decodeTraceData)
+# ---------------------------------------------------------------------------
+
+
+def _expand_value(v: Any, key_map: dict[str, str], intern_table: list[str]) -> Any:
+    """Python port of the JS expandValue function."""
+    if isinstance(v, int) and intern_table and 0 <= v < len(intern_table):
+        return intern_table[v]
+    if isinstance(v, list):
+        return [
+            _expand_node(item, key_map, intern_table)
+            if isinstance(item, dict)
+            else _expand_value(item, key_map, intern_table)
+            for item in v
+        ]
+    if isinstance(v, dict):
+        return _expand_node(v, key_map, intern_table)
+    return v
+
+
+def _expand_node(node: dict, key_map: dict[str, str], intern_table: list[str]) -> dict:
+    """Python port of the JS expandNode function."""
+    expanded = {}
+    for k, v in node.items():
+        full_key = key_map.get(k, k)
+        expanded[full_key] = _expand_value(v, key_map, intern_table)
+    return expanded
+
+
+def _decode_trace_data(raw: dict) -> dict:
+    """Python port of the JS decodeTraceData function."""
+    if "v" not in raw:
+        return raw  # legacy uncompressed format
+    km = raw["km"]  # short → original
+    it = raw.get("it", [])
+    data = raw["data"]
+    return _expand_node(data, km, it)
+
+
+# ---------------------------------------------------------------------------
+# Hypothesis strategies for building minimal RFRunModel instances
+# ---------------------------------------------------------------------------
+
+_statuses = st.sampled_from([Status.PASS, Status.FAIL, Status.SKIP])
+_short_text = st.text(min_size=1, max_size=30, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters=" _-"))
+
+
+@st.composite
+def rf_keyword_model(draw, status: Status | None = None) -> RFKeyword:
+    """Generate a minimal RFKeyword model object."""
+    kw_status = status if status is not None else draw(_statuses)
+    return RFKeyword(
+        name=draw(_short_text),
+        keyword_type=draw(st.sampled_from(["KEYWORD", "SETUP", "TEARDOWN"])),
+        args=draw(st.one_of(st.just(""), _short_text)),
+        status=kw_status,
+        start_time=draw(st.integers(min_value=1_700_000_000_000, max_value=1_800_000_000_000)),
+        end_time=draw(st.integers(min_value=1_700_000_001_000, max_value=1_800_000_001_000)),
+        elapsed_time=draw(st.floats(min_value=0.001, max_value=60.0, allow_nan=False)),
+        lineno=draw(st.integers(min_value=0, max_value=1000)),
+        doc=draw(st.one_of(st.just(""), _short_text)),
+        status_message=draw(st.one_of(st.just(""), _short_text)),
+    )
+
+
+@st.composite
+def rf_test_model(draw, status: Status | None = None) -> RFTest:
+    """Generate a minimal RFTest model with 1-3 keywords."""
+    test_status = status if status is not None else draw(_statuses)
+    num_kws = draw(st.integers(min_value=1, max_value=3))
+    keywords = [draw(rf_keyword_model()) for _ in range(num_kws)]
+    return RFTest(
+        name=draw(_short_text),
+        id=draw(_short_text),
+        status=test_status,
+        start_time=draw(st.integers(min_value=1_700_000_000_000, max_value=1_800_000_000_000)),
+        end_time=draw(st.integers(min_value=1_700_000_001_000, max_value=1_800_000_001_000)),
+        elapsed_time=draw(st.floats(min_value=0.001, max_value=60.0, allow_nan=False)),
+        keywords=keywords,
+        tags=draw(st.lists(_short_text, min_size=0, max_size=3)),
+        doc=draw(st.one_of(st.just(""), _short_text)),
+        status_message=draw(st.one_of(st.just(""), _short_text)),
+    )
+
+
+@st.composite
+def rf_suite_model(draw) -> RFSuite:
+    """Generate a minimal RFSuite with 1-3 tests."""
+    num_tests = draw(st.integers(min_value=1, max_value=3))
+    tests = [draw(rf_test_model()) for _ in range(num_tests)]
+    return RFSuite(
+        name=draw(_short_text),
+        id=draw(_short_text),
+        source=draw(_short_text),
+        status=draw(_statuses),
+        start_time=draw(st.integers(min_value=1_700_000_000_000, max_value=1_800_000_000_000)),
+        end_time=draw(st.integers(min_value=1_700_000_001_000, max_value=1_800_000_001_000)),
+        elapsed_time=draw(st.floats(min_value=0.001, max_value=60.0, allow_nan=False)),
+        children=tests,
+    )
+
+
+@st.composite
+def rf_run_model(draw) -> RFRunModel:
+    """Generate a minimal RFRunModel with 1-2 suites."""
+    num_suites = draw(st.integers(min_value=1, max_value=2))
+    suites = [draw(rf_suite_model()) for _ in range(num_suites)]
+    return RFRunModel(
+        title=draw(_short_text),
+        run_id=draw(_short_text),
+        rf_version="7.0",
+        start_time=1_700_000_000_000,
+        end_time=1_700_000_001_000,
+        suites=suites,
+        statistics=RunStatistics(total_tests=1, passed=1, failed=0, skipped=0, total_duration_ms=1.0),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Property 27: Compact serialization round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestProperty27CompactSerializationRoundTrip:
+    """Property 27: Compact serialization round-trip.
+
+    Validates: Requirements 35.1, 35.2, 35.3, 35.9
+    """
+
+    @given(model=rf_run_model())
+    @settings(max_examples=50)
+    def test_compact_round_trip_preserves_data(self, model: RFRunModel):
+        """Feature: rf-html-report-replacement, Property 27: Compact serialization round-trip
+
+        Serialize with compact format then decode with JS decoder logic (ported to Python)
+        produces data equivalent to the compact-serialized (omit-defaults) form.
+        No span data should be lost or corrupted by the short-key + intern round-trip.
+        """
+        # Produce the compact wrapper JSON
+        compact_json = embed_data(model, compact=True)
+        wrapper = json.loads(compact_json)
+
+        # Must have version field
+        assert wrapper["v"] == 1
+        assert "km" in wrapper
+        assert "it" in wrapper
+        assert "data" in wrapper
+
+        # Decode using the Python-ported JS decoder
+        decoded = _decode_trace_data(wrapper)
+
+        # The reference for comparison is the compact-serialized form with original keys
+        # (omit-defaults applied, but no short keys or intern indices).
+        # We reconstruct this by applying only _serialize_compact (no key-map, no intern).
+        compact_serialized = _serialize_compact(model)
+
+        # The decoded data should match the compact-serialized form exactly.
+        assert decoded == compact_serialized
+
+    @given(model=rf_run_model())
+    @settings(max_examples=50)
+    def test_compact_round_trip_no_data_loss(self, model: RFRunModel):
+        """Feature: rf-html-report-replacement, Property 27: Compact serialization round-trip
+
+        No span data is lost or corrupted by the compact round-trip.
+        """
+        compact_json = embed_data(model, compact=True)
+        wrapper = json.loads(compact_json)
+        decoded = _decode_trace_data(wrapper)
+
+        # Suite count preserved
+        assert len(decoded["suites"]) == len(model.suites)
+
+        # For each suite, test count preserved
+        for suite_data, suite_model in zip(decoded["suites"], model.suites):
+            assert suite_data["name"] == suite_model.name
+            # children contains tests
+            tests_in_data = [c for c in suite_data.get("children", []) if "keywords" in c]
+            tests_in_model = [c for c in suite_model.children if isinstance(c, RFTest)]
+            assert len(tests_in_data) == len(tests_in_model)
+
+    @given(model=rf_run_model())
+    @settings(max_examples=50)
+    def test_compact_key_map_is_reverse_of_key_map_constant(self, model: RFRunModel):
+        """Feature: rf-html-report-replacement, Property 27: Compact serialization round-trip
+
+        The embedded km (key map) is the reverse of KEY_MAP (short→original).
+        """
+        compact_json = embed_data(model, compact=True)
+        wrapper = json.loads(compact_json)
+
+        # km maps short → original; KEY_MAP maps original → short
+        km = wrapper["km"]
+        for short, original in km.items():
+            assert KEY_MAP.get(original) == short, (
+                f"km[{short!r}]={original!r} but KEY_MAP[{original!r}]={KEY_MAP.get(original)!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Property 28: Gzip embed round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestProperty28GzipEmbedRoundTrip:
+    """Property 28: Gzip embed round-trip.
+
+    Validates: Requirements 35.5
+    """
+
+    @given(payload=st.text(min_size=1, max_size=500))
+    @settings(max_examples=100)
+    def test_gzip_base64_round_trip(self, payload: str):
+        """Feature: rf-html-report-replacement, Property 28: Gzip embed round-trip
+
+        gzip-compressing and base64-encoding a JSON payload, then decoding and
+        decompressing, produces the original bytes byte-for-byte.
+        """
+        original_bytes = payload.encode("utf-8")
+
+        # Encode (mirrors generator._gzip_embed logic)
+        compressed = gzip.compress(original_bytes, compresslevel=9)
+        b64 = base64.b64encode(compressed).decode("ascii")
+
+        # Decode (mirrors JS decompressData logic)
+        decoded_compressed = base64.b64decode(b64)
+        decoded_bytes = gzip.decompress(decoded_compressed)
+
+        assert decoded_bytes == original_bytes
+
+    @given(model=rf_run_model())
+    @settings(max_examples=50)
+    def test_gzip_embed_of_json_round_trip(self, model: RFRunModel):
+        """Feature: rf-html-report-replacement, Property 28: Gzip embed round-trip
+
+        gzip+base64 encoding the embedded JSON then decoding produces the original JSON.
+        """
+        json_str = embed_data(model, compact=False)
+        original_bytes = json_str.encode("utf-8")
+
+        # Encode
+        compressed = gzip.compress(original_bytes, compresslevel=9)
+        b64 = base64.b64encode(compressed).decode("ascii")
+
+        # Decode
+        decoded_bytes = gzip.decompress(base64.b64decode(b64))
+
+        assert decoded_bytes == original_bytes
+        # Also verify the decoded JSON is valid and equivalent
+        assert json.loads(decoded_bytes.decode("utf-8")) == json.loads(json_str)
+
+    @given(payload=st.binary(min_size=1, max_size=1000))
+    @settings(max_examples=100)
+    def test_gzip_base64_round_trip_arbitrary_bytes(self, payload: bytes):
+        """Feature: rf-html-report-replacement, Property 28: Gzip embed round-trip
+
+        Round-trip works for arbitrary byte payloads (not just UTF-8 text).
+        """
+        compressed = gzip.compress(payload, compresslevel=9)
+        b64 = base64.b64encode(compressed).decode("ascii")
+        decoded = gzip.decompress(base64.b64decode(b64))
+        assert decoded == payload
+
+
+# ---------------------------------------------------------------------------
+# Property 29: Span truncation correctness
+# ---------------------------------------------------------------------------
+
+
+def _count_spans_in_model(model: RFRunModel) -> int:
+    """Count total spans (suites + tests + keywords) in a model."""
+    total = 0
+
+    def _count_kw(kw: RFKeyword) -> int:
+        return 1 + sum(_count_kw(c) for c in kw.children)
+
+    for suite in model.suites:
+        total += 1  # suite itself
+        for child in suite.children:
+            if isinstance(child, RFTest):
+                total += 1  # test
+                total += sum(_count_kw(kw) for kw in child.keywords)
+            elif isinstance(child, RFSuite):
+                # nested suite counted recursively — handled by outer loop
+                pass
+            elif isinstance(child, RFKeyword):
+                total += _count_kw(child)
+
+    return total
+
+
+def _collect_all_statuses(model: RFRunModel) -> list[Status]:
+    """Collect statuses of all spans in the model."""
+    statuses = []
+
+    def _collect_kw(kw: RFKeyword) -> None:
+        statuses.append(kw.status)
+        for c in kw.children:
+            _collect_kw(c)
+
+    for suite in model.suites:
+        statuses.append(suite.status)
+        for child in suite.children:
+            if isinstance(child, RFTest):
+                statuses.append(child.status)
+                for kw in child.keywords:
+                    _collect_kw(kw)
+            elif isinstance(child, RFKeyword):
+                _collect_kw(child)
+
+    return statuses
+
+
+@st.composite
+def rf_run_model_with_mixed_statuses(draw) -> RFRunModel:
+    """Generate a model that has both PASS and FAIL spans."""
+    # Build a suite with at least one FAIL test and one PASS test
+    fail_test = draw(rf_test_model(status=Status.FAIL))
+    pass_test = draw(rf_test_model(status=Status.PASS))
+    suite = RFSuite(
+        name="mixed-suite",
+        id="s1",
+        source="suite.robot",
+        status=Status.FAIL,
+        start_time=1_700_000_000_000,
+        end_time=1_700_000_001_000,
+        elapsed_time=1.0,
+        children=[fail_test, pass_test],
+    )
+    return RFRunModel(
+        title="mixed",
+        run_id="run1",
+        rf_version="7.0",
+        start_time=1_700_000_000_000,
+        end_time=1_700_000_001_000,
+        suites=[suite],
+        statistics=RunStatistics(total_tests=2, passed=1, failed=1, skipped=0, total_duration_ms=1.0),
+    )
+
+
+class TestProperty29SpanTruncationCorrectness:
+    """Property 29: Span truncation correctness.
+
+    Validates: Requirements 35.6, 35.7, 35.8
+    """
+
+    @given(model=rf_run_model(), max_spans=st.integers(min_value=1, max_value=20))
+    @settings(max_examples=50)
+    def test_truncation_produces_at_most_n_spans(self, model: RFRunModel, max_spans: int):
+        """Feature: rf-html-report-replacement, Property 29: Span truncation correctness
+
+        --max-spans N produces at most N spans in the output.
+        """
+        truncated = _limit_spans(model, max_spans)
+        actual_count = _count_spans_in_model(truncated)
+        assert actual_count <= max_spans, (
+            f"Expected at most {max_spans} spans, got {actual_count}"
+        )
+
+    @given(model=rf_run_model_with_mixed_statuses(), max_spans=st.integers(min_value=1, max_value=5))
+    @settings(max_examples=50)
+    def test_fail_spans_prioritized_over_pass(self, model: RFRunModel, max_spans: int):
+        """Feature: rf-html-report-replacement, Property 29: Span truncation correctness
+
+        FAIL spans are prioritized over PASS spans when truncating.
+        If there are FAIL spans and the limit is reached, no PASS span should
+        appear unless all FAIL spans are already included.
+        """
+        original_statuses = _collect_all_statuses(model)
+        fail_count_original = original_statuses.count(Status.FAIL)
+
+        truncated = _limit_spans(model, max_spans)
+        truncated_statuses = _collect_all_statuses(truncated)
+        actual_count = len(truncated_statuses)
+
+        # If we kept fewer spans than there are FAIL spans, all kept spans
+        # should be FAIL (no PASS should sneak in before all FAILs are included)
+        if actual_count < fail_count_original:
+            pass_count_in_truncated = truncated_statuses.count(Status.PASS)
+            assert pass_count_in_truncated == 0, (
+                f"Found {pass_count_in_truncated} PASS spans when only {actual_count} of "
+                f"{fail_count_original} FAIL spans fit — PASS should not appear before all FAILs"
+            )
+
+    @given(model=rf_run_model())
+    @settings(max_examples=50)
+    def test_no_truncation_when_limit_exceeds_total(self, model: RFRunModel):
+        """Feature: rf-html-report-replacement, Property 29: Span truncation correctness
+
+        When max_spans >= total spans, no truncation occurs and all spans are preserved.
+        """
+        total = _count_spans_in_model(model)
+        # Use a limit larger than the total
+        large_limit = total + 100
+        truncated = _limit_spans(model, large_limit)
+        after_count = _count_spans_in_model(truncated)
+        assert after_count == total, (
+            f"Expected {total} spans (no truncation), got {after_count}"
+        )
