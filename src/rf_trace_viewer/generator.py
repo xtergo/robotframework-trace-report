@@ -77,10 +77,66 @@ def _serialize_compact(obj: Any) -> Any:
     return obj
 
 
+# Maps original field names → short aliases for compact JSON encoding.
+# The reverse mapping (short → original) is embedded in the wrapper as `km`
+# so the JS viewer can decode the compact format.
+KEY_MAP: dict[str, str] = {
+    "name": "n",
+    "type": "t",
+    "status": "s",
+    "start_time": "st",
+    "end_time": "et",
+    "elapsed_time": "el",
+    "children": "ch",
+    "events": "ev",
+    "attributes": "at",
+    "keyword_type": "kt",
+    "status_message": "sm",
+    "doc": "d",
+    "lineno": "ln",
+    "args": "a",
+    "tags": "tg",
+    "metadata": "md",
+}
+
+
+def _apply_key_map(obj: Any, key_map: dict[str, str]) -> Any:
+    """Recursively rename dict keys using key_map.
+
+    - Dicts: rename each key if present in key_map, recurse into values.
+    - Lists: recurse into each item.
+    - Primitives: return as-is.
+    """
+    if isinstance(obj, dict):
+        return {key_map.get(k, k): _apply_key_map(v, key_map) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_apply_key_map(item, key_map) for item in obj]
+    return obj
+
+
 def embed_data(model: RFRunModel, compact: bool = False) -> str:
-    """Serialize RFRunModel to a JSON string for embedding in HTML."""
-    serializer = _serialize_compact if compact else _serialize
-    return json.dumps(serializer(model), separators=(",", ":"))
+    """Serialize RFRunModel to a JSON string for embedding in HTML.
+
+    When ``compact=True``, the output is wrapped in a versioned envelope::
+
+        {"v":1,"km":{<short→original>},"data":{<span tree with short keys>}}
+
+    The JS viewer checks for ``raw.v`` to detect compact format and uses ``km``
+    to decode the short keys back to their original names.
+
+    When ``compact=False``, the raw serialized model is returned unchanged
+    (legacy format, no ``v`` field).
+    """
+    if compact:
+        serialized = _serialize_compact(model)
+        wrapper = {
+            "v": 1,
+            # km maps short alias → original field name (for JS decoder)
+            "km": {v: k for k, v in KEY_MAP.items()},
+            "data": _apply_key_map(serialized, KEY_MAP),
+        }
+        return json.dumps(wrapper, separators=(",", ":"))
+    return json.dumps(_serialize(model), separators=(",", ":"))
 
 
 def embed_viewer_assets() -> tuple[str, str]:
