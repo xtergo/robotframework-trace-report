@@ -1328,3 +1328,98 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Filter Summary Bar (above tree, shows active filter chips) ── */
+.rf-trace-viewer .filter-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+  min-height: 36px;
+}
+
+.rf-trace-viewer .filter-summary-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .filter-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.rf-trace-viewer .filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.rf-trace-viewer .filter-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf-trace-viewer .filter-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .filter-chip-remove:hover {
+  background: var(--hover-bg);
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .filter-chip-remove:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 1px;
+}
+
+.rf-trace-viewer .filter-summary-clear {
+  padding: 2px 10px;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .filter-summary-clear:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .filter-summary-clear:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}

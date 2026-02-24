@@ -732,6 +732,7 @@
     resultCounts.visible = filteredSpans.length;
     _updateResultCountDisplay();
     _updateTimeRangeDisplay();
+    _updateFilterSummaryBar();
 
     // Emit filter-changed event
     if (window.RFTraceViewer && window.RFTraceViewer.emit) {
@@ -897,6 +898,276 @@
     }
     // Fallback: assume ISO 8601 format
     return new Date(timeStr).getTime() / 1000;
+  }
+
+
+  // Default filter values for comparison
+  var _defaultTestStatuses = ['PASS', 'FAIL', 'SKIP'];
+  var _defaultKwStatuses = ['PASS', 'FAIL', 'NOT_RUN'];
+
+  /**
+   * Check whether any filter is active (differs from defaults).
+   */
+  function _hasActiveFilters() {
+    if (filterState.text) return true;
+    if (filterState.tags.length > 0) return true;
+    if (filterState.suites.length > 0) return true;
+    if (filterState.keywordTypes.length > 0) return true;
+    if (filterState.durationMin !== null) return true;
+    if (filterState.durationMax !== null) return true;
+    if (filterState.timeRangeStart !== null && filterState.timeRangeEnd !== null) return true;
+
+    // Check if test statuses differ from default (all checked)
+    if (filterState.testStatuses.length !== _defaultTestStatuses.length) return true;
+    for (var i = 0; i < _defaultTestStatuses.length; i++) {
+      if (filterState.testStatuses.indexOf(_defaultTestStatuses[i]) === -1) return true;
+    }
+
+    // Check if keyword statuses differ from default (all checked)
+    if (filterState.kwStatuses.length !== _defaultKwStatuses.length) return true;
+    for (var i = 0; i < _defaultKwStatuses.length; i++) {
+      if (filterState.kwStatuses.indexOf(_defaultKwStatuses[i]) === -1) return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Build the list of active filter chips.
+   * Returns an array of {label, type, remove} objects.
+   */
+  function _getActiveFilterChips() {
+    var chips = [];
+
+    if (filterState.text) {
+      chips.push({
+        label: 'Search: ' + filterState.text,
+        remove: function () {
+          filterState.text = '';
+          var input = document.getElementById('filter-text-input');
+          if (input) input.value = '';
+          _applyFilters();
+        }
+      });
+    }
+
+    // Test statuses — show chips for unchecked statuses
+    for (var i = 0; i < _defaultTestStatuses.length; i++) {
+      if (filterState.testStatuses.indexOf(_defaultTestStatuses[i]) === -1) {
+        (function (status) {
+          chips.push({
+            label: 'Hide: ' + status,
+            remove: function () {
+              filterState.testStatuses.push(status);
+              // Re-check the corresponding checkbox in the UI
+              var checkboxes = document.querySelectorAll('.filter-checkbox-group input[type="checkbox"]');
+              for (var j = 0; j < checkboxes.length; j++) {
+                if (checkboxes[j].value === status) checkboxes[j].checked = true;
+              }
+              _applyFilters();
+            }
+          });
+        })(_defaultTestStatuses[i]);
+      }
+    }
+
+    // Keyword statuses — show chips for unchecked statuses
+    for (var i = 0; i < _defaultKwStatuses.length; i++) {
+      if (filterState.kwStatuses.indexOf(_defaultKwStatuses[i]) === -1) {
+        (function (status) {
+          chips.push({
+            label: 'KW Hide: ' + status,
+            remove: function () {
+              filterState.kwStatuses.push(status);
+              var checkboxes = document.querySelectorAll('.filter-checkbox-group input[type="checkbox"]');
+              for (var j = 0; j < checkboxes.length; j++) {
+                if (checkboxes[j].value === status) checkboxes[j].checked = true;
+              }
+              _applyFilters();
+            }
+          });
+        })(_defaultKwStatuses[i]);
+      }
+    }
+
+    // Tags
+    for (var i = 0; i < filterState.tags.length; i++) {
+      (function (tag) {
+        chips.push({
+          label: 'Tag: ' + tag,
+          remove: function () {
+            var idx = filterState.tags.indexOf(tag);
+            if (idx !== -1) filterState.tags.splice(idx, 1);
+            // Deselect in multiselect UI
+            var selects = document.querySelectorAll('.filter-multiselect');
+            for (var j = 0; j < selects.length; j++) {
+              for (var k = 0; k < selects[j].options.length; k++) {
+                if (selects[j].options[k].value === tag) selects[j].options[k].selected = false;
+              }
+            }
+            _applyFilters();
+          }
+        });
+      })(filterState.tags[i]);
+    }
+
+    // Suites
+    for (var i = 0; i < filterState.suites.length; i++) {
+      (function (suite) {
+        chips.push({
+          label: 'Suite: ' + suite,
+          remove: function () {
+            var idx = filterState.suites.indexOf(suite);
+            if (idx !== -1) filterState.suites.splice(idx, 1);
+            var selects = document.querySelectorAll('.filter-multiselect');
+            for (var j = 0; j < selects.length; j++) {
+              for (var k = 0; k < selects[j].options.length; k++) {
+                if (selects[j].options[k].value === suite) selects[j].options[k].selected = false;
+              }
+            }
+            _applyFilters();
+          }
+        });
+      })(filterState.suites[i]);
+    }
+
+    // Keyword types
+    for (var i = 0; i < filterState.keywordTypes.length; i++) {
+      (function (kwType) {
+        chips.push({
+          label: 'KW Type: ' + kwType,
+          remove: function () {
+            var idx = filterState.keywordTypes.indexOf(kwType);
+            if (idx !== -1) filterState.keywordTypes.splice(idx, 1);
+            var selects = document.querySelectorAll('.filter-multiselect');
+            for (var j = 0; j < selects.length; j++) {
+              for (var k = 0; k < selects[j].options.length; k++) {
+                if (selects[j].options[k].value === kwType) selects[j].options[k].selected = false;
+              }
+            }
+            _applyFilters();
+          }
+        });
+      })(filterState.keywordTypes[i]);
+    }
+
+    // Duration min
+    if (filterState.durationMin !== null) {
+      chips.push({
+        label: 'Duration: \u2265' + filterState.durationMin + 's',
+        remove: function () {
+          filterState.durationMin = null;
+          var inputs = document.querySelectorAll('.filter-range-input');
+          if (inputs[0]) inputs[0].value = '';
+          _applyFilters();
+        }
+      });
+    }
+
+    // Duration max
+    if (filterState.durationMax !== null) {
+      chips.push({
+        label: 'Duration: \u2264' + filterState.durationMax + 's',
+        remove: function () {
+          filterState.durationMax = null;
+          var inputs = document.querySelectorAll('.filter-range-input');
+          if (inputs[1]) inputs[1].value = '';
+          _applyFilters();
+        }
+      });
+    }
+
+    // Time range
+    if (filterState.timeRangeStart !== null && filterState.timeRangeEnd !== null) {
+      chips.push({
+        label: 'Time: ' + _formatTime(Math.min(filterState.timeRangeStart, filterState.timeRangeEnd)) +
+               ' \u2013 ' + _formatTime(Math.max(filterState.timeRangeStart, filterState.timeRangeEnd)),
+        remove: function () {
+          filterState.timeRangeStart = null;
+          filterState.timeRangeEnd = null;
+          _applyFilters();
+        }
+      });
+    }
+
+    return chips;
+  }
+
+  /**
+   * Update the filter summary bar above the tree view.
+   * Shows active filter chips with remove buttons and result count.
+   * Hidden when no filters are active.
+   */
+  function _updateFilterSummaryBar() {
+    var bar = document.getElementById('filter-summary-bar');
+
+    // Create the bar if it doesn't exist yet
+    if (!bar) {
+      var centerColumn = document.querySelector('.panel-center');
+      if (!centerColumn) return;
+      var treePanel = centerColumn.querySelector('.panel-tree');
+      if (!treePanel) return;
+
+      bar = document.createElement('div');
+      bar.id = 'filter-summary-bar';
+      bar.className = 'filter-summary-bar';
+      bar.setAttribute('role', 'status');
+      bar.setAttribute('aria-label', 'Active filters');
+      centerColumn.insertBefore(bar, treePanel);
+    }
+
+    if (!_hasActiveFilters()) {
+      bar.style.display = 'none';
+      return;
+    }
+
+    bar.style.display = '';
+    bar.innerHTML = '';
+
+    // Result count
+    var countSpan = document.createElement('span');
+    countSpan.className = 'filter-summary-count';
+    countSpan.textContent = _formatResultCount();
+    bar.appendChild(countSpan);
+
+    // Chips container
+    var chipsContainer = document.createElement('span');
+    chipsContainer.className = 'filter-summary-chips';
+
+    var chips = _getActiveFilterChips();
+    for (var i = 0; i < chips.length; i++) {
+      (function (chip) {
+        var chipEl = document.createElement('span');
+        chipEl.className = 'filter-chip';
+
+        var chipLabel = document.createElement('span');
+        chipLabel.className = 'filter-chip-label';
+        chipLabel.textContent = chip.label;
+        chipEl.appendChild(chipLabel);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'filter-chip-remove';
+        removeBtn.textContent = '\u00d7';
+        removeBtn.setAttribute('aria-label', 'Remove filter: ' + chip.label);
+        removeBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          chip.remove();
+        });
+        chipEl.appendChild(removeBtn);
+
+        chipsContainer.appendChild(chipEl);
+      })(chips[i]);
+    }
+
+    bar.appendChild(chipsContainer);
+
+    // Clear all button
+    var clearBtn = document.createElement('button');
+    clearBtn.className = 'filter-summary-clear';
+    clearBtn.textContent = 'Clear all';
+    clearBtn.setAttribute('aria-label', 'Clear all filters');
+    clearBtn.addEventListener('click', _clearAllFilters);
+    bar.appendChild(clearBtn);
   }
 
   /**

@@ -580,7 +580,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add CSS for `.tree-sparkline` in `style.css`
     - _Requirements: 34.8_
 
-  - [ ] 32.5 Add persistent filter summary bar in `src/rf_trace_viewer/viewer/search.js`
+  - [x] 32.5 Add persistent filter summary bar in `src/rf_trace_viewer/viewer/search.js`
     - When any filter is active, show a horizontal bar above the tree listing active filters as removable chips/tags
     - Each chip shows the filter type and value (e.g., "Status: FAIL", "Tag: smoke", "Duration: >5s")
     - Clicking the × on a chip removes that specific filter
@@ -592,7 +592,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Profile tree rendering with a 5,000-span trace and ensure initial render completes within 500ms
     - If needed, implement virtual scrolling: only render nodes visible in the viewport plus a buffer
     - Use `requestAnimationFrame` for batch DOM updates during expand/collapse operations
-    - Test with the large_trace.json fixture (create one if it doesn't exist with 5,000+ spans)
+    - Test with the large_trace.json fixture (create one if it doesn't exist with 500,000+ spans)
     - _Requirements: 34.4_
 
 - [ ] 33. Checkpoint — Tree detail panels, suite navigation, and UX superiority
