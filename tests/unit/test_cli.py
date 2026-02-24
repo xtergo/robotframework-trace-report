@@ -123,6 +123,7 @@ class TestArgumentParsing:
                                 gzip_embed=False,
                                 max_keyword_depth=None,
                                 exclude_passing_keywords=False,
+                                max_spans=None,
                             )
 
     def test_live_mode_argument(self, monkeypatch, capsys):

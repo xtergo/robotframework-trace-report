@@ -76,6 +76,13 @@ def main() -> int:
         action="store_true",
         help="Exclude keyword spans with PASS status from the report (keeps FAIL/SKIP/NOT_RUN)",
     )
+    parser.add_argument(
+        "--max-spans",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit total spans in the report to N, prioritising FAIL > SKIP > PASS (shallowest first)",
+    )
 
     args = parser.parse_args()
 
@@ -96,6 +103,7 @@ def main() -> int:
             gzip_embed=args.gzip_embed,
             max_keyword_depth=args.max_keyword_depth,
             exclude_passing_keywords=args.exclude_passing_keywords,
+            max_spans=args.max_spans,
         )
         html = generate_report(model, options)
 
