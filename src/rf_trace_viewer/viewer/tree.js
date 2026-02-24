@@ -160,7 +160,98 @@ function _mergeGroup(group) {
   return merged;
 }
 
+/**
+ * Count total spans in the model for performance logging.
+ * @param {Object} model - RFRunModel with suites array
+ * @returns {number} Total span count
+ */
+function _countSpans(model) {
+  var count = 0;
+  function countSuite(suite) {
+    count++;
+    if (suite.children) {
+      for (var i = 0; i < suite.children.length; i++) {
+        var child = suite.children[i];
+        if (child.keyword_type !== undefined) {
+          countKeyword(child);
+        } else if (child.keywords !== undefined) {
+          countTest(child);
+        } else {
+          countSuite(child);
+        }
+      }
+    }
+  }
+  function countTest(test) {
+    count++;
+    if (test.keywords) {
+      for (var i = 0; i < test.keywords.length; i++) {
+        countKeyword(test.keywords[i]);
+      }
+    }
+  }
+  function countKeyword(kw) {
+    count++;
+    if (kw.children) {
+      for (var i = 0; i < kw.children.length; i++) {
+        countKeyword(kw.children[i]);
+      }
+    }
+  }
+  var suites = model.suites || [];
+  for (var i = 0; i < suites.length; i++) {
+    countSuite(suites[i]);
+  }
+  return count;
+}
+
+/**
+ * Check if any descendant of a data item matches the filter.
+ * Works on the DATA model, not the DOM.
+ * @param {Object} item - suite, test, or keyword data object
+ * @param {Object} filteredSpanIds - Map of span IDs to show
+ * @returns {boolean}
+ */
+function _hasDescendantInFilter(item, filteredSpanIds) {
+  if (filteredSpanIds[item.id]) return true;
+  // Check children (suites and keywords)
+  if (item.children) {
+    for (var i = 0; i < item.children.length; i++) {
+      if (_hasDescendantInFilter(item.children[i], filteredSpanIds)) return true;
+    }
+  }
+  // Check keywords (tests)
+  if (item.keywords) {
+    for (var j = 0; j < item.keywords.length; j++) {
+      if (_hasDescendantInFilter(item.keywords[j], filteredSpanIds)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if any descendant of a data item has FAIL status.
+ * Works on the DATA model to find failure paths without DOM.
+ * @param {Object} item - suite, test, or keyword data object
+ * @returns {boolean}
+ */
+function _hasDescendantFail(item) {
+  if (item.status === 'FAIL') return true;
+  if (item.children) {
+    for (var i = 0; i < item.children.length; i++) {
+      if (_hasDescendantFail(item.children[i])) return true;
+    }
+  }
+  if (item.keywords) {
+    for (var j = 0; j < item.keywords.length; j++) {
+      if (_hasDescendantFail(item.keywords[j])) return true;
+    }
+  }
+  return false;
+}
+
 function _renderTreeWithFilter(container, model, filteredSpanIds) {
+  var t0 = Date.now();
   container.innerHTML = '';
 
   // Controls: expand all / collapse all / failures only
@@ -217,56 +308,117 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   container.appendChild(treeRoot);
 
   // Auto-expand failure path or root suites on initial load
-  _autoExpandFirstFailure(treeRoot);
+  _autoExpandFirstFailure(treeRoot, suites);
+
+  var elapsed = Date.now() - t0;
+  var spanCount = _countSpans(model);
+  console.log('[Tree] Rendered ' + spanCount + ' spans in ' + elapsed + 'ms (lazy children enabled)');
+}
+
+/**
+ * Find the first failure path through the DATA model.
+ * Returns an array of span IDs from root to the first FAIL leaf.
+ * @param {Array} suites - Array of suite data objects
+ * @returns {Array} Array of span IDs forming the failure path, or empty array
+ */
+function _findFirstFailPath(suites) {
+  function walkSuite(suite) {
+    if (suite.status !== 'FAIL') return null;
+    var path = [suite.id];
+    if (suite.children) {
+      for (var i = 0; i < suite.children.length; i++) {
+        var child = suite.children[i];
+        var childPath = null;
+        if (child.keyword_type !== undefined) {
+          childPath = walkKeyword(child);
+        } else if (child.keywords !== undefined) {
+          childPath = walkTest(child);
+        } else {
+          childPath = walkSuite(child);
+        }
+        if (childPath) return path.concat(childPath);
+      }
+    }
+    return path;
+  }
+  function walkTest(test) {
+    if (test.status !== 'FAIL') return null;
+    var path = [test.id];
+    if (test.keywords) {
+      for (var i = 0; i < test.keywords.length; i++) {
+        var kwPath = walkKeyword(test.keywords[i]);
+        if (kwPath) return path.concat(kwPath);
+      }
+    }
+    return path;
+  }
+  function walkKeyword(kw) {
+    if (kw.status !== 'FAIL') return null;
+    var path = [kw.id];
+    if (kw.children) {
+      for (var i = 0; i < kw.children.length; i++) {
+        var childPath = walkKeyword(kw.children[i]);
+        if (childPath) return path.concat(childPath);
+      }
+    }
+    return path;
+  }
+  for (var i = 0; i < suites.length; i++) {
+    var result = walkSuite(suites[i]);
+    if (result) return result;
+  }
+  return [];
 }
 
 /**
  * Auto-expand the path to the first failure on initial load.
+ * Uses the DATA model to find the failure path, then materializes
+ * lazy children along that path before expanding.
  * If no failures exist, expand only root-level suites (default behavior).
  * @param {HTMLElement} treeRoot - The .tree-root container element
+ * @param {Array} suites - The merged suite data array
  */
-function _autoExpandFirstFailure(treeRoot) {
-  // Find the first FAIL status icon in the tree (depth-first order matches DOM order)
-  var firstFailIcon = treeRoot.querySelector('.tree-status-icon.fail');
+function _autoExpandFirstFailure(treeRoot, suites) {
+  var failPath = _findFirstFailPath(suites);
 
-  if (!firstFailIcon) {
+  if (!failPath || failPath.length === 0) {
     // No failures — expand root suites only (original behavior)
     var rootNodes = treeRoot.querySelectorAll(':scope > .tree-node.depth-0');
     for (var j = 0; j < rootNodes.length; j++) {
+      _materializeIfNeeded(rootNodes[j]);
       _expandNodeOnly(rootNodes[j]);
     }
     return;
   }
 
-  // Walk up from the fail icon to find its .tree-node
-  var failNode = firstFailIcon.closest('.tree-node');
-  if (!failNode) return;
-
-  // Expand all ancestor nodes from root down to the failing node
-  var parent = failNode.parentElement;
-  while (parent && parent !== treeRoot) {
-    if (parent.classList.contains('tree-children')) {
-      parent.classList.add('expanded');
-      var parentNode = parent.parentElement;
-      if (parentNode && parentNode.classList.contains('tree-node')) {
-        _expandNodeOnly(parentNode);
-      }
-    }
-    parent = parent.parentElement;
+  // Materialize and expand each node along the failure path
+  var failNode = null;
+  for (var i = 0; i < failPath.length; i++) {
+    var spanId = failPath[i];
+    var node = treeRoot.querySelector('.tree-node[data-span-id="' + spanId + '"]');
+    if (!node) break;
+    failNode = node;
+    _materializeIfNeeded(node);
+    _expandNodeOnly(node);
+    // Also expand the .tree-children container
+    var childrenEl = node.querySelector(':scope > .tree-children');
+    if (childrenEl) childrenEl.classList.add('expanded');
   }
 
   // Scroll the failing node into view after the DOM settles
-  requestAnimationFrame(function () {
-    var treePanel = failNode.closest('.panel-tree');
-    if (treePanel) {
-      var panelRect = treePanel.getBoundingClientRect();
-      var nodeRect = failNode.getBoundingClientRect();
-      var scrollOffset = nodeRect.top - panelRect.top - panelRect.height / 3 + nodeRect.height / 2;
-      treePanel.scrollBy({ top: scrollOffset, behavior: 'smooth' });
-    } else {
-      failNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  });
+  if (failNode) {
+    requestAnimationFrame(function () {
+      var treePanel = failNode.closest('.panel-tree');
+      if (treePanel) {
+        var panelRect = treePanel.getBoundingClientRect();
+        var nodeRect = failNode.getBoundingClientRect();
+        var scrollOffset = nodeRect.top - panelRect.top - panelRect.height / 3 + nodeRect.height / 2;
+        treePanel.scrollBy({ top: scrollOffset, behavior: 'smooth' });
+      } else {
+        failNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
 }
 
 /**
@@ -284,7 +436,64 @@ function _expandNodeOnly(nodeEl) {
   }
 }
 
-/** Render a suite node and its children recursively. */
+/**
+ * Materialize lazy children for a node if they haven't been rendered yet.
+ * @param {HTMLElement} nodeEl - A .tree-node element
+ */
+function _materializeIfNeeded(nodeEl) {
+  if (!nodeEl._lazyChildren) return;
+  _materializeChildren(nodeEl);
+}
+
+/**
+ * Render lazy children into a DocumentFragment and append to the node's .tree-children element.
+ * @param {HTMLElement} nodeEl - A .tree-node element with _lazyChildren data
+ */
+function _materializeChildren(nodeEl) {
+  var lazy = nodeEl._lazyChildren;
+  if (!lazy) return;
+
+  var childrenEl = nodeEl.querySelector(':scope > .tree-children');
+  if (!childrenEl) return;
+
+  var fragment = document.createDocumentFragment();
+
+  if (lazy.type === 'suite') {
+    for (var i = 0; i < lazy.items.length; i++) {
+      var child = lazy.items[i];
+      var childNode = null;
+      if (child.keyword_type !== undefined) {
+        childNode = _renderKeywordNode(child, lazy.depth, lazy.filteredSpanIds);
+      } else if (child.keywords !== undefined) {
+        childNode = _renderTestNode(child, lazy.depth, lazy.filteredSpanIds, lazy.maxSiblingDuration);
+      } else {
+        childNode = _renderSuiteNode(child, lazy.depth, lazy.filteredSpanIds);
+      }
+      if (childNode) {
+        fragment.appendChild(childNode);
+      }
+    }
+  } else if (lazy.type === 'test') {
+    for (var j = 0; j < lazy.items.length; j++) {
+      var kwNode = _renderKeywordNode(lazy.items[j], lazy.depth, lazy.filteredSpanIds);
+      if (kwNode) {
+        fragment.appendChild(kwNode);
+      }
+    }
+  } else if (lazy.type === 'keyword') {
+    for (var k = 0; k < lazy.items.length; k++) {
+      var nestedNode = _renderKeywordNode(lazy.items[k], lazy.depth, lazy.filteredSpanIds);
+      if (nestedNode) {
+        fragment.appendChild(nestedNode);
+      }
+    }
+  }
+
+  childrenEl.appendChild(fragment);
+  nodeEl._lazyChildren = null;
+}
+
+/** Render a suite node with lazy children (children rendered on first expand). */
 function _renderSuiteNode(suite, depth, filteredSpanIds) {
   // If filtering is active and this suite is not in the filtered list,
   // still render it if any descendant matches (so the tree structure is preserved).
@@ -307,27 +516,14 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
     }
   }
 
-  // Render children first to check if any match the filter
-  var renderedChildren = [];
-  if (hasChildren) {
-    for (var i = 0; i < suite.children.length; i++) {
-      var child = suite.children[i];
-      var childNode = null;
-      if (child.keyword_type !== undefined) {
-        childNode = _renderKeywordNode(child, depth + 1, filteredSpanIds);
-      } else if (child.keywords !== undefined) {
-        childNode = _renderTestNode(child, depth + 1, filteredSpanIds, maxTestDuration);
-      } else {
-        childNode = _renderSuiteNode(child, depth + 1, filteredSpanIds);
-      }
-      if (childNode) {
-        renderedChildren.push(childNode);
-      }
-    }
+  // Check if any descendant matches the filter (using DATA model, not DOM)
+  var hasMatchingDescendant = false;
+  if (hasChildren && filteredSpanIds !== null) {
+    hasMatchingDescendant = _hasDescendantInFilter(suite, filteredSpanIds);
   }
 
   // Skip this suite if it doesn't match and has no matching descendants
-  if (!suiteMatchesFilter && renderedChildren.length === 0) {
+  if (!suiteMatchesFilter && !hasMatchingDescendant) {
     return null;
   }
 
@@ -336,40 +532,40 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
     name: displayName,
     status: suite.status,
     elapsed: suite.elapsed_time,
-    hasChildren: renderedChildren.length > 0,
+    hasChildren: hasChildren,
     depth: depth,
     id: suite.id,
     data: suite
   });
 
-  if (renderedChildren.length > 0) {
-    var childrenEl = node.querySelector('.tree-children');
-    for (var c = 0; c < renderedChildren.length; c++) {
-      childrenEl.appendChild(renderedChildren[c]);
-    }
+  // Store lazy children data instead of rendering them now
+  if (hasChildren) {
+    node._lazyChildren = {
+      items: suite.children,
+      type: 'suite',
+      filteredSpanIds: filteredSpanIds,
+      depth: depth + 1,
+      maxSiblingDuration: maxTestDuration
+    };
   }
+
   return node;
 }
 
-/** Render a test node and its keywords. */
+/** Render a test node with lazy keyword children. */
 function _renderTestNode(test, depth, filteredSpanIds, maxSiblingDuration) {
   var testMatchesFilter = (filteredSpanIds === null || filteredSpanIds[test.id]);
 
   var hasKws = test.keywords && test.keywords.length > 0;
 
-  // Render keywords first to check if any match the filter
-  var renderedKws = [];
-  if (hasKws) {
-    for (var i = 0; i < test.keywords.length; i++) {
-      var kwNode = _renderKeywordNode(test.keywords[i], depth + 1, filteredSpanIds);
-      if (kwNode) {
-        renderedKws.push(kwNode);
-      }
-    }
+  // Check if any descendant keyword matches the filter (using DATA model)
+  var hasMatchingDescendant = false;
+  if (hasKws && filteredSpanIds !== null) {
+    hasMatchingDescendant = _hasDescendantInFilter(test, filteredSpanIds);
   }
 
   // Skip this test if it doesn't match and has no matching descendants
-  if (!testMatchesFilter && renderedKws.length === 0) {
+  if (!testMatchesFilter && !hasMatchingDescendant) {
     return null;
   }
 
@@ -378,41 +574,40 @@ function _renderTestNode(test, depth, filteredSpanIds, maxSiblingDuration) {
     name: test.name,
     status: test.status,
     elapsed: test.elapsed_time,
-    hasChildren: renderedKws.length > 0,
+    hasChildren: hasKws,
     depth: depth,
     id: test.id,
     data: test,
     maxSiblingDuration: maxSiblingDuration || 0
   });
 
-  if (renderedKws.length > 0) {
-    var childrenEl = node.querySelector('.tree-children');
-    for (var k = 0; k < renderedKws.length; k++) {
-      childrenEl.appendChild(renderedKws[k]);
-    }
+  // Store lazy children data instead of rendering them now
+  if (hasKws) {
+    node._lazyChildren = {
+      items: test.keywords,
+      type: 'test',
+      filteredSpanIds: filteredSpanIds,
+      depth: depth + 1
+    };
   }
+
   return node;
 }
 
-/** Render a keyword node and its nested keywords. */
+/** Render a keyword node with lazy nested keyword children. */
 function _renderKeywordNode(kw, depth, filteredSpanIds) {
   var kwMatchesFilter = (filteredSpanIds === null || filteredSpanIds[kw.id]);
 
   var hasChildren = kw.children && kw.children.length > 0;
 
-  // Render children first to check if any match the filter
-  var renderedChildren = [];
-  if (hasChildren) {
-    for (var i = 0; i < kw.children.length; i++) {
-      var childNode = _renderKeywordNode(kw.children[i], depth + 1, filteredSpanIds);
-      if (childNode) {
-        renderedChildren.push(childNode);
-      }
-    }
+  // Check if any descendant matches the filter (using DATA model)
+  var hasMatchingDescendant = false;
+  if (hasChildren && filteredSpanIds !== null) {
+    hasMatchingDescendant = _hasDescendantInFilter(kw, filteredSpanIds);
   }
 
   // Skip this keyword if it doesn't match and has no matching descendants
-  if (!kwMatchesFilter && renderedChildren.length === 0) {
+  if (!kwMatchesFilter && !hasMatchingDescendant) {
     return null;
   }
 
@@ -421,7 +616,7 @@ function _renderKeywordNode(kw, depth, filteredSpanIds) {
     name: kw.name,
     status: kw.status,
     elapsed: kw.elapsed_time,
-    hasChildren: renderedChildren.length > 0,
+    hasChildren: hasChildren,
     depth: depth,
     kwType: kw.keyword_type,
     kwArgs: kw.args,
@@ -429,12 +624,16 @@ function _renderKeywordNode(kw, depth, filteredSpanIds) {
     data: kw
   });
 
-  if (renderedChildren.length > 0) {
-    var childrenEl = node.querySelector('.tree-children');
-    for (var c = 0; c < renderedChildren.length; c++) {
-      childrenEl.appendChild(renderedChildren[c]);
-    }
+  // Store lazy children data instead of rendering them now
+  if (hasChildren) {
+    node._lazyChildren = {
+      items: kw.children,
+      type: 'keyword',
+      filteredSpanIds: filteredSpanIds,
+      depth: depth + 1
+    };
   }
+
   return node;
 }
 
@@ -944,7 +1143,7 @@ function _createTreeNode(opts) {
   return wrapper;
 }
 
-/** Toggle expand/collapse on a tree node. */
+/** Toggle expand/collapse on a tree node. Materializes lazy children on first expand. */
 function _toggleNode(nodeEl) {
   var childrenEl = nodeEl.querySelector(':scope > .tree-children');
   var detailEl = nodeEl.querySelector(':scope > .detail-panel');
@@ -962,6 +1161,10 @@ function _toggleNode(nodeEl) {
       toggleBtn.setAttribute('aria-label', 'Expand');
     }
   } else {
+    // Materialize lazy children on first expand
+    if (nodeEl._lazyChildren) {
+      _materializeChildren(nodeEl);
+    }
     if (childrenEl) childrenEl.classList.add('expanded');
     if (detailEl) detailEl.classList.add('expanded');
     if (toggleBtn) {
@@ -988,31 +1191,82 @@ function _toggleNode(nodeEl) {
   }
 }
 
-/** Expand or collapse all nodes in the tree. */
+/**
+ * Expand or collapse all nodes in the tree using requestAnimationFrame batching.
+ * Materializes lazy children when expanding. Processes ~100 nodes per frame.
+ */
 function _setAllExpanded(container, expand) {
+  // First, if expanding, materialize all lazy children
+  if (expand) {
+    var allNodes = container.querySelectorAll('.tree-node');
+    var lazyQueue = [];
+    for (var n = 0; n < allNodes.length; n++) {
+      if (allNodes[n]._lazyChildren) {
+        lazyQueue.push(allNodes[n]);
+      }
+    }
+    // Materialize all lazy nodes first (this may create new lazy nodes)
+    // Keep materializing until no more lazy nodes remain
+    while (lazyQueue.length > 0) {
+      var node = lazyQueue.shift();
+      if (node._lazyChildren) {
+        _materializeChildren(node);
+      }
+      // Check for newly created lazy children
+      var newChildren = node.querySelectorAll('.tree-node');
+      for (var nc = 0; nc < newChildren.length; nc++) {
+        if (newChildren[nc]._lazyChildren) {
+          lazyQueue.push(newChildren[nc]);
+        }
+      }
+    }
+  }
+
+  // Now collect all elements to toggle
   var childrenEls = container.querySelectorAll('.tree-children');
   var detailEls = container.querySelectorAll('.detail-panel');
   var toggleBtns = container.querySelectorAll('.tree-toggle');
 
+  // Combine all operations into a single list for batching
+  var ops = [];
   for (var i = 0; i < childrenEls.length; i++) {
-    if (expand) {
-      childrenEls[i].classList.add('expanded');
-    } else {
-      childrenEls[i].classList.remove('expanded');
+    ops.push({ el: childrenEls[i], kind: 'class' });
+  }
+  for (var j = 0; j < detailEls.length; j++) {
+    ops.push({ el: detailEls[j], kind: 'class' });
+  }
+  for (var k = 0; k < toggleBtns.length; k++) {
+    ops.push({ el: toggleBtns[k], kind: 'toggle' });
+  }
+
+  var BATCH_SIZE = 100;
+  var idx = 0;
+
+  function processBatch() {
+    var end = Math.min(idx + BATCH_SIZE, ops.length);
+    for (var b = idx; b < end; b++) {
+      var op = ops[b];
+      if (op.kind === 'class') {
+        if (expand) {
+          op.el.classList.add('expanded');
+        } else {
+          op.el.classList.remove('expanded');
+        }
+      } else if (op.kind === 'toggle') {
+        if (op.el.textContent) {
+          op.el.textContent = expand ? '\u25bc' : '\u25b6';
+          op.el.setAttribute('aria-label', expand ? 'Collapse' : 'Expand');
+        }
+      }
+    }
+    idx = end;
+    if (idx < ops.length) {
+      requestAnimationFrame(processBatch);
     }
   }
-  for (var i = 0; i < detailEls.length; i++) {
-    if (expand) {
-      detailEls[i].classList.add('expanded');
-    } else {
-      detailEls[i].classList.remove('expanded');
-    }
-  }
-  for (var j = 0; j < toggleBtns.length; j++) {
-    if (toggleBtns[j].textContent) {
-      toggleBtns[j].textContent = expand ? '\u25bc' : '\u25b6';
-      toggleBtns[j].setAttribute('aria-label', expand ? 'Collapse' : 'Expand');
-    }
+
+  if (ops.length > 0) {
+    requestAnimationFrame(processBatch);
   }
 }
 
@@ -1054,6 +1308,7 @@ function _statusIcon(status) {
 /**
  * Highlight and scroll to a tree node by span ID.
  * Called when a span is clicked in the timeline.
+ * Materializes lazy ancestors if the target node is not yet in the DOM.
  * @param {string} spanId - The span ID to highlight
  */
 function highlightNodeInTree(spanId) {
@@ -1065,6 +1320,26 @@ function highlightNodeInTree(spanId) {
 
   // Find the node with the matching span ID
   var targetNode = document.querySelector('.tree-node[data-span-id="' + spanId + '"]');
+
+  // If not found, the node may be inside a lazy (unmaterialized) subtree.
+  // Walk the original model to find the ancestor path, materialize along the way.
+  if (!targetNode && _originalModel) {
+    var ancestorPath = _findAncestorPath(_originalModel, spanId);
+    if (ancestorPath) {
+      for (var a = 0; a < ancestorPath.length; a++) {
+        var ancestorNode = document.querySelector('.tree-node[data-span-id="' + ancestorPath[a] + '"]');
+        if (ancestorNode) {
+          _materializeIfNeeded(ancestorNode);
+          _expandNodeOnly(ancestorNode);
+          var chEl = ancestorNode.querySelector(':scope > .tree-children');
+          if (chEl) chEl.classList.add('expanded');
+        }
+      }
+      // Try finding the target again after materialization
+      targetNode = document.querySelector('.tree-node[data-span-id="' + spanId + '"]');
+    }
+  }
+
   if (!targetNode) return;
 
   // Expand all parent nodes to make the target visible
@@ -1075,6 +1350,7 @@ function highlightNodeInTree(spanId) {
       // Also expand sibling detail panels
       var parentNode = parent.parentElement;
       if (parentNode && parentNode.classList.contains('tree-node')) {
+        _materializeIfNeeded(parentNode);
         var detailEl = parentNode.querySelector(':scope > .detail-panel');
         if (detailEl) detailEl.classList.add('expanded');
         var toggleBtn = parentNode.querySelector(':scope > .tree-row > .tree-toggle');
@@ -1100,6 +1376,63 @@ function highlightNodeInTree(spanId) {
   } else {
     targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
+}
+
+/**
+ * Find the ancestor path (array of span IDs) from root to the target span
+ * by walking the data model. Returns null if not found.
+ * @param {Object} model - RFRunModel
+ * @param {string} targetId - The span ID to find
+ * @returns {Array|null} Array of ancestor span IDs (excluding target), or null
+ */
+function _findAncestorPath(model, targetId) {
+  function walkSuite(suite, path) {
+    if (suite.id === targetId) return path;
+    var newPath = path.concat([suite.id]);
+    if (suite.children) {
+      for (var i = 0; i < suite.children.length; i++) {
+        var child = suite.children[i];
+        var result = null;
+        if (child.keyword_type !== undefined) {
+          result = walkKeyword(child, newPath);
+        } else if (child.keywords !== undefined) {
+          result = walkTest(child, newPath);
+        } else {
+          result = walkSuite(child, newPath);
+        }
+        if (result) return result;
+      }
+    }
+    return null;
+  }
+  function walkTest(test, path) {
+    if (test.id === targetId) return path;
+    var newPath = path.concat([test.id]);
+    if (test.keywords) {
+      for (var i = 0; i < test.keywords.length; i++) {
+        var result = walkKeyword(test.keywords[i], newPath);
+        if (result) return result;
+      }
+    }
+    return null;
+  }
+  function walkKeyword(kw, path) {
+    if (kw.id === targetId) return path;
+    var newPath = path.concat([kw.id]);
+    if (kw.children) {
+      for (var i = 0; i < kw.children.length; i++) {
+        var result = walkKeyword(kw.children[i], newPath);
+        if (result) return result;
+      }
+    }
+    return null;
+  }
+  var suites = model.suites || [];
+  for (var i = 0; i < suites.length; i++) {
+    var result = walkSuite(suites[i], []);
+    if (result) return result;
+  }
+  return null;
 }
 
 /**

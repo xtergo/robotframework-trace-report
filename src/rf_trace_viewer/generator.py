@@ -32,6 +32,7 @@ class ReportOptions:
 
     title: str | None = None
     theme: str = "system"  # "light", "dark", "system"
+    compact: bool = False  # omit default-value fields from embedded JSON
 
 
 def _serialize(obj: Any) -> Any:
@@ -47,9 +48,39 @@ def _serialize(obj: Any) -> Any:
     return obj
 
 
-def embed_data(model: RFRunModel) -> str:
+_COMPACT_DEFAULTS = ("", [], {}, 0)
+
+
+def _serialize_compact(obj: Any) -> Any:
+    """Recursively serialize like _serialize but omit dataclass fields at default empty values.
+
+    Fields are omitted when their serialized value is ``""``, ``[]``, ``{}``, or ``0`` (int).
+    ``0.0`` (float), ``False``, and ``None`` are NOT omitted — timestamps and durations use floats.
+    Only dataclass fields are subject to omission; plain dict keys are always kept.
+    """
+    if isinstance(obj, Enum):
+        return obj.value
+    if hasattr(obj, "__dataclass_fields__"):
+        result = {}
+        for k in obj.__dataclass_fields__:
+            v = _serialize_compact(getattr(obj, k))
+            # Skip fields whose serialized value is one of the default empties.
+            # Use explicit type checks so 0.0 and False are not skipped.
+            if v == "" or v == [] or v == {} or (v == 0 and type(v) is int):
+                continue
+            result[k] = v
+        return result
+    if isinstance(obj, list):
+        return [_serialize_compact(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _serialize_compact(v) for k, v in obj.items()}
+    return obj
+
+
+def embed_data(model: RFRunModel, compact: bool = False) -> str:
     """Serialize RFRunModel to a JSON string for embedding in HTML."""
-    return json.dumps(_serialize(model), separators=(",", ":"))
+    serializer = _serialize_compact if compact else _serialize
+    return json.dumps(serializer(model), separators=(",", ":"))
 
 
 def embed_viewer_assets() -> tuple[str, str]:
@@ -88,7 +119,7 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
 
     # Strip whitespace and use default if empty
     title = (options.title or "").strip() or (model.title or "").strip() or "RF Trace Report"
-    data_json = embed_data(model)
+    data_json = embed_data(model, compact=options.compact)
     js_content, css_content = embed_viewer_assets()
 
     return (

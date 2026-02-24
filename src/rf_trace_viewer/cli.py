@@ -54,6 +54,11 @@ def main() -> int:
         action="store_true",
         help="Don't auto-open browser in live mode",
     )
+    parser.add_argument(
+        "--compact-html",
+        action="store_true",
+        help="Omit default-value fields from embedded JSON to reduce file size",
+    )
 
     args = parser.parse_args()
 
@@ -68,7 +73,7 @@ def main() -> int:
         roots = build_tree(spans)
         model = interpret_tree(roots)
 
-        options = ReportOptions(title=args.title)
+        options = ReportOptions(title=args.title, compact=args.compact_html)
         html = generate_report(model, options)
 
         with open(args.output, "w", encoding="utf-8") as f:

@@ -588,7 +588,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Bar is hidden when no filters are active
     - _Requirements: 34.5_
 
-  - [ ] 32.6 Ensure rendering performance target in `src/rf_trace_viewer/viewer/tree.js`
+  - [x] 32.6 Ensure rendering performance target in `src/rf_trace_viewer/viewer/tree.js`
     - Profile tree rendering with a 5,000-span trace and ensure initial render completes within 500ms
     - If needed, implement virtual scrolling: only render nodes visible in the viewport plus a buffer
     - Use `requestAnimationFrame` for batch DOM updates during expand/collapse operations
@@ -606,6 +606,75 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Verify cross-view navigation works between tree, timeline, stats, and flow table
   - Verify mini-timeline sparklines appear on test nodes
   - Verify filter summary bar shows active filters with removable chips
+
+- [ ] 34. Implement compact serialization for large trace HTML reports
+  - [x] 34.1 Implement omit-defaults serialization in `src/rf_trace_viewer/generator.py`
+    - Add `_serialize_compact(obj)` function that recursively serializes the span tree but omits fields at their default empty values (`""`, `[]`, `{}`, `0`)
+    - Add `--compact-html` CLI flag in `src/rf_trace_viewer/cli.py` that activates compact serialization
+    - Ensure the JS viewer treats missing fields as their defaults (no JS changes needed if defaults are already handled)
+    - _Requirements: 35.1, 35.4_
+
+  - [ ] 34.2 Implement short key-mapping serialization in `src/rf_trace_viewer/generator.py`
+    - Define `KEY_MAP` dict mapping original field names to short aliases (see design.md for full table)
+    - Add `_apply_key_map(obj, key_map)` function that renames keys in the serialized dict tree
+    - Embed the key-mapping table as `km` in the wrapper JSON object so the JS viewer can decode it
+    - Add format version field `v: 1` to the wrapper object
+    - _Requirements: 35.2, 35.10_
+
+  - [ ] 34.3 Implement string intern table in `src/rf_trace_viewer/generator.py`
+    - Add `_build_intern_table(obj)` function that walks the serialized tree, counts string value frequencies, and returns a list of strings appearing more than once (sorted by frequency descending)
+    - Add `_apply_intern_table(obj, intern_table)` function that replaces repeated string values with their integer index into the intern array
+    - Embed the intern table as `it` in the wrapper JSON object
+    - _Requirements: 35.3_
+
+  - [ ] 34.4 Implement gzip+base64 embedding in `src/rf_trace_viewer/generator.py`
+    - Add `--gzip-embed` CLI flag in `src/rf_trace_viewer/cli.py`
+    - When active, gzip-compress the JSON bytes at level 9, base64-encode, and embed as `window.__RF_TRACE_DATA_GZ__`
+    - Update the HTML template to detect `__RF_TRACE_DATA_GZ__` and call the async `decompressData()` function before initializing the viewer
+    - Add the `decompressData()` JS function (using `DecompressionStream`) to `src/rf_trace_viewer/viewer/app.js`
+    - _Requirements: 35.5_
+
+  - [ ] 34.5 Implement `--max-keyword-depth` CLI filter in `src/rf_trace_viewer/generator.py`
+    - Add `--max-keyword-depth N` CLI flag in `src/rf_trace_viewer/cli.py`
+    - Add `_truncate_depth(tree, max_depth)` function that removes keyword children beyond depth N
+    - Mark truncated parent nodes with a `truncated: true` field so the JS viewer can show a visual indicator
+    - Update the JS viewer (`tree.js`) to render a "… N keywords hidden" indicator on truncated nodes
+    - _Requirements: 35.6_
+
+  - [ ] 34.6 Implement `--exclude-passing-keywords` CLI filter in `src/rf_trace_viewer/generator.py`
+    - Add `--exclude-passing-keywords` CLI flag in `src/rf_trace_viewer/cli.py`
+    - Add `_exclude_passing_keywords(tree)` function that removes keyword spans with PASS status, retaining suite and test spans always
+    - _Requirements: 35.7_
+
+  - [ ] 34.7 Implement `--max-spans` CLI filter in `src/rf_trace_viewer/generator.py`
+    - Add `--max-spans N` CLI flag in `src/rf_trace_viewer/cli.py`
+    - Add `_limit_spans(tree, max_spans)` function that prioritizes FAIL spans, then SKIP, then PASS (shallowest first), and truncates to N total spans
+    - Emit a warning to stderr: "Warning: trace truncated to N spans (M spans omitted)"
+    - _Requirements: 35.8_
+
+  - [ ] 34.8 Implement JS compact format decoder in `src/rf_trace_viewer/viewer/app.js`
+    - Add `decodeTraceData(raw)` function that detects the `v` field and expands short keys and intern indices back to full format
+    - Add `expandNode()` and `expandValue()` helper functions (see design.md for implementation)
+    - Call `decodeTraceData()` on the raw embedded data before passing to the viewer components
+    - Ensure backward compatibility: if `v` field is absent, pass data through unchanged
+    - _Requirements: 35.9, 35.10_
+
+  - [ ] 34.9 Write property tests for compact serialization
+    - **Property 27: Compact serialization round-trip** — serialize with compact format then decode with JS decoder logic (ported to Python for testing) produces equivalent data to original
+    - **Property 28: Gzip embed round-trip** — gzip+base64 encode then decode produces original JSON bytes
+    - **Property 29: Span truncation correctness** — `--max-spans N` produces at most N spans, FAIL spans prioritized over PASS
+    - Add tests in `tests/unit/test_generator.py`
+    - _Requirements: 35.1, 35.2, 35.3, 35.5, 35.8_
+
+  - [ ] 34.10 Write unit tests for compact serialization
+    - Test that `--compact-html` reduces output size vs default for the large_trace.json fixture
+    - Test that `--gzip-embed` produces a valid gzip+base64 payload that decompresses to the original JSON
+    - Test that `--compact-html` + `--gzip-embed` together produce smaller output than either flag alone
+    - Test that `--max-keyword-depth 2` removes keywords beyond depth 2 and marks parents as truncated
+    - Test that `--exclude-passing-keywords` removes PASS keywords but retains all tests and suites
+    - Test that `--max-spans 1000` limits output to 1000 spans with FAIL spans retained
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_generator.py`
+    - _Requirements: 35.1, 35.4, 35.5, 35.6, 35.7, 35.8, 35.11_
 
 ## Notes
 

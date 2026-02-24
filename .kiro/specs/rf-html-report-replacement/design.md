@@ -837,6 +837,160 @@ The following properties are derived from the acceptance criteria in the require
 
 **Validates: Requirements 22.1, 22.2, 22.4**
 
+### Property 27: Compact serialization round-trip
+
+*For any* set of processed span trees, applying compact serialization (omit defaults + short keys + string intern table) and then decoding with the JS viewer's expansion logic should produce data equivalent to the original uncompressed serialization. No span data should be lost or corrupted by the round-trip.
+
+**Validates: Requirements 35.1, 35.2, 35.3, 35.9**
+
+### Property 28: Gzip embed round-trip
+
+*For any* JSON payload, gzip-compressing and base64-encoding it for embedding, then decoding and decompressing in the browser via `DecompressionStream`, should produce the original JSON string byte-for-byte.
+
+**Validates: Requirements 35.5**
+
+### Property 29: Span truncation correctness
+
+*For any* span tree and a `--max-spans N` limit, the truncated output should contain at most N spans, should include all FAIL spans before any PASS spans, and should never split a parent from its children without marking the parent as truncated.
+
+**Validates: Requirements 35.6, 35.7, 35.8**
+
+## Compact Serialization Design (Requirement 35)
+
+### Motivation
+
+Benchmarking with a 610,051-span trace revealed:
+- Raw embedded JSON: **152.6 MB**
+- Breakdown: 51% repeated key names, 19% empty default values, 18% timing data, 12% actual content
+- Gzipping the JSON alone: 152 MB → **7.8 MB** (95% reduction)
+- The HTML file is 99.9% embedded JSON data — the JS+CSS is only 0.19 MB
+
+### Compact JSON Format
+
+The embedded data wrapper object structure:
+
+```json
+{
+  "v": 1,
+  "km": {"n":"name","t":"type","s":"status","st":"start_time","et":"end_time","el":"elapsed_time","ch":"children","ev":"events","at":"attributes","kt":"keyword_type","sm":"status_message","d":"doc","ln":"lineno","a":"args","tg":"tags","md":"metadata"},
+  "it": ["PASS","FAIL","keyword","test","suite","KEYWORD","Log",""],
+  "data": { ... span tree using short keys and intern indices ... }
+}
+```
+
+- `v`: format version (integer, currently 1)
+- `km`: key mapping — maps short alias → original field name (JS uses this to expand keys)
+- `it`: intern table — array of frequently repeated string values; spans reference values by index (e.g., `"s": 0` means `"status": "PASS"`)
+- `data`: the actual span tree using short keys and intern indices
+
+### Key Mapping Table
+
+| Original field | Short alias | Typical savings |
+|---------------|-------------|-----------------|
+| `keyword_type` | `kt` | 10 chars × 600K nodes = ~6 MB |
+| `status_message` | `sm` | 13 chars × 610K nodes = ~8 MB |
+| `start_time` | `st` | 9 chars × 610K nodes = ~5.5 MB |
+| `end_time` | `et` | 7 chars × 610K nodes = ~4.3 MB |
+| `elapsed_time` | `el` | 11 chars × 610K nodes = ~6.7 MB |
+| `children` | `ch` | 7 chars × 610K nodes = ~4.3 MB |
+| `status` | `s` | 5 chars × 610K nodes = ~3 MB |
+| `name` | `n` | 3 chars × 610K nodes = ~1.8 MB |
+| `type` | `t` | 3 chars × 610K nodes = ~1.8 MB |
+
+Estimated total key-name savings: **~44 MB** on a 610K-span trace.
+
+### Omit-Defaults Optimization
+
+Fields omitted when at default value:
+- `doc: ""` → omit (saves ~610K × 6 chars = ~3.7 MB)
+- `status_message: ""` → omit (saves ~610K × 16 chars = ~9.8 MB)
+- `events: []` → omit (saves ~610K × 9 chars = ~5.5 MB)
+- `children: []` → omit (saves ~610K × 12 chars = ~7.3 MB)
+- `lineno: 0` → omit
+- `args: ""` → omit
+- `metadata: {}` → omit
+
+Estimated total omit-defaults savings: **~28 MB** on a 610K-span trace.
+
+### String Intern Table
+
+Collect all string values appearing more than once across the serialized tree. Replace each with its integer index into the intern array. The JS viewer expands indices back to strings on load.
+
+Example: if `"PASS"` appears 400K times, storing it once in the intern table and using index `0` saves `400K × (6 - 1) chars = ~2 MB`.
+
+Estimated total intern savings: **~14 MB** on a 610K-span trace.
+
+### Gzip Embed (`--gzip-embed`)
+
+```python
+import gzip, base64, json
+
+compressed = gzip.compress(json_bytes, compresslevel=9)
+b64 = base64.b64encode(compressed).decode("ascii")
+# Embed as: window.__RF_TRACE_DATA_GZ__ = "<b64string>";
+```
+
+JS decompression at load time:
+```javascript
+async function decompressData(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const ds = new DecompressionStream('gzip');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const chunks = [];
+  for await (const chunk of ds.readable) chunks.push(chunk);
+  const text = new TextDecoder().decode(
+    new Uint8Array(chunks.reduce((a, b) => [...a, ...b], []))
+  );
+  return JSON.parse(text);
+}
+```
+
+Expected size reduction: 152 MB → **~8 MB** (95% reduction) for a 610K-span trace.
+
+### CLI Filter Options
+
+| Flag | Effect | Use case |
+|------|--------|----------|
+| `--compact-html` | Omit defaults + short keys + intern table | Default for large traces |
+| `--gzip-embed` | Gzip+base64 the embedded JSON | Extreme size reduction |
+| `--max-keyword-depth N` | Truncate keyword tree at depth N | Focus on test-level results |
+| `--exclude-passing-keywords` | Drop PASS keyword spans | Keep only failure context |
+| `--max-spans N` | Hard cap on total embedded spans | Emergency size limit |
+
+### JS Decoder
+
+The JS viewer detects compact format by checking for the `v` field in the wrapper:
+
+```javascript
+function decodeTraceData(raw) {
+  if (!raw.v) return raw; // legacy uncompressed format
+  const { km, it, data } = raw;
+  // Build reverse key map: short → original
+  const keyMap = Object.fromEntries(Object.entries(km).map(([orig, short]) => [short, orig]));
+  return expandNode(data, keyMap, it);
+}
+
+function expandNode(node, keyMap, internTable) {
+  const expanded = {};
+  for (const [k, v] of Object.entries(node)) {
+    const fullKey = keyMap[k] || k;
+    expanded[fullKey] = expandValue(v, keyMap, internTable);
+  }
+  return expanded;
+}
+
+function expandValue(v, keyMap, internTable) {
+  if (typeof v === 'number' && internTable && v < internTable.length) return internTable[v];
+  if (Array.isArray(v)) return v.map(item =>
+    typeof item === 'object' ? expandNode(item, keyMap, internTable) : expandValue(item, keyMap, internTable)
+  );
+  if (typeof v === 'object' && v !== null) return expandNode(v, keyMap, internTable);
+  return v;
+}
+```
+
 ## Error Handling
 
 ### Python-Side Errors
