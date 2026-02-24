@@ -296,6 +296,17 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
     displayName += ' (' + suite._merged_count + ' workers)';
   }
 
+  // Compute max test duration among sibling tests for sparkline bars
+  var maxTestDuration = 0;
+  if (hasChildren) {
+    for (var j = 0; j < suite.children.length; j++) {
+      var c = suite.children[j];
+      if (c.keywords !== undefined && c.elapsed_time > maxTestDuration) {
+        maxTestDuration = c.elapsed_time;
+      }
+    }
+  }
+
   // Render children first to check if any match the filter
   var renderedChildren = [];
   if (hasChildren) {
@@ -305,7 +316,7 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
       if (child.keyword_type !== undefined) {
         childNode = _renderKeywordNode(child, depth + 1, filteredSpanIds);
       } else if (child.keywords !== undefined) {
-        childNode = _renderTestNode(child, depth + 1, filteredSpanIds);
+        childNode = _renderTestNode(child, depth + 1, filteredSpanIds, maxTestDuration);
       } else {
         childNode = _renderSuiteNode(child, depth + 1, filteredSpanIds);
       }
@@ -341,7 +352,7 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
 }
 
 /** Render a test node and its keywords. */
-function _renderTestNode(test, depth, filteredSpanIds) {
+function _renderTestNode(test, depth, filteredSpanIds, maxSiblingDuration) {
   var testMatchesFilter = (filteredSpanIds === null || filteredSpanIds[test.id]);
 
   var hasKws = test.keywords && test.keywords.length > 0;
@@ -370,7 +381,8 @@ function _renderTestNode(test, depth, filteredSpanIds) {
     hasChildren: renderedKws.length > 0,
     depth: depth,
     id: test.id,
-    data: test
+    data: test,
+    maxSiblingDuration: maxSiblingDuration || 0
   });
 
   if (renderedKws.length > 0) {
@@ -859,6 +871,20 @@ function _createTreeNode(opts) {
   durEl.className = 'tree-duration';
   durEl.textContent = formatDuration(opts.elapsed || 0);
   row.appendChild(durEl);
+
+  // Mini-timeline sparkline for test nodes
+  if (opts.type === 'test' && opts.maxSiblingDuration > 0) {
+    var sparkline = document.createElement('span');
+    sparkline.className = 'tree-sparkline';
+    var pct = Math.round(((opts.elapsed || 0) / opts.maxSiblingDuration) * 100);
+    if (pct < 1 && (opts.elapsed || 0) > 0) pct = 1;
+    var barColor = 'var(--status-pass)';
+    if (opts.status === 'FAIL') barColor = 'var(--status-fail)';
+    else if (opts.status === 'SKIP') barColor = 'var(--status-skip)';
+    sparkline.style.width = pct + '%';
+    sparkline.style.backgroundColor = barColor;
+    row.appendChild(sparkline);
+  }
 
   wrapper.appendChild(row);
 

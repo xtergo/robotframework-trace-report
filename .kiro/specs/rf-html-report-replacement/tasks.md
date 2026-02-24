@@ -572,7 +572,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - This extends the existing `span-selected` event to work across all views, not just tree ↔ timeline
     - _Requirements: 34.3_
 
-  - [ ] 32.4 Add mini-timeline sparkline to tree nodes in `src/rf_trace_viewer/viewer/tree.js`
+  - [x] 32.4 Add mini-timeline sparkline to tree nodes in `src/rf_trace_viewer/viewer/tree.js`
     - For each test node in the tree, render a small inline horizontal bar showing relative duration compared to sibling tests
     - Use a thin colored bar (width proportional to duration / max sibling duration) next to the duration text
     - Color the bar by status (green=pass, red=fail, yellow=skip)
