@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import gzip
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -33,6 +35,7 @@ class ReportOptions:
     title: str | None = None
     theme: str = "system"  # "light", "dark", "system"
     compact: bool = False  # omit default-value fields from embedded JSON
+    gzip_embed: bool = False  # gzip-compress and base64-encode embedded JSON data
 
 
 def _serialize(obj: Any) -> Any:
@@ -114,6 +117,55 @@ def _apply_key_map(obj: Any, key_map: dict[str, str]) -> Any:
     return obj
 
 
+def _build_intern_table(obj: Any) -> list[str]:
+    """Walk a serialized (JSON-safe) object and return an intern table.
+
+    The intern table is a list of string *values* (not keys) that appear more
+    than once in the object, sorted by frequency descending (most frequent first).
+    Only string values are interned; dict keys are never interned.
+    """
+    from collections import Counter
+
+    counts: Counter[str] = Counter()
+
+    def _walk(node: Any) -> None:
+        if isinstance(node, str):
+            counts[node] += 1
+        elif isinstance(node, dict):
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(obj)
+    # Keep only strings that appear more than once
+    repeated = [(s, c) for s, c in counts.items() if c > 1]
+    # Sort by frequency descending, then alphabetically for determinism
+    repeated.sort(key=lambda x: (-x[1], x[0]))
+    return [s for s, _ in repeated]
+
+
+def _apply_intern_table(obj: Any, intern_table: list[str]) -> Any:
+    """Replace string values that are in intern_table with their integer index.
+
+    Only string *values* are replaced; dict keys are left unchanged.
+    Strings not present in intern_table are left as-is.
+    """
+    index: dict[str, int] = {s: i for i, s in enumerate(intern_table)}
+
+    def _walk(node: Any) -> Any:
+        if isinstance(node, str):
+            return index.get(node, node)
+        if isinstance(node, dict):
+            return {k: _walk(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [_walk(item) for item in node]
+        return node
+
+    return _walk(obj)
+
+
 def embed_data(model: RFRunModel, compact: bool = False) -> str:
     """Serialize RFRunModel to a JSON string for embedding in HTML.
 
@@ -129,11 +181,15 @@ def embed_data(model: RFRunModel, compact: bool = False) -> str:
     """
     if compact:
         serialized = _serialize_compact(model)
+        short_keyed = _apply_key_map(serialized, KEY_MAP)
+        intern_table = _build_intern_table(short_keyed)
+        interned = _apply_intern_table(short_keyed, intern_table)
         wrapper = {
             "v": 1,
             # km maps short alias → original field name (for JS decoder)
             "km": {v: k for k, v in KEY_MAP.items()},
-            "data": _apply_key_map(serialized, KEY_MAP),
+            "it": intern_table,
+            "data": interned,
         }
         return json.dumps(wrapper, separators=(",", ":"))
     return json.dumps(_serialize(model), separators=(",", ":"))
@@ -178,6 +234,14 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
     data_json = embed_data(model, compact=options.compact)
     js_content, css_content = embed_viewer_assets()
 
+    if options.gzip_embed:
+        data_bytes = data_json.encode("utf-8")
+        compressed = gzip.compress(data_bytes, compresslevel=9)
+        b64_string = base64.b64encode(compressed).decode("ascii")
+        data_script = f'window.__RF_TRACE_DATA_GZ__ = "{b64_string}";\n'
+    else:
+        data_script = f"window.__RF_TRACE_DATA__ = {data_json};\n"
+
     return (
         "<!DOCTYPE html>\n"
         '<html lang="en">\n'
@@ -192,7 +256,7 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
         "<body>\n"
         '<div class="rf-trace-viewer"></div>\n'
         "<script>\n"
-        f"window.__RF_TRACE_DATA__ = {data_json};\n"
+        f"{data_script}"
         "</script>\n"
         "<script>\n"
         f"{js_content}\n"

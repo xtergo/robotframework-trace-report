@@ -60,13 +60,56 @@
     eventBus.emit('plugin-registered', plugin);
   };
 
-  document.addEventListener('DOMContentLoaded', function () {
-    var data = window.__RF_TRACE_DATA__;
-    if (!data) {
-      document.body.textContent = 'Error: No trace data found.';
-      return;
+  /**
+   * Decompress gzip+base64 encoded trace data using DecompressionStream API.
+   * Returns the parsed JSON object.
+   */
+  async function decompressData(b64) {
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
     }
+    var ds = new DecompressionStream('gzip');
+    var writer = ds.writable.getWriter();
+    writer.write(bytes);
+    writer.close();
+    var reader = ds.readable.getReader();
+    var chunks = [];
+    var totalLength = 0;
+    while (true) {
+      var result = await reader.read();
+      if (result.done) break;
+      chunks.push(result.value);
+      totalLength += result.value.length;
+    }
+    var merged = new Uint8Array(totalLength);
+    var offset = 0;
+    for (var j = 0; j < chunks.length; j++) {
+      merged.set(chunks[j], offset);
+      offset += chunks[j].length;
+    }
+    return JSON.parse(new TextDecoder().decode(merged));
+  }
 
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.__RF_TRACE_DATA_GZ__) {
+      decompressData(window.__RF_TRACE_DATA_GZ__).then(function(data) {
+        _initApp(data);
+      }).catch(function(err) {
+        document.body.textContent = 'Error: Failed to decompress trace data: ' + err.message;
+      });
+    } else {
+      var data = window.__RF_TRACE_DATA__;
+      if (!data) {
+        document.body.textContent = 'Error: No trace data found.';
+        return;
+      }
+      _initApp(data);
+    }
+  });
+
+  function _initApp(data) {
     appState.data = data;
 
     var root = document.querySelector('.rf-trace-viewer');
@@ -241,7 +284,7 @@
 
     // Emit app-ready event
     eventBus.emit('app-ready', { data: data });
-  });
+  }
 
   /**
    * Initialize all views with data.

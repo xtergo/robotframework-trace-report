@@ -614,20 +614,20 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Ensure the JS viewer treats missing fields as their defaults (no JS changes needed if defaults are already handled)
     - _Requirements: 35.1, 35.4_
 
-  - [ ] 34.2 Implement short key-mapping serialization in `src/rf_trace_viewer/generator.py`
+  - [x] 34.2 Implement short key-mapping serialization in `src/rf_trace_viewer/generator.py`
     - Define `KEY_MAP` dict mapping original field names to short aliases (see design.md for full table)
     - Add `_apply_key_map(obj, key_map)` function that renames keys in the serialized dict tree
     - Embed the key-mapping table as `km` in the wrapper JSON object so the JS viewer can decode it
     - Add format version field `v: 1` to the wrapper object
     - _Requirements: 35.2, 35.10_
 
-  - [ ] 34.3 Implement string intern table in `src/rf_trace_viewer/generator.py`
+  - [x] 34.3 Implement string intern table in `src/rf_trace_viewer/generator.py`
     - Add `_build_intern_table(obj)` function that walks the serialized tree, counts string value frequencies, and returns a list of strings appearing more than once (sorted by frequency descending)
     - Add `_apply_intern_table(obj, intern_table)` function that replaces repeated string values with their integer index into the intern array
     - Embed the intern table as `it` in the wrapper JSON object
     - _Requirements: 35.3_
 
-  - [ ] 34.4 Implement gzip+base64 embedding in `src/rf_trace_viewer/generator.py`
+  - [x] 34.4 Implement gzip+base64 embedding in `src/rf_trace_viewer/generator.py`
     - Add `--gzip-embed` CLI flag in `src/rf_trace_viewer/cli.py`
     - When active, gzip-compress the JSON bytes at level 9, base64-encode, and embed as `window.__RF_TRACE_DATA_GZ__`
     - Update the HTML template to detect `__RF_TRACE_DATA_GZ__` and call the async `decompressData()` function before initializing the viewer

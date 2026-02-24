@@ -117,7 +117,9 @@ class TestArgumentParsing:
                             exit_code = main()
 
                             assert exit_code == 0
-                            mock_options.assert_called_once_with(title="Custom Report Title")
+                            mock_options.assert_called_once_with(
+                                title="Custom Report Title", compact=False, gzip_embed=False
+                            )
 
     def test_live_mode_argument(self, monkeypatch, capsys):
         """CLI with --live should indicate live mode (not yet implemented)."""

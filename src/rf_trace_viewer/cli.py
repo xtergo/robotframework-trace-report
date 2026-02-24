@@ -59,6 +59,11 @@ def main() -> int:
         action="store_true",
         help="Omit default-value fields from embedded JSON to reduce file size",
     )
+    parser.add_argument(
+        "--gzip-embed",
+        action="store_true",
+        help="Gzip-compress and base64-encode embedded JSON data to reduce file size",
+    )
 
     args = parser.parse_args()
 
@@ -73,7 +78,11 @@ def main() -> int:
         roots = build_tree(spans)
         model = interpret_tree(roots)
 
-        options = ReportOptions(title=args.title, compact=args.compact_html)
+        options = ReportOptions(
+            title=args.title,
+            compact=args.compact_html,
+            gzip_embed=args.gzip_embed,
+        )
         html = generate_report(model, options)
 
         with open(args.output, "w", encoding="utf-8") as f:
