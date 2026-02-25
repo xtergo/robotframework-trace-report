@@ -1567,3 +1567,304 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .filter-scope-toggle-label:hover {
   color: var(--text-primary);
 }
+
+/* ── Execution Flow Table ── */
+.rf-trace-viewer .flow-table-section {
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  max-height: 320px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rf-trace-viewer .flow-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .flow-table-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .flow-table-filter-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rf-trace-viewer .flow-table-filter-btn:hover {
+  background: var(--status-fail-bg);
+  border-color: var(--status-fail);
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .flow-table-filter-btn.active {
+  background: var(--status-fail);
+  border-color: var(--status-fail);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.rf-trace-viewer .flow-table-filter-btn:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.rf-trace-viewer .flow-table-count {
+  padding: 4px 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .flow-table-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.rf-trace-viewer .flow-table-container {
+  overflow: auto;
+  flex: 1;
+}
+
+.rf-trace-viewer .flow-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rf-trace-viewer .flow-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 5;
+}
+
+.rf-trace-viewer .flow-table th {
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.rf-trace-viewer .flow-table-row {
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.1s;
+}
+
+.rf-trace-viewer .flow-table-row:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .flow-table-row td {
+  padding: 5px 10px;
+  color: var(--text-primary);
+  vertical-align: top;
+}
+
+/* FAIL row highlighting */
+.rf-trace-viewer .flow-row-fail {
+  background: var(--status-fail-bg);
+}
+
+.rf-trace-viewer .flow-row-fail:hover {
+  background: var(--status-fail-bg);
+  filter: brightness(0.95);
+}
+
+.rf-trace-viewer.theme-dark .flow-row-fail:hover {
+  filter: brightness(1.1);
+}
+
+/* Column styles */
+.rf-trace-viewer .flow-col-type {
+  white-space: nowrap;
+  width: 80px;
+}
+
+.rf-trace-viewer .flow-col-name {
+  font-weight: 500;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .flow-col-args {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.rf-trace-viewer .flow-col-source {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.rf-trace-viewer .flow-col-line {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 11px;
+  width: 50px;
+}
+
+.rf-trace-viewer .flow-col-status {
+  white-space: nowrap;
+  width: 60px;
+}
+
+.rf-trace-viewer .flow-col-duration {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  width: 70px;
+}
+
+.rf-trace-viewer .flow-col-error {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--status-fail);
+  font-family: monospace;
+  font-size: 11px;
+}
+
+/* Type badges */
+.rf-trace-viewer .flow-type-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.rf-trace-viewer .flow-type-keyword { background: var(--bg-tertiary); color: var(--text-secondary); }
+.rf-trace-viewer .flow-type-setup { background: #e3f2fd; color: #1565c0; }
+.rf-trace-viewer .flow-type-teardown { background: #fce4ec; color: #ad1457; }
+.rf-trace-viewer .flow-type-for { background: #e8eaf6; color: #283593; }
+.rf-trace-viewer .flow-type-if { background: #fff3e0; color: #e65100; }
+.rf-trace-viewer .flow-type-try { background: #e0f2f1; color: #00695c; }
+.rf-trace-viewer .flow-type-while { background: #f3e5f5; color: #6a1b9a; }
+
+/* Dark mode type badges */
+.rf-trace-viewer.theme-dark .flow-type-setup { background: #0d2137; color: #42a5f5; }
+.rf-trace-viewer.theme-dark .flow-type-teardown { background: #370d1a; color: #f48fb1; }
+.rf-trace-viewer.theme-dark .flow-type-for { background: #141730; color: #7986cb; }
+.rf-trace-viewer.theme-dark .flow-type-if { background: #331a00; color: #ffb74d; }
+.rf-trace-viewer.theme-dark .flow-type-try { background: #0a2924; color: #4db6ac; }
+.rf-trace-viewer.theme-dark .flow-type-while { background: #250d30; color: #ba68c8; }
+
+/* Status badges */
+.rf-trace-viewer .flow-status-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.rf-trace-viewer .flow-status-pass { background: var(--status-pass-bg); color: var(--status-pass); }
+.rf-trace-viewer .flow-status-fail { background: var(--status-fail-bg); color: var(--status-fail); }
+.rf-trace-viewer .flow-status-skip { background: var(--status-skip-bg); color: var(--status-skip); }
+.rf-trace-viewer .flow-status-not-run { background: var(--status-not-run-bg); color: var(--status-not-run); }
+
+/* ── Print styles for flow table ── */
+@media print {
+  .rf-trace-viewer .flow-table-section {
+    max-height: none;
+    overflow: visible;
+  }
+  .rf-trace-viewer .flow-table-filter-btn {
+    display: none;
+  }
+}
+
+/* ── Flow table controls and pin button ── */
+.rf-trace-viewer .flow-table-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rf-trace-viewer .flow-table-pin-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rf-trace-viewer .flow-table-pin-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--text-secondary);
+}
+
+.rf-trace-viewer .flow-table-pin-btn.active {
+  background: var(--focus-outline);
+  border-color: var(--focus-outline);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.rf-trace-viewer .flow-table-pin-btn:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* ── Highlighted row (navigated-to keyword) ── */
+.rf-trace-viewer .flow-row-highlight {
+  border-left: 3px solid var(--focus-outline);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.rf-trace-viewer .flow-row-highlight:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.rf-trace-viewer.theme-dark .flow-row-highlight {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.rf-trace-viewer.theme-dark .flow-row-highlight:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
