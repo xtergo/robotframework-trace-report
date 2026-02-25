@@ -43,6 +43,9 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   --overall-pass-bg: #c8e6c9;
   --overall-fail-bg: #ffcdd2;
 
+  /* Tree indentation */
+  --tree-indent-size: 24px;
+
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   color: var(--text-primary);
@@ -78,6 +81,9 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
   --overall-pass-bg: #1b5e20;
   --overall-fail-bg: #b71c1c;
+
+  /* Tree indentation */
+  --tree-indent-size: 24px;
 }
 
 /* ── Layout ── */
@@ -501,8 +507,37 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: var(--status-fail);
 }
 
+.rf-trace-viewer .tree-indent-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rf-trace-viewer .tree-indent-control label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .tree-indent-control select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rf-trace-viewer .tree-indent-control select:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 1px;
+}
+
 .rf-trace-viewer .tree-node {
-  margin-left: 16px;
+  margin-left: var(--tree-indent-size);
 }
 
 .rf-trace-viewer .tree-node.depth-0 {
