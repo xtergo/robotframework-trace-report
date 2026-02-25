@@ -25,6 +25,7 @@ _JS_FILES = (
     "deep-link.js",
     "theme.js",
     "flow-table.js",
+    "live.js",
     "app.js",
 )
 _CSS_FILES = ("style.css",)

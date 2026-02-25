@@ -1868,3 +1868,66 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer.theme-dark .flow-row-highlight:hover {
   background: rgba(59, 130, 246, 0.2);
 }
+
+/* ── Live Mode Status Bar ── */
+.rf-trace-viewer .live-status-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 3px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .live-status-bar::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16a34a;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.rf-trace-viewer.theme-dark .live-status-bar {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.rf-trace-viewer.theme-dark .live-status-bar::before {
+  background: #4ade80;
+}
+
+/* RUNNING status for in-progress items in live mode */
+.rf-trace-viewer .status-running {
+  color: #2563eb;
+}
+
+.rf-trace-viewer .status-icon-running::before {
+  content: '\25f7';
+  color: #2563eb;
+  animation: spin-slow 2s linear infinite;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rf-trace-viewer.theme-dark .status-running {
+  color: #60a5fa;
+}
+
+.rf-trace-viewer.theme-dark .status-icon-running::before {
+  color: #60a5fa;
+}
