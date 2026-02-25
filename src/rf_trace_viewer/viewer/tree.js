@@ -13,12 +13,87 @@ var VIRTUAL_THRESHOLD = 5000;
 var VIRTUAL_ROW_HEIGHT = 28;
 var VIRTUAL_BUFFER = 20;
 
+// Indentation slider state
+var _indentSliders = [];  // all slider elements for sync
+var _cachedIndentSize = 24;  // cached current indent value in px
+
+/**
+ * Read saved indent size from localStorage and apply to CSS custom property.
+ * Called before first render to avoid flash of wrong indentation.
+ */
+function _initIndentSize() {
+  try {
+    var saved = localStorage.getItem('rf-trace-indent-size');
+    if (saved !== null) {
+      var val = parseInt(saved, 10);
+      if (val >= 8 && val <= 48) {
+        _cachedIndentSize = val;
+        document.documentElement.style.setProperty('--tree-indent-size', val + 'px');
+      }
+    }
+  } catch (e) {
+    // localStorage may be unavailable
+  }
+}
+
+/**
+ * Create an indentation slider control element.
+ * @returns {HTMLElement} The control container element
+ */
+function _createIndentControl() {
+  var wrapper = document.createElement('span');
+  wrapper.className = 'tree-indent-control';
+
+  var lbl = document.createElement('label');
+  lbl.textContent = 'Indent:';
+
+  var slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '8';
+  slider.max = '48';
+  slider.step = '4';
+  slider.value = String(_cachedIndentSize);
+  slider.setAttribute('aria-label', 'Tree indentation size');
+
+  var valSpan = document.createElement('span');
+  valSpan.className = 'indent-value';
+  valSpan.textContent = _cachedIndentSize + 'px';
+
+  slider.addEventListener('input', function () {
+    var val = parseInt(slider.value, 10);
+    _cachedIndentSize = val;
+    document.documentElement.style.setProperty('--tree-indent-size', val + 'px');
+    valSpan.textContent = val + 'px';
+    // Sync all other sliders
+    for (var i = 0; i < _indentSliders.length; i++) {
+      var entry = _indentSliders[i];
+      if (entry.slider !== slider) {
+        entry.slider.value = String(val);
+        entry.valSpan.textContent = val + 'px';
+      }
+    }
+    try {
+      localStorage.setItem('rf-trace-indent-size', String(val));
+    } catch (e) {
+      // localStorage may be unavailable
+    }
+  });
+
+  _indentSliders.push({ slider: slider, valSpan: valSpan });
+
+  wrapper.appendChild(lbl);
+  wrapper.appendChild(slider);
+  wrapper.appendChild(valSpan);
+  return wrapper;
+}
+
 /**
  * Render the tree view into the given container.
  * @param {HTMLElement} container
  * @param {Object} model - RFRunModel with suites array
  */
 function renderTree(container, model) {
+  _initIndentSize();
   _originalModel = model;
   _treeContainer = container;
   _currentFilteredSpanIds = null; // null = show all
@@ -620,6 +695,7 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   controls.appendChild(expandBtn);
   controls.appendChild(collapseBtn);
   controls.appendChild(failuresBtn);
+  controls.appendChild(_createIndentControl());
   container.appendChild(controls);
 
   // Render suites
@@ -693,6 +769,7 @@ function _renderTreeVirtual(container, model, filteredSpanIds) {
     controls.appendChild(expandBtn);
     controls.appendChild(collapseBtn);
     controls.appendChild(failuresBtn);
+    controls.appendChild(_createIndentControl());
     container.appendChild(controls);
 
     // Scroll viewport — this is the tree-root equivalent

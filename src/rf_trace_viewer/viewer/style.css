@@ -536,6 +536,19 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline-offset: 1px;
 }
 
+.rf-trace-viewer .tree-indent-control input[type="range"] {
+  width: 80px;
+  cursor: pointer;
+  accent-color: var(--accent-color, #2563eb);
+}
+
+.rf-trace-viewer .tree-indent-control .indent-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 28px;
+  text-align: right;
+}
+
 .rf-trace-viewer .tree-node {
   margin-left: var(--tree-indent-size);
 }
