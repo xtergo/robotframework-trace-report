@@ -432,6 +432,11 @@
     if (keywordStatsSection && typeof renderKeywordStats === 'function') {
       renderKeywordStats(keywordStatsSection, data);
     }
+
+    // Initialize deep link system (last, so all views are ready for state restore)
+    if (typeof window.initDeepLink === 'function') {
+      window.initDeepLink();
+    }
   }
 
   /** Detect OS color scheme preference. */

@@ -22,6 +22,7 @@ _JS_FILES = (
     "timeline.js",
     "keyword-stats.js",
     "search.js",
+    "deep-link.js",
     "theme.js",
     "app.js",
 )

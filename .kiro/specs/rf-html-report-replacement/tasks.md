@@ -758,7 +758,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Ensure all new styles have dark mode variants via `[data-theme="dark"]` or CSS custom properties
     - _Requirements: 37.5, 37.7, 37.8_
 
-  - [ ] 36.8 Add scope state to deep link hash encoding in `src/rf_trace_viewer/viewer/deep-link.js`
+  - [x] 36.8 Add scope state to deep link hash encoding in `src/rf_trace_viewer/viewer/deep-link.js`
     - In the hash encoder: add `scope=0` to the URL hash only when `filterState.scopeToTestContext` is `false` (omit when `true` since it's the default, keeping URLs shorter)
     - In the hash decoder: read `scope` parameter, set `filterState.scopeToTestContext = params.scope !== '0'` (default `true` if absent)
     - _Requirements: 37.10_
