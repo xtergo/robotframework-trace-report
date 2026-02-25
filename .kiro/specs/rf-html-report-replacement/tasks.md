@@ -699,7 +699,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Ensure this works in both regular and virtual scroll rendering paths
     - _Requirements: 36.6, 36.7_
 
-  - [ ] 35.4 Write unit tests for indentation feature
+  - [x] 35.4 Write unit tests for indentation feature
     - Test that default `--tree-indent-size` is 24px in the generated HTML
     - Test that slider control has min=8, max=48, step=4 attributes
     - Test that changing the slider value updates the CSS custom property on `document.documentElement`
@@ -708,6 +708,92 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Test that depth-0 nodes always have margin-left: 0 regardless of indent setting
     - Run via Docker: `make test` or `docker compose run --rm test`
     - _Requirements: 36.1, 36.2, 36.3, 36.5, 36.7_
+
+- [ ] 36. Implement filter scope mode and cross-level filter logic (Requirement 37)
+  - [x] 36.1 Add `scopeToTestContext` to filter state and build scope toggle UI in `src/rf_trace_viewer/viewer/search.js`
+    - Add `scopeToTestContext: true` to the `filterState` object (default enabled to preserve existing implicit behavior)
+    - Implement `_buildScopeToggle()` function: creates a `div.filter-section.filter-scope-toggle-section` containing a `label.filter-scope-toggle-label` with a checkbox (`id="filter-scope-toggle"`) and "Scope to test context" label text
+    - On checkbox `change` event: update `filterState.scopeToTestContext`, call `_updateTagFilterOptions()`, persist to `localStorage` under key `rf-trace-scope-to-test-context` (`'1'` or `'0'`), call `_applyFilters()`
+    - On init in `initSearch`: read `rf-trace-scope-to-test-context` from `localStorage`, set `filterState.scopeToTestContext` accordingly (default `true` if absent)
+    - Insert the scope toggle into the filter panel between Test Status and Keyword Status sections
+    - _Requirements: 37.1, 37.4, 37.9_
+
+  - [ ] 36.2 Add AND operator indicators between filter sections in `src/rf_trace_viewer/viewer/search.js`
+    - Implement `_buildAndIndicator()` function: creates a `div.filter-and-indicator` with `aria-hidden="true"`, containing two `span.filter-and-line` elements flanking a `span.filter-and-text` with text "AND"
+    - Update `_buildFilterUI()` to insert `_buildAndIndicator()` between each filter section (Test Status / Scope Toggle / Keyword Status / Tags / Suites / Keyword Types / Duration)
+    - _Requirements: 37.7_
+
+  - [ ] 36.3 Gate parent-test check in `_applyFilters()` behind `scopeToTestContext` flag in `src/rf_trace_viewer/viewer/search.js`
+    - In the keyword filtering block of `_applyFilters()`, wrap the existing `_findTestAncestor` parent-test status check inside `if (filterState.scopeToTestContext)` guard
+    - When `scopeToTestContext` is `false`, keywords are evaluated solely against `kwStatuses` with no parent test status check
+    - When `scopeToTestContext` is `true`, preserve existing behavior: keyword must match `kwStatuses` AND its parent test must match `testStatuses`
+    - _Requirements: 37.1, 37.2, 37.3, 37.9_
+
+  - [ ] 36.4 Implement tag filter dynamic scoping by suite in `src/rf_trace_viewer/viewer/search.js`
+    - Implement `_updateTagFilterOptions()`: when `scopeToTestContext` is enabled and `filterState.suites` is non-empty, collect tags only from tests within selected suites; otherwise show all tags
+    - Implement `_rebuildTagSelect(tags)`: rebuild the tag multiselect options from the given tag list, preserving current selections that still exist in the scoped list, removing selections for tags no longer in scope
+    - Add `filter-tag-section` class to the tag filter section element in `_buildTagFilters()` so `_rebuildTagSelect` can target it
+    - Call `_updateTagFilterOptions()` from the suite filter's change handler after updating `filterState.suites`
+    - _Requirements: 37.6_
+
+  - [ ] 36.5 Update filter summary bar for scoped chip grouping in `src/rf_trace_viewer/viewer/search.js`
+    - Update `_getActiveFilterChips()`: when `scopeToTestContext` is active, mark test status chips with `group: 'test-status'` and keyword status chips with `group: 'kw-status'` and `scopedUnder: 'test-status'`
+    - Update `_updateFilterSummaryBar()`: render chips with `scopedUnder` preceded by a `span.filter-chip-scope-arrow` containing "↳" (`aria-hidden="true"`)
+    - When scoping is active and status filters are modified, show a `span.filter-scope-indicator` with text "Test Status → Keyword Status" and a tooltip explaining the hierarchical relationship
+    - _Requirements: 37.5, 37.8_
+
+  - [ ] 36.6 Update `_clearAllFilters()` and `setFilterState()` in `src/rf_trace_viewer/viewer/search.js`
+    - In `_clearAllFilters()`: reset `filterState.scopeToTestContext` to `true` and update the toggle checkbox UI to checked
+    - In `setFilterState()` (public API): handle `scopeToTestContext` if present in `newState`
+    - _Requirements: 37.1, 37.9_
+
+  - [ ] 36.7 Add CSS styles for scope toggle and AND indicators in `src/rf_trace_viewer/viewer/style.css`
+    - Add `.filter-and-indicator` styles: flex row, centered, 8px gap, 4px vertical padding, 0.5 opacity, 11px font-size
+    - Add `.filter-and-line` styles: flex 1, 1px height, `var(--border-color)` background
+    - Add `.filter-and-text` styles: `var(--text-secondary)` color, 600 weight, 0.05em letter-spacing
+    - Add `.filter-scope-toggle-section` styles for the toggle container
+    - Add `.filter-scope-toggle-label` styles for the label with checkbox
+    - Add `.filter-chip-scope-arrow` styles for the "↳" indicator in summary bar chips
+    - Add `.filter-scope-indicator` styles for the "Test Status → Keyword Status" relationship label
+    - Ensure all new styles have dark mode variants via `[data-theme="dark"]` or CSS custom properties
+    - _Requirements: 37.5, 37.7, 37.8_
+
+  - [ ] 36.8 Add scope state to deep link hash encoding in `src/rf_trace_viewer/viewer/deep-link.js`
+    - In the hash encoder: add `scope=0` to the URL hash only when `filterState.scopeToTestContext` is `false` (omit when `true` since it's the default, keeping URLs shorter)
+    - In the hash decoder: read `scope` parameter, set `filterState.scopeToTestContext = params.scope !== '0'` (default `true` if absent)
+    - _Requirements: 37.10_
+
+  - [ ]* 36.9 Write property test for scope toggle cross-level keyword filtering
+    - **Property 33: Scope toggle controls cross-level keyword filtering**
+    - For any set of spans with tests and keywords of various statuses, and any combination of `testStatuses` and `kwStatuses`: when `scopeToTestContext` is true, a keyword appears only if its status is in `kwStatuses` AND its parent test's status is in `testStatuses`; when false, a keyword appears if its status is in `kwStatuses` regardless of parent test status
+    - **Validates: Requirements 37.1, 37.2, 37.3, 37.9**
+
+  - [ ]* 36.10 Write property test for scope toggle localStorage round-trip
+    - **Property 34: Scope toggle localStorage round-trip**
+    - For any boolean value, persisting `scopeToTestContext` to localStorage as `'1'`/`'0'` and reading it back produces the original boolean
+    - **Validates: Requirements 37.4**
+
+  - [ ]* 36.11 Write property test for tag options scoped by suite filter
+    - **Property 35: Tag options scoped by suite filter**
+    - For any set of spans with known suite and tag associations, when scoping is enabled and suites are selected, the tag options contain exactly the tags from tests within selected suites — no extra, no missing
+    - **Validates: Requirements 37.6**
+
+  - [ ]* 36.12 Write property test for scope state deep link round-trip
+    - **Property 36: Scope state deep link round-trip**
+    - For any filter state including `scopeToTestContext`, encoding as URL hash then decoding produces the same `scopeToTestContext` value
+    - **Validates: Requirements 37.10**
+
+- [ ] 37. Checkpoint — Filter scope mode and cross-level filter logic
+  - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
+  - Verify scope toggle appears between Test Status and Keyword Status in the filter panel
+  - Verify AND indicators appear between all filter sections
+  - Verify toggling scope off allows keywords from any test to appear regardless of test status filter
+  - Verify toggling scope on restricts keywords to those belonging to tests matching the test status filter
+  - Verify tag filter options narrow to selected suites when scoping is enabled
+  - Verify filter summary bar shows scoped chip grouping with "↳" arrows and "Test Status → Keyword Status" indicator
+  - Verify scope state persists in localStorage across page reloads
+  - Verify scope state round-trips through deep link URL hash
+  - Verify clear-all-filters resets scope toggle to enabled (default)
 
 ## Notes
 

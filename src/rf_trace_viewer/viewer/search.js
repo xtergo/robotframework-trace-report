@@ -31,7 +31,8 @@
     durationMin: null,  // Minimum duration in seconds
     durationMax: null,  // Maximum duration in seconds
     timeRangeStart: null,  // Timeline selection start (epoch seconds)
-    timeRangeEnd: null     // Timeline selection end (epoch seconds)
+    timeRangeEnd: null,    // Timeline selection end (epoch seconds)
+    scopeToTestContext: true  // When true, keyword filters are scoped to parent test context
   };
 
   // Available options (populated from data)
@@ -68,6 +69,10 @@
 
     // Extract available filter options
     _extractFilterOptions(allSpans);
+
+    // Restore scope toggle from localStorage (default true if absent)
+    var savedScope = localStorage.getItem('rf-trace-scope-to-test-context');
+    filterState.scopeToTestContext = savedScope !== '0';
 
     // Build filter UI
     _buildFilterUI(container);
@@ -249,6 +254,10 @@
     var testStatusSection = _buildTestStatusFilters();
     container.appendChild(testStatusSection);
 
+    // Scope toggle (between test status and keyword status)
+    var scopeToggleSection = _buildScopeToggle();
+    container.appendChild(scopeToggleSection);
+
     // Keyword status filters
     var kwStatusSection = _buildKwStatusFilters();
     container.appendChild(kwStatusSection);
@@ -351,6 +360,39 @@
     }
 
     section.appendChild(checkboxContainer);
+    return section;
+  }
+
+  /**
+   * Build scope toggle for cross-level filtering.
+   * When enabled, keyword filters are scoped to parent test context.
+   */
+  function _buildScopeToggle() {
+    var section = document.createElement('div');
+    section.className = 'filter-section filter-scope-toggle-section';
+
+    var label = document.createElement('label');
+    label.className = 'filter-scope-toggle-label';
+
+    var checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'filter-scope-toggle';
+    checkbox.checked = filterState.scopeToTestContext;
+    checkbox.addEventListener('change', function (e) {
+      filterState.scopeToTestContext = e.target.checked;
+      if (typeof _updateTagFilterOptions === 'function') {
+        _updateTagFilterOptions();
+      }
+      localStorage.setItem('rf-trace-scope-to-test-context', e.target.checked ? '1' : '0');
+      _applyFilters();
+    });
+    label.appendChild(checkbox);
+
+    var labelText = document.createElement('span');
+    labelText.textContent = 'Scope to test context';
+    label.appendChild(labelText);
+
+    section.appendChild(label);
     return section;
   }
 
