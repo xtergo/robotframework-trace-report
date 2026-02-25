@@ -742,12 +742,12 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - When scoping is active and status filters are modified, show a `span.filter-scope-indicator` with text "Test Status → Keyword Status" and a tooltip explaining the hierarchical relationship
     - _Requirements: 37.5, 37.8_
 
-  - [ ] 36.6 Update `_clearAllFilters()` and `setFilterState()` in `src/rf_trace_viewer/viewer/search.js`
+  - [x] 36.6 Update `_clearAllFilters()` and `setFilterState()` in `src/rf_trace_viewer/viewer/search.js`
     - In `_clearAllFilters()`: reset `filterState.scopeToTestContext` to `true` and update the toggle checkbox UI to checked
     - In `setFilterState()` (public API): handle `scopeToTestContext` if present in `newState`
     - _Requirements: 37.1, 37.9_
 
-  - [ ] 36.7 Add CSS styles for scope toggle and AND indicators in `src/rf_trace_viewer/viewer/style.css`
+  - [x] 36.7 Add CSS styles for scope toggle and AND indicators in `src/rf_trace_viewer/viewer/style.css`
     - Add `.filter-and-indicator` styles: flex row, centered, 8px gap, 4px vertical padding, 0.5 opacity, 11px font-size
     - Add `.filter-and-line` styles: flex 1, 1px height, `var(--border-color)` background
     - Add `.filter-and-text` styles: `var(--text-secondary)` color, 600 weight, 0.05em letter-spacing

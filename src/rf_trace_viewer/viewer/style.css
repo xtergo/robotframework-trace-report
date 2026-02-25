@@ -1525,3 +1525,52 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
+
+/* --- AND indicator between filter sections --- */
+
+.rf-trace-viewer .filter-and-indicator {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+.rf-trace-viewer .filter-and-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.rf-trace-viewer .filter-and-text {
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+/* --- Scope toggle section --- */
+
+.rf-trace-viewer .filter-scope-toggle-section {
+  padding: 4px 0;
+}
+
+.rf-trace-viewer .filter-scope-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rf-trace-viewer .filter-scope-toggle-label input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.rf-trace-viewer .filter-scope-toggle-label:hover {
+  color: var(--text-primary);
+}
