@@ -1268,6 +1268,23 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   contain: layout style;
 }
 
+/* Virtual scroll container fills available space */
+.rf-trace-viewer .tree-virtual-scroll {
+  position: relative;
+}
+
+.rf-trace-viewer .tree-virtual-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.rf-trace-viewer .tree-virtual-sentinel {
+  pointer-events: none;
+}
+
 .rf-trace-viewer .detail-panel.expanded {
   display: block;
   /* Ensure the panel contributes to the node's measured height */

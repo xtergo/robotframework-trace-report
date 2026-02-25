@@ -1,11 +1,18 @@
-datasources:baa2e7e1a96cb35ffc9786a9a114dbd2c1c6ad19
+datasources:14b8a8813577f7f054e79538bf6ebd241dd2f458
 commandlineoptions:4423614c2b57fbd737bfcbb26443b39f4c55982b
 suitesfrom:no-suites-from-option
-file:393fff84a9cf4cfe36c0d1ef4bfa1c79a8a14533
+file:79a46c3e6fe9f7742d2b4e49c98844dfe9ba6959
+--suite Suites.Gantt Performance
+--suite Suites.Dark Mode Canvas Pixel
+--suite Suites.Dark Mode Timeline
 --suite Suites.Filter Functionality
+--suite Suites.Gantt Preservation
+--suite Suites.Gzip Compact Load
+--suite Suites.Large Trace Load
 --suite Suites.Report Rendering
 --suite Suites.Test No Overlap
 --suite Suites.Test Selection Simple
 --suite Suites.Timeline Ux
---suite Suites.Verify Latest Report
 --suite Suites.Tree Node Click
+--suite Suites.Verify Dark Default
+--suite Suites.Verify Latest Report

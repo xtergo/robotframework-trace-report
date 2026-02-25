@@ -666,7 +666,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add tests in `tests/unit/test_generator.py`
     - _Requirements: 35.1, 35.2, 35.3, 35.5, 35.8_
 
-  - [ ] 34.10 Write unit tests for compact serialization
+  - [x] 34.10 Write unit tests for compact serialization
     - Test that `--compact-html` reduces output size vs default for the large_trace.json fixture
     - Test that `--gzip-embed` produces a valid gzip+base64 payload that decompresses to the original JSON
     - Test that `--compact-html` + `--gzip-embed` together produce smaller output than either flag alone

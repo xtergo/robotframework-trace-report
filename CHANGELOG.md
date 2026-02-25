@@ -19,3 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timeline rendering: Added missing `start_time` and `end_time` timestamps to RF model dataclasses
 - Timeline canvas now dynamically sizes based on content to prevent span clipping
 - Timeline section now scrollable when content exceeds container height
+- Gantt viewer performance collapse on 600K+ span traces:
+  - Sub-pixel span aggregation in `_renderWorkerLanes()` to cap draw calls
+  - Raised gradient threshold from 4px to 20px in `_renderSpan()`
+  - Skip accent/border for narrow bars (<10px) in `_renderSpan()`
+  - Pre-computed time markers in `_processSpans()` instead of O(n) per-frame scan
+  - Binary search hit testing in `_getSpanAtPoint()`
+  - Virtualized tree rendering in `_renderTreeWithFilter()`
+  - Listener guard in `renderTree()` to prevent duplicate filter-changed handlers
+  - Added `off()` method to event bus in `app.js`

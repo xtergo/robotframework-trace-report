@@ -3,13 +3,44 @@ Pytest configuration and Hypothesis strategies for property-based testing.
 
 This module provides custom Hypothesis strategies for generating valid OTLP spans,
 NDJSON lines, RF-specific attributes, and span trees for comprehensive property-based testing.
+
+## Test fixture strategy
+Most unit tests use `simple_trace.json` (small, fast, low memory).
+Tests that specifically measure size reduction or need large data are marked
+`@pytest.mark.slow` and use `large_trace.json`.
+
+Run slow tests explicitly:  make test-slow
+Skip slow tests (default):  make test-unit  (uses --skip-slow)
 """
 
 import json
 import time
 from typing import Any
 
+import pytest
 from hypothesis import strategies as st
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--skip-slow",
+        action="store_true",
+        default=False,
+        help="Skip tests marked as slow (large fixture tests, high memory)",
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: marks tests as slow (large fixture, high memory)")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--skip-slow"):
+        skip_slow = pytest.mark.skip(reason="--skip-slow flag set")
+        for item in items:
+            if "slow" in item.keywords:
+                item.add_marker(skip_slow)
+
 
 # ============================================================================
 # Basic Building Blocks

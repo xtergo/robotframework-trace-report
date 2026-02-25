@@ -2,22 +2,50 @@
 
 Tests static HTML generation end-to-end with fixture data,
 title derivation, and embedding features.
+
+## Fixture strategy
+Most tests use ``simple_trace.json`` (small, fast, low memory).
+Tests that specifically measure size reduction are marked ``@pytest.mark.slow``
+and use ``large_trace.json`` (~50-100 MB in memory).
+
+Run slow tests:   make test-slow
+Skip slow tests:  make test-unit  (default, uses --skip-slow)
 """
 
+import base64
+import gzip
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from rf_trace_viewer.generator import (
+    KEY_MAP,
     ReportOptions,
-    generate_report,
+    _apply_intern_table,
+    _apply_key_map,
+    _build_intern_table,
+    _limit_spans,
+    _serialize,
+    _serialize_compact,
     embed_data,
     embed_viewer_assets,
+    generate_report,
 )
 from rf_trace_viewer.parser import parse_file
+from rf_trace_viewer.rf_model import (
+    RFKeyword,
+    RFRunModel,
+    RFSuite,
+    RFTest,
+    RunStatistics,
+    Status,
+    interpret_tree,
+)
 from rf_trace_viewer.tree import build_tree
-from rf_trace_viewer.rf_model import interpret_tree
 
 
 class TestStaticHTMLGeneration:
@@ -461,32 +489,6 @@ class TestEnrichedFieldSerialization:
 # Property-Based Tests for Compact Serialization (Properties 27, 28, 29)
 # ============================================================================
 
-import base64
-import gzip
-from dataclasses import dataclass, field
-from typing import Any
-
-from hypothesis import given, settings, assume
-from hypothesis import strategies as st
-
-from rf_trace_viewer.generator import (
-    KEY_MAP,
-    _apply_intern_table,
-    _apply_key_map,
-    _build_intern_table,
-    _limit_spans,
-    _serialize,
-    _serialize_compact,
-    embed_data,
-)
-from rf_trace_viewer.rf_model import (
-    RFKeyword,
-    RFRunModel,
-    RFSuite,
-    RFTest,
-    RunStatistics,
-    Status,
-)
 
 # ---------------------------------------------------------------------------
 # Python port of the JS decoder (expandNode / expandValue / decodeTraceData)
@@ -924,3 +926,232 @@ class TestProperty29SpanTruncationCorrectness:
         truncated = _limit_spans(model, large_limit)
         after_count = _count_spans_in_model(truncated)
         assert after_count == total, f"Expected {total} spans (no truncation), got {after_count}"
+
+
+class TestCompactSerializationUnit:
+    """Unit tests for compact serialization CLI flags (task 34.10).
+
+    Requirements: 35.1, 35.4, 35.5, 35.6, 35.7, 35.8, 35.11
+    """
+
+    FIXTURES = Path(__file__).parent.parent / "fixtures"
+    LARGE_TRACE = FIXTURES / "large_trace.json"
+    SIMPLE_TRACE = FIXTURES / "simple_trace.json"
+
+    def _load_model(self, fixture_path):
+        spans = parse_file(str(fixture_path))
+        trees = build_tree(spans)
+        return interpret_tree(trees)
+
+    def _count_all_spans(self, model):
+        def _count_kw(kw):
+            return 1 + sum(_count_kw(c) for c in kw.children)
+
+        def _count_suite(suite):
+            total = 1
+            for child in suite.children:
+                if isinstance(child, RFSuite):
+                    total += _count_suite(child)
+                elif isinstance(child, RFTest):
+                    total += 1 + sum(_count_kw(k) for k in child.keywords)
+                elif isinstance(child, RFKeyword):
+                    total += _count_kw(child)
+            return total
+
+        return sum(_count_suite(s) for s in model.suites)
+
+    def _collect_keyword_depths(self, model):
+        depths = []
+
+        def _walk_kw(kw, depth):
+            depths.append(depth)
+            for child in kw.children:
+                _walk_kw(child, depth + 1)
+
+        def _walk_suite(suite):
+            for child in suite.children:
+                if isinstance(child, RFSuite):
+                    _walk_suite(child)
+                elif isinstance(child, RFTest):
+                    for kw in child.keywords:
+                        _walk_kw(kw, 1)
+                elif isinstance(child, RFKeyword):
+                    _walk_kw(child, 1)
+
+        for suite in model.suites:
+            _walk_suite(suite)
+        return depths
+
+    def _collect_keyword_statuses(self, model):
+        statuses = []
+
+        def _walk_kw(kw):
+            statuses.append(kw.status)
+            for child in kw.children:
+                _walk_kw(child)
+
+        def _walk_suite(suite):
+            for child in suite.children:
+                if isinstance(child, RFSuite):
+                    _walk_suite(child)
+                elif isinstance(child, RFTest):
+                    for kw in child.keywords:
+                        _walk_kw(kw)
+                elif isinstance(child, RFKeyword):
+                    _walk_kw(child)
+
+        for suite in model.suites:
+            _walk_suite(suite)
+        return statuses
+
+    @pytest.mark.slow
+    def test_compact_html_reduces_output_size(self):
+        """--compact-html produces smaller HTML than default for large_trace.json.
+
+        Marked slow: loads large_trace.json (~50-100 MB). Run with: make test-slow
+        """
+        html_default = generate_report(self._load_model(self.LARGE_TRACE), ReportOptions())
+        html_compact = generate_report(
+            self._load_model(self.LARGE_TRACE), ReportOptions(compact=True)
+        )
+        assert len(html_compact) < len(html_default)
+
+    def test_gzip_embed_produces_valid_payload(self):
+        """--gzip-embed embeds a valid gzip+base64 payload."""
+        html = generate_report(self._load_model(self.SIMPLE_TRACE), ReportOptions(gzip_embed=True))
+        marker = 'window.__RF_TRACE_DATA_GZ__ = "'
+        assert marker in html
+        start = html.index(marker) + len(marker)
+        end = html.index('"', start)
+        b64_payload = html[start:end]
+        decompressed = gzip.decompress(base64.b64decode(b64_payload)).decode("utf-8")
+        assert isinstance(json.loads(decompressed), dict)
+
+    def test_gzip_embed_decompresses_to_same_data_as_default(self):
+        """--gzip-embed decompressed data equals the non-gzip embedded data."""
+        html_gz = generate_report(
+            self._load_model(self.SIMPLE_TRACE), ReportOptions(gzip_embed=True)
+        )
+        html_plain = generate_report(self._load_model(self.SIMPLE_TRACE), ReportOptions())
+        marker_gz = 'window.__RF_TRACE_DATA_GZ__ = "'
+        start = html_gz.index(marker_gz) + len(marker_gz)
+        end = html_gz.index('"', start)
+        decompressed = gzip.decompress(base64.b64decode(html_gz[start:end])).decode("utf-8")
+        marker_plain = "window.__RF_TRACE_DATA__ = "
+        ps = html_plain.index(marker_plain) + len(marker_plain)
+        pe = html_plain.index("\n", ps)
+        plain_json = html_plain[ps:pe].rstrip(";")
+        assert json.loads(decompressed) == json.loads(plain_json)
+
+    @pytest.mark.slow
+    def test_compact_and_gzip_together_smaller_than_either_alone(self):
+        """--compact-html + --gzip-embed together produce smaller output than either alone.
+
+        Marked slow: loads large_trace.json (~50-100 MB). Run with: make test-slow
+        """
+        html_both = generate_report(
+            self._load_model(self.LARGE_TRACE), ReportOptions(compact=True, gzip_embed=True)
+        )
+        html_compact = generate_report(
+            self._load_model(self.LARGE_TRACE), ReportOptions(compact=True)
+        )
+        html_gzip = generate_report(
+            self._load_model(self.LARGE_TRACE), ReportOptions(gzip_embed=True)
+        )
+        assert len(html_both) < len(html_compact)
+        assert len(html_both) < len(html_gzip)
+
+    def test_max_keyword_depth_removes_deep_keywords(self):
+        """--max-keyword-depth 2 removes keywords beyond depth 2."""
+        from rf_trace_viewer.generator import _truncate_depth
+
+        model = self._load_model(self.SIMPLE_TRACE)
+        _truncate_depth(model, 2)
+        depths = self._collect_keyword_depths(model)
+        if depths:
+            assert max(depths) <= 2
+
+    def test_max_keyword_depth_marks_truncated_parents(self):
+        """--max-keyword-depth marks truncated parent nodes."""
+        from rf_trace_viewer.generator import _truncate_depth
+
+        model = self._load_model(self.SIMPLE_TRACE)
+        original_depths = self._collect_keyword_depths(model)
+        if not original_depths or max(original_depths) < 2:
+            pytest.skip("No keywords nested beyond depth 1 in fixture")
+        _truncate_depth(model, 1)
+        truncated_found = False
+
+        def _check(suite):
+            nonlocal truncated_found
+            for child in suite.children:
+                if isinstance(child, RFSuite):
+                    _check(child)
+                elif isinstance(child, RFTest):
+                    for kw in child.keywords:
+                        if getattr(kw, "truncated", None):
+                            truncated_found = True
+                elif isinstance(child, RFKeyword):
+                    if getattr(child, "truncated", None):
+                        truncated_found = True
+
+        for s in model.suites:
+            _check(s)
+        assert truncated_found
+
+    def test_exclude_passing_keywords_removes_pass_keywords(self):
+        """--exclude-passing-keywords removes PASS keywords, retains tests and suites."""
+        from rf_trace_viewer.generator import _exclude_passing_keywords
+
+        def _count_ts(m):
+            tests, suites = 0, 0
+
+            def _w(s):
+                nonlocal tests, suites
+                suites += 1
+                for c in s.children:
+                    if isinstance(c, RFSuite):
+                        _w(c)
+                    elif isinstance(c, RFTest):
+                        tests += 1
+
+            for s in m.suites:
+                _w(s)
+            return tests, suites
+
+        model = self._load_model(self.SIMPLE_TRACE)
+        t_before, s_before = _count_ts(model)
+        _exclude_passing_keywords(model)
+        t_after, s_after = _count_ts(model)
+        assert t_after == t_before
+        assert s_after == s_before
+        pass_kws = [s for s in self._collect_keyword_statuses(model) if s == Status.PASS]
+        assert len(pass_kws) == 0
+
+    def test_max_spans_limits_total_spans(self):
+        """--max-spans 5 limits output to at most 5 spans (uses simple_trace)."""
+        from rf_trace_viewer.generator import _limit_spans
+
+        model = self._load_model(self.SIMPLE_TRACE)
+        limit = 5
+        if self._count_all_spans(model) <= limit:
+            # Still verify no-op when limit >= total
+            original = self._count_all_spans(model)
+            _limit_spans(model, original + 100)
+            assert self._count_all_spans(model) == original
+            return
+        _limit_spans(model, limit)
+        assert self._count_all_spans(model) <= limit
+
+    def test_max_spans_retains_fail_spans(self):
+        """--max-spans retains FAIL spans over PASS spans when truncating."""
+        from rf_trace_viewer.generator import _limit_spans
+
+        model = self._load_model(self.SIMPLE_TRACE)
+        all_before = self._collect_keyword_statuses(model)
+        fail_count = all_before.count(Status.FAIL)
+        if fail_count == 0:
+            pytest.skip("No FAIL keywords in simple_trace.json")
+        _limit_spans(model, max(1, fail_count))
+        pass_after = [s for s in self._collect_keyword_statuses(model) if s == Status.PASS]
+        assert len(pass_after) == 0

@@ -323,8 +323,9 @@
       totalHeight += (maxLane + 2) * timelineState.rowHeight;
     }
     
-    // Minimum height of 300px
-    return Math.max(300, totalHeight);
+    // Cap at 16000px to stay within browser canvas limits
+    // (most browsers fail silently above ~16384px or ~32768px)
+    return Math.max(300, Math.min(totalHeight, 16000));
   }
 
   /**
@@ -378,89 +379,95 @@
 
     console.log('[Timeline] Processing data:', { suiteCount: suites.length, data: data });
 
-    // Flatten the hierarchy
-    function flattenSuite(suite, depth, parentWorker) {
-      var worker = suite.worker_id || parentWorker || 'default';
-      var span = {
-        id: suite.id || _generateId(),
-        name: suite.name,
-        type: 'suite',
-        status: suite.status,
-        startTime: _parseTime(suite.start_time),
-        endTime: _parseTime(suite.end_time),
-        elapsed: suite.elapsed_time || 0,
-        depth: depth,
-        worker: worker,
-        children: []
-      };
-      allSpans.push(span);
+    // Iterative flattening using explicit work stack to avoid stack overflow
+    // on large traces (600K+ spans). Stack items: [node, type, depth, worker, parentSpan]
+    // type: 'suite', 'test', 'keyword'
+    var stack = [];
+    for (var i = suites.length - 1; i >= 0; i--) {
+      stack.push([suites[i], 'suite', 0, null, null]);
+    }
 
-      if (suite.children) {
-        for (var i = 0; i < suite.children.length; i++) {
-          var child = suite.children[i];
-          if (child.keywords !== undefined) {
-            // It's a test
-            flattenTest(child, depth + 1, worker, span);
-          } else {
-            // It's a nested suite
-            flattenSuite(child, depth + 1, worker);
+    while (stack.length > 0) {
+      var item = stack.pop();
+      var node = item[0];
+      var type = item[1];
+      var depth = item[2];
+      var worker = item[3];
+      var parentSpan = item[4];
+
+      if (type === 'suite') {
+        worker = node.worker_id || worker || 'default';
+        var span = {
+          id: node.id || _generateId(),
+          name: node.name,
+          type: 'suite',
+          status: node.status,
+          startTime: _parseTime(node.start_time),
+          endTime: _parseTime(node.end_time),
+          elapsed: node.elapsed_time || 0,
+          depth: depth,
+          worker: worker,
+          children: []
+        };
+        allSpans.push(span);
+
+        if (node.children) {
+          for (var ci = node.children.length - 1; ci >= 0; ci--) {
+            var child = node.children[ci];
+            if (child.keywords !== undefined) {
+              stack.push([child, 'test', depth + 1, worker, span]);
+            } else {
+              stack.push([child, 'suite', depth + 1, worker, null]);
+            }
+          }
+        }
+      } else if (type === 'test') {
+        var span = {
+          id: node.id || _generateId(),
+          name: node.name,
+          type: 'test',
+          status: node.status,
+          startTime: _parseTime(node.start_time),
+          endTime: _parseTime(node.end_time),
+          elapsed: node.elapsed_time || 0,
+          depth: depth,
+          worker: worker,
+          parent: parentSpan,
+          children: []
+        };
+        allSpans.push(span);
+        if (parentSpan) parentSpan.children.push(span);
+
+        if (node.keywords) {
+          for (var ki = node.keywords.length - 1; ki >= 0; ki--) {
+            stack.push([node.keywords[ki], 'keyword', depth + 1, worker, span]);
+          }
+        }
+      } else {
+        // keyword
+        var span = {
+          id: node.id || _generateId(),
+          name: node.name,
+          type: 'keyword',
+          kwType: node.keyword_type,
+          status: node.status,
+          startTime: _parseTime(node.start_time),
+          endTime: _parseTime(node.end_time),
+          elapsed: node.elapsed_time || 0,
+          depth: depth,
+          worker: worker,
+          parent: parentSpan,
+          children: []
+        };
+        allSpans.push(span);
+        if (parentSpan) parentSpan.children.push(span);
+
+        if (node.children) {
+          for (var kci = node.children.length - 1; kci >= 0; kci--) {
+            stack.push([node.children[kci], 'keyword', depth + 1, worker, span]);
           }
         }
       }
-    }
-
-    function flattenTest(test, depth, worker, parentSuite) {
-      var span = {
-        id: test.id || _generateId(),
-        name: test.name,
-        type: 'test',
-        status: test.status,
-        startTime: _parseTime(test.start_time),
-        endTime: _parseTime(test.end_time),
-        elapsed: test.elapsed_time || 0,
-        depth: depth,
-        worker: worker,
-        parent: parentSuite,
-        children: []
-      };
-      allSpans.push(span);
-      if (parentSuite) parentSuite.children.push(span);
-
-      if (test.keywords) {
-        for (var i = 0; i < test.keywords.length; i++) {
-          flattenKeyword(test.keywords[i], depth + 1, worker, span);
-        }
-      }
-    }
-
-    function flattenKeyword(kw, depth, worker, parentTest) {
-      var span = {
-        id: kw.id || _generateId(),
-        name: kw.name,
-        type: 'keyword',
-        kwType: kw.keyword_type,
-        status: kw.status,
-        startTime: _parseTime(kw.start_time),
-        endTime: _parseTime(kw.end_time),
-        elapsed: kw.elapsed_time || 0,
-        depth: depth,
-        worker: worker,
-        parent: parentTest,
-        children: []
-      };
-      allSpans.push(span);
-      if (parentTest) parentTest.children.push(span);
-
-      if (kw.children) {
-        for (var i = 0; i < kw.children.length; i++) {
-          flattenKeyword(kw.children[i], depth + 1, worker, span);
-        }
-      }
-    }
-
-    // Flatten all suites
-    for (var i = 0; i < suites.length; i++) {
-      flattenSuite(suites[i], 0, null);
     }
 
     timelineState.spans = allSpans;
@@ -473,8 +480,10 @@
 
     // Compute time bounds
     if (allSpans.length > 0) {
-      timelineState.minTime = Math.min.apply(null, allSpans.map(function (s) { return s.startTime; }));
-      timelineState.maxTime = Math.max.apply(null, allSpans.map(function (s) { return s.endTime; }));
+      timelineState.minTime = Infinity;
+      for (var _mi = 0; _mi < allSpans.length; _mi++) { if (allSpans[_mi].startTime < timelineState.minTime) timelineState.minTime = allSpans[_mi].startTime; }
+      timelineState.maxTime = -Infinity;
+      for (var _xi = 0; _xi < allSpans.length; _xi++) { if (allSpans[_xi].endTime > timelineState.maxTime) timelineState.maxTime = allSpans[_xi].endTime; }
       timelineState.viewStart = timelineState.minTime;
       timelineState.viewEnd = timelineState.maxTime;
       console.log('[Timeline] Time bounds:', { 
@@ -489,6 +498,24 @@
     
     // Assign lanes to prevent overlap
     _assignLanes(allSpans);
+
+    // Pre-compute time markers (suite/test boundaries) — avoids O(n) scan per frame
+    var markers = [];
+    var markerSeen = {};
+    for (var _tmi = 0; _tmi < allSpans.length; _tmi++) {
+      var _tmSpan = allSpans[_tmi];
+      if (_tmSpan.type === 'suite' || _tmSpan.type === 'test') {
+        if (!markerSeen[_tmSpan.startTime]) {
+          markers.push({ time: _tmSpan.startTime, type: _tmSpan.type });
+          markerSeen[_tmSpan.startTime] = true;
+        }
+        if (!markerSeen[_tmSpan.endTime]) {
+          markers.push({ time: _tmSpan.endTime, type: _tmSpan.type });
+          markerSeen[_tmSpan.endTime] = true;
+        }
+      }
+    }
+    timelineState.cachedMarkers = markers;
   }
 
   /**
@@ -520,48 +547,67 @@
 
       var lane = 0;
 
-      // Recursively assign lanes: suite bar, then its children below
-      function assignHierarchy(node) {
-        node.lane = lane;
-        lane++;
-
-        // Get children sorted by start time
-        var children = (node.children || []).slice();
-        children.sort(function(a, b) { return a.startTime - b.startTime; });
-
-        for (var c = 0; c < children.length; c++) {
-          var child = children[c];
-          if (child.type === 'suite') {
-            // Nested suite: recurse
-            assignHierarchy(child);
-          } else if (child.type === 'test') {
-            // Test: place test bar, then pack all its keywords (recursive) into minimal lanes
-            child.lane = lane;
-            lane++;
-            var allKws = [];
-            collectKeywords(child.children || [], allKws);
-            if (allKws.length > 0) {
-              _assignLanesForGroup(allKws, lane);
-              var maxKwLane = lane;
-              for (var k = 0; k < allKws.length; k++) {
-                if (allKws[k].lane > maxKwLane) maxKwLane = allKws[k].lane;
-              }
-              lane = maxKwLane + 1;
+      // Iteratively collect all keywords into a flat list
+      function collectKeywords(kwList, result) {
+        var kwStack = kwList.slice();
+        while (kwStack.length > 0) {
+          var kw = kwStack.pop();
+          result.push(kw);
+          if (kw.children && kw.children.length > 0) {
+            for (var ki = kw.children.length - 1; ki >= 0; ki--) {
+              kwStack.push(kw.children[ki]);
             }
-          } else {
-            // Direct keyword child (e.g. suite setup/teardown)
-            child.lane = lane;
-            lane++;
           }
         }
       }
 
-      // Recursively collect all keywords into a flat list
-      function collectKeywords(kwList, result) {
-        for (var k = 0; k < kwList.length; k++) {
-          result.push(kwList[k]);
-          if (kwList[k].children && kwList[k].children.length > 0) {
-            collectKeywords(kwList[k].children, result);
+      // Iteratively assign lanes using DFS
+      function assignHierarchy(rootNode) {
+        // Stack items are either:
+        // - A node object (suite): assign lane, process children
+        // - {_leaf: node}: just assign lane, no child processing
+        // - {_kws: children}: collect keywords and assign lanes
+        var hStack = [rootNode];
+        while (hStack.length > 0) {
+          var cur = hStack.pop();
+
+          if (cur._kws) {
+            var allKws = [];
+            collectKeywords(cur._kws, allKws);
+            if (allKws.length > 0) {
+              _assignLanesForGroup(allKws, lane);
+              var maxKwLane = lane;
+              for (var mk = 0; mk < allKws.length; mk++) {
+                if (allKws[mk].lane > maxKwLane) maxKwLane = allKws[mk].lane;
+              }
+              lane = maxKwLane + 1;
+            }
+            continue;
+          }
+
+          if (cur._leaf) {
+            cur._leaf.lane = lane;
+            lane++;
+            continue;
+          }
+
+          // Suite node: assign lane, then process children
+          cur.lane = lane;
+          lane++;
+
+          var hChildren = (cur.children || []).slice();
+          hChildren.sort(function(a, b) { return a.startTime - b.startTime; });
+
+          for (var hc = hChildren.length - 1; hc >= 0; hc--) {
+            var hChild = hChildren[hc];
+            if (hChild.type === 'suite') {
+              hStack.push(hChild);
+            } else if (hChild.type === 'test') {
+              hStack.push({_kws: hChild.children || []});
+              hStack.push({_leaf: hChild});
+            } else {
+              hStack.push({_leaf: hChild});
+            }
           }
         }
       }
@@ -840,12 +886,35 @@
   function _getSpanAtPoint(x, y) {
     var workers = Object.keys(timelineState.workers);
     var yOffset = timelineState.topMargin + timelineState.panY;
+    // Convert click X to time for binary search
+    var clickTime = _screenXToTime(x);
 
     for (var w = 0; w < workers.length; w++) {
       var workerSpans = timelineState.workers[workers[w]];
-      
-      for (var i = 0; i < workerSpans.length; i++) {
+
+      // Binary search on startTime (which IS sorted) to find the rightmost span
+      // whose startTime <= clickTime. Any span containing clickTime must have
+      // startTime <= clickTime, so we only need to check spans at or before this index.
+      var lo = 0, hi = workerSpans.length - 1, rightIdx = -1;
+      while (lo <= hi) {
+        var mid = (lo + hi) >>> 1;
+        if (workerSpans[mid].startTime <= clickTime) {
+          rightIdx = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+
+      // Scan backwards from rightIdx — check spans whose startTime <= clickTime
+      // A span contains the click if startTime <= clickTime AND endTime >= clickTime
+      // Also check Y coordinate for lane matching
+      for (var i = rightIdx; i >= 0; i--) {
         var span = workerSpans[i];
+        // Since spans are sorted by startTime, all remaining spans have startTime <= clickTime
+        // But we can stop early if the span's endTime is too far left (heuristic: won't help much
+        // for overlapping spans, but limits scan for non-overlapping cases)
+        
         var lane = span.lane !== undefined ? span.lane : span.depth;
         var spanY = yOffset + lane * timelineState.rowHeight;
         var spanX1 = _timeToScreenX(span.startTime);
@@ -857,9 +926,11 @@
       }
 
       // Move to next worker lane
-      var maxLane = Math.max.apply(null, workerSpans.map(function (s) { 
-        return s.lane !== undefined ? s.lane : s.depth; 
-      }));
+      var maxLane = 0;
+      for (var _li = 0; _li < workerSpans.length; _li++) {
+        var _lv = workerSpans[_li].lane !== undefined ? workerSpans[_li].lane : workerSpans[_li].depth;
+        if (_lv > maxLane) maxLane = _lv;
+      }
       yOffset += (maxLane + 2) * timelineState.rowHeight;
     }
 
@@ -970,6 +1041,9 @@
     var yOffset = timelineState.topMargin + timelineState.panY;
     var textColor = _css('--text-primary', '#1a1a1a');
     var borderColor = _css('--border-color', '#d0d0d0');
+    var viewRange = timelineState.viewEnd - timelineState.viewStart;
+    var canvasWidth = timelineState.canvas.width / (window.devicePixelRatio || 1);
+    var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
     
     // Only show worker labels if there are multiple workers
     var showWorkerLabels = workers.length > 1 || (workers.length === 1 && workers[0] !== 'default');
@@ -977,6 +1051,29 @@
     for (var w = 0; w < workers.length; w++) {
       var workerId = workers[w];
       var workerSpans = timelineState.workers[workerId];
+
+      // Pre-compute maxLane for this worker group (needed for Y-range check and separator)
+      var maxLane = 0;
+      for (var _li = 0; _li < workerSpans.length; _li++) {
+        var _lv = workerSpans[_li].lane !== undefined ? workerSpans[_li].lane : workerSpans[_li].depth;
+        if (_lv > maxLane) maxLane = _lv;
+      }
+      var laneHeight = (maxLane + 2) * timelineState.rowHeight;
+
+      // Early termination: skip entire worker group if its Y range is off-screen
+      var workerYTop = yOffset;
+      var workerYBottom = yOffset + laneHeight;
+      if (workerYBottom < 0 || workerYTop > height) {
+        // Still need to advance yOffset and draw separator
+        yOffset += laneHeight;
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, yOffset);
+        ctx.lineTo(width, yOffset);
+        ctx.stroke();
+        continue;
+      }
 
       // Worker label (only if multiple workers or non-default worker)
       if (showWorkerLabels) {
@@ -987,17 +1084,59 @@
         ctx.fillText(label, 10, yOffset + 15);
       }
 
-      // Render spans for this worker
+      // Sub-pixel aggregation map: key = "lane:pixelCol" -> { color, count }
+      var aggBuckets = {};
+      var barHeight = timelineState.rowHeight - 4;
+
+      // Render spans for this worker — with viewport culling and sub-pixel aggregation
       for (var i = 0; i < workerSpans.length; i++) {
         var span = workerSpans[i];
-        _renderSpan(ctx, span, yOffset);
+
+        // Y-axis culling: skip spans outside visible canvas height
+        var lane = span.lane !== undefined ? span.lane : span.depth;
+        var spanY = yOffset + lane * timelineState.rowHeight;
+        if (spanY + timelineState.rowHeight < 0 || spanY > height) continue;
+
+        // X-axis culling: skip spans outside current time view
+        if (span.endTime < timelineState.viewStart || span.startTime > timelineState.viewEnd) continue;
+
+        // Compute pixel width for this span
+        var spanDuration = span.endTime - span.startTime;
+        var pixelWidth = (viewRange > 0 && timelineWidth > 0)
+          ? (spanDuration / viewRange) * timelineWidth
+          : 2;
+
+        if (pixelWidth < 2) {
+          // Sub-pixel: bucket into aggregation map
+          var screenX = _timeToScreenX(span.startTime);
+          var pixelCol = Math.floor(screenX);
+          var bucketKey = lane + ':' + pixelCol;
+          if (!aggBuckets[bucketKey]) {
+            aggBuckets[bucketKey] = { lane: lane, pixelCol: pixelCol, color: _getSpanColors(span).bottom, count: 1 };
+          } else {
+            aggBuckets[bucketKey].count++;
+            // Keep the color of the most common status (simple: last one wins for ties,
+            // but FAIL always dominates for visibility)
+            if (span.status === 'FAIL') {
+              aggBuckets[bucketKey].color = _getSpanColors(span).bottom;
+            }
+          }
+        } else {
+          // Normal rendering for spans wide enough to see
+          _renderSpan(ctx, span, yOffset);
+        }
+      }
+
+      // Flush aggregation buckets — one rect per pixel column per lane
+      var bucketKeys = Object.keys(aggBuckets);
+      for (var bi = 0; bi < bucketKeys.length; bi++) {
+        var bucket = aggBuckets[bucketKeys[bi]];
+        var by = yOffset + bucket.lane * timelineState.rowHeight + 2;
+        ctx.fillStyle = bucket.color;
+        ctx.fillRect(bucket.pixelCol, by, 2, barHeight);
       }
 
       // Lane separator
-      var maxLane = Math.max.apply(null, workerSpans.map(function (s) { 
-        return s.lane !== undefined ? s.lane : s.depth; 
-      }));
-      var laneHeight = (maxLane + 2) * timelineState.rowHeight;
       yOffset += laneHeight;
 
       ctx.strokeStyle = borderColor;
@@ -1018,6 +1157,8 @@
     var y = yOffset + lane * timelineState.rowHeight;
     var x1 = _timeToScreenX(span.startTime);
     var x2 = _timeToScreenX(span.endTime);
+    // Skip if entirely off-screen horizontally
+    if (x2 < 0 || x1 > timelineState.canvas.width / (window.devicePixelRatio || 1)) return;
     var barWidth = Math.max(x2 - x1, 2);
     var barHeight = timelineState.rowHeight - 4;
     var radius = 3;
@@ -1028,7 +1169,7 @@
 
     // Draw rounded rect with gradient
     _roundRect(ctx, x1, barY, barWidth, barHeight, radius);
-    if (barWidth > 4) {
+    if (barWidth > 20) {
       var grad = ctx.createLinearGradient(x1, barY, x1, barY + barHeight);
       grad.addColorStop(0, colors.top);
       grad.addColorStop(1, colors.bottom);
@@ -1039,18 +1180,21 @@
     ctx.fill();
 
     // Thin status accent on the left edge (3px wide) for suites and tests
-    if (span.type !== 'keyword' && barWidth > 6) {
+    // Skip for narrow bars (< 10px) where details are invisible
+    if (span.type !== 'keyword' && barWidth >= 10) {
       var accentColor = _getStatusAccentColor(span.status);
       _roundRect(ctx, x1, barY, 3, barHeight, radius > 1 ? 2 : 0);
       ctx.fillStyle = accentColor;
       ctx.fill();
     }
 
-    // Subtle bottom border for depth
-    _roundRect(ctx, x1, barY, barWidth, barHeight, radius);
-    ctx.strokeStyle = colors.border;
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
+    // Subtle bottom border for depth — skip for narrow bars (< 10px)
+    if (barWidth >= 10) {
+      _roundRect(ctx, x1, barY, barWidth, barHeight, radius);
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
 
     // Highlight selected or hovered
     if (span === timelineState.selectedSpan) {
@@ -1158,22 +1302,10 @@
   function _renderTimeMarkers(ctx, width, height) {
     var borderColor = _css('--border-color', '#d0d0d0');
     
-    // Find suite and test boundaries
-    var markers = [];
-    for (var i = 0; i < timelineState.flatSpans.length; i++) {
-      var span = timelineState.flatSpans[i];
-      if (span.type === 'suite' || span.type === 'test') {
-        markers.push({ time: span.startTime, type: span.type });
-        markers.push({ time: span.endTime, type: span.type });
-      }
-    }
+    // Use pre-computed markers from _processSpans() — O(marker_count) instead of O(n)
+    var markers = timelineState.cachedMarkers || [];
 
-    // Remove duplicates
-    markers = markers.filter(function (m, idx, arr) {
-      return arr.findIndex(function (m2) { return m2.time === m.time; }) === idx;
-    });
-
-    // Render markers
+    // Render markers — filter by viewport
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 2]);
@@ -1477,9 +1609,11 @@
           }
           
           // Move to next worker lane
-          var maxLane = Math.max.apply(null, workerSpans.map(function (s) { 
-            return s.lane !== undefined ? s.lane : s.depth; 
-          }));
+          var maxLane = 0;
+          for (var _li = 0; _li < workerSpans.length; _li++) {
+            var _lv = workerSpans[_li].lane !== undefined ? workerSpans[_li].lane : workerSpans[_li].depth;
+            if (_lv > maxLane) maxLane = _lv;
+          }
           yOffset += (maxLane + 2) * timelineState.rowHeight;
         }
         

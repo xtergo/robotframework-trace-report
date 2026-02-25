@@ -67,3 +67,6 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n auto"
+markers = [
+    "slow: marks tests as slow (large fixture, high memory) — run with: make test-slow",
+]

@@ -28,6 +28,11 @@ Comprehensive implementation guide for the tree enhancement and UX superiority f
 
 Use this when working on Tasks 28-33 or any of the remaining feature implementation.
 
+### pbt-status-fix.md
+**Inclusion:** Auto (always active)
+
+Documents the workaround for clearing stuck red "Test Failed" badges on spec tasks. When PBT status gets incorrectly set to failed, this guide explains how to fix it by invoking the spec-task-execution subagent to call updatePBTStatus.
+
 ## How Steering Files Work
 
 Steering files can have different inclusion modes:

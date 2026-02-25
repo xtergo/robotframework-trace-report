@@ -23,6 +23,13 @@
           this.listeners[event][i](data);
         }
       }
+    },
+    off: function (event, callback) {
+      if (!this.listeners[event]) return;
+      var idx = this.listeners[event].indexOf(callback);
+      if (idx !== -1) {
+        this.listeners[event].splice(idx, 1);
+      }
     }
   };
 
@@ -36,6 +43,7 @@
   window.RFTraceViewer = window.RFTraceViewer || {};
   window.RFTraceViewer.on = eventBus.on.bind(eventBus);
   window.RFTraceViewer.emit = eventBus.emit.bind(eventBus);
+  window.RFTraceViewer.off = eventBus.off.bind(eventBus);
   
   // Public API methods
   window.RFTraceViewer.setFilter = function (filterState) {
@@ -64,19 +72,16 @@
    * Decode compact trace data format back to full format.
    * If the data has a `v` field, it was encoded with short keys and intern table.
    * Otherwise, pass through unchanged (legacy uncompressed format).
+   *
+   * Uses an iterative work-stack instead of recursion to avoid
+   * "Maximum call stack size exceeded" on large traces (600K+ spans).
    */
   function decodeTraceData(raw) {
     if (!raw.v) return raw; // legacy uncompressed format
-    var km = raw.km;
+    var km = raw.km;  // already short → original (e.g. {"ch": "children"})
     var it = raw.it;
     var data = raw.data;
-    // Build reverse key map: short → original
-    var keyMap = {};
-    var entries = Object.entries(km);
-    for (var i = 0; i < entries.length; i++) {
-      keyMap[entries[i][1]] = entries[i][0];
-    }
-    return expandNode(data, keyMap, it);
+    return _expandIterative(data, km, it);
   }
 
   // Fields that always hold numeric values — never expand these as intern indices.
@@ -88,66 +93,112 @@
     st: true, et: true, el: true, ln: true
   };
 
-  function expandNode(node, keyMap, internTable) {
-    var expanded = {};
-    var keys = Object.keys(node);
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i];
-      var fullKey = keyMap[k] || k;
-      expanded[fullKey] = expandValue(node[k], keyMap, internTable, k);
-    }
-    return expanded;
-  }
+  /**
+   * Iterative expansion of a compact-encoded object tree.
+   * Each work item is {src, dst, key, fieldKey} where dst[key] will be
+   * set to the expanded value of src.
+   */
+  function _expandIterative(root, keyMap, internTable) {
+    // Wrapper so we can treat the root uniformly
+    var wrapper = {result: null};
+    // Stack items: [source_value, target_object, target_key, fieldKey]
+    var stack = [[root, wrapper, 'result', null]];
 
-  function expandValue(v, keyMap, internTable, fieldKey) {
-    if (typeof v === 'number' && Number.isInteger(v) && internTable && v >= 0 && v < internTable.length) {
-      // Only expand as intern index if this field is NOT a known numeric field.
-      if (!fieldKey || !NUMERIC_FIELDS[fieldKey]) {
-        return internTable[v];
-      }
-    }
-    if (Array.isArray(v)) {
-      return v.map(function(item) {
-        if (typeof item === 'object' && item !== null) {
-          return expandNode(item, keyMap, internTable);
+    while (stack.length > 0) {
+      var item = stack.pop();
+      var v = item[0];
+      var target = item[1];
+      var tKey = item[2];
+      var fieldKey = item[3];
+
+      // Intern table lookup for integer values
+      if (typeof v === 'number' && Number.isInteger(v) && internTable && v >= 0 && v < internTable.length) {
+        if (!fieldKey || !NUMERIC_FIELDS[fieldKey]) {
+          target[tKey] = internTable[v];
+          continue;
         }
-        return expandValue(item, keyMap, internTable);
-      });
+      }
+
+      // Object (dict) — expand keys, push children onto stack
+      if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+        var expanded = {};
+        target[tKey] = expanded;
+        var keys = Object.keys(v);
+        for (var i = keys.length - 1; i >= 0; i--) {
+          var k = keys[i];
+          var fullKey = keyMap[k] || k;
+          stack.push([v[k], expanded, fullKey, k]);
+        }
+        continue;
+      }
+
+      // Array — create output array, push each element onto stack
+      if (Array.isArray(v)) {
+        var arr = new Array(v.length);
+        target[tKey] = arr;
+        for (var j = v.length - 1; j >= 0; j--) {
+          stack.push([v[j], arr, j, null]);
+        }
+        continue;
+      }
+
+      // Primitive — assign directly
+      target[tKey] = v;
     }
-    if (typeof v === 'object' && v !== null) {
-      return expandNode(v, keyMap, internTable);
-    }
-    return v;
+
+    return wrapper.result;
   }
 
   /**
    * Decompress gzip+base64 encoded trace data using DecompressionStream API.
+   * Uses chunked base64 decoding to avoid stack overflow on large strings.
+   * atob() on multi-MB strings can exceed call stack in headless Chromium.
    * Returns the parsed JSON object.
    */
   async function decompressData(b64) {
-    var binary = atob(b64);
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
+    // Decode base64 in chunks to avoid stack overflow on large strings.
+    // atob() on multi-MB strings can exceed call stack in some JS engines.
+    var CHUNK = 65536; // 64K chars per chunk (multiple of 4)
+    var parts = [];
+    var totalLen = 0;
+    for (var pos = 0; pos < b64.length; pos += CHUNK) {
+      var slice = b64.substring(pos, Math.min(pos + CHUNK, b64.length));
+      var bin = atob(slice);
+      var arr = new Uint8Array(bin.length);
+      for (var k = 0; k < bin.length; k++) {
+        arr[k] = bin.charCodeAt(k);
+      }
+      parts.push(arr);
+      totalLen += arr.length;
+    }
+    var bytes = new Uint8Array(totalLen);
+    var boff = 0;
+    for (var p = 0; p < parts.length; p++) {
+      bytes.set(parts[p], boff);
+      boff += parts[p].length;
     }
     var ds = new DecompressionStream('gzip');
     var writer = ds.writable.getWriter();
-    writer.write(bytes);
+    var WRITE_CHUNK = 1048576; // 1MB write chunks
+    for (var wi = 0; wi < bytes.length; wi += WRITE_CHUNK) {
+      var end = Math.min(wi + WRITE_CHUNK, bytes.length);
+      writer.write(bytes.subarray(wi, end));
+    }
     writer.close();
     var reader = ds.readable.getReader();
     var chunks = [];
-    var totalLength = 0;
+    var readLen = 0;
     while (true) {
       var result = await reader.read();
       if (result.done) break;
       chunks.push(result.value);
-      totalLength += result.value.length;
+      readLen += result.value.length;
     }
-    var merged = new Uint8Array(totalLength);
-    var offset = 0;
+    var merged = new Uint8Array(readLen);
+    var moff = 0;
     for (var j = 0; j < chunks.length; j++) {
-      merged.set(chunks[j], offset);
-      offset += chunks[j].length;
+      merged.set(chunks[j], moff);
+      moff += chunks[j].length;
     }
     return JSON.parse(new TextDecoder().decode(merged));
   }

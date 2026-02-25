@@ -57,6 +57,9 @@ def _serialize(obj: Any) -> Any:
 
 _COMPACT_DEFAULTS = ("", [], {}, 0)
 
+# Structural fields the JS viewer expects to always exist (even when empty).
+_KEEP_FIELDS = {"children", "keywords", "tags", "suites", "events"}
+
 
 def _serialize_compact(obj: Any) -> Any:
     """Recursively serialize like _serialize but omit dataclass fields at default empty values.
@@ -73,7 +76,9 @@ def _serialize_compact(obj: Any) -> Any:
             v = _serialize_compact(getattr(obj, k))
             # Skip fields whose serialized value is one of the default empties.
             # Use explicit type checks so 0.0 and False are not skipped.
-            if v == "" or v == [] or v == {} or (v == 0 and type(v) is int):
+            if k not in _KEEP_FIELDS and (
+                v == "" or v == [] or v == {} or (v == 0 and type(v) is int)
+            ):
                 continue
             result[k] = v
         return result

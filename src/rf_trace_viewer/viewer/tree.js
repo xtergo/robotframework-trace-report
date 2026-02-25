@@ -5,6 +5,13 @@ var _originalModel = null;
 var _treeContainer = null;
 var _currentFilteredSpanIds = null;
 var _failuresOnlyActive = false;
+var _filterListenerRegistered = false;
+
+// Virtual scrolling state — only used when span count > VIRTUAL_THRESHOLD
+var _virtualState = null;
+var VIRTUAL_THRESHOLD = 5000;
+var VIRTUAL_ROW_HEIGHT = 28;
+var VIRTUAL_BUFFER = 20;
 
 /**
  * Render the tree view into the given container.
@@ -22,7 +29,8 @@ function renderTree(container, model) {
   setupTreeSynchronization();
   
   // Listen for filter changes
-  if (window.RFTraceViewer && window.RFTraceViewer.on) {
+  if (!_filterListenerRegistered && window.RFTraceViewer && window.RFTraceViewer.on) {
+    _filterListenerRegistered = true;
     window.RFTraceViewer.on('filter-changed', function (data) {
       var filteredSpanIds = {};
       if (data.filteredSpans) {
@@ -167,40 +175,20 @@ function _mergeGroup(group) {
  */
 function _countSpans(model) {
   var count = 0;
-  function countSuite(suite) {
+  var stack = (model.suites || []).slice();
+  while (stack.length > 0) {
+    var item = stack.pop();
     count++;
-    if (suite.children) {
-      for (var i = 0; i < suite.children.length; i++) {
-        var child = suite.children[i];
-        if (child.keyword_type !== undefined) {
-          countKeyword(child);
-        } else if (child.keywords !== undefined) {
-          countTest(child);
-        } else {
-          countSuite(child);
-        }
+    if (item.children) {
+      for (var i = 0; i < item.children.length; i++) {
+        stack.push(item.children[i]);
       }
     }
-  }
-  function countTest(test) {
-    count++;
-    if (test.keywords) {
-      for (var i = 0; i < test.keywords.length; i++) {
-        countKeyword(test.keywords[i]);
+    if (item.keywords) {
+      for (var j = 0; j < item.keywords.length; j++) {
+        stack.push(item.keywords[j]);
       }
     }
-  }
-  function countKeyword(kw) {
-    count++;
-    if (kw.children) {
-      for (var i = 0; i < kw.children.length; i++) {
-        countKeyword(kw.children[i]);
-      }
-    }
-  }
-  var suites = model.suites || [];
-  for (var i = 0; i < suites.length; i++) {
-    countSuite(suites[i]);
   }
   return count;
 }
@@ -213,17 +201,19 @@ function _countSpans(model) {
  * @returns {boolean}
  */
 function _hasDescendantInFilter(item, filteredSpanIds) {
-  if (filteredSpanIds[item.id]) return true;
-  // Check children (suites and keywords)
-  if (item.children) {
-    for (var i = 0; i < item.children.length; i++) {
-      if (_hasDescendantInFilter(item.children[i], filteredSpanIds)) return true;
+  var stack = [item];
+  while (stack.length > 0) {
+    var cur = stack.pop();
+    if (filteredSpanIds[cur.id]) return true;
+    if (cur.children) {
+      for (var i = 0; i < cur.children.length; i++) {
+        stack.push(cur.children[i]);
+      }
     }
-  }
-  // Check keywords (tests)
-  if (item.keywords) {
-    for (var j = 0; j < item.keywords.length; j++) {
-      if (_hasDescendantInFilter(item.keywords[j], filteredSpanIds)) return true;
+    if (cur.keywords) {
+      for (var j = 0; j < cur.keywords.length; j++) {
+        stack.push(cur.keywords[j]);
+      }
     }
   }
   return false;
@@ -236,22 +226,359 @@ function _hasDescendantInFilter(item, filteredSpanIds) {
  * @returns {boolean}
  */
 function _hasDescendantFail(item) {
-  if (item.status === 'FAIL') return true;
-  if (item.children) {
-    for (var i = 0; i < item.children.length; i++) {
-      if (_hasDescendantFail(item.children[i])) return true;
+  var stack = [item];
+  while (stack.length > 0) {
+    var cur = stack.pop();
+    if (cur.status === 'FAIL') return true;
+    if (cur.children) {
+      for (var i = 0; i < cur.children.length; i++) {
+        stack.push(cur.children[i]);
+      }
     }
-  }
-  if (item.keywords) {
-    for (var j = 0; j < item.keywords.length; j++) {
-      if (_hasDescendantFail(item.keywords[j])) return true;
+    if (cur.keywords) {
+      for (var j = 0; j < cur.keywords.length; j++) {
+        stack.push(cur.keywords[j]);
+      }
     }
   }
   return false;
 }
 
+/**
+ * Flatten the tree data model into a flat array of row descriptors.
+ * Only includes items that pass the filter and whose ancestors are expanded.
+ * @param {Array} suites - Merged suite array
+ * @param {Object|null} filteredSpanIds - Filter map or null for all
+ * @param {Object} expandedIds - Map of expanded node IDs
+ * @returns {Array} Flat array of { data, depth, type, maxSiblingDuration, id }
+ */
+function _flattenTree(suites, filteredSpanIds, expandedIds) {
+  var result = [];
+  // Use an explicit stack for iterative DFS (avoids recursion)
+  // Stack items: { items: Array, index: number, depth: number, type: string, maxSiblingDuration: number }
+  var stack = [{ items: suites, index: 0, depth: 0, type: 'suites', maxSiblingDuration: 0 }];
+
+  while (stack.length > 0) {
+    var frame = stack[stack.length - 1];
+    if (frame.index >= frame.items.length) {
+      stack.pop();
+      continue;
+    }
+    var item = frame.items[frame.index];
+    frame.index++;
+
+    // Determine item type
+    var itemType;
+    if (item.keyword_type !== undefined) {
+      itemType = 'keyword';
+    } else if (item.keywords !== undefined) {
+      itemType = 'test';
+    } else {
+      itemType = 'suite';
+    }
+
+    // Filter check: skip if doesn't match and has no matching descendants
+    if (filteredSpanIds !== null) {
+      var matchesFilter = !!filteredSpanIds[item.id];
+      if (!matchesFilter && !_hasDescendantInFilter(item, filteredSpanIds)) {
+        continue;
+      }
+    }
+
+    // Compute maxSiblingDuration for test nodes
+    var maxSibDur = 0;
+    if (itemType === 'test') {
+      maxSibDur = frame.maxSiblingDuration || 0;
+    }
+
+    // Build display name for suites with merged workers
+    var displayName = item.name;
+    if (itemType === 'suite' && item._merged_count && item._merged_count > 1) {
+      displayName = item.name + ' (' + item._merged_count + ' workers)';
+    }
+
+    // Determine children
+    var children = null;
+    var hasChildren = false;
+    if (itemType === 'suite') {
+      children = item.children || [];
+      hasChildren = children.length > 0;
+    } else if (itemType === 'test') {
+      children = item.keywords || [];
+      hasChildren = children.length > 0;
+    } else {
+      children = item.children || [];
+      hasChildren = children.length > 0 || (item.truncated && item.truncated > 0);
+    }
+
+    result.push({
+      data: item,
+      depth: frame.depth,
+      type: itemType,
+      id: item.id,
+      displayName: displayName,
+      hasChildren: hasChildren,
+      maxSiblingDuration: maxSibDur,
+      truncatedCount: (itemType === 'keyword' && item.truncated) ? item.truncated : 0
+    });
+
+    // If expanded, push children onto stack
+    if (hasChildren && expandedIds[item.id] && children.length > 0) {
+      // Compute maxSiblingDuration for child tests
+      var childMaxDur = 0;
+      if (itemType === 'suite') {
+        for (var c = 0; c < children.length; c++) {
+          var ch = children[c];
+          if (ch.keywords !== undefined && ch.elapsed_time > childMaxDur) {
+            childMaxDur = ch.elapsed_time;
+          }
+        }
+      }
+      stack.push({
+        items: children,
+        index: 0,
+        depth: frame.depth + 1,
+        type: itemType,
+        maxSiblingDuration: childMaxDur
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Compute the initial expanded IDs set based on failure path or root suites.
+ * @param {Array} suites - Merged suite array
+ * @returns {Object} Map of expanded node IDs
+ */
+function _computeInitialExpanded(suites) {
+  var expandedIds = {};
+  var failPath = _findFirstFailPath(suites);
+  if (failPath && failPath.length > 0) {
+    for (var i = 0; i < failPath.length; i++) {
+      expandedIds[failPath[i]] = true;
+    }
+  } else {
+    // Expand root suites only
+    for (var j = 0; j < suites.length; j++) {
+      if (suites[j].id) {
+        expandedIds[suites[j].id] = true;
+      }
+    }
+  }
+  return expandedIds;
+}
+
+/**
+ * Render only the visible rows in the virtual scroll viewport.
+ * Clears the content element and creates DOM nodes for visible rows + buffer.
+ */
+function _renderVisibleRows() {
+  var vs = _virtualState;
+  if (!vs || !vs.scrollEl || !vs.contentEl) return;
+
+  var scrollTop = vs.scrollEl.scrollTop;
+  var viewportHeight = vs.scrollEl.clientHeight;
+  // Fallback if container not yet laid out
+  if (viewportHeight <= 0) viewportHeight = 800;
+  var totalItems = vs.flatItems.length;
+  var totalHeight = totalItems * vs.ROW_HEIGHT;
+
+  // Update sentinel height
+  if (vs.sentinelEl) {
+    vs.sentinelEl.style.height = totalHeight + 'px';
+  }
+
+  // Calculate visible range
+  var startIdx = Math.floor(scrollTop / vs.ROW_HEIGHT) - vs.BUFFER;
+  var endIdx = Math.ceil((scrollTop + viewportHeight) / vs.ROW_HEIGHT) + vs.BUFFER;
+  if (startIdx < 0) startIdx = 0;
+  if (endIdx > totalItems) endIdx = totalItems;
+
+  // Skip re-render if range hasn't changed
+  if (vs.renderedRange.start === startIdx && vs.renderedRange.end === endIdx) {
+    return;
+  }
+  vs.renderedRange.start = startIdx;
+  vs.renderedRange.end = endIdx;
+
+  // Clear and rebuild content
+  vs.contentEl.innerHTML = '';
+  vs.contentEl.style.position = 'absolute';
+  vs.contentEl.style.top = (startIdx * vs.ROW_HEIGHT) + 'px';
+  vs.contentEl.style.left = '0';
+  vs.contentEl.style.right = '0';
+
+  var fragment = document.createDocumentFragment();
+  for (var i = startIdx; i < endIdx; i++) {
+    var item = vs.flatItems[i];
+    var rowEl = _createVirtualRow(item, i);
+    fragment.appendChild(rowEl);
+  }
+  vs.contentEl.appendChild(fragment);
+}
+
+/**
+ * Create a DOM element for a single virtual row.
+ * Uses _createTreeNode but strips children container (children are separate flat items).
+ * @param {Object} item - Flat item descriptor
+ * @param {number} index - Index in flatItems array
+ * @returns {HTMLElement}
+ */
+function _createVirtualRow(item, index) {
+  var vs = _virtualState;
+  var isExpanded = !!vs.expandedIds[item.id];
+
+  var node = _createTreeNode({
+    type: item.type,
+    name: item.displayName,
+    status: item.data.status,
+    elapsed: item.data.elapsed_time,
+    hasChildren: item.hasChildren,
+    depth: item.depth,
+    id: item.id,
+    data: item.data,
+    kwType: item.data.keyword_type,
+    kwArgs: item.data.args,
+    maxSiblingDuration: item.maxSiblingDuration || 0
+  });
+
+  // Set fixed height for consistent virtual scrolling
+  node.style.height = vs.ROW_HEIGHT + 'px';
+  node.style.overflow = 'hidden';
+  node.style.boxSizing = 'border-box';
+
+  // Override toggle behavior for virtual mode
+  var toggleBtn = node.querySelector(':scope > .tree-row > .tree-toggle');
+  var row = node.querySelector(':scope > .tree-row');
+
+  // Remove the children container — in virtual mode children are separate flat items
+  var childrenEl = node.querySelector(':scope > .tree-children');
+  if (childrenEl) {
+    node.removeChild(childrenEl);
+  }
+
+  // Remove the detail panel — we handle expand differently in virtual mode
+  var detailEl = node.querySelector(':scope > .detail-panel');
+  if (detailEl) {
+    node.removeChild(detailEl);
+  }
+
+  // Set expanded visual state on toggle button
+  if (isExpanded && toggleBtn) {
+    toggleBtn.textContent = '\u25bc'; // ▼
+    toggleBtn.setAttribute('aria-label', 'Collapse');
+  }
+
+  // Highlight if this is the highlighted span
+  if (vs.highlightedSpanId && item.id === vs.highlightedSpanId) {
+    node.classList.add('highlighted');
+  }
+
+  // Replace click handlers with virtual toggle
+  // Clone row to remove old listeners, then add new ones
+  var newRow = row.cloneNode(true);
+  node.replaceChild(newRow, row);
+
+  // Re-get toggle button from cloned row
+  var newToggle = newRow.querySelector(':scope > .tree-toggle');
+
+  // Add virtual toggle handler to toggle button
+  if (newToggle) {
+    newToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      // Emit navigate-to-span BEFORE toggle (toggle rebuilds DOM)
+      if (item.id && window.RFTraceViewer && window.RFTraceViewer.emit) {
+        window.RFTraceViewer.emit('navigate-to-span', { spanId: item.id, source: 'tree' });
+      }
+      _virtualToggle(item.id);
+    });
+  }
+
+  // Add click handler to row for toggle + navigate
+  newRow.addEventListener('click', function () {
+    // Emit navigate-to-span BEFORE toggle (toggle rebuilds DOM)
+    if (item.id && window.RFTraceViewer && window.RFTraceViewer.emit) {
+      window.RFTraceViewer.emit('navigate-to-span', { spanId: item.id, source: 'tree' });
+    }
+    _virtualToggle(item.id);
+  });
+
+  return node;
+}
+
+/**
+ * Toggle expand/collapse for a node in virtual mode.
+ * Rebuilds the flat list and re-renders visible rows.
+ * @param {string} nodeId - The span ID to toggle
+ */
+function _virtualToggle(nodeId) {
+  var vs = _virtualState;
+  if (!vs) return;
+
+  if (vs.expandedIds[nodeId]) {
+    delete vs.expandedIds[nodeId];
+  } else {
+    vs.expandedIds[nodeId] = true;
+  }
+
+  // Rebuild flat list
+  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+
+  // Force re-render by resetting rendered range
+  vs.renderedRange.start = -1;
+  vs.renderedRange.end = -1;
+  _renderVisibleRows();
+}
+
+/**
+ * Find the index of a span ID in the flat items list.
+ * @param {string} spanId
+ * @returns {number} Index or -1 if not found
+ */
+function _findFlatIndex(spanId) {
+  var vs = _virtualState;
+  if (!vs) return -1;
+  for (var i = 0; i < vs.flatItems.length; i++) {
+    if (vs.flatItems[i].id === spanId) return i;
+  }
+  return -1;
+}
+
+/**
+ * Expand ancestors of a target span in virtual mode.
+ * Walks the data model to find the ancestor path, adds all to expandedIds.
+ * @param {string} targetId - The span ID to reveal
+ */
+function _virtualExpandAncestors(targetId) {
+  var vs = _virtualState;
+  if (!vs) return;
+
+  // Use merged model for ancestor path (flat list is built from merged suites)
+  var mergedModel = { suites: vs.mergedSuites };
+  var ancestorPath = _findAncestorPath(mergedModel, targetId);
+  if (ancestorPath) {
+    for (var i = 0; i < ancestorPath.length; i++) {
+      vs.expandedIds[ancestorPath[i]] = true;
+    }
+  }
+  // Rebuild flat list
+  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+}
+
 function _renderTreeWithFilter(container, model, filteredSpanIds) {
   var t0 = Date.now();
+  var spanCount = _countSpans(model);
+
+  // For large trees, use virtual scrolling
+  if (spanCount > VIRTUAL_THRESHOLD) {
+    _renderTreeVirtual(container, model, filteredSpanIds);
+    var elapsed = Date.now() - t0;
+    console.log('[Tree] Rendered ' + spanCount + ' spans in ' + elapsed + 'ms (virtual scrolling)');
+    return;
+  }
+
+  // Original path for small trees
   container.innerHTML = '';
 
   // Controls: expand all / collapse all / failures only
@@ -310,9 +637,176 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   // Auto-expand failure path or root suites on initial load
   _autoExpandFirstFailure(treeRoot, suites);
 
-  var elapsed = Date.now() - t0;
-  var spanCount = _countSpans(model);
-  console.log('[Tree] Rendered ' + spanCount + ' spans in ' + elapsed + 'ms (lazy children enabled)');
+  var elapsed2 = Date.now() - t0;
+  console.log('[Tree] Rendered ' + spanCount + ' spans in ' + elapsed2 + 'ms (lazy children enabled)');
+}
+
+/**
+ * Render the tree using virtual scrolling for large traces.
+ * Only creates DOM nodes for visible rows + buffer.
+ * @param {HTMLElement} container
+ * @param {Object} model
+ * @param {Object|null} filteredSpanIds
+ */
+function _renderTreeVirtual(container, model, filteredSpanIds) {
+  var mergedSuites = _mergeSameNameSuites(model.suites || []);
+
+  // Determine if this is a re-render (filter change) or first render
+  var isReRender = _virtualState && _virtualState.container === container;
+
+  if (!isReRender) {
+    // First render — set up DOM structure
+    container.innerHTML = '';
+
+    // Controls bar
+    var controls = document.createElement('div');
+    controls.className = 'tree-controls';
+
+    var expandBtn = document.createElement('button');
+    expandBtn.textContent = 'Expand All';
+    expandBtn.addEventListener('click', function () { _virtualSetAllExpanded(true); });
+
+    var collapseBtn = document.createElement('button');
+    collapseBtn.textContent = 'Collapse All';
+    collapseBtn.addEventListener('click', function () { _virtualSetAllExpanded(false); });
+
+    var failuresBtn = document.createElement('button');
+    failuresBtn.textContent = 'Failures Only';
+    failuresBtn.className = 'failures-only-toggle' + (_failuresOnlyActive ? ' active' : '');
+    failuresBtn.setAttribute('aria-pressed', _failuresOnlyActive ? 'true' : 'false');
+    failuresBtn.title = _failuresOnlyActive ? 'Show all test results' : 'Show only failing tests';
+    failuresBtn.addEventListener('click', function () {
+      _failuresOnlyActive = !_failuresOnlyActive;
+      if (_failuresOnlyActive) {
+        if (typeof window.setFilterState === 'function') {
+          window.setFilterState({ testStatuses: ['FAIL'] });
+        }
+        _syncStatusCheckboxes(['FAIL']);
+      } else {
+        if (typeof window.setFilterState === 'function') {
+          window.setFilterState({ testStatuses: ['PASS', 'FAIL', 'SKIP'] });
+        }
+        _syncStatusCheckboxes(['PASS', 'FAIL', 'SKIP']);
+      }
+    });
+
+    controls.appendChild(expandBtn);
+    controls.appendChild(collapseBtn);
+    controls.appendChild(failuresBtn);
+    container.appendChild(controls);
+
+    // Scroll viewport — this is the tree-root equivalent
+    var scrollEl = document.createElement('div');
+    scrollEl.className = 'tree-root tree-virtual-scroll';
+    scrollEl.style.position = 'relative';
+
+    // Sentinel for total height (normal flow, sets scrollbar range on panel-tree)
+    var sentinelEl = document.createElement('div');
+    sentinelEl.className = 'tree-virtual-sentinel';
+    sentinelEl.style.width = '100%';
+    sentinelEl.style.pointerEvents = 'none';
+    scrollEl.appendChild(sentinelEl);
+
+    // Content container for visible rows (positioned over sentinel)
+    var contentEl = document.createElement('div');
+    contentEl.className = 'tree-virtual-content';
+    contentEl.style.position = 'absolute';
+    contentEl.style.top = '0';
+    contentEl.style.left = '0';
+    contentEl.style.right = '0';
+    scrollEl.appendChild(contentEl);
+
+    container.appendChild(scrollEl);
+
+    // Compute initial expanded state
+    var expandedIds = _computeInitialExpanded(mergedSuites);
+
+    // Initialize virtual state
+    _virtualState = {
+      flatItems: [],
+      expandedIds: expandedIds,
+      container: container,
+      scrollEl: container,  // panel-tree is the scroll container (has overflow-y: auto)
+      contentEl: contentEl,
+      sentinelEl: sentinelEl,
+      controlsEl: controls,
+      model: model,
+      filteredSpanIds: filteredSpanIds,
+      mergedSuites: mergedSuites,
+      ROW_HEIGHT: VIRTUAL_ROW_HEIGHT,
+      BUFFER: VIRTUAL_BUFFER,
+      renderedRange: { start: -1, end: -1 },
+      highlightedSpanId: null,
+      scrollViewEl: scrollEl
+    };
+
+    // Attach scroll listener to the panel-tree container
+    var scrollHandler = function () {
+      requestAnimationFrame(function () {
+        _renderVisibleRows();
+      });
+    };
+    container.addEventListener('scroll', scrollHandler);
+    _virtualState._scrollHandler = scrollHandler;
+  } else {
+    // Re-render (filter change) — update state, keep DOM structure
+    _virtualState.filteredSpanIds = filteredSpanIds;
+    _virtualState.mergedSuites = mergedSuites;
+    _virtualState.model = model;
+
+    // Update failures button state
+    var existingFailBtn = container.querySelector('.failures-only-toggle');
+    if (existingFailBtn) {
+      existingFailBtn.className = 'failures-only-toggle' + (_failuresOnlyActive ? ' active' : '');
+      existingFailBtn.setAttribute('aria-pressed', _failuresOnlyActive ? 'true' : 'false');
+      existingFailBtn.title = _failuresOnlyActive ? 'Show all test results' : 'Show only failing tests';
+    }
+  }
+
+  // Build flat list and render
+  _virtualState.flatItems = _flattenTree(mergedSuites, filteredSpanIds, _virtualState.expandedIds);
+  _virtualState.renderedRange.start = -1;
+  _virtualState.renderedRange.end = -1;
+  _renderVisibleRows();
+}
+
+/**
+ * Expand or collapse all nodes in virtual mode.
+ * @param {boolean} expand - true to expand all, false to collapse all
+ */
+function _virtualSetAllExpanded(expand) {
+  var vs = _virtualState;
+  if (!vs) return;
+
+  if (expand) {
+    // Add ALL node IDs to expandedIds by walking the data model
+    var stack = (vs.mergedSuites || []).slice();
+    while (stack.length > 0) {
+      var item = stack.pop();
+      if (item.id) {
+        vs.expandedIds[item.id] = true;
+      }
+      if (item.children) {
+        for (var i = 0; i < item.children.length; i++) {
+          stack.push(item.children[i]);
+        }
+      }
+      if (item.keywords) {
+        for (var j = 0; j < item.keywords.length; j++) {
+          stack.push(item.keywords[j]);
+        }
+      }
+    }
+  } else {
+    // Collapse all — clear expandedIds
+    vs.expandedIds = {};
+  }
+
+  // Rebuild and re-render
+  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+  vs.renderedRange.start = -1;
+  vs.renderedRange.end = -1;
+  _renderVisibleRows();
 }
 
 /**
@@ -322,50 +816,32 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
  * @returns {Array} Array of span IDs forming the failure path, or empty array
  */
 function _findFirstFailPath(suites) {
-  function walkSuite(suite) {
-    if (suite.status !== 'FAIL') return null;
-    var path = [suite.id];
-    if (suite.children) {
-      for (var i = 0; i < suite.children.length; i++) {
-        var child = suite.children[i];
-        var childPath = null;
-        if (child.keyword_type !== undefined) {
-          childPath = walkKeyword(child);
-        } else if (child.keywords !== undefined) {
-          childPath = walkTest(child);
-        } else {
-          childPath = walkSuite(child);
-        }
-        if (childPath) return path.concat(childPath);
+  // Iterative DFS to find the first FAIL path from root to deepest failing node.
+  // Each stack item: { node, path }
+  var stack = [];
+  for (var i = suites.length - 1; i >= 0; i--) {
+    stack.push({ node: suites[i], path: [] });
+  }
+  while (stack.length > 0) {
+    var item = stack.pop();
+    var node = item.node;
+    var path = item.path;
+    if (node.status !== 'FAIL') continue;
+    var currentPath = path.concat([node.id]);
+    // Try to go deeper into children/keywords
+    var kids = node.children || node.keywords || [];
+    var pushed = false;
+    for (var j = 0; j < kids.length; j++) {
+      if (kids[j].status === 'FAIL') {
+        stack.push({ node: kids[j], path: currentPath });
+        pushed = true;
+        break; // only follow the first failing child
       }
     }
-    return path;
-  }
-  function walkTest(test) {
-    if (test.status !== 'FAIL') return null;
-    var path = [test.id];
-    if (test.keywords) {
-      for (var i = 0; i < test.keywords.length; i++) {
-        var kwPath = walkKeyword(test.keywords[i]);
-        if (kwPath) return path.concat(kwPath);
-      }
+    if (!pushed) {
+      // This is the deepest failing node on this path
+      return currentPath;
     }
-    return path;
-  }
-  function walkKeyword(kw) {
-    if (kw.status !== 'FAIL') return null;
-    var path = [kw.id];
-    if (kw.children) {
-      for (var i = 0; i < kw.children.length; i++) {
-        var childPath = walkKeyword(kw.children[i]);
-        if (childPath) return path.concat(childPath);
-      }
-    }
-    return path;
-  }
-  for (var i = 0; i < suites.length; i++) {
-    var result = walkSuite(suites[i]);
-    if (result) return result;
   }
   return [];
 }
@@ -1204,6 +1680,13 @@ function _toggleNode(nodeEl) {
  * Materializes lazy children when expanding. Processes ~100 nodes per frame.
  */
 function _setAllExpanded(container, expand) {
+  // If in virtual mode, delegate to virtual handler
+  if (_virtualState) {
+    _virtualSetAllExpanded(expand);
+    return;
+  }
+
+  // Original mode — DOM-based expand/collapse
   // First, if expanding, materialize all lazy children
   if (expand) {
     var allNodes = container.querySelectorAll('.tree-node');
@@ -1320,6 +1803,13 @@ function _statusIcon(status) {
  * @param {string} spanId - The span ID to highlight
  */
 function highlightNodeInTree(spanId) {
+  // Virtual mode handling
+  if (_virtualState) {
+    _virtualHighlight(spanId);
+    return;
+  }
+
+  // Original mode — DOM-based highlighting
   // Clear previous highlights
   var previousHighlights = document.querySelectorAll('.tree-node.highlighted');
   for (var i = 0; i < previousHighlights.length; i++) {
@@ -1345,6 +1835,26 @@ function highlightNodeInTree(spanId) {
       }
       // Try finding the target again after materialization
       targetNode = document.querySelector('.tree-node[data-span-id="' + spanId + '"]');
+    }
+  }
+
+  if (!targetNode) {
+    // Span not in tree model (e.g., truncated keywords) — try nearest ancestor
+    var fallbackId = _findNearestTreeAncestor(spanId);
+    if (fallbackId) {
+      var fallbackAncestors = _findAncestorPath(_originalModel, fallbackId);
+      if (fallbackAncestors) {
+        for (var fa = 0; fa < fallbackAncestors.length; fa++) {
+          var faNode = document.querySelector('.tree-node[data-span-id="' + fallbackAncestors[fa] + '"]');
+          if (faNode) {
+            _materializeIfNeeded(faNode);
+            _expandNodeOnly(faNode);
+            var faChEl = faNode.querySelector(':scope > .tree-children');
+            if (faChEl) faChEl.classList.add('expanded');
+          }
+        }
+      }
+      targetNode = document.querySelector('.tree-node[data-span-id="' + fallbackId + '"]');
     }
   }
 
@@ -1384,6 +1894,103 @@ function highlightNodeInTree(spanId) {
   } else {
     targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
+}
+
+/**
+ * Find the nearest ancestor of a span that exists in the tree model.
+ * Uses the timeline's flatSpans parent chain to walk up from the target.
+ * Falls back when the target span is in a truncated subtree.
+ * @param {string} spanId - The span ID to find an ancestor for
+ * @returns {string|null} The ID of the nearest ancestor in the tree, or null
+ */
+function _findNearestTreeAncestor(spanId) {
+  // Use timeline's flatSpans to walk up the parent chain
+  var ts = window.timelineState;
+  if (!ts || !ts.flatSpans) return null;
+
+  // Find the span in flatSpans
+  var span = null;
+  for (var i = 0; i < ts.flatSpans.length; i++) {
+    if (ts.flatSpans[i].id === spanId) {
+      span = ts.flatSpans[i];
+      break;
+    }
+  }
+  if (!span) return null;
+
+  // Determine which model to search (merged if virtual, original otherwise)
+  var searchModel = _virtualState
+    ? { suites: _virtualState.mergedSuites }
+    : _originalModel;
+  if (!searchModel) return null;
+
+  // Walk up parent chain, checking if each ancestor is in the tree model
+  var current = span.parent;
+  while (current) {
+    var path = _findAncestorPath(searchModel, current.id);
+    if (path !== null) {
+      return current.id;
+    }
+    // Also check if it's a root suite
+    var suites = searchModel.suites || [];
+    for (var s = 0; s < suites.length; s++) {
+      if (suites[s].id === current.id) return current.id;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+/**
+ * Highlight a span in virtual mode by expanding ancestors and scrolling to it.
+ * @param {string} spanId
+ */
+function _virtualHighlight(spanId) {
+  var vs = _virtualState;
+  if (!vs) return;
+
+  // Clear previous highlight
+  vs.highlightedSpanId = spanId;
+
+  // Find the item in flat list
+  var idx = _findFlatIndex(spanId);
+
+  // If not found, expand ancestors and rebuild
+  if (idx < 0) {
+    _virtualExpandAncestors(spanId);
+    idx = _findFlatIndex(spanId);
+  }
+
+  // If still not found, try to find via timeline parent chain
+  if (idx < 0) {
+    var fallbackId = _findNearestTreeAncestor(spanId);
+    if (fallbackId) {
+      _virtualExpandAncestors(fallbackId);
+      idx = _findFlatIndex(fallbackId);
+      if (idx >= 0) {
+        vs.highlightedSpanId = fallbackId;
+      }
+    }
+  }
+
+  if (idx < 0) {
+    // Can't find span or any ancestor — just re-render current view
+    vs.renderedRange.start = -1;
+    vs.renderedRange.end = -1;
+    _renderVisibleRows();
+    return;
+  }
+
+  // Scroll to the item
+  var scrollTarget = idx * vs.ROW_HEIGHT;
+  var viewportH = vs.scrollEl.clientHeight;
+  if (viewportH <= 0) viewportH = 800;
+  vs.scrollEl.scrollTop = Math.max(0, scrollTarget - viewportH / 2);
+
+  // Force re-render at the new scroll position
+  vs.renderedRange.start = -1;
+  vs.renderedRange.end = -1;
+  _renderVisibleRows();
 }
 
 /**

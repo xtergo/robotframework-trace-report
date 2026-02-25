@@ -82,45 +82,44 @@ function renderKeywordStats(container, model) {
  * Returns array of keyword statistics objects.
  */
 function _aggregateKeywords(suites) {
-  var keywordMap = {}; // keyword name -> { count, durations[], spanIds[] }
+  var keywordMap = {};
   
-  function collectKeywords(keywords) {
-    keywords.forEach(function(kw) {
-      var name = kw.name;
-      if (!keywordMap[name]) {
-        keywordMap[name] = {
-          count: 0,
-          durations: [],
-          spanIds: []
-        };
+  // Iterative walk: stack holds items to process.
+  // Items can be suites (have .children), tests (have .keywords), or keywords (have .keyword_type).
+  var stack = (suites || []).slice();
+  
+  while (stack.length > 0) {
+    var item = stack.pop();
+    
+    if (item.keyword_type !== undefined) {
+      // It's a keyword — aggregate it
+      var name = item.name;
+      if (name) {
+        if (!keywordMap[name]) {
+          keywordMap[name] = { count: 0, durations: [], spanIds: [] };
+        }
+        keywordMap[name].count++;
+        keywordMap[name].durations.push(item.elapsed_time);
+        keywordMap[name].spanIds.push(item.start_time);
       }
-      keywordMap[name].count++;
-      keywordMap[name].durations.push(kw.elapsed_time);
-      // Store identifier for highlighting (using name + start_time as unique ID)
-      keywordMap[name].spanIds.push(kw.start_time);
-      
-      // Recursively collect nested keywords
-      if (kw.children && kw.children.length > 0) {
-        collectKeywords(kw.children);
+      // Push nested keyword children
+      if (item.children) {
+        for (var c = 0; c < item.children.length; c++) {
+          stack.push(item.children[c]);
+        }
       }
-    });
+    } else if (item.keywords !== undefined) {
+      // It's a test — push its keywords
+      for (var k = 0; k < item.keywords.length; k++) {
+        stack.push(item.keywords[k]);
+      }
+    } else if (item.children !== undefined) {
+      // It's a suite — push its children
+      for (var s = 0; s < item.children.length; s++) {
+        stack.push(item.children[s]);
+      }
+    }
   }
-  
-  function processTests(children) {
-    children.forEach(function(child) {
-      if (child.keywords !== undefined) {
-        // It's a test
-        collectKeywords(child.keywords);
-      } else if (child.children !== undefined) {
-        // It's a nested suite
-        processTests(child.children);
-      }
-    });
-  }
-  
-  suites.forEach(function(suite) {
-    processTests(suite.children);
-  });
   
   // Convert map to array with computed statistics
   var stats = [];
@@ -128,9 +127,17 @@ function _aggregateKeywords(suites) {
     if (keywordMap.hasOwnProperty(keyword)) {
       var data = keywordMap[keyword];
       var durations = data.durations;
-      var minDuration = Math.min.apply(null, durations);
-      var maxDuration = Math.max.apply(null, durations);
-      var totalDuration = durations.reduce(function(sum, d) { return sum + d; }, 0);
+      // Compute min/max/total iteratively to avoid stack overflow
+      // Math.min.apply(null, arr) overflows when arr has >~65K elements
+      var minDuration = Infinity;
+      var maxDuration = -Infinity;
+      var totalDuration = 0;
+      for (var di = 0; di < durations.length; di++) {
+        var d = durations[di];
+        if (d < minDuration) minDuration = d;
+        if (d > maxDuration) maxDuration = d;
+        totalDuration += d;
+      }
       var avgDuration = totalDuration / data.count;
       
       stats.push({
