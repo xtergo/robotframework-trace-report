@@ -30,3 +30,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `off()` method to event bus in `app.js`
 - Deep link support: URL hash encodes viewer state (active tab, selected span, filters) and restores on page load
 - Property-based test for deep link round-trip (Property 23)
+- Timeline seconds grid: toggleable dotted vertical lines at second intervals, adaptive spacing based on zoom level
+- Timeline time range filter: click-and-drag on timeline now emits time-range-selected event for search panel filtering

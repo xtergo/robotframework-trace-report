@@ -78,6 +78,8 @@ Open the generated `report.html` in any browser. No server needed for static rep
 - Parallel execution lanes for pabot workers
 - Zoom and pan controls
 - Color-coded by status (pass/fail/skip)
+- Seconds grid overlay with adaptive interval spacing
+- Click-and-drag time range selection for filtering
 
 ### Tree View
 - Hierarchical suite → test → keyword navigation

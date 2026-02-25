@@ -270,15 +270,15 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement `data-theme` attribute switching on `<html>`
     - _Requirements: 11.1, 11.2, 11.3_
 
-- [ ] 16. Implement Deep Links
-  - [ ] 16.1 Create `src/rf_trace_viewer/viewer/deep-link.js`
+- [x] 16. Implement Deep Links
+  - [x] 16.1 Create `src/rf_trace_viewer/viewer/deep-link.js`
     - Implement state → URL hash encoding (view, span, filters)
     - Implement URL hash → state decoding on page load
     - Implement hash update on navigation/filter changes
     - Implement "Copy Link" button
     - _Requirements: 20.1, 20.2, 20.3, 20.4_
 
-  - [ ] 16.2 Write property test for deep link round-trip
+  - [x] 16.2 Write property test for deep link round-trip
     - **Property 23: Deep link round-trip** — encode then decode produces equivalent state
     - **Validates: Requirements 20.1, 20.2, 20.3**
 

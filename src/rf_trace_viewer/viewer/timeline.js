@@ -48,7 +48,8 @@
     rightMargin: 20,
     topMargin: 10,
     bottomMargin: 20,
-    showTimeMarkers: false
+    showTimeMarkers: false,
+    showSecondsGrid: false
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -196,6 +197,22 @@
     markerToggle.appendChild(markerCb);
     markerToggle.appendChild(document.createTextNode('Grid lines'));
     zoomBar.appendChild(markerToggle);
+
+    // Seconds grid toggle
+    var secondsToggle = document.createElement('label');
+    secondsToggle.className = 'timeline-seconds-toggle';
+    secondsToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
+    var secondsCb = document.createElement('input');
+    secondsCb.type = 'checkbox';
+    secondsCb.checked = false;
+    secondsCb.setAttribute('aria-label', 'Show seconds grid lines');
+    secondsCb.addEventListener('change', function () {
+      timelineState.showSecondsGrid = secondsCb.checked;
+      _render();
+    });
+    secondsToggle.appendChild(secondsCb);
+    secondsToggle.appendChild(document.createTextNode('Seconds'));
+    zoomBar.appendChild(secondsToggle);
 
     headerEl.appendChild(zoomBar);
 
@@ -784,7 +801,7 @@
         var totalRange = timelineState.maxTime - timelineState.minTime;
         var selectedRange = endTime - startTime;
 
-        // Only zoom if the selection is meaningful (more than 1% of current view)
+        // Only act if the selection is meaningful (more than 1% of current view)
         var viewRange = timelineState.viewEnd - timelineState.viewStart;
         if (selectedRange > viewRange * 0.01) {
           // Set viewport to the selected range
@@ -792,6 +809,9 @@
           timelineState.viewEnd = endTime;
           timelineState.zoom = totalRange / selectedRange;
           if (timelineState._syncSlider) timelineState._syncSlider();
+
+          // Emit time range filter event
+          _emitTimeRangeSelected(startTime, endTime);
         }
 
         // Clear selection
@@ -966,6 +986,11 @@
     // Render time markers (only when toggle is on)
     if (timelineState.showTimeMarkers) {
       _renderTimeMarkers(ctx, width, height);
+    }
+
+    // Render seconds grid (only when toggle is on)
+    if (timelineState.showSecondsGrid) {
+      _renderSecondsGrid(ctx, width, height);
     }
 
     // Render red dotted line at selected span start
@@ -1297,16 +1322,26 @@
   }
 
   /**
+   * Detect whether dark mode is active.
+   */
+  function _isDarkMode() {
+    return document.querySelector('.rf-trace-viewer.theme-dark') !== null ||
+           document.documentElement.getAttribute('data-theme') === 'dark';
+  }
+
+  /**
    * Render time markers at suite/test boundaries.
    */
   function _renderTimeMarkers(ctx, width, height) {
-    var borderColor = _css('--border-color', '#d0d0d0');
+    // Theme-aware: use visible color for both light and dark backgrounds
+    var isDark = _isDarkMode();
+    var markerColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.35)';
     
     // Use pre-computed markers from _processSpans() — O(marker_count) instead of O(n)
     var markers = timelineState.cachedMarkers || [];
 
     // Render markers — filter by viewport
-    ctx.strokeStyle = borderColor;
+    ctx.strokeStyle = markerColor;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 2]);
 
@@ -1321,6 +1356,58 @@
     }
 
     ctx.setLineDash([]);
+  }
+
+  /**
+   * Render dotted vertical lines at each second interval within the visible viewport.
+   * Adapts interval based on zoom level to avoid overcrowding.
+   */
+  function _renderSecondsGrid(ctx, width, height) {
+    var viewStart = timelineState.viewStart;
+    var viewEnd = timelineState.viewEnd;
+    var viewRange = viewEnd - viewStart;
+
+    // Choose interval: 1s, 5s, 10s, 30s, 60s depending on zoom
+    // Aim for roughly 10-60 lines visible at a time
+    var interval;
+    if (viewRange <= 10) {
+      interval = 0.1;  // 100ms for very zoomed in
+    } else if (viewRange <= 60) {
+      interval = 1;
+    } else if (viewRange <= 300) {
+      interval = 5;
+    } else if (viewRange <= 600) {
+      interval = 10;
+    } else if (viewRange <= 1800) {
+      interval = 30;
+    } else {
+      interval = 60;
+    }
+
+    // Theme-aware: black lines on light bg, white lines on dark bg
+    var isDark = _isDarkMode();
+    var gridColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.35)';
+
+    ctx.save();
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+
+    // Start from the first interval boundary at or after viewStart
+    var firstTick = Math.ceil(viewStart / interval) * interval;
+
+    for (var t = firstTick; t <= viewEnd; t += interval) {
+      var x = _timeToScreenX(t);
+      if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+    }
+
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   /**

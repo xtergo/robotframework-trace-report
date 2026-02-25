@@ -726,7 +726,7 @@
     section.className = 'filter-section';
 
     var label = document.createElement('label');
-    label.textContent = 'Time Range (from timeline)';
+    label.textContent = 'Time Range';
     section.appendChild(label);
 
     var display = document.createElement('div');
@@ -735,9 +735,17 @@
     display.textContent = _formatTimeRange();
     section.appendChild(display);
 
+    var hint = document.createElement('div');
+    hint.className = 'filter-hint';
+    hint.id = 'filter-time-range-hint';
+    hint.textContent = 'Click and drag on the timeline to select a range';
+    section.appendChild(hint);
+
     var clearBtn = document.createElement('button');
     clearBtn.className = 'filter-time-range-clear';
+    clearBtn.id = 'filter-time-range-clear-btn';
     clearBtn.textContent = 'Clear Time Range';
+    clearBtn.style.display = (filterState.timeRangeStart !== null) ? '' : 'none';
     clearBtn.addEventListener('click', function () {
       filterState.timeRangeStart = null;
       filterState.timeRangeEnd = null;
@@ -999,6 +1007,14 @@
     var displayEl = document.getElementById('filter-time-range-display');
     if (displayEl) {
       displayEl.textContent = _formatTimeRange();
+    }
+    var hintEl = document.getElementById('filter-time-range-hint');
+    if (hintEl) {
+      hintEl.style.display = (filterState.timeRangeStart !== null) ? 'none' : '';
+    }
+    var clearBtn = document.getElementById('filter-time-range-clear-btn');
+    if (clearBtn) {
+      clearBtn.style.display = (filterState.timeRangeStart !== null) ? '' : 'none';
     }
   }
 
