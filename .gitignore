@@ -66,3 +66,5 @@ test-reports/
 
 # Large generated test fixtures (regenerate with: python tests/fixtures/generate_large_trace.py)
 tests/fixtures/large_trace.json
+tests/fixtures/large_diverse_trace.json
+tests/fixtures/large_diverse_trace.json.gz
