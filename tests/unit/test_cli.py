@@ -126,8 +126,8 @@ class TestArgumentParsing:
                                 max_spans=None,
                             )
 
-    def test_live_mode_argument(self, monkeypatch, capsys):
-        """CLI with --live should indicate live mode (not yet implemented)."""
+    def test_live_mode_argument(self, monkeypatch):
+        """CLI with --live should create and start a LiveServer."""
         monkeypatch.setattr(
             "sys.argv",
             [
@@ -137,14 +137,23 @@ class TestArgumentParsing:
             ],
         )
 
-        exit_code = main()
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
 
-        assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "Live mode not yet implemented" in captured.out
+            exit_code = main()
 
-    def test_port_argument(self, monkeypatch, capsys):
-        """CLI with --port should accept port number for live mode."""
+            assert exit_code == 0
+            mock_server_cls.assert_called_once_with(
+                trace_path="tests/fixtures/simple_trace.json",
+                port=8077,
+                title=None,
+                poll_interval=5,
+            )
+            mock_server.start.assert_called_once_with(open_browser=True)
+
+    def test_port_argument(self, monkeypatch):
+        """CLI with --port should pass port number to LiveServer."""
         monkeypatch.setattr(
             "sys.argv",
             [
@@ -156,15 +165,22 @@ class TestArgumentParsing:
             ],
         )
 
-        exit_code = main()
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
 
-        assert exit_code == 0
-        # Port argument should be parsed without error
-        captured = capsys.readouterr()
-        assert "Live mode not yet implemented" in captured.out
+            exit_code = main()
 
-    def test_no_open_argument(self, monkeypatch, capsys):
-        """CLI with --no-open should accept flag for live mode."""
+            assert exit_code == 0
+            mock_server_cls.assert_called_once_with(
+                trace_path="tests/fixtures/simple_trace.json",
+                port=9000,
+                title=None,
+                poll_interval=5,
+            )
+
+    def test_no_open_argument(self, monkeypatch):
+        """CLI with --no-open should pass open_browser=False to LiveServer.start()."""
         monkeypatch.setattr(
             "sys.argv",
             [
@@ -175,11 +191,14 @@ class TestArgumentParsing:
             ],
         )
 
-        exit_code = main()
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
 
-        assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "Live mode not yet implemented" in captured.out
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_server.start.assert_called_once_with(open_browser=False)
 
     def test_version_argument(self, monkeypatch, capsys):
         """CLI with --version should print version and exit."""

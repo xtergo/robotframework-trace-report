@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from rf_trace_viewer import __version__
@@ -55,6 +56,12 @@ def main() -> int:
         help="Don't auto-open browser in live mode",
     )
     parser.add_argument(
+        "--poll-interval",
+        type=int,
+        default=5,
+        help="Polling interval in seconds for live mode (default: 5, range: 1-30)",
+    )
+    parser.add_argument(
         "--compact-html",
         action="store_true",
         help="Omit default-value fields from embedded JSON to reduce file size",
@@ -86,9 +93,21 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    # Live mode — not yet implemented
+    # Live mode
     if args.live:
-        print("Live mode not yet implemented")
+        from rf_trace_viewer.server import LiveServer
+
+        if args.input != "-" and not os.path.exists(args.input):
+            # In live mode, the file may not exist yet — that's OK, the server handles it
+            pass
+
+        server = LiveServer(
+            trace_path=args.input,
+            port=args.port,
+            title=args.title,
+            poll_interval=args.poll_interval,
+        )
+        server.start(open_browser=not args.no_open)
         return 0
 
     # Static mode pipeline: parse → build tree → interpret → generate → write

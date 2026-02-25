@@ -240,7 +240,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Verify generated report opens in browser with working tree view, timeline, statistics, and filtering.
 
 - [ ] 14. Implement Live Mode
-  - [ ] 14.1 Implement `LiveServer` class in `src/rf_trace_viewer/server.py`
+  - [x] 14.1 Implement `LiveServer` class in `src/rf_trace_viewer/server.py`
     - Implement HTTP server using `http.server`
     - Implement `GET /` route: serve HTML viewer with live mode flag (no embedded data)
     - Implement `GET /traces.json` route: serve raw trace file, re-read on each request
