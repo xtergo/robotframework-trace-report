@@ -1043,7 +1043,7 @@ function _materializeChildren(nodeEl) {
     if (lazy.truncatedCount > 0) {
       var truncEl = document.createElement('div');
       truncEl.className = 'tree-truncated-indicator';
-      truncEl.style.paddingLeft = (lazy.depth * 16 + 24) + 'px';
+      truncEl.style.paddingLeft = (lazy.depth * _cachedIndentSize + 24) + 'px';
       truncEl.textContent = '\u2026 ' + lazy.truncatedCount + ' keyword' + (lazy.truncatedCount === 1 ? '' : 's') + ' hidden';
       fragment.appendChild(truncEl);
     }

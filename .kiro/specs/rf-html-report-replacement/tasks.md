@@ -676,6 +676,39 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Run via Docker: `make dev-test-file FILE=tests/unit/test_generator.py`
     - _Requirements: 35.1, 35.4, 35.5, 35.6, 35.7, 35.8, 35.11_
 
+- [ ] 35. Implement configurable tree indentation (Requirement 36)
+  - [x] 35.1 Add `--tree-indent-size` CSS custom property to `src/rf_trace_viewer/viewer/style.css`
+    - Add `--tree-indent-size: 24px` to the `:root` / `.rf-trace-viewer` custom properties block
+    - Change `.rf-trace-viewer .tree-node` from `margin-left: 16px` to `margin-left: var(--tree-indent-size)`
+    - Keep `.rf-trace-viewer .tree-node.depth-0` at `margin-left: 0`
+    - Add `.tree-indent-control` styles (inline-flex, gap, font-size matching other controls, margin-left: auto or appropriate spacing)
+    - _Requirements: 36.1, 36.4_
+
+  - [x] 35.2 Add indentation slider control to tree controls bar in `src/rf_trace_viewer/viewer/tree.js`
+    - Add a range slider (`<input type="range" min="8" max="48" step="4">`) after the Failures Only button in both the regular tree controls bar and the virtual scroll controls bar
+    - On `input` event: set `--tree-indent-size` on `document.documentElement.style`, update the label text showing current px value
+    - On init: read `rf-trace-indent-size` from `localStorage`, apply to slider value and CSS custom property (before first render to avoid flash)
+    - On change: write value to `localStorage` under key `rf-trace-indent-size`
+    - Keep both sliders (regular and virtual scroll) in sync if both exist
+    - _Requirements: 36.2, 36.3, 36.5_
+
+  - [x] 35.3 Update truncated-children indicator to use `--tree-indent-size` in `src/rf_trace_viewer/viewer/tree.js`
+    - Change the inline `paddingLeft` calculation from `(depth * 16 + 24) + 'px'` to use the current `--tree-indent-size` value
+    - Cache the current indent value in a module-level variable (updated when slider changes) to avoid repeated `getComputedStyle` calls
+    - Compute padding as `depth * cachedIndentSize + 24` pixels
+    - Ensure this works in both regular and virtual scroll rendering paths
+    - _Requirements: 36.6, 36.7_
+
+  - [ ] 35.4 Write unit tests for indentation feature
+    - Test that default `--tree-indent-size` is 24px in the generated HTML
+    - Test that slider control has min=8, max=48, step=4 attributes
+    - Test that changing the slider value updates the CSS custom property on `document.documentElement`
+    - Test that truncated indicator padding uses the configured indent size (not hardcoded 16)
+    - Test localStorage round-trip: set value, read back, verify match
+    - Test that depth-0 nodes always have margin-left: 0 regardless of indent setting
+    - Run via Docker: `make test` or `docker compose run --rm test`
+    - _Requirements: 36.1, 36.2, 36.3, 36.5, 36.7_
+
 ## Notes
 
 - All tasks are required for comprehensive coverage
