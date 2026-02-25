@@ -452,7 +452,13 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .tree-controls {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 12px 0;
+  margin-bottom: 0;
 }
 
 .rf-trace-viewer .tree-controls button {
