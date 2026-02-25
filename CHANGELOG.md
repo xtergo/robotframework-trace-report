@@ -28,3 +28,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Virtualized tree rendering in `_renderTreeWithFilter()`
   - Listener guard in `renderTree()` to prevent duplicate filter-changed handlers
   - Added `off()` method to event bus in `app.js`
+- Deep link support: URL hash encodes viewer state (active tab, selected span, filters) and restores on page load
+- Property-based test for deep link round-trip (Property 23)

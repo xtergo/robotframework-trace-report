@@ -20,6 +20,9 @@
   // Suppress hash updates while we are restoring state from the URL
   var _suppressHashUpdate = false;
 
+  // Currently selected span ID, tracked from navigate-to-span events
+  var _selectedSpanId = null;
+
   /**
    * Encode the current viewer state into a URL hash string.
    * Only non-default values are included to keep URLs short.
@@ -30,7 +33,7 @@
 
     // Active view tab
     var activeTab = _getActiveTab();
-    if (activeTab && activeTab !== 'tree') {
+    if (activeTab && activeTab !== 'overview') {
       parts.push('view=' + encodeURIComponent(activeTab));
     }
 
@@ -128,7 +131,7 @@
     }
 
     var state = {
-      view: params.view || 'tree',
+      view: params.view || 'overview',
       span: params.span || null,
       filterState: {}
     };
@@ -205,7 +208,7 @@
    * @returns {string|null}
    */
   function _getActiveTab() {
-    var active = document.querySelector('.view-tab.active, [role="tab"][aria-selected="true"]');
+    var active = document.querySelector('.tab-btn.active');
     if (active) {
       return active.getAttribute('data-tab') || active.id || null;
     }
@@ -217,15 +220,7 @@
    * @returns {string|null}
    */
   function _getSelectedSpan() {
-    if (window.RFTraceViewer && typeof window.RFTraceViewer.getState === 'function') {
-      var s = window.RFTraceViewer.getState();
-      if (s && s.selectedSpanId) return s.selectedSpanId;
-    }
-    var selected = document.querySelector('.tree-node.selected, .tree-node[aria-selected="true"]');
-    if (selected) {
-      return selected.getAttribute('data-span-id') || null;
-    }
-    return null;
+    return _selectedSpanId;
   }
 
   /**
@@ -246,14 +241,14 @@
       }
 
       // Restore active view tab
-      if (state.view && state.view !== 'tree') {
-        if (window.RFTraceViewer && typeof window.RFTraceViewer.emit === 'function') {
-          window.RFTraceViewer.emit('tab-changed', { tab: state.view });
-        }
+      if (state.view && state.view !== 'overview') {
+        var tabBtn = document.querySelector('.tab-btn[data-tab="' + state.view + '"]');
+        if (tabBtn) tabBtn.click();
       }
 
       // Restore selected span
       if (state.span) {
+        _selectedSpanId = state.span;
         if (window.RFTraceViewer && typeof window.RFTraceViewer.emit === 'function') {
           window.RFTraceViewer.emit('navigate-to-span', { spanId: state.span });
         }
@@ -317,9 +312,11 @@
     });
 
     // Update hash when a span is selected/navigated to
-    bus.on('navigate-to-span', function () {
-      // Small delay to let the UI settle before reading state
-      setTimeout(_updateHash, 0);
+    bus.on('navigate-to-span', function (data) {
+      if (data && data.spanId) {
+        _selectedSpanId = data.spanId;
+      }
+      _updateHash();
     });
 
     // Restore state from hash on init

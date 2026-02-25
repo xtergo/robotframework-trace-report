@@ -95,6 +95,11 @@ Open the generated `report.html` in any browser. No server needed for static rep
 - Time-range selection on timeline
 - Text search across span names and attributes
 
+### Deep Links
+- URL hash updates as you navigate, select spans, and apply filters
+- Share links that restore exact viewer state (tab, span, filters)
+- Copy Link button for easy sharing
+
 ## Input Format
 
 The viewer reads OTLP NDJSON files as produced by `robotframework-tracer` with `RF_TRACER_OUTPUT_FILE=auto`. Each line is a JSON object following the [OTLP JSON encoding](https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding).
