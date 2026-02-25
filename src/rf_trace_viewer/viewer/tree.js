@@ -17,6 +17,11 @@ var VIRTUAL_BUFFER = 20;
 var _indentSliders = [];  // all slider elements for sync
 var _cachedIndentSize = 24;  // cached current indent value in px
 
+/** Get the .rf-trace-viewer element where CSS custom properties are defined. */
+function _getIndentTarget() {
+  return document.querySelector('.rf-trace-viewer') || document.documentElement;
+}
+
 /**
  * Read saved indent size from localStorage and apply to CSS custom property.
  * Called before first render to avoid flash of wrong indentation.
@@ -28,7 +33,7 @@ function _initIndentSize() {
       var val = parseInt(saved, 10);
       if (val >= 8 && val <= 48) {
         _cachedIndentSize = val;
-        document.documentElement.style.setProperty('--tree-indent-size', val + 'px');
+        _getIndentTarget().style.setProperty('--tree-indent-size', val + 'px');
       }
     }
   } catch (e) {
@@ -62,7 +67,7 @@ function _createIndentControl() {
   slider.addEventListener('input', function () {
     var val = parseInt(slider.value, 10);
     _cachedIndentSize = val;
-    document.documentElement.style.setProperty('--tree-indent-size', val + 'px');
+    _getIndentTarget().style.setProperty('--tree-indent-size', val + 'px');
     valSpan.textContent = val + 'px';
     // Sync all other sliders
     for (var i = 0; i < _indentSliders.length; i++) {
