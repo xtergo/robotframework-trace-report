@@ -250,7 +250,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Wire into CLI --live flow
     - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-  - [ ] 14.2 Create `src/rf_trace_viewer/viewer/live.js`
+  - [x] 14.2 Create `src/rf_trace_viewer/viewer/live.js`
     - Implement polling at configurable interval (default 5s)
     - Implement incremental NDJSON parsing in JS (only new lines via offset)
     - Implement tree/timeline/stats update on new data
@@ -262,6 +262,41 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Test server starts and serves correct routes
     - Test offset-based incremental serving
     - _Requirements: 9.1, 9.5_
+
+  - [ ] 14.4 Implement OTLP receiver mode in `src/rf_trace_viewer/server.py`
+    - Add `POST /v1/traces` handler that accepts OTLP JSON `ExportTraceServiceRequest`
+    - Buffer received NDJSON lines in an in-memory list
+    - Implement `/traces.json?offset=N` serving from in-memory buffer (N = line index)
+    - Return `X-File-Offset` header with new line count
+    - Add `--receiver` CLI flag to start in receiver mode (no input file required)
+    - _Requirements: 9.10, 9.11, 10.9_
+
+  - [ ] 14.5 Implement journal file for crash recovery
+    - Append each received OTLP payload as NDJSON line to journal file
+    - Default journal path: `traces.journal.json`
+    - Support `--journal <path>` CLI flag for custom path
+    - Support `--no-journal` CLI flag to disable journaling
+    - _Requirements: 9.13, 9.15, 10.11, 10.12_
+
+  - [ ] 14.6 Implement upstream collector forwarding
+    - When `--forward <url>` is set, POST received OTLP payloads to upstream collector
+    - Forward asynchronously (don't block the response to the tracer)
+    - Log forwarding errors to stderr without failing
+    - _Requirements: 9.12, 10.10_
+
+  - [ ] 14.7 Implement auto-report generation on shutdown
+    - On graceful shutdown (Ctrl+C / SIGTERM), generate static HTML from buffered spans
+    - Use configured report options (--compact-html, --gzip-embed, -o)
+    - Print report path to stdout on completion
+    - _Requirements: 9.14_
+
+  - [ ] 14.8 Write unit tests for OTLP receiver mode
+    - Test POST /v1/traces accepts valid OTLP JSON and buffers spans
+    - Test /traces.json?offset=N serves from buffer with correct offset
+    - Test journal file is written and can be used for recovery
+    - Test forwarding sends payload to upstream URL
+    - Test auto-report generation on shutdown
+    - _Requirements: 9.10, 9.11, 9.12, 9.13, 9.14_
 
 - [x] 15. Implement Theme Manager and Dark Mode
   - [x] 15.1 Create `src/rf_trace_viewer/viewer/theme.js`

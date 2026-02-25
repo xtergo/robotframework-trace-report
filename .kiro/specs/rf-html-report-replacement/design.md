@@ -373,13 +373,35 @@ class LiveServer:
         """Start HTTP server. Blocks until interrupted."""
 
     def stop(self) -> None:
-        """Graceful shutdown."""
+        """Graceful shutdown. In receiver mode, generates final static report."""
 ```
 
 Routes:
 - `GET /` → HTML viewer (with live mode flag, no embedded data)
-- `GET /traces.json` → Raw trace file (re-read on each request)
-- `GET /traces.json?offset=N` → Trace file from byte offset N (for incremental polling)
+- `GET /traces.json` → Raw trace file (re-read on each request) [file mode]
+- `GET /traces.json?offset=N` → Trace file from byte offset N (for incremental polling) [file mode]
+- `POST /v1/traces` → OTLP HTTP receiver, accepts `ExportTraceServiceRequest` JSON [receiver mode]
+- `GET /traces.json?offset=N` → Serve from in-memory buffer using span index offset [receiver mode]
+
+##### OTLP Receiver Mode
+
+When `--receiver` is passed, the server operates without an input file:
+
+```
+tracer → POST /v1/traces → LiveServer
+                              ├── in-memory span buffer → serves /traces.json to browser
+                              ├── append to journal file (crash recovery)
+                              └── forward to --forward <collector_url> (optional)
+```
+
+The receiver accepts standard OTLP JSON payloads (`ExportTraceServiceRequest`), extracts the NDJSON lines, and:
+1. Appends raw JSON lines to the in-memory buffer (list of NDJSON strings)
+2. Appends the same lines to the journal file (append-only, no parsing overhead)
+3. If `--forward` is set, POSTs the original payload to the upstream collector
+
+The `/traces.json?offset=N` endpoint in receiver mode uses `N` as a line index into the buffer (not byte offset), returning all NDJSON lines from index N onward and the new offset in `X-File-Offset`.
+
+On graceful shutdown, the server calls the static report generator with the buffered data to produce the final HTML report.
 
 #### 6. CLI (`cli.py`)
 

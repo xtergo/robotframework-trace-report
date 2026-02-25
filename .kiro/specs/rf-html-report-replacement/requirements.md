@@ -147,6 +147,12 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 7. WHEN signal spans (e.g., `test.starting`) are received, THE JS_Viewer SHALL immediately display the starting test in the tree view with a visual indicator that it is in progress.
 8. THE JS_Viewer SHALL display a live status indicator showing the time since the last update (e.g., "Live — last updated 3s ago").
 9. THE CLI SHALL accept a `--poll-interval` option to configure the live polling interval in seconds.
+10. WHEN the CLI is invoked with `rf-trace-report --live --receiver`, THE Live_Server SHALL start an OTLP HTTP receiver on `POST /v1/traces` that accepts OTLP JSON ExportTraceServiceRequest payloads and buffers received spans in memory.
+11. WHEN the Live_Server is running in receiver mode, THE Live_Server SHALL serve buffered spans at `/traces.json?offset=N` from the in-memory buffer, using the same incremental offset protocol as file-based mode.
+12. WHEN the `--forward` option is provided with a collector URL, THE Live_Server SHALL forward all received OTLP payloads to the specified collector endpoint after buffering them locally.
+13. WHEN the Live_Server is running in receiver mode, THE Live_Server SHALL append each received OTLP payload as an NDJSON line to a journal file (default: `traces.journal.json`) for crash recovery.
+14. WHEN the Live_Server shuts down gracefully (Ctrl+C or SIGTERM), THE Live_Server SHALL automatically generate a static HTML report from the buffered spans using the configured report options.
+15. WHEN the Live_Server is running in receiver mode and the `--no-journal` flag is set, THE Live_Server SHALL skip writing the journal file and operate purely in-memory.
 
 ### Requirement 10: CLI Interface
 
@@ -162,6 +168,10 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 6. THE CLI SHALL accept `--no-open` to suppress automatic browser opening in live mode.
 7. WHEN the input file does not exist and is not `-`, THE CLI SHALL exit with a non-zero exit code and a descriptive error message.
 8. WHEN the output file path is not writable, THE CLI SHALL exit with a non-zero exit code and a descriptive error message.
+9. THE CLI SHALL accept `--receiver` to start the live server in OTLP receiver mode (no input file required).
+10. THE CLI SHALL accept `--forward <url>` to specify an upstream OTel collector URL for forwarding received spans.
+11. THE CLI SHALL accept `--journal <path>` to specify the journal file path for crash recovery (default: `traces.journal.json`).
+12. THE CLI SHALL accept `--no-journal` to disable journal file writing in receiver mode.
 
 ### Requirement 11: Dark Mode
 
@@ -493,3 +503,423 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 8. THE filter summary bar chips SHALL group related filters visually when scoping is active, showing scoped filters as nested or indented chips under their parent scope (e.g., "Test Status: FAIL" with "↳ Keyword Status: FAIL" indented beneath it).
 9. WHEN the "Scope to test context" toggle is changed, THE JS_Viewer SHALL immediately re-apply all active filters and update the tree view, timeline, and statistics without requiring a page reload.
 10. THE "Scope to test context" toggle SHALL be compatible with the deep link URL hash encoding, so that the scope state is preserved when sharing links.
+
+### Requirement 38: Screenshot and Artifact Embedding
+
+**User Story:** As a test engineer using RF Browser library (Playwright), I want screenshots captured during test execution to be displayed inline in the report so that I can visually inspect the state of the application at the point of failure or at key checkpoints without leaving the report.
+
+#### Acceptance Criteria
+
+1. WHEN a keyword span contains a span event with attribute `rf.screenshot.path` referencing a file on disk, THE Report_Generator SHALL read the file at generation time, base64-encode it, and embed it in the JSON data as `rf.screenshot.data` with the appropriate MIME type in `rf.screenshot.content_type`.
+2. WHEN a keyword span contains a span event with attribute `rf.screenshot.data` (base64-encoded image bytes provided directly by the tracer), THE Report_Generator SHALL pass the data through to the embedded JSON without modification.
+3. WHEN both `rf.screenshot.path` and `rf.screenshot.data` are present on the same span event, THE Report_Generator SHALL prefer `rf.screenshot.data` (already embedded) over reading from the file path.
+4. WHEN `rf.screenshot.path` references a file that does not exist at generation time, THE Report_Generator SHALL emit a warning to stderr and embed a placeholder indicating the missing file path, rather than failing the entire report generation.
+5. THE JS_Viewer SHALL detect screenshot data in keyword span events and render a clickable thumbnail (max 200px wide) inline in the keyword detail panel, below the keyword arguments and above log events.
+6. WHEN a screenshot thumbnail is clicked, THE JS_Viewer SHALL display the full-size image in a modal overlay with close, zoom, and download controls.
+7. THE JS_Viewer SHALL support `image/png`, `image/jpeg`, and `image/webp` content types for embedded screenshots.
+8. WHEN the CLI is invoked with `--no-screenshots`, THE Report_Generator SHALL skip reading and embedding screenshot files from `rf.screenshot.path` attributes, and SHALL strip any `rf.screenshot.data` attributes from the embedded JSON, reducing report size.
+9. WHEN the CLI is invoked with `--screenshot-quality N` (where N is 1-100), THE Report_Generator SHALL re-encode PNG screenshots as JPEG at the specified quality level before embedding, reducing file size for large screenshots. JPEG and WebP screenshots SHALL be passed through unchanged.
+10. THE Report_Generator SHALL support a `--screenshot-max-width N` option that resizes screenshots wider than N pixels (preserving aspect ratio) before embedding, reducing payload size for high-resolution captures.
+11. WHEN in live mode, THE Live_Server SHALL serve screenshot files referenced by `rf.screenshot.path` via a `/artifacts/` route, allowing the JS viewer to load them on demand rather than requiring pre-embedding.
+12. THE JS_Viewer SHALL render multiple screenshots per keyword if multiple `rf.screenshot` events exist on the same span, displayed as a horizontal scrollable strip of thumbnails.
+13. THE tracer SHALL emit screenshot references as OTLP span events with name `rf.screenshot` and attributes: `rf.screenshot.path` (string, file path), `rf.screenshot.content_type` (string, MIME type, e.g., `image/png`), and optionally `rf.screenshot.data` (string, base64-encoded image bytes).
+
+
+### Requirement 39: Live Mode UX Enhancements
+
+**User Story:** As a test engineer watching a live test run, I want the viewer to keep up with execution in real-time with minimal noise so that I can monitor progress and spot failures instantly without manual interaction.
+
+#### Acceptance Criteria
+
+1. WHEN in live mode and new spans arrive, THE JS_Viewer SHALL auto-scroll the tree view and execution flow table to the most recently added keyword or test, keeping the latest activity visible.
+2. THE JS_Viewer SHALL provide an "Auto-Scroll" toggle (enabled by default) that the user can disable to freeze the scroll position while inspecting earlier results.
+3. WHEN in live mode and a test or suite completes with PASS status, THE JS_Viewer SHALL automatically collapse that node's tree branch to reduce visual clutter, keeping only FAIL and in-progress nodes expanded.
+4. THE JS_Viewer SHALL provide an "Auto-Collapse Passed" toggle (enabled by default) that the user can disable to keep all completed nodes expanded during live execution.
+5. WHEN a keyword or test is currently executing (detected via signal spans or open spans without end time), THE JS_Viewer SHALL display a prominent animated "in progress" indicator (e.g., pulsing dot or spinner) on that node in the tree view and timeline.
+6. THE JS_Viewer SHALL render lightweight hover tooltips on tree nodes showing keyword name, execution time, status, and arguments without requiring the user to expand the node or open a detail panel.
+
+## Appendix A: RF Core Output Gap Analysis
+
+This document identifies information and visualizations present in Robot Framework's built-in `log.html` and `report.html` that are not yet covered by `rf-trace-report`, either due to missing tracer data or missing viewer features.
+
+### A.1 Tracer-Side Data Gaps
+
+These are pieces of information that RF core captures in `output.xml` and renders in log.html/report.html, but which the tracer (`robotframework-tracer`) may not currently emit as OTLP span attributes or events. Fixing these requires changes to the tracer.
+
+#### A.1.1 Log Messages (CRITICAL)
+
+**RF behavior:** Every keyword execution in log.html shows all log messages emitted during that keyword's execution — INFO, WARN, DEBUG, TRACE, ERROR, FAIL levels. This is the primary debugging tool in log.html. Messages include:
+- `BuiltIn.Log` output
+- Library-internal logging (e.g., Browser library HTTP request/response logs)
+- Implicit messages from keyword execution (e.g., "Typing text 'hello' into element '#input'")
+- `robot.api.logger` output from Python keywords
+
+**Current state:** Our spec has `RFKeyword.events` (Req 31.3) which maps to OTLP span events. If the tracer emits log messages as span events, we display them (Req 30.4). But it's unclear if the tracer currently emits ALL RF log messages or just a subset.
+
+**Tracer action needed:** Ensure the tracer emits every RF log message as an OTLP span event with:
+- `event.name` = log level (INFO, WARN, DEBUG, TRACE, ERROR, FAIL)
+- `event.attributes`: `message` (string), `timestamp` (nanoseconds), `html` (boolean, whether message contains HTML markup)
+- Respect RF's `--loglevel` setting to filter which levels are emitted
+
+**Viewer action needed:** Already covered by Req 30.4 (level-colored log events under keywords). May need to add HTML message rendering support (RF log.html renders HTML-tagged messages as actual HTML).
+
+#### A.1.2 Resolved Variable Values in Arguments
+
+**RF behavior:** log.html shows keyword arguments with variables fully resolved. For example, if the test has `Click  ${BUTTON_LOCATOR}`, log.html shows `Click  css=#submit-btn` (the resolved value).
+
+**Current state:** We display `rf.keyword.args` but it's unclear whether the tracer sends the resolved or unresolved form.
+
+**Tracer action needed:** Ensure `rf.keyword.args` contains the resolved argument values, not the raw variable references. Optionally also emit `rf.keyword.args.raw` with the unresolved form for reference.
+
+#### A.1.3 Keyword Return Values
+
+**RF behavior:** log.html shows the return value of keywords that produce output. For example: `${result} =  Get Text  css=#status` shows `Return: Active` in the log.
+
+**Current state:** No `rf.keyword.return_value` attribute in our data model.
+
+**Tracer action needed:** Emit `rf.keyword.return_value` as a span attribute containing the string representation of the return value (or "None" if no return).
+
+**Viewer action needed:** Add `return_value` field to `RFKeyword` model. Display in keyword detail panel after arguments.
+
+#### A.1.4 FOR/IF/WHILE Loop Iteration Details
+
+**RF behavior:** log.html shows each iteration of a FOR loop as a separate expandable block with its own keywords. IF/ELSE branches show which branch was taken. WHILE loops show each iteration. TRY/EXCEPT shows which block executed.
+
+**Current state:** If the tracer emits each iteration as a child span of the FOR keyword span, our tree view would show them naturally. But if the tracer emits FOR as a single span with no children per iteration, we lose this detail.
+
+**Tracer action needed:** Verify that:
+- FOR loops emit a child span per iteration with `rf.keyword.type=FOR_ITERATION` and the iteration variable values as attributes
+- IF/ELSE emits child spans for the taken branch with `rf.keyword.type=IF_BRANCH` or `ELSE_BRANCH`
+- WHILE emits child spans per iteration
+- TRY/EXCEPT emits child spans for TRY, EXCEPT, FINALLY blocks
+
+#### A.1.5 Timeout Information
+
+**RF behavior:** log.html shows when a keyword or test times out, including the configured timeout value and the actual elapsed time before timeout.
+
+**Current state:** No explicit timeout attributes in our model.
+
+**Tracer action needed:** Emit `rf.keyword.timeout` (configured timeout in seconds) and `rf.keyword.timed_out` (boolean) as span attributes when a timeout is configured or triggered. For test-level timeouts, emit `rf.test.timeout`.
+
+**Viewer action needed:** Display timeout badge on keywords/tests that timed out. Show configured timeout value in detail panel.
+
+#### A.1.6 Library and Resource File Origin
+
+**RF behavior:** log.html shows the full qualified keyword name including the library (e.g., `Browser.Click`, `BuiltIn.Log`, `Collections.Append To List`). It also shows whether a keyword comes from a .resource file or a Python library.
+
+**Current state:** We have `rf.keyword.name` and `rf.keyword.source` (file path + line number), but not the library/resource name as a separate field.
+
+**Tracer action needed:** Emit `rf.keyword.library` (e.g., "Browser", "BuiltIn", "MyResource") as a span attribute.
+
+**Viewer action needed:** Display library name as a prefix or badge on keyword nodes. Enable filtering by library in the keyword stats view.
+
+#### A.1.7 Test and Suite Metadata
+
+**RF behavior:** report.html shows suite metadata (set via `[Metadata]` setting in suite files) and test tags prominently. log.html shows `[Documentation]`, `[Tags]`, `[Setup]`, `[Teardown]`, `[Timeout]` settings for each test.
+
+**Current state:** We have `RFSuite.metadata` (Req 31.8), `RFTest.tags` (via attributes), and `doc` fields. But we may be missing:
+- Test template information (`[Template]` setting)
+- Test timeout configuration (not just whether it timed out)
+- Suite-level settings like `Suite Setup`, `Suite Teardown` names
+
+**Tracer action needed:** Emit `rf.test.template` (template keyword name if test uses `[Template]`), `rf.test.timeout` (configured timeout string).
+
+#### A.1.8 Keyword Assign Target
+
+**RF behavior:** log.html shows the variable assignment target for keywords. E.g., `${result} =  Get Text  locator` — the `${result} =` part is shown.
+
+**Current state:** Not captured.
+
+**Tracer action needed:** Emit `rf.keyword.assign` as a span attribute containing the list of variable names being assigned to (e.g., `["${result}"]` or `["${status}", "${message}"]` for multi-assign).
+
+**Viewer action needed:** Display assignment target before keyword name in tree view and flow table (e.g., `${result} = Get Text`).
+
+#### A.1.9 Message Timestamps
+
+**RF behavior:** log.html shows precise timestamps on each log message within a keyword, allowing you to see the timing of individual operations within a keyword call.
+
+**Current state:** OTLP span events have timestamps, so if the tracer emits log messages as events with correct timestamps, we get this for free.
+
+**Tracer action needed:** Ensure span event timestamps are set to the actual log message time, not the span start/end time.
+
+#### A.1.10 Continuation Markers (CONTINUE / BREAK)
+
+**RF behavior:** RF 5.0+ supports CONTINUE and BREAK statements in loops. log.html shows when these are hit.
+
+**Current state:** Not captured.
+
+**Tracer action needed:** Emit CONTINUE/BREAK as span events or short-lived child spans with `rf.keyword.type=CONTINUE` or `BREAK`.
+
+### A.2 Viewer-Side Visualization Gaps
+
+These are visualizations or UI features present in RF's log.html or report.html that our viewer doesn't implement, even if the data is available.
+
+#### A.2.1 report.html Summary Dashboard (IMPORTANT)
+
+**RF behavior:** report.html provides a clean summary page with:
+- Total pass/fail/skip counts with large colored numbers
+- Pass rate percentage as a prominent metric
+- Total elapsed time
+- Per-suite breakdown table with pass/fail/skip columns
+- Tag statistics table showing pass/fail per tag
+- Generation timestamp and RF version
+- Links to log.html for each suite/test
+
+**Current state:** Our stats view (Req 7) covers most of this, but we don't have:
+- A dedicated "summary/dashboard" landing page — our viewer opens to the tree view
+- A prominent pass rate percentage display
+- Generation timestamp display
+
+**Viewer action needed:** Consider adding a "Summary" tab as the default landing view, showing the high-level dashboard before the user dives into the tree. This is what report.html users expect to see first.
+
+#### A.2.2 Tag Statistics with Combined Tag Patterns
+
+**RF behavior:** report.html supports combined tag statistics — you can configure patterns like `tag1 AND tag2` or `tag1 NOT tag2` to see aggregated stats for tag combinations. This is configured via `--tagstatcombine` CLI option.
+
+**Current state:** We have tag-based grouping (Req 7.4) but no combined tag pattern support.
+
+**Viewer action needed:** Add support for tag combination patterns in the statistics view, either via CLI configuration or an interactive UI for building tag expressions.
+
+#### A.2.3 Tag Statistics Links and Documentation
+
+**RF behavior:** report.html supports `--tagstatlink` to add external links to tag statistics (e.g., linking a JIRA tag to the JIRA issue URL) and `--tagdoc` to add documentation to tags.
+
+**Current state:** Not covered.
+
+**Viewer action needed:** Add `--tag-link` and `--tag-doc` CLI options. Display links and documentation in the tag statistics table.
+
+#### A.2.4 Log Level Filtering in Viewer
+
+**RF behavior:** log.html has a log level dropdown that lets you filter visible messages by level (e.g., show only WARN and above, hide DEBUG/TRACE).
+
+**Current state:** We show events with level coloring (Req 30.4) but no level filter control.
+
+**Viewer action needed:** Add a log level filter dropdown in the keyword detail panel or as a global setting, allowing users to hide verbose DEBUG/TRACE messages.
+
+#### A.2.5 Elapsed Time Column in Suite Table
+
+**RF behavior:** report.html shows elapsed time for each suite in the breakdown table, with the ability to sort by duration.
+
+**Current state:** Our stats view has per-suite breakdown (Req 7.3) but sorting by duration may not be implemented.
+
+**Viewer action needed:** Ensure suite breakdown table is sortable by all columns including duration.
+
+#### A.2.6 Test Execution Order Display
+
+**RF behavior:** log.html preserves and shows the exact execution order of tests within a suite. Tests are numbered sequentially.
+
+**Current state:** Our tree view shows tests sorted by start_time (from span ordering), which should match execution order. But we don't show explicit test numbers/indices.
+
+**Viewer action needed:** Consider adding test index numbers (e.g., "1/15", "2/15") to test nodes in the tree view for quick orientation in large suites.
+
+#### A.2.7 HTML Content in Log Messages
+
+**RF behavior:** log.html renders HTML-tagged log messages as actual HTML. Libraries like Browser use this to embed formatted content, links, and even inline images in log messages via `*HTML*` prefix.
+
+**Current state:** We render events as plain text (Req 30.4).
+
+**Viewer action needed:** Detect `*HTML*` prefix in log messages and render the content as sanitized HTML (must sanitize to prevent XSS from untrusted trace data). This is important for Browser library compatibility.
+
+#### A.2.8 Keyword Count per Test
+
+**RF behavior:** log.html shows the total number of keywords under each test, giving a quick sense of test complexity.
+
+**Current state:** Not explicitly shown.
+
+**Viewer action needed:** Display keyword count badge on test nodes (e.g., "Login Test (23 keywords)").
+
+#### A.2.9 Suite/Test Source File Links
+
+**RF behavior:** log.html shows the source file path for suites and tests. In some setups, these are clickable links to the source.
+
+**Current state:** We show source path in detail panels (Req 30.1, 30.3) but no clickable link.
+
+**Viewer action needed:** Make source file paths clickable — could open in a configured IDE URL scheme (e.g., `vscode://file/{path}:{line}`) or copy to clipboard. Add `--source-url-pattern` CLI option for configuring the link format.
+
+#### A.2.10 Start/End Time Display Format
+
+**RF behavior:** log.html shows human-readable timestamps like "20250225 14:32:05.123" for start/end times.
+
+**Current state:** We show start/end times in detail panels but format may not match RF convention.
+
+**Viewer action needed:** Ensure timestamps are displayed in a clear, human-readable format. Consider showing both absolute time and relative time (e.g., "+2.3s from test start").
+
+### A.3 Data Available But Potentially Underutilized
+
+These are data points that the tracer likely already emits but our viewer may not be making full use of.
+
+#### A.3.1 Resource Attributes
+
+**What's available:** OTLP resource attributes include host name, service name, OS, Python version, etc.
+
+**Current state:** Req 28 covers environment info display, but we could also use resource attributes for:
+- Grouping results by host in parallel/distributed execution
+- Showing Python/RF version mismatch warnings when comparing traces
+
+#### A.3.2 Span Status Code vs RF Status
+
+**What's available:** Both OTLP status code and `rf.status` attribute.
+
+**Current state:** We map these (Req 3.7), but edge cases may exist:
+- `STATUS_CODE_UNSET` with `rf.status=SKIP` — is this handled?
+- `STATUS_CODE_ERROR` with `rf.status=PASS` — should this warn?
+
+#### A.3.3 Span Links
+
+**What's available:** OTLP spans can have `links` to other spans (cross-trace references).
+
+**Current state:** Not utilized. Could be useful for:
+- Linking RF test spans to SUT spans (if trace context propagation is set up)
+- Linking retry attempts to original test execution
+
+### A.4 Priority Ranking
+
+| Priority | Gap | Impact | Effort |
+|----------|-----|--------|--------|
+| P0 | 1.1 Log messages | Without this, log.html is still needed for debugging | Tracer: medium, Viewer: low (already have events) |
+| P0 | 2.1 Summary dashboard | First thing report.html users look for | Viewer only: medium |
+| P1 | 1.2 Resolved variable values | Important for debugging | Tracer: low (likely already done) |
+| P1 | 1.4 Loop iteration details | Important for complex tests | Tracer: medium |
+| P1 | 2.7 HTML log messages | Browser library compatibility | Viewer: medium (needs sanitization) |
+| P1 | 1.8 Keyword assign target | Common debugging pattern | Tracer: low |
+| P2 | 1.3 Return values | Nice to have for debugging | Tracer: low, Viewer: low |
+| P2 | 1.6 Library origin | Useful for keyword identification | Tracer: low, Viewer: low |
+| P2 | 2.4 Log level filtering | Quality of life | Viewer: low |
+| P2 | 2.9 Source file links | IDE integration | Viewer: low |
+| P3 | 1.5 Timeout info | Edge case | Tracer: low |
+| P3 | 1.7 Template info | Edge case | Tracer: low |
+| P3 | 2.2 Combined tag patterns | Power user feature | Viewer: medium |
+| P3 | 2.3 Tag links/docs | Power user feature | Viewer: low |
+| P3 | 2.6 Test execution order | Minor UX | Viewer: low |
+| P3 | 2.8 Keyword count | Minor UX | Viewer: low |
+| P3 | 2.10 Timestamp format | Minor UX | Viewer: low |
+| P3 | 1.10 CONTINUE/BREAK | RF 5.0+ only | Tracer: low |
+
+
+### A.5 Enhancements Over RF Core log.html / report.html
+
+These are features and capabilities that RF's built-in log.html and report.html do NOT provide, where this tool offers a superior or entirely new experience. Some are already in our spec, others are ideas for future consideration.
+
+#### Already Specified (in our requirements)
+
+##### A.5.1 Timeline / Gantt View (Req 6)
+RF core has no timeline visualization. log.html shows a flat tree with timestamps, but you can't see parallel execution patterns, overlapping spans, or bottlenecks visually. Our Gantt-style timeline with zoom/pan/selection is a major differentiator, especially for pabot parallel runs.
+
+##### A.5.2 Cross-View Synchronized Navigation (Req 34.3)
+RF core's log.html and report.html are separate files with no cross-linking between views. Clicking a test in report.html opens log.html but loses context. Our viewer keeps tree, timeline, stats, and flow table in sync — click anywhere, everything follows.
+
+##### A.5.3 Instant Full-Text Search (Req 8.1, 34.2)
+RF log.html has zero search capability. Users resort to browser Ctrl+F which doesn't work well with collapsed nodes. Our search works across all node names, arguments, log messages, and error messages with real-time highlighting.
+
+##### A.5.4 Multi-Dimensional Filtering (Req 8)
+RF core has no filtering at all. Our viewer supports status, tag, suite, keyword type, duration range, time range, and text search — all composable with AND logic and a visible filter summary bar.
+
+##### A.5.5 Failures-Only Quick Filter (Req 34.6)
+The most common debugging workflow in RF is "find the failure." In log.html this requires manually expanding suites and tests until you find the red one. Our failures-only toggle instantly collapses everything except the failure path.
+
+##### A.5.6 Auto-Expand to First Failure (Req 34.7)
+log.html starts fully collapsed. Our viewer auto-expands the path to the first failure on load — zero clicks to see what broke.
+
+##### A.5.7 Dark Mode (Req 11)
+RF log.html and report.html are light-only. No dark mode, no theme switching.
+
+##### A.5.8 Deep Links with Filter State (Req 20)
+RF log.html supports basic anchor links to specific tests, but doesn't encode filter state, view selection, or scroll position. Our deep links capture the full viewer state.
+
+##### A.5.9 Live Mode with Real-Time Updates (Req 9)
+RF core generates output files only after the run completes (or via `--listener` hacks). Our live mode shows results streaming in real-time during execution with incremental updates.
+
+##### A.5.10 Comparison / Regression Detection (Req 14)
+RF core has no built-in comparison. You'd need external tools like `rebot --merge` or diffing XML files. Our viewer loads a second trace and shows regressions, fixes, duration changes, and new/removed tests inline.
+
+##### A.5.11 Flaky Test Detection (Req 16)
+RF core doesn't track flakiness. Our viewer identifies tests with inconsistent results across multiple runs and computes flakiness scores.
+
+##### A.5.12 Critical Path Analysis (Req 17)
+RF core shows individual durations but doesn't compute or visualize the critical path — the chain of sequential spans that determines total wall-clock time. Essential for optimizing parallel execution.
+
+##### A.5.13 Keyword Usage Statistics (Req 18)
+RF core shows no aggregated keyword metrics. Our keyword stats view shows call count, min/max/avg/total duration per keyword — invaluable for identifying slow library calls.
+
+##### A.5.14 Execution Flow Table (Req 26)
+RF log.html shows keywords in a tree. Our flow table shows them as a flat sequential table with source file, line number, args, status, and duration — closer to a debugger step-through view.
+
+##### A.5.15 Virtual Scrolling for Large Traces (Req 13.2)
+RF log.html uses jQuery DOM manipulation and becomes unusable above ~2,000 elements. Our virtual scrolling handles 500,000+ spans smoothly.
+
+##### A.5.16 Export to CSV/JSON (Req 21)
+RF core has no export. You'd need to parse output.xml yourself. Our viewer exports filtered results as CSV or JSON directly from the browser.
+
+##### A.5.17 Theming and Branding (Req 22)
+RF log.html/report.html have a fixed appearance. Our viewer supports custom logos, accent colors, theme CSS files, and footer text for corporate branding.
+
+##### A.5.18 Plugin System (Req 24)
+RF core has no viewer plugin system. Our viewer supports Python span processors and JavaScript viewer plugins with a full event API.
+
+##### A.5.19 Compact Serialization (Req 35)
+RF log.html embeds data using a custom JS model format that's not optimized for size. Our compact serialization with key mapping, string interning, and gzip embedding produces significantly smaller files for large traces.
+
+##### A.5.20 Screenshot Embedding (Req 38)
+RF log.html can show screenshots via `*HTML*` log messages with `<img>` tags, but requires the image files to be accessible at the same relative path. Our approach embeds screenshots directly in the HTML as base64, making the report fully self-contained and portable.
+
+##### A.5.21 Configurable Tree Indentation (Req 36)
+RF log.html has fixed indentation. Our viewer lets users adjust indentation depth with a slider, persisted across sessions.
+
+##### A.5.22 Filter Scope Mode (Req 37)
+RF core has no concept of cross-level filter scoping. Our scope toggle lets users control whether keyword filters respect the test-level filter context.
+
+#### Not Yet Specified (Future Enhancement Ideas)
+
+##### A.5.23 AI-Powered Failure Analysis
+Integrate with LLM APIs to automatically analyze failure patterns, suggest root causes, and group related failures. Could provide "This failure looks similar to issue #1234" suggestions based on error message similarity.
+
+##### A.5.24 Test Execution Heatmap
+A calendar-style heatmap showing test health over time (like GitHub's contribution graph). Each cell represents a run, colored by pass rate. Requires historical data from multiple runs.
+
+##### A.5.25 Diff View for Test Output Changes
+When comparing two runs, show a side-by-side diff of log messages for tests that changed status. Helps identify what changed in the environment or test that caused a regression.
+
+##### A.5.26 Performance Regression Alerts
+Automatically flag tests whose duration increased by more than a configurable threshold (e.g., >20%) compared to a baseline run. Show these prominently in the summary dashboard.
+
+##### A.5.27 Test Dependency Graph
+Visualize implicit dependencies between tests based on shared resources, execution order constraints, or variable passing. Helps identify tests that can be parallelized or that have hidden coupling.
+
+##### A.5.28 Collaborative Annotations
+Allow users to add notes/annotations to specific tests or failures in the report (stored in localStorage or a shared backend). Useful for team debugging sessions — "I'm investigating this one" or "Known issue, see JIRA-456".
+
+##### A.5.29 Notification Webhooks
+CLI option to send a webhook (Slack, Teams, email) when report generation completes, including summary stats. Useful for CI pipelines where the report is generated as a post-build step.
+
+##### A.5.30 Embedded Terminal Replay
+If the tracer captures stdout/stderr output during test execution, embed a terminal replay viewer that shows the console output synchronized with the timeline. Useful for debugging tests that interact with CLI tools.
+
+##### A.5.31 Resource Usage Overlay
+If the tracer or a companion agent captures CPU/memory/network metrics during execution, overlay these on the timeline as a line chart. Helps correlate test failures with resource exhaustion.
+
+##### A.5.32 Test Coverage Mapping
+If code coverage data is available (e.g., from coverage.py), link test spans to the code they exercise. Show which tests cover which modules, and highlight untested code paths.
+
+##### A.5.33 Smart Test Ordering Suggestions
+Analyze execution patterns across multiple runs and suggest optimal test ordering for faster feedback — run historically flaky or slow tests first, parallelize independent suites.
+
+##### A.5.34 Offline PWA Mode
+Make the viewer installable as a Progressive Web App so it works offline, can be pinned to the taskbar, and supports file drag-and-drop for opening trace files without a server.
+
+##### A.5.35 Accessibility Audit Report
+Generate an accessibility summary for the test results themselves — if tests are testing a web application, correlate with axe-core or similar accessibility scan results embedded as span attributes.
+
+##### A.5.36 Multi-Language Log Message Support
+RF log.html assumes English. Support rendering log messages with Unicode, RTL text, and CJK characters correctly. Ensure the viewer's text search works with non-ASCII content.
+
+##### A.5.37 Shareable Report Snippets
+Allow users to select a subset of the report (e.g., a single failing test with its keyword tree) and export it as a standalone mini-report or shareable image/PDF for bug reports and Slack messages.
+
+##### A.5.38 CI/CD Integration Dashboard
+A companion web dashboard that aggregates reports from multiple CI runs, showing trends, flaky test tracking, and team-level metrics. The HTML report would be the single-run view; the dashboard provides the multi-run overview.
+
+##### A.5.39 Span Attribute Search and Grouping
+Allow users to search and group by arbitrary span attributes (not just RF-specific ones). Useful when SUT OTLP spans carry custom attributes like `http.method`, `db.statement`, or `user.id`.
+
+##### A.5.40 Configurable Column Layout in Flow Table
+Let users choose which columns to show/hide in the execution flow table, reorder columns, and resize column widths. Persist preferences in localStorage.
