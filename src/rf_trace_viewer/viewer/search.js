@@ -943,6 +943,7 @@
     filterState.durationMax = null;
     filterState.timeRangeStart = null;
     filterState.timeRangeEnd = null;
+    filterState.scopeToTestContext = true;
 
     // Update UI
     var textInput = document.getElementById('filter-text-input');
@@ -964,6 +965,9 @@
     for (var i = 0; i < rangeInputs.length; i++) {
       rangeInputs[i].value = '';
     }
+
+    var scopeToggle = document.getElementById('filter-scope-toggle');
+    if (scopeToggle) scopeToggle.checked = true;
 
     _applyFilters();
   }
@@ -1366,6 +1370,7 @@
     if (newState.durationMax !== undefined) filterState.durationMax = newState.durationMax;
     if (newState.timeRangeStart !== undefined) filterState.timeRangeStart = newState.timeRangeStart;
     if (newState.timeRangeEnd !== undefined) filterState.timeRangeEnd = newState.timeRangeEnd;
+    if (newState.scopeToTestContext !== undefined) filterState.scopeToTestContext = newState.scopeToTestContext;
 
     _applyFilters();
   };
