@@ -484,7 +484,7 @@
    */
   function _buildTagFilters() {
     var section = document.createElement('div');
-    section.className = 'filter-section';
+    section.className = 'filter-section filter-tag-section';
 
     var label = document.createElement('label');
     label.textContent = 'Tags';
@@ -554,6 +554,7 @@
           filterState.suites.push(e.target.options[i].value);
         }
       }
+      _updateTagFilterOptions();
       _applyFilters();
     });
 
@@ -660,6 +661,64 @@
   }
 
   /**
+   * Update tag filter options based on current scope and suite selection.
+   * When scopeToTestContext is enabled and suites are selected, only show
+   * tags from tests within those suites. Otherwise show all tags.
+   */
+  function _updateTagFilterOptions() {
+    var scopedTags;
+    if (filterState.scopeToTestContext && filterState.suites.length > 0) {
+      var tagSet = {};
+      for (var i = 0; i < allSpans.length; i++) {
+        var span = allSpans[i];
+        if (span.type === 'test' && filterState.suites.indexOf(span.suite) !== -1) {
+          for (var j = 0; j < span.tags.length; j++) {
+            tagSet[span.tags[j]] = true;
+          }
+        }
+      }
+      scopedTags = Object.keys(tagSet).sort();
+    } else {
+      scopedTags = availableOptions.tags;
+    }
+    _rebuildTagSelect(scopedTags);
+  }
+
+  /**
+   * Rebuild the tag multiselect options from the given tag list.
+   * Preserves current selections that still exist in the scoped list,
+   * removes selections for tags no longer in scope.
+   */
+  function _rebuildTagSelect(tags) {
+    var section = document.querySelector('.filter-tag-section');
+    if (!section) return;
+
+    var select = section.querySelector('select');
+    if (!select) return;
+
+    // Preserve current selections that still exist in new tag list
+    var newSelections = [];
+    for (var i = 0; i < filterState.tags.length; i++) {
+      if (tags.indexOf(filterState.tags[i]) !== -1) {
+        newSelections.push(filterState.tags[i]);
+      }
+    }
+    filterState.tags = newSelections;
+
+    // Rebuild options
+    select.innerHTML = '';
+    select.size = Math.min(5, tags.length);
+
+    for (var i = 0; i < tags.length; i++) {
+      var option = document.createElement('option');
+      option.value = tags[i];
+      option.textContent = tags[i];
+      option.selected = filterState.tags.indexOf(tags[i]) !== -1;
+      select.appendChild(option);
+    }
+  }
+
+  /**
    * Build time range display (read-only, set by timeline).
    */
   function _buildTimeRangeDisplay() {
@@ -746,8 +805,8 @@
             filterState.kwStatuses.indexOf(span.status) === -1) {
           continue;
         }
-        // Parent test must pass testStatuses
-        if (filterState.testStatuses.length > 0) {
+        // Parent test must pass testStatuses (only when scoped to test context)
+        if (filterState.scopeToTestContext && filterState.testStatuses.length > 0) {
           var testAncestor = _findTestAncestor(span.id);
           if (testAncestor &&
               filterState.testStatuses.indexOf(testAncestor.status) === -1) {

@@ -462,3 +462,34 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 9. THE JS_Viewer SHALL detect and decode compact serialization format automatically on load: check for the presence of the key-mapping table and intern table in the embedded data, and transparently expand the data to the full format before rendering.
 10. THE compact serialization format SHALL be versioned (a `"v"` field in the wrapper object) so that future format changes can be detected and handled by the JS viewer.
 11. WHEN both `--compact-html` and `--gzip-embed` flags are provided together, THE Report_Generator SHALL first apply compact serialization (omit defaults, short keys, intern table) and then gzip-compress the resulting compact JSON, so both optimizations compose and the maximum size reduction is achieved.
+
+### Requirement 36: Configurable Tree Indentation
+
+**User Story:** As a test engineer, I want to adjust the indentation depth of tree nodes so that deeply nested suites, tests, and keywords are visually distinct and easy to follow.
+
+#### Acceptance Criteria
+
+1. THE JS_Viewer SHALL indent tree nodes at a default depth increment of 24 pixels per nesting level, replacing the current 16-pixel increment.
+2. THE JS_Viewer SHALL render an indentation control in the tree controls bar (alongside Expand All, Collapse All, and Failures Only) that allows the user to adjust the per-level indentation between 8 pixels and 48 pixels.
+3. WHEN the user adjusts the indentation control, THE JS_Viewer SHALL immediately update the indentation of all visible tree nodes without requiring a page reload.
+4. THE JS_Viewer SHALL apply tree indentation using a CSS custom property (`--tree-indent-size`) so that the value can be overridden by custom theme files.
+5. WHEN the user changes the indentation setting, THE JS_Viewer SHALL persist the chosen value in `localStorage` and restore it on subsequent page loads.
+6. THE indentation control SHALL be compatible with virtual scrolling mode, applying the configured indentation to dynamically rendered nodes as the user scrolls.
+7. THE truncated-children indicator SHALL use the same CSS custom property (`--tree-indent-size`) for its left padding calculation, maintaining visual alignment with tree nodes at the corresponding depth.
+
+### Requirement 37: Filter Scope Mode and Cross-Level Filter Logic
+
+**User Story:** As a test engineer, I want keyword-level filters to respect the test-level filter context so that when I filter for failed tests, I only see keywords belonging to those failed tests, and I want visible control over how filter groups combine.
+
+#### Acceptance Criteria
+
+1. THE JS_Viewer SHALL provide a "Scope to test context" toggle control in the filter panel (enabled by default) that, when active, restricts keyword-level filter results to only keywords whose parent test passes the active Test Status filter.
+2. WHEN "Scope to test context" is enabled and the user unchecks PASS in Test Status, THE JS_Viewer SHALL hide all keywords belonging to passing tests, regardless of the Keyword Status filter settings.
+3. WHEN "Scope to test context" is disabled, THE JS_Viewer SHALL evaluate Test Status and Keyword Status filters independently (current behavior), allowing keywords from any test to appear if they match the Keyword Status filter.
+4. THE JS_Viewer SHALL persist the "Scope to test context" toggle state in localStorage and restore it on subsequent page loads.
+5. THE JS_Viewer SHALL display the scope relationship in the filter summary bar (above the tree) when scoping is active, using a visual indicator (e.g., "Test Status → Keyword Status" with a linking arrow or "within" label) so users understand the hierarchical relationship.
+6. WHEN "Scope to test context" is enabled, THE JS_Viewer SHALL also scope Tag filters to respect the Suite filter — if specific suites are selected, only tags from tests within those suites SHALL appear in the tag filter options.
+7. THE JS_Viewer SHALL display a filter group operator indicator between filter sections in the filter panel showing "AND" (the current default behavior), making the logical combination explicit to the user.
+8. THE filter summary bar chips SHALL group related filters visually when scoping is active, showing scoped filters as nested or indented chips under their parent scope (e.g., "Test Status: FAIL" with "↳ Keyword Status: FAIL" indented beneath it).
+9. WHEN the "Scope to test context" toggle is changed, THE JS_Viewer SHALL immediately re-apply all active filters and update the tree view, timeline, and statistics without requiring a page reload.
+10. THE "Scope to test context" toggle SHALL be compatible with the deep link URL hash encoding, so that the scope state is preserved when sharing links.

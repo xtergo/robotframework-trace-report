@@ -723,13 +723,13 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Update `_buildFilterUI()` to insert `_buildAndIndicator()` between each filter section (Test Status / Scope Toggle / Keyword Status / Tags / Suites / Keyword Types / Duration)
     - _Requirements: 37.7_
 
-  - [ ] 36.3 Gate parent-test check in `_applyFilters()` behind `scopeToTestContext` flag in `src/rf_trace_viewer/viewer/search.js`
+  - [x] 36.3 Gate parent-test check in `_applyFilters()` behind `scopeToTestContext` flag in `src/rf_trace_viewer/viewer/search.js`
     - In the keyword filtering block of `_applyFilters()`, wrap the existing `_findTestAncestor` parent-test status check inside `if (filterState.scopeToTestContext)` guard
     - When `scopeToTestContext` is `false`, keywords are evaluated solely against `kwStatuses` with no parent test status check
     - When `scopeToTestContext` is `true`, preserve existing behavior: keyword must match `kwStatuses` AND its parent test must match `testStatuses`
     - _Requirements: 37.1, 37.2, 37.3, 37.9_
 
-  - [ ] 36.4 Implement tag filter dynamic scoping by suite in `src/rf_trace_viewer/viewer/search.js`
+  - [x] 36.4 Implement tag filter dynamic scoping by suite in `src/rf_trace_viewer/viewer/search.js`
     - Implement `_updateTagFilterOptions()`: when `scopeToTestContext` is enabled and `filterState.suites` is non-empty, collect tags only from tests within selected suites; otherwise show all tags
     - Implement `_rebuildTagSelect(tags)`: rebuild the tag multiselect options from the given tag list, preserving current selections that still exist in the scoped list, removing selections for tags no longer in scope
     - Add `filter-tag-section` class to the tag filter section element in `_buildTagFilters()` so `_rebuildTagSelect` can target it

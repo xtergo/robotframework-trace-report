@@ -229,6 +229,7 @@ Generate Virtual Report
     ...    python3    -m    rf_trace_viewer.cli
     ...    ${VIRTUAL_TRACE}
     ...    -o    ${VIRTUAL_REPORT}
+    ...    --gzip-embed
     ...    env:PYTHONPATH=src
     ...    cwd=${CURDIR}/../../..
     Should Be Equal As Integers    ${result.rc}    0    Virtual report generation failed: ${result.stderr}

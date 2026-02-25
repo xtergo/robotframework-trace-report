@@ -1120,3 +1120,516 @@ The following Kiro hooks should be configured for development workflow automatio
 1. **On Python file edit**: Run `ruff check` and `black --check` on the changed file
 2. **On test file edit**: Run the corresponding pytest test file
 3. **On agent stop**: Run `pytest --cov` to verify coverage hasn't dropped below 80%
+
+## Configurable Tree Indentation Design (Requirement 36)
+
+### Motivation
+
+The current tree view uses a hardcoded `margin-left: 16px` per nesting level. For deeply nested suites/tests/keywords (common in large RF projects with library keyword chains), 16px per level makes deep nodes hard to distinguish visually. A configurable indentation with a wider default (24px) and user-adjustable range improves readability for both shallow and deep trees.
+
+### CSS Custom Property Approach
+
+Replace the hardcoded `margin-left: 16px` on `.tree-node` with a CSS custom property:
+
+```css
+:root {
+  --tree-indent-size: 24px;
+}
+
+.rf-trace-viewer .tree-node {
+  margin-left: var(--tree-indent-size);
+}
+
+.rf-trace-viewer .tree-node.depth-0 {
+  margin-left: 0;
+}
+```
+
+This allows:
+- Theme files to override the default via `--tree-indent-size`
+- The JS slider control to update the value at runtime via `document.documentElement.style.setProperty('--tree-indent-size', value + 'px')`
+- Virtual scroll nodes to automatically inherit the current value (CSS custom properties cascade to dynamically created elements)
+
+### Slider Control UI
+
+A range slider is added to the tree controls bar, after the "Failures Only" button:
+
+```
+[Expand All] [Collapse All] [Failures Only]   Indent: [====|====] 24px
+```
+
+Implementation:
+```javascript
+var indentLabel = document.createElement('label');
+indentLabel.className = 'tree-indent-control';
+indentLabel.textContent = 'Indent: ';
+
+var indentSlider = document.createElement('input');
+indentSlider.type = 'range';
+indentSlider.min = '8';
+indentSlider.max = '48';
+indentSlider.step = '4';
+indentSlider.value = currentIndent;
+
+var indentValue = document.createElement('span');
+indentValue.textContent = currentIndent + 'px';
+
+indentSlider.addEventListener('input', function() {
+  var val = parseInt(indentSlider.value, 10);
+  document.documentElement.style.setProperty('--tree-indent-size', val + 'px');
+  indentValue.textContent = val + 'px';
+  localStorage.setItem('rf-trace-indent-size', String(val));
+  // Update any visible truncated indicators
+  _updateTruncatedIndicators(val);
+});
+```
+
+The slider is rendered in both the regular tree controls bar and the virtual scroll controls bar, kept in sync.
+
+### localStorage Persistence
+
+- Key: `rf-trace-indent-size`
+- On init: `var saved = localStorage.getItem('rf-trace-indent-size'); if (saved) { currentIndent = parseInt(saved, 10); }`
+- On change: `localStorage.setItem('rf-trace-indent-size', String(val));`
+- Applied before first render so the tree never flashes at the wrong indentation
+
+### Virtual Scrolling Compatibility
+
+No special handling needed. Virtual scrolling creates `.tree-node` elements dynamically, and they inherit `margin-left: var(--tree-indent-size)` from the stylesheet. The CSS custom property is set on `:root`, so all current and future DOM elements pick it up.
+
+### Truncated-Children Indicator Alignment
+
+The truncated indicator currently uses:
+```javascript
+truncEl.style.paddingLeft = (lazy.depth * 16 + 24) + 'px';
+```
+
+This changes to read the current indent size:
+```javascript
+var indentSize = parseInt(
+  getComputedStyle(document.documentElement).getPropertyValue('--tree-indent-size'), 10
+) || 24;
+truncEl.style.paddingLeft = (lazy.depth * indentSize + 24) + 'px';
+```
+
+For performance (avoiding `getComputedStyle` on every render), the current indent value is cached in a module-level variable and updated when the slider changes.
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `src/rf_trace_viewer/viewer/style.css` | Add `--tree-indent-size: 24px` to `:root`, change `.tree-node` margin-left to `var(--tree-indent-size)`, add `.tree-indent-control` styles |
+| `src/rf_trace_viewer/viewer/tree.js` | Add slider control in both regular and virtual scroll control bars, localStorage read/write, update truncated indicator padding calculation, cache indent value |
+
+### Correctness Properties for Requirement 36
+
+### Property 30: Indentation CSS custom property controls node indentation
+
+*For any* valid indentation value between 8 and 48 pixels (inclusive, step 4), setting `--tree-indent-size` to that value should cause all tree nodes at depth N (where N > 0) to have a computed `margin-left` equal to that value, and depth-0 nodes to have `margin-left: 0`.
+
+**Validates: Requirements 36.3, 36.4**
+
+### Property 31: Indentation persistence round-trip
+
+*For any* valid indentation value between 8 and 48 pixels, setting the indentation control to that value should persist it to `localStorage` under key `rf-trace-indent-size`, and reading that key should return the string representation of the same integer value.
+
+**Validates: Requirements 36.5**
+
+### Property 32: Truncated indicator alignment with tree indentation
+
+*For any* valid indentation value between 8 and 48 pixels and any depth N ≥ 0, the truncated-children indicator's left padding should equal `N * indentSize + 24` pixels, using the same indentation value as tree nodes at that depth.
+
+**Validates: Requirements 36.7**
+
+
+## Filter Scope Mode and Cross-Level Filter Logic Design (Requirement 37)
+
+### Motivation
+
+The current `_applyFilters()` logic already has partial cross-level behavior: when filtering keywords, it checks the parent test's status against `testStatuses`. However, this behavior is implicit and always-on — users have no visibility into or control over it. Additionally, there's no scoping between Suite filters and Tag filter options, so selecting a specific suite still shows tags from all suites in the tag dropdown.
+
+Requirement 37 makes this cross-level logic explicit, controllable, and visible. A `scopeToTestContext` toggle lets users choose between hierarchical filtering (keywords scoped to their parent test's filter result) and flat filtering (each level evaluated independently). The filter panel gains AND operator indicators between sections, and the summary bar groups scoped chips visually.
+
+### Filter State Extension
+
+Add `scopeToTestContext` to the existing `filterState` object:
+
+```javascript
+var filterState = {
+  text: '',
+  testStatuses: ['PASS', 'FAIL', 'SKIP'],
+  kwStatuses: ['PASS', 'FAIL', 'NOT_RUN'],
+  tags: [],
+  suites: [],
+  keywordTypes: [],
+  durationMin: null,
+  durationMax: null,
+  timeRangeStart: null,
+  timeRangeEnd: null,
+  scopeToTestContext: true   // NEW — default enabled
+};
+```
+
+The default is `true` because the existing `_applyFilters()` already performs parent-test checking for keywords. Enabling by default preserves current behavior and makes the implicit logic explicit.
+
+### Scope Toggle UI
+
+A toggle control is inserted into the filter panel between the Test Status and Keyword Status sections. It uses a checkbox styled as a toggle switch:
+
+```
+┌─────────────────────────────┐
+│ Filters                     │
+├─────────────────────────────┤
+│ Search: [________________]  │
+├─────────────────────────────┤
+│ Test Status                 │
+│ ☑ Pass  ☑ Fail  ☑ Skip     │
+├─────────────────────────────┤
+│ ── AND ──                   │  ← NEW: operator indicator
+├─────────────────────────────┤
+│ [●] Scope to test context   │  ← NEW: toggle control
+├─────────────────────────────┤
+│ Keyword Status              │
+│ ☑ Pass  ☑ Fail  ☑ Not Run  │
+├─────────────────────────────┤
+│ ── AND ──                   │  ← NEW: operator indicator
+├─────────────────────────────┤
+│ Tags                        │
+│ [multiselect]               │
+├─────────────────────────────┤
+│ ── AND ──                   │
+├─────────────────────────────┤
+│ Suites                      │
+│ [multiselect]               │
+│ ...                         │
+└─────────────────────────────┘
+```
+
+Implementation in `_buildFilterUI`:
+
+```javascript
+function _buildScopeToggle() {
+  var section = document.createElement('div');
+  section.className = 'filter-section filter-scope-toggle-section';
+
+  var toggleLabel = document.createElement('label');
+  toggleLabel.className = 'filter-scope-toggle-label';
+
+  var checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.id = 'filter-scope-toggle';
+  checkbox.checked = filterState.scopeToTestContext;
+  checkbox.addEventListener('change', function (e) {
+    filterState.scopeToTestContext = e.target.checked;
+    _updateTagFilterOptions();  // re-scope tag options if needed
+    localStorage.setItem('rf-trace-scope-to-test-context',
+                          filterState.scopeToTestContext ? '1' : '0');
+    _applyFilters();
+  });
+  toggleLabel.appendChild(checkbox);
+
+  var labelText = document.createElement('span');
+  labelText.textContent = 'Scope to test context';
+  toggleLabel.appendChild(labelText);
+
+  section.appendChild(toggleLabel);
+  return section;
+}
+```
+
+### AND Operator Indicators
+
+A new helper builds a visual separator between filter sections:
+
+```javascript
+function _buildAndIndicator() {
+  var indicator = document.createElement('div');
+  indicator.className = 'filter-and-indicator';
+  indicator.setAttribute('aria-hidden', 'true');
+
+  var line = document.createElement('span');
+  line.className = 'filter-and-line';
+  indicator.appendChild(line);
+
+  var text = document.createElement('span');
+  text.className = 'filter-and-text';
+  text.textContent = 'AND';
+  indicator.appendChild(text);
+
+  var line2 = document.createElement('span');
+  line2.className = 'filter-and-line';
+  indicator.appendChild(line2);
+
+  return indicator;
+}
+```
+
+CSS for the indicator:
+
+```css
+.filter-and-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+.filter-and-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.filter-and-text {
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+```
+
+The `_buildFilterUI` function is updated to insert `_buildAndIndicator()` between each filter section, and `_buildScopeToggle()` between Test Status and Keyword Status sections.
+
+### Modified `_applyFilters()` Logic
+
+The keyword filtering block in `_applyFilters()` changes to respect `scopeToTestContext`:
+
+```javascript
+} else if (span.type === 'keyword') {
+  // Keyword must pass kwStatuses
+  if (filterState.kwStatuses.length > 0 &&
+      filterState.kwStatuses.indexOf(span.status) === -1) {
+    continue;
+  }
+  // Cross-level scoping: only check parent test status when scope is enabled
+  if (filterState.scopeToTestContext && filterState.testStatuses.length > 0) {
+    var testAncestor = _findTestAncestor(span.id);
+    if (testAncestor &&
+        filterState.testStatuses.indexOf(testAncestor.status) === -1) {
+      continue;
+    }
+  }
+  // When scope is disabled, keywords are evaluated independently —
+  // no parent test status check is performed.
+}
+```
+
+The key difference from the current code: the `_findTestAncestor` check is now gated behind `filterState.scopeToTestContext`. When disabled, keywords pass through based solely on their own `kwStatuses` match.
+
+### Tag Filter Dynamic Options Scoping
+
+When `scopeToTestContext` is enabled and suites are selected, the tag filter dropdown should only show tags from tests within those suites. A new function handles this:
+
+```javascript
+function _updateTagFilterOptions() {
+  if (!filterState.scopeToTestContext || filterState.suites.length === 0) {
+    // Show all tags
+    _rebuildTagSelect(availableOptions.tags);
+    return;
+  }
+
+  // Collect tags only from tests in selected suites
+  var scopedTags = {};
+  for (var i = 0; i < allSpans.length; i++) {
+    var span = allSpans[i];
+    if (span.type === 'test' &&
+        filterState.suites.indexOf(span.suite) !== -1) {
+      for (var j = 0; j < span.tags.length; j++) {
+        scopedTags[span.tags[j]] = true;
+      }
+    }
+  }
+
+  var tagList = Object.keys(scopedTags).sort();
+  _rebuildTagSelect(tagList);
+}
+
+function _rebuildTagSelect(tags) {
+  var select = document.querySelector('.filter-section .filter-multiselect');
+  // Find the tag multiselect specifically (first one after Tags label)
+  var tagSection = document.querySelector('.filter-tag-section .filter-multiselect');
+  if (!tagSection) return;
+
+  var currentSelections = filterState.tags.slice();
+  tagSection.innerHTML = '';
+
+  for (var i = 0; i < tags.length; i++) {
+    var option = document.createElement('option');
+    option.value = tags[i];
+    option.textContent = tags[i];
+    option.selected = currentSelections.indexOf(tags[i]) !== -1;
+    tagSection.appendChild(option);
+  }
+
+  tagSection.size = Math.min(5, tags.length);
+
+  // Remove any selected tags that are no longer in the scoped list
+  filterState.tags = currentSelections.filter(function (t) {
+    return tags.indexOf(t) !== -1;
+  });
+}
+```
+
+The `_buildTagFilters` function adds a `filter-tag-section` class to its section element so `_rebuildTagSelect` can target it. The suite filter's change handler calls `_updateTagFilterOptions()` after updating `filterState.suites`.
+
+### Filter Summary Bar Changes
+
+When scoping is active, the summary bar groups related chips hierarchically. The `_getActiveFilterChips()` function is extended to return chips with an optional `scoped` flag and `parentGroup` reference:
+
+```javascript
+// When scoping is active, keyword status chips are marked as scoped under test status
+if (filterState.scopeToTestContext) {
+  // Test status chips get a group marker
+  for (var i = 0; i < chips.length; i++) {
+    if (chips[i].label.indexOf('Hide:') === 0 &&
+        chips[i].label.indexOf('KW') === -1) {
+      chips[i].group = 'test-status';
+    }
+  }
+  // KW status chips are nested under test status
+  for (var i = 0; i < chips.length; i++) {
+    if (chips[i].label.indexOf('KW Hide:') === 0) {
+      chips[i].group = 'kw-status';
+      chips[i].scopedUnder = 'test-status';
+    }
+  }
+}
+```
+
+The `_updateFilterSummaryBar()` function renders scoped chips with indentation:
+
+```javascript
+// When rendering a chip with scopedUnder, add a scope indicator
+if (chip.scopedUnder && filterState.scopeToTestContext) {
+  var scopeArrow = document.createElement('span');
+  scopeArrow.className = 'filter-chip-scope-arrow';
+  scopeArrow.textContent = '↳';
+  scopeArrow.setAttribute('aria-hidden', 'true');
+  chipsContainer.appendChild(scopeArrow);
+}
+```
+
+When scoping is active and both test status and keyword status filters are modified, the summary bar shows:
+
+```
+3 of 150 results  [Hide: PASS ×]  ↳ [KW Hide: NOT_RUN ×]  [Clear all]
+```
+
+Additionally, when scoping is active, a scope relationship indicator is shown:
+
+```javascript
+if (filterState.scopeToTestContext && _hasActiveStatusFilters()) {
+  var scopeIndicator = document.createElement('span');
+  scopeIndicator.className = 'filter-scope-indicator';
+  scopeIndicator.textContent = 'Test Status → Keyword Status';
+  scopeIndicator.setAttribute('title',
+    'Keyword results are scoped to tests matching the Test Status filter');
+  bar.insertBefore(scopeIndicator, chipsContainer);
+}
+```
+
+### localStorage Persistence
+
+The scope toggle state is persisted alongside the existing indent size persistence:
+
+- Key: `rf-trace-scope-to-test-context`
+- Values: `'1'` (enabled) or `'0'` (disabled)
+- Read on init in `initSearch`:
+  ```javascript
+  var savedScope = localStorage.getItem('rf-trace-scope-to-test-context');
+  if (savedScope !== null) {
+    filterState.scopeToTestContext = savedScope === '1';
+  }
+  ```
+- Written on toggle change (shown in the toggle handler above)
+
+### Deep Link Hash Encoding
+
+The scope state is added to the URL hash encoding. The existing hash format:
+
+```
+#view=tree&span=f17e43d020d07570&status=FAIL&tag=smoke&search=login
+```
+
+Becomes:
+
+```
+#view=tree&span=f17e43d020d07570&status=FAIL&tag=smoke&search=login&scope=1
+```
+
+- `scope=1` means scoping enabled (default, can be omitted)
+- `scope=0` means scoping disabled
+
+The deep link encoder adds:
+```javascript
+if (!filterState.scopeToTestContext) {
+  params.push('scope=0');
+}
+```
+
+The deep link decoder adds:
+```javascript
+if (params.scope !== undefined) {
+  filterState.scopeToTestContext = params.scope !== '0';
+}
+```
+
+Since the default is `true`, the hash only needs to encode `scope=0` when scoping is disabled, keeping URLs shorter in the common case.
+
+### `_clearAllFilters()` Update
+
+The clear function resets the scope toggle to its default:
+
+```javascript
+filterState.scopeToTestContext = true;
+// Update toggle UI
+var scopeToggle = document.getElementById('filter-scope-toggle');
+if (scopeToggle) scopeToggle.checked = true;
+```
+
+### `_hasActiveFilters()` Update
+
+The scope toggle being disabled is not itself an "active filter" in the summary bar sense — it changes filter behavior but doesn't narrow results on its own. However, `_hasActiveFilters()` does not need to check `scopeToTestContext` because the scope toggle modifies how existing filters combine, not whether filters are active.
+
+### `setFilterState()` Public API Update
+
+```javascript
+if (newState.scopeToTestContext !== undefined) {
+  filterState.scopeToTestContext = newState.scopeToTestContext;
+}
+```
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `src/rf_trace_viewer/viewer/search.js` | Add `scopeToTestContext` to filterState, add `_buildScopeToggle()`, add `_buildAndIndicator()`, update `_buildFilterUI()` to insert toggle and AND indicators, gate parent-test check in `_applyFilters()` behind scope flag, add `_updateTagFilterOptions()` and `_rebuildTagSelect()`, update `_getActiveFilterChips()` with scoped chip grouping, update `_updateFilterSummaryBar()` with scope indicator and nested chip rendering, update `_clearAllFilters()`, update `setFilterState()` |
+| `src/rf_trace_viewer/viewer/style.css` | Add `.filter-and-indicator`, `.filter-and-line`, `.filter-and-text`, `.filter-scope-toggle-section`, `.filter-scope-toggle-label`, `.filter-chip-scope-arrow`, `.filter-scope-indicator` styles with light/dark theme variants |
+| `src/rf_trace_viewer/viewer/deep-link.js` (or equivalent hash logic in app.js) | Add `scope` parameter encoding/decoding in URL hash |
+
+### Correctness Properties for Requirement 37
+
+### Property 33: Scope toggle controls cross-level keyword filtering
+
+*For any* set of spans containing tests and keywords with various statuses, and *for any* combination of `testStatuses` and `kwStatuses` filter values: when `scopeToTestContext` is `true`, a keyword should appear in the filtered output only if (a) its own status is in `kwStatuses` AND (b) its parent test's status is in `testStatuses`; when `scopeToTestContext` is `false`, a keyword should appear in the filtered output if its own status is in `kwStatuses`, regardless of its parent test's status.
+
+**Validates: Requirements 37.1, 37.2, 37.3, 37.9**
+
+### Property 34: Scope toggle localStorage round-trip
+
+*For any* boolean value, setting `scopeToTestContext` and persisting it to `localStorage` under key `rf-trace-scope-to-test-context`, then reading and parsing that key, should produce the original boolean value.
+
+**Validates: Requirements 37.4**
+
+### Property 35: Tag options scoped by suite filter
+
+*For any* set of spans with known suite and tag associations, when `scopeToTestContext` is enabled and specific suites are selected in the suite filter, the tag filter options should contain exactly the set of tags that appear on tests within the selected suites — no tags from tests in unselected suites should appear, and all tags from tests in selected suites should appear.
+
+**Validates: Requirements 37.6**
+
+### Property 36: Scope state deep link round-trip
+
+*For any* filter state including a `scopeToTestContext` boolean value, encoding the state as a URL hash string and then decoding it should produce a filter state with the same `scopeToTestContext` value.
+
+**Validates: Requirements 37.10**
