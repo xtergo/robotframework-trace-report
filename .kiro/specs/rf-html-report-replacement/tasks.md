@@ -387,8 +387,8 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Ensure visible focus indicators on all focusable elements
     - _Requirements: 19.3, 19.4_
 
-- [ ] 24. Implement Execution Flow Table
-  - [ ] 24.1 Create `src/rf_trace_viewer/viewer/flow-table.js`
+- [x] 24. Implement Execution Flow Table
+  - [x] 24.1 Create `src/rf_trace_viewer/viewer/flow-table.js`
     - Implement sequential execution flow table for selected test
     - Display columns: source file, line number, keyword name, args, status, duration, error
     - Include SETUP and TEARDOWN keywords labeled by type

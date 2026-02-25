@@ -312,6 +312,10 @@
     treePanel.className = 'panel-tree';
     centerColumn.appendChild(treePanel);
 
+    var flowTableSection = document.createElement('section');
+    flowTableSection.className = 'flow-table-section';
+    centerColumn.appendChild(flowTableSection);
+
     var filterSidebar = document.createElement('aside');
     filterSidebar.className = 'panel-filter collapsed';
 
@@ -431,6 +435,12 @@
     var keywordStatsSection = document.querySelector('.keyword-stats-section');
     if (keywordStatsSection && typeof renderKeywordStats === 'function') {
       renderKeywordStats(keywordStatsSection, data);
+    }
+
+    // Initialize flow table view
+    var flowTableSection = document.querySelector('.flow-table-section');
+    if (flowTableSection && typeof window.initFlowTable === 'function') {
+      window.initFlowTable(flowTableSection, data);
     }
 
     // Initialize deep link system (last, so all views are ready for state restore)
