@@ -1482,6 +1482,28 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline-offset: 1px;
 }
 
+.rf-trace-viewer .filter-chip-scope-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .filter-scope-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: help;
+}
+
 .rf-trace-viewer .filter-summary-clear {
   padding: 2px 10px;
   background: none;

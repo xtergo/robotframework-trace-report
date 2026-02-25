@@ -1087,10 +1087,11 @@
     }
 
     // Test statuses — show chips for unchecked statuses
+    var _scopeActive = filterState.scopeToTestContext;
     for (var i = 0; i < _defaultTestStatuses.length; i++) {
       if (filterState.testStatuses.indexOf(_defaultTestStatuses[i]) === -1) {
         (function (status) {
-          chips.push({
+          var chip = {
             label: 'Hide: ' + status,
             remove: function () {
               filterState.testStatuses.push(status);
@@ -1101,7 +1102,11 @@
               }
               _applyFilters();
             }
-          });
+          };
+          if (_scopeActive) {
+            chip.group = 'test-status';
+          }
+          chips.push(chip);
         })(_defaultTestStatuses[i]);
       }
     }
@@ -1110,7 +1115,7 @@
     for (var i = 0; i < _defaultKwStatuses.length; i++) {
       if (filterState.kwStatuses.indexOf(_defaultKwStatuses[i]) === -1) {
         (function (status) {
-          chips.push({
+          var chip = {
             label: 'KW Hide: ' + status,
             remove: function () {
               filterState.kwStatuses.push(status);
@@ -1120,7 +1125,12 @@
               }
               _applyFilters();
             }
-          });
+          };
+          if (_scopeActive) {
+            chip.group = 'kw-status';
+            chip.scopedUnder = 'test-status';
+          }
+          chips.push(chip);
         })(_defaultKwStatuses[i]);
       }
     }
@@ -1270,10 +1280,29 @@
     chipsContainer.className = 'filter-summary-chips';
 
     var chips = _getActiveFilterChips();
+    var _hasTestStatusChips = false;
+    var _hasKwStatusChips = false;
+    for (var i = 0; i < chips.length; i++) {
+      if (chips[i].group === 'test-status') _hasTestStatusChips = true;
+      if (chips[i].group === 'kw-status') _hasKwStatusChips = true;
+    }
+
     for (var i = 0; i < chips.length; i++) {
       (function (chip) {
+        // Insert scope arrow before chips that are scoped under another group
+        if (chip.scopedUnder) {
+          var arrow = document.createElement('span');
+          arrow.className = 'filter-chip-scope-arrow';
+          arrow.textContent = '\u21b3';
+          arrow.setAttribute('aria-hidden', 'true');
+          chipsContainer.appendChild(arrow);
+        }
+
         var chipEl = document.createElement('span');
         chipEl.className = 'filter-chip';
+        if (chip.group) {
+          chipEl.setAttribute('data-chip-group', chip.group);
+        }
 
         var chipLabel = document.createElement('span');
         chipLabel.className = 'filter-chip-label';
@@ -1292,6 +1321,15 @@
 
         chipsContainer.appendChild(chipEl);
       })(chips[i]);
+    }
+
+    // Show scope indicator when scoping is active and status filters are modified
+    if (filterState.scopeToTestContext && (_hasTestStatusChips || _hasKwStatusChips)) {
+      var scopeIndicator = document.createElement('span');
+      scopeIndicator.className = 'filter-scope-indicator';
+      scopeIndicator.textContent = 'Test Status \u2192 Keyword Status';
+      scopeIndicator.title = 'Keyword status filters are applied within the context of matching test status filters (hierarchical scoping)';
+      chipsContainer.appendChild(scopeIndicator);
     }
 
     bar.appendChild(chipsContainer);

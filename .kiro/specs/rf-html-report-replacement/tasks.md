@@ -736,7 +736,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Call `_updateTagFilterOptions()` from the suite filter's change handler after updating `filterState.suites`
     - _Requirements: 37.6_
 
-  - [ ] 36.5 Update filter summary bar for scoped chip grouping in `src/rf_trace_viewer/viewer/search.js`
+  - [x] 36.5 Update filter summary bar for scoped chip grouping in `src/rf_trace_viewer/viewer/search.js`
     - Update `_getActiveFilterChips()`: when `scopeToTestContext` is active, mark test status chips with `group: 'test-status'` and keyword status chips with `group: 'kw-status'` and `scopedUnder: 'test-status'`
     - Update `_updateFilterSummaryBar()`: render chips with `scopedUnder` preceded by a `span.filter-chip-scope-arrow` containing "↳" (`aria-hidden="true"`)
     - When scoping is active and status filters are modified, show a `span.filter-scope-indicator` with text "Test Status → Keyword Status" and a tooltip explaining the hierarchical relationship
