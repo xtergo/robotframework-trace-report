@@ -1293,15 +1293,6 @@
 
     for (var i = 0; i < chips.length; i++) {
       (function (chip) {
-        // Insert scope arrow before chips that are scoped under another group
-        if (chip.scopedUnder) {
-          var arrow = document.createElement('span');
-          arrow.className = 'filter-chip-scope-arrow';
-          arrow.textContent = '\u21b3';
-          arrow.setAttribute('aria-hidden', 'true');
-          chipsContainer.appendChild(arrow);
-        }
-
         var chipEl = document.createElement('span');
         chipEl.className = 'filter-chip';
         if (chip.group) {
@@ -1327,13 +1318,32 @@
       })(chips[i]);
     }
 
-    // Show scope indicator when scoping is active and status filters are modified
+    // Show scope chip when scoping is active and status filters are modified
     if (filterState.scopeToTestContext && (_hasTestStatusChips || _hasKwStatusChips)) {
-      var scopeIndicator = document.createElement('span');
-      scopeIndicator.className = 'filter-scope-indicator';
-      scopeIndicator.textContent = 'Test Status \u2192 Keyword Status';
-      scopeIndicator.title = 'Keyword status filters are applied within the context of matching test status filters (hierarchical scoping)';
-      chipsContainer.appendChild(scopeIndicator);
+      var scopeChip = document.createElement('span');
+      scopeChip.className = 'filter-chip filter-scope-indicator';
+      scopeChip.title = 'Keyword filters only apply within tests matching the test status filter. Click \u00d7 to show all keywords regardless of test status.';
+
+      var scopeLabel = document.createElement('span');
+      scopeLabel.className = 'filter-chip-label';
+      scopeLabel.textContent = 'Within selected tests';
+      scopeChip.appendChild(scopeLabel);
+
+      var scopeRemove = document.createElement('button');
+      scopeRemove.className = 'filter-chip-remove';
+      scopeRemove.textContent = '\u00d7';
+      scopeRemove.setAttribute('aria-label', 'Disable hierarchical scoping');
+      scopeRemove.addEventListener('click', function (e) {
+        e.stopPropagation();
+        filterState.scopeToTestContext = false;
+        var toggle = document.getElementById('filter-scope-toggle');
+        if (toggle) toggle.checked = false;
+        localStorage.setItem('rf-trace-scope-to-test-context', '0');
+        _applyFilters();
+      });
+      scopeChip.appendChild(scopeRemove);
+
+      chipsContainer.appendChild(scopeChip);
     }
 
     bar.appendChild(chipsContainer);
