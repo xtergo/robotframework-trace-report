@@ -718,7 +718,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Insert the scope toggle into the filter panel between Test Status and Keyword Status sections
     - _Requirements: 37.1, 37.4, 37.9_
 
-  - [ ] 36.2 Add AND operator indicators between filter sections in `src/rf_trace_viewer/viewer/search.js`
+  - [x] 36.2 Add AND operator indicators between filter sections in `src/rf_trace_viewer/viewer/search.js`
     - Implement `_buildAndIndicator()` function: creates a `div.filter-and-indicator` with `aria-hidden="true"`, containing two `span.filter-and-line` elements flanking a `span.filter-and-text` with text "AND"
     - Update `_buildFilterUI()` to insert `_buildAndIndicator()` between each filter section (Test Status / Scope Toggle / Keyword Status / Tags / Suites / Keyword Types / Duration)
     - _Requirements: 37.7_

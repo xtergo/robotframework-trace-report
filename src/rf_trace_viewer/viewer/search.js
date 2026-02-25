@@ -254,9 +254,13 @@
     var testStatusSection = _buildTestStatusFilters();
     container.appendChild(testStatusSection);
 
+    container.appendChild(_buildAndIndicator());
+
     // Scope toggle (between test status and keyword status)
     var scopeToggleSection = _buildScopeToggle();
     container.appendChild(scopeToggleSection);
+
+    container.appendChild(_buildAndIndicator());
 
     // Keyword status filters
     var kwStatusSection = _buildKwStatusFilters();
@@ -264,19 +268,25 @@
 
     // Tag filters
     if (availableOptions.tags.length > 0) {
+      container.appendChild(_buildAndIndicator());
       var tagSection = _buildTagFilters();
       container.appendChild(tagSection);
     }
 
     // Suite filters
     if (availableOptions.suites.length > 0) {
+      container.appendChild(_buildAndIndicator());
       var suiteSection = _buildSuiteFilters();
       container.appendChild(suiteSection);
     }
 
+    container.appendChild(_buildAndIndicator());
+
     // Keyword type filters
     var kwTypeSection = _buildKeywordTypeFilters();
     container.appendChild(kwTypeSection);
+
+    container.appendChild(_buildAndIndicator());
 
     // Duration range filter
     var durationSection = _buildDurationFilter();
@@ -285,6 +295,30 @@
     // Time range display (read-only, set by timeline)
     var timeRangeSection = _buildTimeRangeDisplay();
     container.appendChild(timeRangeSection);
+  }
+
+  /**
+   * Build AND operator indicator between filter sections.
+   */
+  function _buildAndIndicator() {
+    var indicator = document.createElement('div');
+    indicator.className = 'filter-and-indicator';
+    indicator.setAttribute('aria-hidden', 'true');
+
+    var line = document.createElement('span');
+    line.className = 'filter-and-line';
+    indicator.appendChild(line);
+
+    var text = document.createElement('span');
+    text.className = 'filter-and-text';
+    text.textContent = 'AND';
+    indicator.appendChild(text);
+
+    var line2 = document.createElement('span');
+    line2.className = 'filter-and-line';
+    indicator.appendChild(line2);
+
+    return indicator;
   }
 
   /**
