@@ -271,7 +271,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add `--receiver` CLI flag to start in receiver mode (no input file required)
     - _Requirements: 9.10, 9.11, 10.9_
 
-  - [ ] 14.5 Implement journal file for crash recovery
+  - [x] 14.5 Implement journal file for crash recovery
     - Append each received OTLP payload as NDJSON line to journal file
     - Default journal path: `traces.journal.json`
     - Support `--journal <path>` CLI flag for custom path

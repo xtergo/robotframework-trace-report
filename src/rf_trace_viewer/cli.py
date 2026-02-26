@@ -97,6 +97,17 @@ def main() -> int:
         action="store_true",
         help="Start live server in OTLP receiver mode (no input file required)",
     )
+    parser.add_argument(
+        "--journal",
+        default="traces.journal.json",
+        metavar="<path>",
+        help="Journal file path for crash recovery (default: traces.journal.json)",
+    )
+    parser.add_argument(
+        "--no-journal",
+        action="store_true",
+        help="Disable journal file writing in receiver mode",
+    )
 
     args = parser.parse_args()
 
@@ -113,12 +124,15 @@ def main() -> int:
             # In live mode, the file may not exist yet — that's OK, the server handles it
             pass
 
+        journal_path = None if args.no_journal else args.journal
+
         server = LiveServer(
             trace_path=trace_path,
             port=args.port,
             title=args.title,
             poll_interval=args.poll_interval,
             receiver_mode=args.receiver,
+            journal_path=journal_path,
         )
         server.start(open_browser=not args.no_open)
         return 0

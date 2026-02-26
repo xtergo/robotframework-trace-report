@@ -90,6 +90,16 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         line = body.decode("utf-8").replace("\n", " ")
         with self.server.receiver_lock:
             self.server.receiver_buffer.append(line)
+            # Append to journal file for crash recovery
+            journal_path = self.server.journal_path
+            if journal_path:
+                try:
+                    with open(journal_path, "a", encoding="utf-8") as jf:
+                        jf.write(line + "\n")
+                except OSError as exc:
+                    import sys
+
+                    print(f"Warning: journal write failed: {exc}", file=sys.stderr)
 
         response = b"{}"
         self.send_response(200)
@@ -189,12 +199,15 @@ class LiveServer:
         title: str | None = None,
         poll_interval: int = 5,
         receiver_mode: bool = False,
+        journal_path: str | None = "traces.journal.json",
     ) -> None:
         self.trace_path = trace_path
         self.port = port
         self.title = title
         self.poll_interval = max(1, min(30, poll_interval))
         self.receiver_mode = receiver_mode
+        # Journal is only used in receiver mode; None disables it
+        self.journal_path = journal_path if receiver_mode else None
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -207,11 +220,16 @@ class LiveServer:
         self._httpd.receiver_mode = self.receiver_mode  # type: ignore[attr-defined]
         self._httpd.receiver_buffer: list[str] = []  # type: ignore[attr-defined]
         self._httpd.receiver_lock = threading.Lock()  # type: ignore[attr-defined]
+        self._httpd.journal_path = self.journal_path  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")
         if self.receiver_mode:
             print("OTLP receiver mode — POST traces to /v1/traces")
+            if self.journal_path:
+                print(f"Journal file: {self.journal_path}")
+            else:
+                print("Journal file: disabled")
         else:
             print(f"Serving trace file: {self.trace_path}")
         print(f"Poll interval: {self.poll_interval}s")

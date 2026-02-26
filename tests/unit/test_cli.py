@@ -150,6 +150,7 @@ class TestArgumentParsing:
                 title=None,
                 poll_interval=5,
                 receiver_mode=False,
+                journal_path="traces.journal.json",
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -179,6 +180,7 @@ class TestArgumentParsing:
                 title=None,
                 poll_interval=5,
                 receiver_mode=False,
+                journal_path="traces.journal.json",
             )
 
     def test_no_open_argument(self, monkeypatch):
