@@ -284,7 +284,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Log forwarding errors to stderr without failing
     - _Requirements: 9.12, 10.10_
 
-  - [ ] 14.7 Implement auto-report generation on shutdown
+  - [x] 14.7 Implement auto-report generation on shutdown
     - On graceful shutdown (Ctrl+C / SIGTERM), generate static HTML from buffered spans
     - Use configured report options (--compact-html, --gzip-embed, -o)
     - Print report path to stdout on completion

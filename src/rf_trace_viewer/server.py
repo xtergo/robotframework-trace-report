@@ -12,7 +12,10 @@ from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
-from rf_trace_viewer.generator import embed_viewer_assets, _escape_html
+from rf_trace_viewer.generator import embed_viewer_assets, _escape_html, ReportOptions, generate_report
+from rf_trace_viewer.parser import parse_line
+from rf_trace_viewer.rf_model import interpret_tree
+from rf_trace_viewer.tree import build_tree
 
 
 class _LiveRequestHandler(BaseHTTPRequestHandler):
@@ -230,6 +233,8 @@ class LiveServer:
         receiver_mode: bool = False,
         journal_path: str | None = "traces.journal.json",
         forward_url: str | None = None,
+        output_path: str = "trace-report.html",
+        report_options: ReportOptions | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -240,6 +245,8 @@ class LiveServer:
         self.journal_path = journal_path if receiver_mode else None
         # Forward URL is only used in receiver mode; None disables it
         self.forward_url = forward_url if receiver_mode else None
+        self.output_path = output_path
+        self.report_options = report_options
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -281,8 +288,70 @@ class LiveServer:
             self.stop()
 
     def stop(self) -> None:
-        """Gracefully shut down the server."""
+        """Gracefully shut down the server.
+
+        In receiver mode, generates a static HTML report from buffered spans
+        before releasing the server resources.
+        """
         if self._httpd is not None:
             self._httpd.shutdown()
             self._httpd.server_close()
+            # Generate report from buffered spans in receiver mode
+            if self.receiver_mode:
+                self._generate_shutdown_report()
             self._httpd = None
+
+    def _generate_shutdown_report(self) -> None:
+        """Generate a static HTML report from the receiver buffer."""
+        with self._httpd.receiver_lock:
+            lines = list(self._httpd.receiver_buffer)
+
+        if not lines:
+            print("No spans received — skipping report generation.")
+            return
+
+        try:
+            # Parse buffered NDJSON lines into spans
+            spans = []
+            for line in lines:
+                try:
+                    spans.extend(parse_line(line))
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+            if not spans:
+                print("No valid spans found — skipping report generation.")
+                return
+
+            # Build tree → interpret → generate
+            roots = build_tree(spans)
+            model = interpret_tree(roots)
+
+            options = self.report_options or ReportOptions()
+            if self.title and not options.title:
+                options = ReportOptions(
+                    title=self.title,
+                    theme=options.theme,
+                    compact=options.compact,
+                    gzip_embed=options.gzip_embed,
+                    max_keyword_depth=options.max_keyword_depth,
+                    exclude_passing_keywords=options.exclude_passing_keywords,
+                    max_spans=options.max_spans,
+                )
+
+            html = generate_report(model, options)
+
+            with open(self.output_path, "w", encoding="utf-8") as f:
+                f.write(html)
+
+            test_count = model.statistics.total_tests
+            passed = model.statistics.passed
+            failed = model.statistics.failed
+            skipped = model.statistics.skipped
+            print(
+                f"Report generated: {self.output_path} "
+                f"({len(spans)} spans, {test_count} tests: "
+                f"{passed} passed, {failed} failed, {skipped} skipped)"
+            )
+        except Exception as exc:
+            print(f"Warning: report generation failed: {exc}", file=sys.stderr)

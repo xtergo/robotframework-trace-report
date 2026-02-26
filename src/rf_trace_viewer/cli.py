@@ -132,6 +132,16 @@ def main() -> int:
 
         journal_path = None if args.no_journal else args.journal
 
+        # Build report options for shutdown report generation
+        report_options = ReportOptions(
+            title=args.title,
+            compact=args.compact_html,
+            gzip_embed=args.gzip_embed,
+            max_keyword_depth=args.max_keyword_depth,
+            exclude_passing_keywords=args.exclude_passing_keywords,
+            max_spans=args.max_spans,
+        )
+
         server = LiveServer(
             trace_path=trace_path,
             port=args.port,
@@ -140,6 +150,8 @@ def main() -> int:
             receiver_mode=args.receiver,
             journal_path=journal_path,
             forward_url=args.forward,
+            output_path=args.output,
+            report_options=report_options,
         )
         server.start(open_browser=not args.no_open)
         return 0
