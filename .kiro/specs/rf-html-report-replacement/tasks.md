@@ -278,7 +278,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Support `--no-journal` CLI flag to disable journaling
     - _Requirements: 9.13, 9.15, 10.11, 10.12_
 
-  - [ ] 14.6 Implement upstream collector forwarding
+  - [x] 14.6 Implement upstream collector forwarding
     - When `--forward <url>` is set, POST received OTLP payloads to upstream collector
     - Forward asynchronously (don't block the response to the tracer)
     - Log forwarding errors to stderr without failing

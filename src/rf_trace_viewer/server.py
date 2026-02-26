@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 
 from rf_trace_viewer.generator import embed_viewer_assets, _escape_html
 
@@ -97,9 +100,12 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                     with open(journal_path, "a", encoding="utf-8") as jf:
                         jf.write(line + "\n")
                 except OSError as exc:
-                    import sys
-
                     print(f"Warning: journal write failed: {exc}", file=sys.stderr)
+
+        # Forward to upstream collector asynchronously (don't block the response)
+        forward_url = self.server.forward_url
+        if forward_url:
+            _forward_payload(forward_url, body)
 
         response = b"{}"
         self.send_response(200)
@@ -185,6 +191,29 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         pass
 
 
+def _forward_payload(url: str, body: bytes) -> None:
+    """POST an OTLP payload to an upstream collector (fire-and-forget).
+
+    Runs in a daemon thread so it never blocks the caller.  Errors are
+    logged to stderr but never propagated.
+    """
+
+    def _do_forward() -> None:
+        try:
+            req = Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urlopen(req, timeout=10)
+        except (URLError, OSError, ValueError) as exc:
+            print(f"Warning: forwarding to {url} failed: {exc}", file=sys.stderr)
+
+    t = threading.Thread(target=_do_forward, daemon=True)
+    t.start()
+
+
 class LiveServer:
     """HTTP server for live trace viewing.
 
@@ -200,6 +229,7 @@ class LiveServer:
         poll_interval: int = 5,
         receiver_mode: bool = False,
         journal_path: str | None = "traces.journal.json",
+        forward_url: str | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -208,6 +238,8 @@ class LiveServer:
         self.receiver_mode = receiver_mode
         # Journal is only used in receiver mode; None disables it
         self.journal_path = journal_path if receiver_mode else None
+        # Forward URL is only used in receiver mode; None disables it
+        self.forward_url = forward_url if receiver_mode else None
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -221,6 +253,7 @@ class LiveServer:
         self._httpd.receiver_buffer: list[str] = []  # type: ignore[attr-defined]
         self._httpd.receiver_lock = threading.Lock()  # type: ignore[attr-defined]
         self._httpd.journal_path = self.journal_path  # type: ignore[attr-defined]
+        self._httpd.forward_url = self.forward_url  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")
@@ -230,6 +263,8 @@ class LiveServer:
                 print(f"Journal file: {self.journal_path}")
             else:
                 print("Journal file: disabled")
+            if self.forward_url:
+                print(f"Forwarding to: {self.forward_url}")
         else:
             print(f"Serving trace file: {self.trace_path}")
         print(f"Poll interval: {self.poll_interval}s")

@@ -55,6 +55,7 @@ def _create_handler_with_server(journal_path=None, receiver_mode=True):
     server.receiver_buffer = []
     server.receiver_lock = threading.Lock()
     server.journal_path = journal_path
+    server.forward_url = None
     return server
 
 
@@ -225,6 +226,7 @@ class TestCLIJournalArguments:
                 poll_interval=5,
                 receiver_mode=True,
                 journal_path="traces.journal.json",
+                forward_url=None,
             )
 
     def test_custom_journal_path(self, monkeypatch):
@@ -244,6 +246,7 @@ class TestCLIJournalArguments:
                 poll_interval=5,
                 receiver_mode=True,
                 journal_path="/tmp/custom.journal",
+                forward_url=None,
             )
 
     def test_no_journal_flag(self, monkeypatch):
@@ -263,6 +266,7 @@ class TestCLIJournalArguments:
                 poll_interval=5,
                 receiver_mode=True,
                 journal_path=None,
+                forward_url=None,
             )
 
     def test_no_journal_overrides_custom_path(self, monkeypatch):
@@ -289,4 +293,5 @@ class TestCLIJournalArguments:
                 poll_interval=5,
                 receiver_mode=True,
                 journal_path=None,
+                forward_url=None,
             )

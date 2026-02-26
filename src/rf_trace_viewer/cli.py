@@ -108,6 +108,12 @@ def main() -> int:
         action="store_true",
         help="Disable journal file writing in receiver mode",
     )
+    parser.add_argument(
+        "--forward",
+        default=None,
+        metavar="<url>",
+        help="Forward received OTLP payloads to an upstream collector URL",
+    )
 
     args = parser.parse_args()
 
@@ -133,6 +139,7 @@ def main() -> int:
             poll_interval=args.poll_interval,
             receiver_mode=args.receiver,
             journal_path=journal_path,
+            forward_url=args.forward,
         )
         server.start(open_browser=not args.no_open)
         return 0
