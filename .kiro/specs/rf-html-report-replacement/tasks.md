@@ -1120,7 +1120,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Run via Docker: `make dev-test-file FILE=tests/unit/test_server.py`
     - _Requirements: 44.4, 47.1, 48.4, 50.1_
 
-- [ ] 48. Checkpoint — CLI and server integration
+- [x] 48. Checkpoint — CLI and server integration
   - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
   - Verify `--provider signoz` with `--signoz-endpoint` constructs `SigNozProvider`
   - Verify `--provider json` (default) constructs `JsonProvider` and behaves identically to pre-SigNoz implementation
@@ -1130,7 +1130,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 
 
 - [ ] 49. Extend JS Viewer for SigNoz mode
-  - [ ] 49.1 Modify `src/rf_trace_viewer/viewer/live.js` for SigNoz poll branch
+  - [x] 49.1 Modify `src/rf_trace_viewer/viewer/live.js` for SigNoz poll branch
     - Add provider-aware polling: check `window.__RF_PROVIDER` to select SigNoz or file-based polling
     - Implement `_pollSigNoz()`: fetch `/api/spans?since_ns=<lastSeenNs>`, merge new spans, update `_lastSeenNs` to max `start_time_ns + duration_ns` of received spans
     - Handle 429 rate limit: show notification, implement exponential backoff (double interval, max 30s)

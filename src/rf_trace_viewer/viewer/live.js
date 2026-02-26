@@ -5,7 +5,8 @@
  *  1. Sets window.__RF_TRACE_DATA__ to a minimal empty model so app.js can
  *     build the DOM structure on DOMContentLoaded.
  *  2. After the 'app-ready' event fires, starts polling /traces.json?offset=N
- *     for incremental NDJSON data.
+ *     for incremental NDJSON data (json provider) or /api/spans?since_ns=N
+ *     for SigNoz spans (signoz provider).
  *  3. Parses new spans, rebuilds the model, and re-renders all views.
  */
 (function () {
@@ -21,6 +22,8 @@
 
   /* ── state ─────────────────────────────────────────────────────── */
 
+  var provider = window.__RF_PROVIDER || 'json';  // 'json' or 'signoz'
+
   var byteOffset = 0;          // current byte offset into the trace file
   var lineBuffer = '';          // partial line carried across polls
   var allSpans = [];            // flat list of all parsed spans
@@ -30,6 +33,11 @@
   var statusBarEl = null;       // live status bar DOM element
   var appReady = false;         // true after 'app-ready' fires
   var polling = false;          // guard against overlapping fetches
+
+  // SigNoz-specific state
+  var lastSeenNs = 0;            // SigNoz: highest (start_time_ns + duration_ns) seen
+  var backoffMs = POLL_MS;       // SigNoz: current backoff interval (for 429 handling)
+  var snapshotMode = false;      // true = paused polling (snapshot), false = live
 
   /* ── 1. Provide empty model for app.js ─────────────────────────── */
 
@@ -89,9 +97,11 @@
         _stopPolling();
         _stopTick();
       } else {
-        _startPolling();
-        _startTick();
-        _poll(); // immediate catch-up
+        if (!snapshotMode) {
+          _startPolling();
+          _startTick();
+          _poll(); // immediate catch-up
+        }
       }
     });
   }
@@ -100,6 +110,14 @@
 
   function _poll() {
     if (polling) return;
+    if (provider === 'signoz') {
+      _pollSigNoz();
+    } else {
+      _pollJson();
+    }
+  }
+
+  function _pollJson() {
     polling = true;
 
     fetch('/traces.json?offset=' + byteOffset)
@@ -118,6 +136,51 @@
       })
       .catch(function (err) {
         console.warn('[live] poll error:', err.message);
+      })
+      .finally(function () {
+        polling = false;
+      });
+  }
+
+  function _pollSigNoz() {
+    polling = true;
+    var url = '/api/spans?since_ns=' + lastSeenNs;
+
+    fetch(url)
+      .then(function (res) {
+        if (res.status === 429) {
+          // Rate limited — exponential backoff
+          return res.json().then(function (body) {
+            _showNotification('Rate limited by SigNoz. Backing off\u2026');
+            backoffMs = Math.min(backoffMs * 2, 30000);
+            _reschedulePolling(backoffMs);
+            throw new Error('rate_limited');
+          });
+        }
+        if (!res.ok) {
+          return res.json().then(function (body) {
+            throw new Error(body.message || 'HTTP ' + res.status);
+          }).catch(function () {
+            throw new Error('HTTP ' + res.status);
+          });
+        }
+        // Success — reset backoff
+        backoffMs = POLL_MS;
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.spans) return;
+        var spans = data.spans;
+        if (spans.length > 0) {
+          _ingestSigNozSpans(spans);
+          lastUpdateTs = Date.now();
+          _rebuildAndRender();
+        }
+      })
+      .catch(function (err) {
+        if (err.message === 'rate_limited') return; // already handled
+        console.warn('[live] SigNoz poll error:', err.message);
+        _showNotification('SigNoz error: partial data may be shown');
       })
       .finally(function () {
         polling = false;
@@ -143,6 +206,44 @@
       } catch (e) {
         console.warn('[live] skipping malformed line:', e.message);
       }
+    }
+  }
+
+  /** Ingest TraceSpan objects from SigNoz /api/spans response. */
+  function _ingestSigNozSpans(spans) {
+    for (var i = 0; i < spans.length; i++) {
+      var s = spans[i];
+      var startNs = s.start_time_ns || 0;
+      var durationNs = s.duration_ns || 0;
+      var endNs = startNs + durationNs;
+
+      // Update lastSeenNs watermark
+      if (endNs > lastSeenNs) lastSeenNs = endNs;
+
+      // Map status: "OK" → "STATUS_CODE_OK", "ERROR" → "STATUS_CODE_ERROR", else ""
+      var statusCode = '';
+      if (s.status === 'OK') statusCode = 'STATUS_CODE_OK';
+      else if (s.status === 'ERROR') statusCode = 'STATUS_CODE_ERROR';
+
+      // Merge resource_attributes into attributes (span attrs take precedence)
+      var attrs = {};
+      var ra = s.resource_attributes || {};
+      var key;
+      for (key in ra) { attrs[key] = ra[key]; }
+      var sa = s.attributes || {};
+      for (key in sa) { attrs[key] = sa[key]; }
+
+      allSpans.push({
+        trace_id: (s.trace_id || '').toLowerCase(),
+        span_id: (s.span_id || '').toLowerCase(),
+        parent_span_id: (s.parent_span_id || '').toLowerCase(),
+        name: s.name || '',
+        start_time: startNs,
+        end_time: endNs,
+        status_code: statusCode,
+        attributes: attrs,
+        events: s.events || []
+      });
     }
   }
 
@@ -673,17 +774,88 @@
     statusBarEl.className = 'live-status-bar';
     statusBarEl.textContent = 'Live \u2014 connecting\u2026';
     header.appendChild(statusBarEl);
+
+    if (provider === 'signoz') {
+      var toggleContainer = document.createElement('span');
+      toggleContainer.className = 'snapshot-toggle';
+
+      var liveBtn = document.createElement('button');
+      liveBtn.className = 'snapshot-toggle-btn snapshot-toggle-live active';
+      liveBtn.textContent = 'Live';
+      liveBtn.setAttribute('aria-pressed', 'true');
+
+      var snapBtn = document.createElement('button');
+      snapBtn.className = 'snapshot-toggle-btn snapshot-toggle-snap';
+      snapBtn.textContent = 'Snapshot';
+      snapBtn.setAttribute('aria-pressed', 'false');
+
+      liveBtn.addEventListener('click', function () {
+        if (!snapshotMode) return;
+        snapshotMode = false;
+        liveBtn.classList.add('active');
+        liveBtn.setAttribute('aria-pressed', 'true');
+        snapBtn.classList.remove('active');
+        snapBtn.setAttribute('aria-pressed', 'false');
+        _startPolling();
+        _startTick();
+        _poll();
+      });
+
+      snapBtn.addEventListener('click', function () {
+        if (snapshotMode) return;
+        snapshotMode = true;
+        snapBtn.classList.add('active');
+        snapBtn.setAttribute('aria-pressed', 'true');
+        liveBtn.classList.remove('active');
+        liveBtn.setAttribute('aria-pressed', 'false');
+        _stopPolling();
+        _stopTick();
+        if (statusBarEl) statusBarEl.textContent = 'Snapshot mode';
+      });
+
+      toggleContainer.appendChild(liveBtn);
+      toggleContainer.appendChild(snapBtn);
+      header.appendChild(toggleContainer);
+    }
+
     _updateStatusText();
   }
 
   function _updateStatusText() {
     if (!statusBarEl) return;
+    if (snapshotMode) {
+      statusBarEl.textContent = 'Snapshot mode';
+      return;
+    }
     if (!lastUpdateTs) {
       statusBarEl.textContent = 'Live \u2014 connecting\u2026';
       return;
     }
     var ago = Math.round((Date.now() - lastUpdateTs) / 1000);
     statusBarEl.textContent = 'Live \u2014 last updated ' + ago + 's ago';
+  }
+
+  /* ── 9. SigNoz helpers ─────────────────────────────────────────── */
+
+  function _reschedulePolling(intervalMs) {
+    _stopPolling();
+    pollTimer = setInterval(_poll, intervalMs);
+  }
+
+  function _showNotification(msg) {
+    if (!statusBarEl) return;
+    var note = statusBarEl.parentNode.querySelector('.live-notification');
+    if (!note) {
+      note = document.createElement('span');
+      note.className = 'live-notification';
+      statusBarEl.parentNode.appendChild(note);
+    }
+    note.textContent = msg;
+    // Auto-clear after 10 seconds
+    clearTimeout(note._clearTimer);
+    note._clearTimer = setTimeout(function () {
+      note.textContent = '';
+    }, 10000);
   }
 
 })();
