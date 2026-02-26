@@ -14,11 +14,13 @@ from .base import (
     TraceSpan,
     TraceViewModel,
 )
+from .json_provider import JsonProvider
 
 __all__ = [
     "AuthenticationError",
     "ConfigurationError",
     "ExecutionSummary",
+    "JsonProvider",
     "ProviderError",
     "RateLimitError",
     "TraceProvider",

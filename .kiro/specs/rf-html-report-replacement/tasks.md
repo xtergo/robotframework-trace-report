@@ -872,7 +872,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 
 
 - [ ] 39. Implement JsonProvider wrapping existing parser
-  - [ ] 39.1 Create `src/rf_trace_viewer/providers/json_provider.py`
+  - [x] 39.1 Create `src/rf_trace_viewer/providers/json_provider.py`
     - Implement `JsonProvider(TraceProvider)` class wrapping existing `NDJSONParser`
     - Implement `_to_trace_span(ParsedSpan) -> TraceSpan` conversion: `start_time` float → `start_time_ns` int, `end_time - start_time` → `duration_ns`, `status_code` → `status` string mapping, stringify all attribute values
     - Implement `list_executions()`: parse file, return single `ExecutionSummary` with first span's `trace_id`
