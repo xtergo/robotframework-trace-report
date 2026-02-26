@@ -843,7 +843,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Enforce invariants: `start_time_ns >= 0`, `duration_ns >= 0`, `status` in `{"OK", "ERROR", "UNSET"}`, `span_id` non-empty, `trace_id` non-empty
     - _Requirements: 40.1, 40.4, 41.1, 41.2, 41.3, 41.4, 41.5_
 
-  - [ ] 38.3 Create exception hierarchy in `src/rf_trace_viewer/providers/base.py`
+  - [x] 38.3 Create exception hierarchy in `src/rf_trace_viewer/providers/base.py`
     - Implement `ProviderError(Exception)` base class
     - Implement `AuthenticationError(ProviderError)` for SigNoz API key failures
     - Implement `RateLimitError(ProviderError)` for SigNoz 429 responses

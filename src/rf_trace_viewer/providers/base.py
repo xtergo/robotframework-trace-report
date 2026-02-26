@@ -10,6 +10,28 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 
+# --- Exception hierarchy ---
+
+
+class ProviderError(Exception):
+    """Base exception for all provider errors."""
+
+
+class AuthenticationError(ProviderError):
+    """SigNoz API key invalid or missing."""
+
+
+class RateLimitError(ProviderError):
+    """SigNoz API rate limit exceeded."""
+
+
+class ConfigurationError(Exception):
+    """Invalid or missing configuration."""
+
+
+# --- Data models ---
+
+
 @dataclass
 class TraceSpan:
     """Canonical span record. All providers must emit these."""
