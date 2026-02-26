@@ -1171,7 +1171,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 
 
 - [ ] 51. Implement Docker/Deployment support for SigNoz mode
-  - [ ] 51.1 Extend Dockerfile for SigNoz mode
+  - [x] 51.1 Extend Dockerfile for SigNoz mode
     - Add environment variable declarations: `SIGNOZ_ENDPOINT`, `SIGNOZ_API_KEY`, `EXECUTION_ATTRIBUTE`, `POLL_INTERVAL`, `MAX_SPANS_PER_PAGE`, `PORT`
     - Set default `CMD` to `rf-trace-report serve --provider signoz --port 8077 --no-open`
     - Ensure existing Docker build and JSON-mode usage are unaffected
