@@ -830,6 +830,480 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Verify scope state round-trips through deep link URL hash
   - Verify clear-all-filters resets scope toggle to enabled (default)
 
+- [ ] 38. Implement Provider layer foundation and data models
+  - [x] 38.1 Create `src/rf_trace_viewer/providers/__init__.py` package init
+    - Export `TraceProvider`, `TraceSpan`, `TraceViewModel`, `ExecutionSummary` from `base.py`
+    - _Requirements: 40.1_
+
+  - [ ] 38.2 Create `src/rf_trace_viewer/providers/base.py` with core interfaces and data models
+    - Implement `TraceSpan` dataclass with fields: `span_id`, `parent_span_id`, `trace_id`, `start_time_ns`, `duration_ns`, `status`, `attributes`, `resource_attributes`, `events`, `status_message`, `name`
+    - Implement `TraceViewModel` dataclass with `spans: list[TraceSpan]` and `resource_attributes: dict[str, str]`
+    - Implement `ExecutionSummary` dataclass with `execution_id`, `start_time_ns`, `span_count`, `root_span_name`
+    - Implement `TraceProvider` ABC with abstract methods: `list_executions()`, `fetch_spans()`, `fetch_all()`, `supports_live_poll()`, `poll_new_spans()`
+    - Enforce invariants: `start_time_ns >= 0`, `duration_ns >= 0`, `status` in `{"OK", "ERROR", "UNSET"}`, `span_id` non-empty, `trace_id` non-empty
+    - _Requirements: 40.1, 40.4, 41.1, 41.2, 41.3, 41.4, 41.5_
+
+  - [ ] 38.3 Create exception hierarchy in `src/rf_trace_viewer/providers/base.py`
+    - Implement `ProviderError(Exception)` base class
+    - Implement `AuthenticationError(ProviderError)` for SigNoz API key failures
+    - Implement `RateLimitError(ProviderError)` for SigNoz 429 responses
+    - Implement `ConfigurationError(Exception)` for invalid/missing configuration
+    - _Requirements: 42.9, 42.10_
+
+  - [ ]* 38.4 Write property test for TraceViewModel JSON round-trip
+    - **Property 37: TraceViewModel JSON round-trip**
+    - Serialize `TraceViewModel` to JSON and deserialize back; all fields must be preserved
+    - Add test in `tests/unit/test_trace_provider.py`
+    - **Validates: Requirements 41.6**
+
+  - [ ]* 38.5 Write property test for TraceSpan structural invariants
+    - **Property 38: TraceSpan structural invariants**
+    - Every `TraceSpan` produced by any provider must satisfy: non-empty `span_id`, non-empty `trace_id`, `start_time_ns >= 0`, `duration_ns >= 0`, `status` in `{"OK", "ERROR", "UNSET"}`, all attribute keys and values are strings
+    - Add test in `tests/unit/test_trace_provider.py`
+    - **Validates: Requirements 40.4, 41.1, 41.2, 41.5**
+
+  - [ ] 38.6 Write unit tests for TraceSpan and TraceViewModel
+    - Test dataclass construction with valid and edge-case values
+    - Test that `TraceProvider` ABC cannot be instantiated directly
+    - Test exception hierarchy (`isinstance` checks)
+    - Add tests in `tests/unit/test_trace_provider.py`
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_trace_provider.py`
+    - _Requirements: 40.1, 41.1_
+
+
+- [ ] 39. Implement JsonProvider wrapping existing parser
+  - [ ] 39.1 Create `src/rf_trace_viewer/providers/json_provider.py`
+    - Implement `JsonProvider(TraceProvider)` class wrapping existing `NDJSONParser`
+    - Implement `_to_trace_span(ParsedSpan) -> TraceSpan` conversion: `start_time` float → `start_time_ns` int, `end_time - start_time` → `duration_ns`, `status_code` → `status` string mapping, stringify all attribute values
+    - Implement `list_executions()`: parse file, return single `ExecutionSummary` with first span's `trace_id`
+    - Implement `fetch_spans()`: parse file, return paginated slice with `next_offset`
+    - Implement `fetch_all()`: parse entire file, convert all `ParsedSpan` to `TraceSpan`, cap at `max_spans`
+    - Implement `supports_live_poll()`: return `False` (JSON live mode uses existing file-offset polling)
+    - Implement `poll_new_spans()`: raise `NotImplementedError`
+    - _Requirements: 40.2, 50.1, 50.3_
+
+  - [ ]* 39.2 Write property test for JsonProvider backward compatibility
+    - **Property 39: JsonProvider backward compatibility**
+    - Parse OTLP NDJSON through `JsonProvider` → `TraceViewModel` → `SpanTreeBuilder` → `RFAttributeInterpreter`; compare RF model output to pre-provider pipeline (`NDJSONParser` → `SpanTreeBuilder` → `RFAttributeInterpreter`); field values must be identical
+    - Add test in `tests/unit/test_json_provider.py`
+    - **Validates: Requirements 40.2, 50.1, 50.3**
+
+  - [ ]* 39.3 Write property test for JsonProvider NDJSON round-trip
+    - **Property 40: JsonProvider NDJSON round-trip**
+    - Convert OTLP NDJSON to `TraceViewModel` via `JsonProvider`, serialize spans back to NDJSON, re-parse with `JsonProvider`; resulting `TraceViewModel` must have equivalent span data
+    - Add test in `tests/unit/test_json_provider.py`
+    - **Validates: Requirements 40.7**
+
+  - [ ] 39.4 Write unit tests for JsonProvider
+    - Test `fetch_all()` with `simple_trace.json` and `pabot_trace.json` fixtures
+    - Test `_to_trace_span` conversion: verify nanosecond timestamps, status mapping, attribute stringification
+    - Test `fetch_spans()` pagination: offset=0 limit=5 returns first 5 spans, correct `next_offset`
+    - Test `list_executions()` returns single entry with correct span count
+    - Test backward compatibility: `JsonProvider` output fed to tree builder + RF interpreter matches existing pipeline output
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_json_provider.py`
+    - _Requirements: 40.2, 50.1, 50.3, 50.5_
+
+- [ ] 40. Checkpoint — Provider foundation and JsonProvider
+  - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
+  - Verify `TraceSpan` and `TraceViewModel` dataclasses are correctly defined with all invariants
+  - Verify `JsonProvider` produces identical RF model output to the pre-provider pipeline
+  - Verify existing tests still pass (backward compatibility)
+
+
+- [ ] 41. Implement Configuration loader
+  - [ ] 41.1 Create `src/rf_trace_viewer/config.py`
+    - Implement `AppConfig` dataclass with all fields: `provider`, `input_path`, `output_path`, `live`, `port`, `title`, `signoz_endpoint`, `signoz_api_key`, `execution_attribute`, `poll_interval`, `max_spans_per_page`, `max_spans`, `overlap_window_seconds`, plus existing settings (`receiver`, `forward`, `journal`, `no_journal`, `no_open`, `compact_html`, `gzip_embed`)
+    - Implement `SigNozConfig` dataclass extracted from `AppConfig` for provider construction
+    - Implement `load_config(cli_args, config_path)` with three-tier precedence: CLI args > config file > environment variables
+    - Implement `_load_config_file(path)` supporting JSON config files with nested `signoz.*` key flattening and camelCase → snake_case conversion
+    - Implement `_coerce(attr, val)` for type conversion of env var string values to int/float/bool
+    - Implement validation: `--provider signoz` requires `signoz_endpoint`, `poll_interval` must be 1-30
+    - Raise `ConfigurationError` for missing required settings, invalid values, missing/unparseable config files
+    - _Requirements: 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.11_
+
+  - [ ] 41.2 Create `tests/fixtures/sample_config.json` fixture
+    - Create sample config file with `provider`, `signoz.endpoint`, `signoz.apiKey`, `signoz.executionAttribute`, `signoz.pollIntervalSeconds`, `signoz.maxSpansPerPage`
+    - _Requirements: 46.8_
+
+  - [ ]* 41.3 Write property test for configuration precedence
+    - **Property 47: Configuration precedence**
+    - For any three distinct values assigned to the same setting via CLI, config file, and env var, `load_config` must use CLI value when present, then config file, then env var
+    - Add test in `tests/unit/test_config.py`
+    - **Validates: Requirements 46.8, 46.9, 46.11**
+
+  - [ ] 41.4 Write unit tests for configuration loader
+    - Test `load_config` with CLI-only args, config-file-only, env-var-only, and mixed precedence
+    - Test `_load_config_file` with `sample_config.json` fixture: verify nested key flattening and camelCase conversion
+    - Test validation: `--provider signoz` without endpoint raises `ConfigurationError`
+    - Test validation: `poll_interval` outside 1-30 raises `ConfigurationError`
+    - Test `SIGNOZ_API_KEY` env var is read correctly
+    - Test `--provider json` ignores all `--signoz-*` arguments
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_config.py`
+    - _Requirements: 46.1, 46.3, 46.8, 46.9, 46.10, 46.11_
+
+
+- [ ] 42. Implement SigNozProvider
+  - [ ] 42.1 Create `src/rf_trace_viewer/providers/signoz_provider.py`
+    - Implement `SigNozProvider(TraceProvider)` class accepting `SigNozConfig`
+    - Implement `_api_request(path, payload)` using `urllib.request` (stdlib only): authenticated POST with `SIGNOZ-API-KEY` header, 30s timeout
+    - Implement error handling: `HTTPError` 401 → `AuthenticationError`, 429 → `RateLimitError`, other → `ProviderError`; `URLError` → `ProviderError` with endpoint URL and connection details
+    - Implement `_build_aggregate_query()` for listing executions (aggregate distinct execution IDs via `query_range`)
+    - Implement `_build_span_query()` for fetching spans with filters, limit/offset, orderBy timestamp asc
+    - Implement `_parse_spans(response)` mapping SigNoz response rows (`spanID`, `traceID`, `parentSpanID`, `startTime`, `durationNano`, `statusCode`, `name`, `tagMap`/`stringTagMap`) to `TraceSpan` objects
+    - Implement `_parse_execution_list(response)` mapping aggregate response to `ExecutionSummary` list
+    - _Requirements: 42.1, 42.2, 42.3, 42.4, 42.5, 42.7, 42.8, 42.9, 42.10_
+
+  - [ ] 42.2 Implement pagination and span cap in `SigNozProvider`
+    - Implement `fetch_spans()` with limit/offset pagination, `next_offset == -1` when no more pages
+    - Implement `fetch_all()` with automatic pagination loop, respecting `max_spans` cap
+    - Emit warning to stderr when span cap is reached
+    - _Requirements: 43.1, 43.5_
+
+  - [ ] 42.3 Implement deduplication and live poll in `SigNozProvider`
+    - Implement `_seen_span_ids: set[str]` for cross-poll deduplication
+    - Implement `poll_new_spans(since_ns)` with overlap window: query `startTimeNs > since_ns - overlap_window_ns`, deduplicate against `_seen_span_ids`
+    - Implement `supports_live_poll()` returning `True`
+    - _Requirements: 44.1, 44.2, 44.3, 44.6_
+
+  - [ ] 42.4 Create `tests/fixtures/signoz_response_spans.json` and `tests/fixtures/signoz_response_executions.json`
+    - Create mock SigNoz `query_range` response for span fetching (with `spanID`, `traceID`, `parentSpanID`, `startTime`, `durationNano`, `statusCode`, `name`, `tagMap` fields)
+    - Create mock SigNoz aggregate response for execution listing
+    - _Requirements: 42.3, 42.4_
+
+  - [ ]* 42.5 Write property test for SigNoz response to TraceSpan conversion
+    - **Property 41: SigNoz response to TraceSpan conversion**
+    - For any valid SigNoz response row, `_parse_spans` must produce `TraceSpan` with matching `span_id`, `trace_id`, `start_time_ns`, `duration_ns`, and all `tagMap` entries in `attributes`
+    - Add test in `tests/unit/test_signoz_provider.py`
+    - **Validates: Requirements 42.7**
+
+  - [ ]* 42.6 Write property test for span cap enforcement
+    - **Property 43: Span cap enforcement**
+    - For any total span count N > cap M, `fetch_all()` must return at most M spans
+    - Add test in `tests/unit/test_signoz_provider.py`
+    - **Validates: Requirements 43.5**
+
+  - [ ]* 42.7 Write property test for live poll deduplication
+    - **Property 44: Live poll deduplication**
+    - For any sequence of poll cycles with overlapping span sets, each unique `spanId` must appear in exactly one poll cycle's output
+    - Add test in `tests/unit/test_signoz_provider.py`
+    - **Validates: Requirements 44.2, 44.3**
+
+  - [ ] 42.8 Write unit tests for SigNozProvider
+    - Test `_parse_spans` with `signoz_response_spans.json` fixture
+    - Test `_parse_execution_list` with `signoz_response_executions.json` fixture
+    - Test error handling: mock 401 → `AuthenticationError`, mock 429 → `RateLimitError`, mock connection error → `ProviderError`
+    - Test pagination: mock multi-page responses, verify all spans collected and `next_offset` correct
+    - Test deduplication: call `poll_new_spans` twice with overlapping spans, verify no duplicates
+    - Test span cap: mock response exceeding cap, verify truncation and warning
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_signoz_provider.py`
+    - _Requirements: 42.1, 42.2, 42.9, 42.10, 43.1, 43.5, 44.3_
+
+
+- [ ] 43. Implement Robot Semantics Layer
+  - [ ] 43.1 Create `src/rf_trace_viewer/robot_semantics.py`
+    - Implement `RobotSemanticsLayer` class with configurable `execution_attribute` (default: `essvt.execution_id`)
+    - Implement `enrich(vm: TraceViewModel) -> TraceViewModel`: normalize `robot.type`/`robot.suite`/`robot.test`/`robot.keyword` attributes to canonical `rf.suite.name`/`rf.test.name`/`rf.keyword.name` when `rf.*` attributes are not already present
+    - Implement `group_by_execution(vm: TraceViewModel) -> dict[str, TraceViewModel]`: group spans by `execution_attribute` value
+    - Ensure `enrich()` is a no-op for spans that already have `rf.*` attributes (JsonProvider data passthrough)
+    - Preserve original `robot.*` attributes after normalization
+    - _Requirements: 45.1, 45.2, 45.3, 45.4, 45.5_
+
+  - [ ]* 43.2 Write property test for attribute normalization
+    - **Property 45: Robot Semantics Layer attribute normalization**
+    - For any `TraceSpan` with `robot.type`/`robot.suite`/`robot.test`/`robot.keyword` but without `rf.*` attributes, `enrich()` must produce corresponding `rf.suite.name`/`rf.test.name`/`rf.keyword.name` attributes; original `robot.*` attributes must be preserved
+    - Add test in `tests/unit/test_robot_semantics.py`
+    - **Validates: Requirements 45.1**
+
+  - [ ]* 43.3 Write property test for provider equivalence
+    - **Property 46: Provider equivalence for RF model output**
+    - For any `TraceSpan` with `rf.*` attributes, passing through `RobotSemanticsLayer.enrich()` then `RFAttributeInterpreter.interpret()` must produce the same RF model object regardless of whether the span was constructed by `JsonProvider` or `SigNozProvider`
+    - Add test in `tests/unit/test_robot_semantics.py`
+    - **Validates: Requirements 45.4, 45.6**
+
+  - [ ] 43.4 Write unit tests for Robot Semantics Layer
+    - Test `enrich()` with spans containing `robot.type=suite` + `robot.suite=MySuite` → `rf.suite.name=MySuite`
+    - Test `enrich()` with spans containing `robot.type=test` + `robot.test=MyTest` → `rf.test.name=MyTest`
+    - Test `enrich()` with spans containing `robot.type=keyword` + `robot.keyword=Log` → `rf.keyword.name=Log`
+    - Test `enrich()` is no-op for spans already having `rf.*` attributes
+    - Test `enrich()` preserves original `robot.*` attributes after normalization
+    - Test `group_by_execution()` groups spans correctly by execution attribute
+    - Test `group_by_execution()` uses `"unknown"` for spans missing the execution attribute
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_robot_semantics.py`
+    - _Requirements: 45.1, 45.2, 45.4, 45.5_
+
+- [ ] 44. Checkpoint — SigNoz provider and semantics layer
+  - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
+  - Verify `SigNozProvider` correctly parses mock SigNoz responses into `TraceSpan` objects
+  - Verify `RobotSemanticsLayer.enrich()` normalizes `robot.*` → `rf.*` attributes
+  - Verify `RobotSemanticsLayer.enrich()` is a no-op for JSON-sourced spans with `rf.*` attributes
+  - Verify deduplication works across multiple poll cycles
+  - Verify existing tests still pass (backward compatibility)
+
+
+- [ ] 45. Extend Tree Builder for incremental merge with orphan tracking
+  - [ ] 45.1 Modify `src/rf_trace_viewer/tree.py` to support paged incremental merge
+    - Add `_orphans: dict[str, list[SpanNode]]` to track spans waiting for their parent
+    - Add `_node_index: dict[str, SpanNode]` for O(1) span lookup by `span_id`
+    - Enhance `merge()` to check if new spans resolve existing orphans (re-parent them under correct parent, re-sort children)
+    - Enhance `merge()` to park spans with unknown `parent_span_id` as orphans instead of immediately promoting to root
+    - Add `orphan_count` property: total number of spans waiting for their parent
+    - Add `total_count` property: total number of spans indexed
+    - After all pages loaded, promote remaining orphans to root-level nodes
+    - _Requirements: 43.2, 43.3, 49.1, 49.2, 49.4_
+
+  - [ ]* 45.2 Write property test for incremental tree building equivalence
+    - **Property 42: Incremental tree building equivalence**
+    - For any set of spans with known parent-child relationships, splitting into arbitrary pages (any order) and building via `merge()` per page must produce the same tree structure as building from the complete set in one call; orphans resolved by later pages must end up in correct position
+    - Add test in `tests/unit/test_tree.py`
+    - **Validates: Requirements 43.2, 43.3, 49.1, 49.2**
+
+  - [ ] 45.3 Write unit tests for enhanced tree builder
+    - Test orphan tracking: add child span before parent, verify orphan is re-parented when parent arrives
+    - Test `orphan_count` and `total_count` properties at each merge step
+    - Test multi-page merge: split `pabot_trace.json` spans into 3 pages, merge sequentially, verify final tree matches single-build tree
+    - Test remaining orphans are promoted to root after all pages
+    - Test that existing `build()` behavior is unchanged (backward compatibility)
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_tree.py`
+    - _Requirements: 43.2, 43.3, 49.1, 49.2_
+
+
+- [ ] 46. Extend CLI with SigNoz arguments and provider selection
+  - [ ] 46.1 Modify `src/rf_trace_viewer/cli.py` to add SigNoz CLI arguments
+    - Add `--provider` argument (`json` | `signoz`, default `json`)
+    - Add `--signoz-endpoint` argument (SigNoz API base URL)
+    - Add `--signoz-api-key` argument (also readable from `SIGNOZ_API_KEY` env var)
+    - Add `--execution-attribute` argument (default: `essvt.execution_id`)
+    - Add `--max-spans-per-page` argument (default: 10000)
+    - Add `--max-spans` argument (default: 500000) — note: this extends the existing `--max-spans` from compact serialization (task 34.7) to also apply to SigNoz fetching
+    - Add `--config` argument (path to JSON config file)
+    - Add `--overlap-window` argument (float, default: 2.0 seconds)
+    - _Requirements: 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.11_
+
+  - [ ] 46.2 Add `serve` subcommand to CLI
+    - Add `serve` subcommand that implies `--live` behavior without requiring an input file
+    - Wire `serve` to start the HTTP server with provider selection
+    - Validate: `--provider signoz` requires `--signoz-endpoint` (from CLI, config file, or env); exit code 1 with descriptive error if missing
+    - Validate: `--provider json` (default) ignores all `--signoz-*` arguments; does not require SigNoz config
+    - _Requirements: 46.10, 47.1, 50.2, 50.4_
+
+  - [ ] 46.3 Integrate `load_config()` into CLI flow
+    - Call `load_config(cli_args, config_path)` to merge CLI args, config file, and env vars
+    - Construct `SigNozConfig` from `AppConfig` when `provider == "signoz"`
+    - Instantiate appropriate provider (`JsonProvider` or `SigNozProvider`) based on `AppConfig.provider`
+    - Wire provider into existing static mode and live mode flows
+    - _Requirements: 46.8, 46.9, 50.1_
+
+  - [ ] 46.4 Write unit tests for CLI SigNoz arguments
+    - Test argument parsing for all new options
+    - Test `serve` subcommand is recognized
+    - Test validation: `--provider signoz` without `--signoz-endpoint` exits with error
+    - Test validation: `--provider json` works without any SigNoz config
+    - Test that existing CLI behavior is unchanged when `--provider` is not specified
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_cli.py`
+    - _Requirements: 46.1, 46.3, 46.10, 50.2, 50.4_
+
+- [ ] 47. Extend Server with SigNoz proxy routes
+  - [ ] 47.1 Modify `src/rf_trace_viewer/server.py` to add provider-aware handler
+    - Add `SigNozLiveHandler` (or extend existing handler) with `GET /api/spans?since_ns=<timestamp>` route
+    - Handler calls `SigNoz_Provider.poll_new_spans(since_ns)` and returns JSON response with `spans`, `orphan_count`, `total_count`
+    - Handle `RateLimitError`: return 429 with `retry_after` field
+    - Handle `ProviderError`: return 502 with error message
+    - Set `window.__RF_PROVIDER` to `"signoz"` or `"json"` in served HTML so JS viewer can detect mode
+    - Preserve existing file-based routes (`/traces.json`, `/v1/traces`) when provider is `json`
+    - _Requirements: 44.4, 47.1, 48.4, 48.5, 50.1_
+
+  - [ ] 47.2 Write unit tests for SigNoz server routes
+    - Test `GET /api/spans?since_ns=0` returns JSON with `spans` array
+    - Test rate limit handling: mock `RateLimitError` → 429 response
+    - Test provider error handling: mock `ProviderError` → 502 response
+    - Test that existing file-based routes still work when provider is `json`
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_server.py`
+    - _Requirements: 44.4, 47.1, 48.4, 50.1_
+
+- [ ] 48. Checkpoint — CLI and server integration
+  - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
+  - Verify `--provider signoz` with `--signoz-endpoint` constructs `SigNozProvider`
+  - Verify `--provider json` (default) constructs `JsonProvider` and behaves identically to pre-SigNoz implementation
+  - Verify `serve` subcommand starts server without input file
+  - Verify `/api/spans` proxy route returns correct JSON structure
+  - Verify existing CLI commands and server routes are unchanged (backward compatibility)
+
+
+- [ ] 49. Extend JS Viewer for SigNoz mode
+  - [ ] 49.1 Modify `src/rf_trace_viewer/viewer/live.js` for SigNoz poll branch
+    - Add provider-aware polling: check `window.__RF_PROVIDER` to select SigNoz or file-based polling
+    - Implement `_pollSigNoz()`: fetch `/api/spans?since_ns=<lastSeenNs>`, merge new spans, update `_lastSeenNs` to max `start_time_ns + duration_ns` of received spans
+    - Handle 429 rate limit: show notification, implement exponential backoff (double interval, max 30s)
+    - Handle errors: show warning with partial data notification
+    - Implement snapshot mode toggle: "Live" / "Snapshot" buttons in status bar, stop/resume polling
+    - _Requirements: 44.1, 44.4, 44.7, 48.4_
+
+  - [ ] 49.2 Modify `src/rf_trace_viewer/viewer/app.js` for provider detection and progress UI
+    - Detect provider from `window.__RF_PROVIDER` variable (set by server in served HTML)
+    - Add progress indicator UI: persistent bar showing "N spans loaded | M orphans pending" during paged loading
+    - Implement `_startBackgroundFetch()` and `_fetchNextPage()` for non-blocking paged retrieval
+    - Implement `_mergeSpansPreservingState()`: capture scroll position, expanded nodes, selected node before merge; restore after merge
+    - Show span cap notification when limit reached: "Trace partially loaded: N span limit reached"
+    - Show orphan count indicator: "M orphan spans pending reconciliation"
+    - Use `requestAnimationFrame` to yield to UI between page fetches
+    - _Requirements: 43.4, 43.6, 43.7, 48.1, 48.2, 48.3, 49.3_
+
+  - [ ] 49.3 Add progress indicator styles to `src/rf_trace_viewer/viewer/style.css`
+    - Add CSS for `.loading-progress-bar` (persistent top bar during loading)
+    - Add CSS for `.span-cap-notification` and `.orphan-indicator`
+    - Add CSS for `.snapshot-toggle` button states (active/inactive)
+    - Ensure dark mode compatibility via CSS custom properties
+    - _Requirements: 43.6, 44.7_
+
+- [ ] 50. Implement test fixtures and Hypothesis strategies for SigNoz integration
+  - [ ] 50.1 Extend `tests/conftest.py` with new Hypothesis strategies
+    - Add `trace_span_strategy`: generates valid `TraceSpan` objects with hex IDs, non-negative timestamps, valid status values, string attribute k/v pairs
+    - Add `trace_view_model_strategy`: generates `TraceViewModel` with list of `TraceSpan` objects
+    - Add `signoz_span_row` strategy: generates mock SigNoz API response rows with `spanID`, `traceID`, `parentSpanID`, `startTime`, `durationNano`, `statusCode`, `name`, `tagMap`
+    - Add `span_tree_strategy(max_depth, max_children)`: generates span trees with known parent-child relationships for incremental merge testing
+    - _Requirements: 40.4, 41.1, 42.7_
+
+  - [ ] 50.2 Verify all SigNoz fixture files are created
+    - Verify `tests/fixtures/signoz_response_spans.json` exists (created in task 42.4)
+    - Verify `tests/fixtures/signoz_response_executions.json` exists (created in task 42.4)
+    - Verify `tests/fixtures/sample_config.json` exists (created in task 41.2)
+    - _Requirements: 42.3, 46.8_
+
+
+- [ ] 51. Implement Docker/Deployment support for SigNoz mode
+  - [ ] 51.1 Extend Dockerfile for SigNoz mode
+    - Add environment variable declarations: `SIGNOZ_ENDPOINT`, `SIGNOZ_API_KEY`, `EXECUTION_ATTRIBUTE`, `POLL_INTERVAL`, `MAX_SPANS_PER_PAGE`, `PORT`
+    - Set default `CMD` to `rf-trace-report serve --provider signoz --port 8077 --no-open`
+    - Ensure existing Docker build and JSON-mode usage are unaffected
+    - _Requirements: 47.2, 47.3, 47.5_
+
+  - [ ] 51.2 Wire `serve` subcommand end-to-end
+    - Verify `serve` subcommand starts server with `SigNozProvider` when `--provider signoz` is specified
+    - Verify `serve` reads config from env vars when no CLI args provided (Docker use case)
+    - Verify `--base-url` works correctly for reverse proxy deployment (API calls prefixed with base URL)
+    - Verify sidecar deployment scenario: `SIGNOZ_ENDPOINT=http://localhost:3301` connects to co-located SigNoz
+    - _Requirements: 47.1, 47.3, 47.4, 47.5_
+
+  - [ ] 51.3 Write unit tests for deployment scenarios
+    - Test that env vars are picked up by `load_config` when no CLI args provided
+    - Test that `--base-url` is propagated to served HTML as `window.__RF_BASE_URL`
+    - Test that `serve` subcommand without `--provider` defaults to `json` and requires input file
+    - Run via Docker: `make dev-test-file FILE=tests/unit/test_config.py`
+    - _Requirements: 47.1, 47.2, 47.4_
+
+- [ ] 52. Final checkpoint — SigNoz integration complete
+  - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
+  - Verify `JsonProvider` produces identical output to pre-provider pipeline for all existing fixture files
+  - Verify `SigNozProvider` correctly parses mock responses and handles pagination, deduplication, and error cases
+  - Verify `RobotSemanticsLayer` normalizes `robot.*` → `rf.*` attributes and is a no-op for JSON-sourced data
+  - Verify incremental tree building with orphan reconciliation produces correct trees
+  - Verify CLI `--provider signoz` flow works end-to-end with mock data
+  - Verify CLI `--provider json` (default) behavior is unchanged from pre-SigNoz implementation
+  - Verify `serve` subcommand starts server and proxies SigNoz API calls
+  - Verify JS viewer detects provider mode and uses correct polling mechanism
+  - Verify progress indicator shows during paged loading
+  - Verify snapshot/live toggle works in SigNoz mode
+  - Verify Docker image builds and starts with env var configuration
+  - Verify all existing tests still pass (backward compatibility)
+  - Run `black --check` and `ruff check` to verify code quality
+
+- [ ] 53. Add Requirement 51 and design section for SigNoz end-to-end integration testing
+  - [ ] 53.1 Add Requirement 51 to `.kiro/specs/rf-html-report-replacement/requirements.md`
+    - Add "Requirement 51: End-to-End Integration Testing with SigNoz" covering: Docker Compose stack with SigNoz services, RF test runner with robotframework-tracer, rf-trace-report in SigNoz mode, full-flow verification (RF test → tracer → SigNoz → rf-trace-report → HTML)
+    - Acceptance criteria: stack starts via single Docker Compose command, RF tests produce OTLP traces ingested by SigNoz, rf-trace-report in `serve --provider signoz` mode can list executions and fetch spans, static HTML report generated from SigNoz data contains correct test results, teardown cleans up all containers
+    - _Requirements: 42.1, 44.1, 47.1, 47.5, 50.1_
+
+  - [ ] 53.2 Add integration test architecture section to `.kiro/specs/rf-html-report-replacement/design.md`
+    - Describe the Docker Compose stack topology: SigNoz (otel-collector, query-service, clickhouse), RF test runner, rf-trace-report service
+    - Describe the data flow: RF test → robotframework-tracer listener → OTLP HTTP → SigNoz collector → ClickHouse → query-service → rf-trace-report SigNoz provider → HTML
+    - Describe the verification strategy: script-driven assertions against rf-trace-report CLI/API output
+    - _Requirements: 42.1, 47.1_
+
+- [ ] 54. Create SigNoz integration test Docker Compose stack
+  - [ ] 54.1 Create `tests/integration/signoz/docker-compose.yml`
+    - Define SigNoz services using official images: `signoz/signoz-otel-collector`, `signoz/query-service`, `clickhouse/clickhouse-server`
+    - Define RF test runner service based on `tests/browser/Dockerfile` pattern (Python 3.11 + robotframework + robotframework-tracer), configured to send OTLP traces to SigNoz collector endpoint (`http://signoz-otel-collector:4318/v1/traces`)
+    - Define rf-trace-report service built from project root Dockerfile, running `serve --provider signoz --signoz-endpoint http://query-service:8080 --no-open --port 8077`
+    - Add health checks: ClickHouse TCP port 9000, query-service HTTP port 8080, otel-collector HTTP port 4318
+    - Add `depends_on` with `condition: service_healthy` for correct startup ordering
+    - Define shared network for inter-service communication
+    - Mount project source into rf-trace-report container for live code
+    - _Requirements: 42.1, 47.1, 47.5_
+
+  - [ ] 54.2 Create `tests/integration/signoz/Dockerfile.rf-runner`
+    - Base on Python 3.11-slim
+    - Install `robotframework==7.1.1` and `robotframework-tracer` (pip install)
+    - Set `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable to SigNoz collector
+    - Copy test suites into container
+    - Default CMD runs robot with tracer listener and `essvt.execution_id` attribute
+    - _Requirements: 42.1, 44.1_
+
+  - [ ] 54.3 Create `tests/integration/signoz/Dockerfile.report`
+    - Base on Python 3.11-slim
+    - Copy project source and install rf-trace-report in the container
+    - Expose port 8077
+    - Default CMD: `rf-trace-report serve --provider signoz --no-open --port 8077`
+    - Accept `SIGNOZ_ENDPOINT` and `SIGNOZ_API_KEY` as environment variables
+    - _Requirements: 47.1, 47.2, 47.3_
+
+- [ ] 55. Create RF test suite and integration test script for SigNoz verification
+  - [ ] 55.1 Create `tests/integration/signoz/suites/signoz_integration.robot`
+    - Implement 3 simple RF test cases exercising suite/test/keyword hierarchy:
+      - `Passing Test With Keywords` — calls 2-3 built-in keywords (Log, Set Variable, Should Be Equal), expects PASS
+      - `Failing Test For Verification` — calls Should Be Equal with mismatched values, expects FAIL
+      - `Test With Tags` — tagged with `smoke` and `integration`, calls Log, expects PASS
+    - Configure `robotframework-tracer` as listener via `--listener` argument
+    - Set `essvt.execution_id` resource attribute for execution grouping
+    - _Requirements: 42.1, 45.1_
+
+  - [ ] 55.2 Create `tests/integration/signoz/run_integration.sh`
+    - Start full Docker Compose stack with `docker compose up -d`
+    - Wait for SigNoz health checks (poll query-service `/api/v1/health` endpoint, max 60s timeout)
+    - Run RF test suite container (which sends traces to SigNoz via robotframework-tracer)
+    - Wait for trace ingestion (poll SigNoz query API for spans with the execution_id, max 30s timeout)
+    - Start rf-trace-report container in SigNoz mode
+    - Verify execution listing: curl rf-trace-report API, assert at least 1 execution returned
+    - Verify span fetching: curl rf-trace-report API, assert spans contain expected test names (`Passing Test With Keywords`, `Failing Test For Verification`, `Test With Tags`)
+    - Verify static report generation: exec into rf-trace-report container, run CLI to generate HTML, assert file exists and contains expected test names
+    - Tear down stack with `docker compose down -v`
+    - Exit 0 on all checks pass, exit 1 on any failure with descriptive error message
+    - _Requirements: 42.1, 42.3, 44.1, 47.1, 50.1_
+
+  - [ ] 55.3 Create `tests/integration/signoz/wait_for_traces.sh` helper script
+    - Accept SigNoz query endpoint URL and execution_id as arguments
+    - Poll SigNoz `query_range` API for spans matching the execution_id
+    - Return 0 when spans are found, return 1 after timeout (configurable, default 30s)
+    - Used by `run_integration.sh` to wait for trace ingestion before verification
+    - _Requirements: 42.3_
+
+- [ ] 56. Add Makefile target and verify full integration flow
+  - [ ] 56.1 Add `test-integration-signoz` target to `Makefile`
+    - Target runs `cd tests/integration/signoz && bash run_integration.sh`
+    - Add help text: "Run end-to-end SigNoz integration test (requires Docker)"
+    - Ensure target is independent of other test targets (not included in `make test`)
+    - _Requirements: 47.1, 47.5_
+
+  - [ ] 56.2 Add `.gitignore` entries for integration test artifacts
+    - Add `tests/integration/signoz/results/` to `.gitignore`
+    - Add `tests/integration/signoz/*.html` to `.gitignore`
+    - _Requirements: 47.1_
+
+- [ ] 57. Checkpoint — SigNoz end-to-end integration test
+  - Ensure integration test passes end-to-end: `make test-integration-signoz`
+  - Verify RF tests run and produce OTLP traces ingested by SigNoz
+  - Verify rf-trace-report in SigNoz mode can list executions and fetch spans
+  - Verify generated HTML report contains correct test names and statuses
+  - Verify Docker Compose stack tears down cleanly with no orphaned containers
+  - Verify existing tests still pass: `make test`
+  - Ask the user if questions arise.
+
+- [ ] 58. Final checkpoint — All integration tests complete
+  - Ensure all unit tests pass: `make test`
+  - Ensure SigNoz integration test passes: `make test-integration-signoz`
+  - Verify no regressions in existing functionality
+  - Run `black --check` and `ruff check` to verify code quality
+  - Ask the user if questions arise.
+
 ## Notes
 
 - All tasks are required for comprehensive coverage
@@ -838,3 +1312,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 - Property tests validate universal correctness properties from the design document
 - Unit tests validate specific examples and edge cases
 - JS viewer components are created as separate files in `src/rf_trace_viewer/viewer/` and concatenated by the generator into the HTML output
+- Tasks 38-52 implement the SigNoz Integration Mode (Requirements 40-50, Properties 37-47)
+- Tasks 53-58 implement the SigNoz End-to-End Integration Test (Requirement 51) with a full Docker Compose stack
+- All tests run in Docker containers per the project's testing strategy
+- The `test-integration-signoz` Makefile target is separate from `make test` due to the heavy SigNoz stack requirement
