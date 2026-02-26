@@ -73,3 +73,100 @@ def build_tree(spans: list[RawSpan]) -> list[SpanNode]:
     # Sort roots by start_time_unix_nano
     roots.sort(key=lambda n: n.span.start_time_unix_nano)
     return roots
+
+class IncrementalTreeBuilder:
+    """Incremental tree builder with orphan tracking for paged span loading.
+
+    Supports building span trees incrementally by merging pages of spans.
+    Spans whose parent hasn't arrived yet are tracked as orphans and
+    automatically re-parented when their parent span arrives in a later page.
+    """
+
+    def __init__(self) -> None:
+        self._roots: list[SpanNode] = []
+        self._node_index: dict[str, SpanNode] = {}  # span_id -> SpanNode for O(1) lookup
+        self._orphans: dict[str, list[SpanNode]] = {}  # parent_span_id -> list of waiting children
+
+    @property
+    def orphan_count(self) -> int:
+        """Total number of spans waiting for their parent."""
+        return sum(len(children) for children in self._orphans.values())
+
+    @property
+    def total_count(self) -> int:
+        """Total number of spans indexed."""
+        return len(self._node_index)
+
+    @property
+    def roots(self) -> list[SpanNode]:
+        """Current root nodes sorted by start_time_unix_nano."""
+        return list(self._roots)
+
+    def merge(self, spans: list[RawSpan]) -> None:
+        """Merge a page of spans into the existing tree.
+
+        - New spans are indexed and linked to existing parents if found
+        - If a span's parent hasn't arrived yet, it's parked as an orphan
+        - If a new span resolves existing orphans (i.e., orphans were waiting
+          for this span_id as their parent), they are re-parented under it
+        - Duplicate span_ids are skipped with a warning
+        - Children are kept sorted by start_time_unix_nano
+        """
+        for raw_span in spans:
+            sid = raw_span.span_id
+
+            # Skip duplicates
+            if sid in self._node_index:
+                warnings.warn(
+                    f"Duplicate span_id {sid!r} in trace {raw_span.trace_id!r}, "
+                    "keeping first occurrence",
+                    stacklevel=2,
+                )
+                continue
+
+            node = SpanNode(span=raw_span)
+            self._node_index[sid] = node
+
+            # Try to link to parent
+            pid = raw_span.parent_span_id
+            if not pid:
+                # No parent -> root
+                self._roots.append(node)
+            elif pid in self._node_index:
+                # Parent already exists -> link
+                parent_node = self._node_index[pid]
+                node.parent = parent_node
+                parent_node.children.append(node)
+                parent_node.children.sort(key=lambda n: n.span.start_time_unix_nano)
+            else:
+                # Parent not yet seen -> park as orphan
+                self._orphans.setdefault(pid, []).append(node)
+
+            # Check if this new span resolves any orphans
+            if sid in self._orphans:
+                waiting = self._orphans.pop(sid)
+                for orphan_node in waiting:
+                    orphan_node.parent = node
+                    node.children.append(orphan_node)
+                # Re-sort children after adding resolved orphans
+                node.children.sort(key=lambda n: n.span.start_time_unix_nano)
+
+        # Keep roots sorted
+        self._roots.sort(key=lambda n: n.span.start_time_unix_nano)
+
+    def finalize(self) -> list[SpanNode]:
+        """Promote remaining orphans to root-level nodes and return final tree.
+
+        Call this after all pages have been merged. Any spans still waiting
+        for a parent that never arrived are promoted to roots.
+
+        Returns the final list of root SpanNode objects sorted by start_time_unix_nano.
+        """
+        for _pid, orphan_list in self._orphans.items():
+            for orphan_node in orphan_list:
+                self._roots.append(orphan_node)
+        self._orphans.clear()
+
+        self._roots.sort(key=lambda n: n.span.start_time_unix_nano)
+        return list(self._roots)
+

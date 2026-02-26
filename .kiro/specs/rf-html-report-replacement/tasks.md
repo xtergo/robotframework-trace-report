@@ -1040,8 +1040,8 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Verify existing tests still pass (backward compatibility)
 
 
-- [ ] 45. Extend Tree Builder for incremental merge with orphan tracking
-  - [ ] 45.1 Modify `src/rf_trace_viewer/tree.py` to support paged incremental merge
+- [x] 45. Extend Tree Builder for incremental merge with orphan tracking
+  - [x] 45.1 Modify `src/rf_trace_viewer/tree.py` to support paged incremental merge
     - Add `_orphans: dict[str, list[SpanNode]]` to track spans waiting for their parent
     - Add `_node_index: dict[str, SpanNode]` for O(1) span lookup by `span_id`
     - Enhance `merge()` to check if new spans resolve existing orphans (re-parent them under correct parent, re-sort children)
@@ -1057,7 +1057,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add test in `tests/unit/test_tree.py`
     - **Validates: Requirements 43.2, 43.3, 49.1, 49.2**
 
-  - [ ] 45.3 Write unit tests for enhanced tree builder
+  - [x] 45.3 Write unit tests for enhanced tree builder
     - Test orphan tracking: add child span before parent, verify orphan is re-parented when parent arrives
     - Test `orphan_count` and `total_count` properties at each merge step
     - Test multi-page merge: split `pabot_trace.json` spans into 3 pages, merge sequentially, verify final tree matches single-build tree

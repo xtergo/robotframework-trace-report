@@ -729,3 +729,229 @@ def test_duplicate_span_ids():
     assert root.span.name == "First Occurrence"
     assert root.span.attributes["order"] == "first"
     assert root.span.start_time_unix_nano == 1000000000000000000
+
+
+# ============================================================================
+# IncrementalTreeBuilder Tests
+# ============================================================================
+
+from rf_trace_viewer.tree import IncrementalTreeBuilder
+
+
+def _collect_tree_structure(roots):
+    """Collect (span_id, [child_span_ids]) tuples for comparison."""
+    result = {}
+
+    def _walk(node):
+        result[node.span.span_id] = [c.span.span_id for c in node.children]
+        for c in node.children:
+            _walk(c)
+
+    for root in roots:
+        _walk(root)
+    return result
+
+
+def _make_span(span_id, parent_span_id="", start_ns=1000000000000000000, name="Span"):
+    """Helper to create a RawSpan with minimal boilerplate."""
+    return RawSpan(
+        trace_id="0d077f083a9f42acdc3c862ebd202521",
+        span_id=span_id,
+        parent_span_id=parent_span_id,
+        name=name,
+        kind="SPAN_KIND_INTERNAL",
+        start_time_unix_nano=start_ns,
+        end_time_unix_nano=start_ns + 1000000000,
+        attributes={},
+        resource_attributes={},
+        status={"code": "STATUS_CODE_OK"},
+        events=[],
+    )
+
+
+def test_incremental_orphan_reparenting():
+    """
+    Test that a child span added before its parent is correctly re-parented
+    when the parent arrives in a later merge.
+    """
+    builder = IncrementalTreeBuilder()
+
+    # Add child first (parent not yet seen)
+    child = _make_span("child001", parent_span_id="parent01", start_ns=2000000000000000000, name="Child")
+    builder.merge([child])
+
+    assert builder.orphan_count == 1
+    assert builder.total_count == 1
+    assert len(builder.roots) == 0  # orphan is parked, not promoted to root
+
+    # Add parent
+    parent = _make_span("parent01", parent_span_id="", start_ns=1000000000000000000, name="Parent")
+    builder.merge([parent])
+
+    assert builder.orphan_count == 0
+    assert builder.total_count == 2
+    assert len(builder.roots) == 1
+
+    root = builder.roots[0]
+    assert root.span.span_id == "parent01"
+    assert len(root.children) == 1
+    assert root.children[0].span.span_id == "child001"
+    assert root.children[0].parent is root
+
+
+def test_incremental_orphan_count_and_total_count():
+    """
+    Test orphan_count and total_count properties at each merge step.
+    """
+    builder = IncrementalTreeBuilder()
+
+    # Step 1: Add 2 orphan children (parent not yet seen)
+    c1 = _make_span("child001", parent_span_id="parent01", start_ns=2000000000000000000)
+    c2 = _make_span("child002", parent_span_id="parent01", start_ns=3000000000000000000)
+    builder.merge([c1, c2])
+
+    assert builder.orphan_count == 2
+    assert builder.total_count == 2
+
+    # Step 2: Add their parent
+    p = _make_span("parent01", parent_span_id="", start_ns=1000000000000000000)
+    builder.merge([p])
+
+    assert builder.orphan_count == 0
+    assert builder.total_count == 3
+
+    # Step 3: Add another orphan
+    c3 = _make_span("child003", parent_span_id="missing01", start_ns=4000000000000000000)
+    builder.merge([c3])
+
+    assert builder.orphan_count == 1
+    assert builder.total_count == 4
+
+
+def test_incremental_multi_page_merge_matches_build_tree():
+    """
+    Test that splitting pabot_trace.json spans into 3 pages and merging
+    incrementally produces the same tree structure as build_tree() on the
+    full span list.
+    """
+    spans = parse_file("tests/fixtures/pabot_trace.json")
+
+    # Build reference tree with build_tree
+    ref_roots = build_tree(spans)
+    ref_structure = _collect_tree_structure(ref_roots)
+
+    # Split into 3 roughly equal pages
+    page_size = len(spans) // 3
+    pages = [
+        spans[:page_size],
+        spans[page_size : page_size * 2],
+        spans[page_size * 2 :],
+    ]
+
+    # Build incrementally
+    builder = IncrementalTreeBuilder()
+    for page in pages:
+        builder.merge(page)
+    inc_roots = builder.finalize()
+    inc_structure = _collect_tree_structure(inc_roots)
+
+    # Same number of roots
+    assert len(inc_roots) == len(ref_roots), (
+        f"Root count mismatch: incremental={len(inc_roots)}, build_tree={len(ref_roots)}"
+    )
+
+    # Same span_ids indexed
+    assert set(ref_structure.keys()) == set(inc_structure.keys()), "Span ID sets differ"
+
+    # Same parent-child relationships
+    for sid in ref_structure:
+        assert ref_structure[sid] == inc_structure[sid], (
+            f"Children mismatch for span {sid}: "
+            f"build_tree={ref_structure[sid]}, incremental={inc_structure[sid]}"
+        )
+
+
+def test_incremental_finalize_promotes_remaining_orphans():
+    """
+    Test that finalize() promotes remaining orphans to roots when their
+    parent never arrives.
+    """
+    builder = IncrementalTreeBuilder()
+
+    # Add a root span
+    root = _make_span("root0001", parent_span_id="", start_ns=1000000000000000000, name="Root")
+    # Add orphans whose parents will never arrive
+    orphan1 = _make_span("orphan01", parent_span_id="missing01", start_ns=2000000000000000000, name="Orphan 1")
+    orphan2 = _make_span("orphan02", parent_span_id="missing02", start_ns=3000000000000000000, name="Orphan 2")
+
+    builder.merge([root, orphan1, orphan2])
+
+    assert builder.orphan_count == 2
+    assert len(builder.roots) == 1  # only the real root
+
+    # Finalize promotes orphans
+    final_roots = builder.finalize()
+
+    assert builder.orphan_count == 0
+    assert len(final_roots) == 3  # root + 2 orphans
+
+    # Verify sorted by start_time
+    root_ids = [r.span.span_id for r in final_roots]
+    assert root_ids == ["root0001", "orphan01", "orphan02"]
+
+
+def test_build_tree_unchanged():
+    """
+    Sanity check that build_tree() still works correctly with a simple
+    parent-child-grandchild structure (backward compatibility).
+    """
+    grandparent = _make_span("gp000001", parent_span_id="", start_ns=1000000000000000000, name="Grandparent")
+    parent = _make_span("parent01", parent_span_id="gp000001", start_ns=2000000000000000000, name="Parent")
+    child = _make_span("child001", parent_span_id="parent01", start_ns=3000000000000000000, name="Child")
+
+    roots = build_tree([grandparent, parent, child])
+
+    assert len(roots) == 1
+    root = roots[0]
+    assert root.span.span_id == "gp000001"
+    assert root.parent is None
+    assert len(root.children) == 1
+
+    mid = root.children[0]
+    assert mid.span.span_id == "parent01"
+    assert mid.parent is root
+    assert len(mid.children) == 1
+
+    leaf = mid.children[0]
+    assert leaf.span.span_id == "child001"
+    assert leaf.parent is mid
+    assert len(leaf.children) == 0
+
+
+def test_incremental_duplicate_span_ids():
+    """
+    Test that merging a duplicate span_id emits a warning and keeps the
+    first occurrence.
+    """
+    import warnings as _warnings
+
+    builder = IncrementalTreeBuilder()
+
+    span1 = _make_span("dup00001", parent_span_id="", start_ns=1000000000000000000, name="First")
+    builder.merge([span1])
+
+    span2 = _make_span("dup00001", parent_span_id="", start_ns=2000000000000000000, name="Second")
+
+    with _warnings.catch_warnings(record=True) as w:
+        _warnings.simplefilter("always")
+        builder.merge([span2])
+
+        assert len(w) == 1
+        assert "Duplicate span_id" in str(w[0].message)
+
+    assert builder.total_count == 1
+
+    # Verify first occurrence was kept
+    root = builder.roots[0]
+    assert root.span.name == "First"
+
