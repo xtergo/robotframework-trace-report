@@ -943,7 +943,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 
 
 - [ ] 42. Implement SigNozProvider
-  - [ ] 42.1 Create `src/rf_trace_viewer/providers/signoz_provider.py`
+  - [x] 42.1 Create `src/rf_trace_viewer/providers/signoz_provider.py`
     - Implement `SigNozProvider(TraceProvider)` class accepting `SigNozConfig`
     - Implement `_api_request(path, payload)` using `urllib.request` (stdlib only): authenticated POST with `SIGNOZ-API-KEY` header, 30s timeout
     - Implement error handling: `HTTPError` 401 → `AuthenticationError`, 429 → `RateLimitError`, other → `ProviderError`; `URLError` → `ProviderError` with endpoint URL and connection details

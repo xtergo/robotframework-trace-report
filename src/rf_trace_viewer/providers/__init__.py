@@ -15,6 +15,7 @@ from .base import (
     TraceViewModel,
 )
 from .json_provider import JsonProvider
+from .signoz_provider import SigNozProvider
 
 __all__ = [
     "AuthenticationError",
@@ -23,6 +24,7 @@ __all__ = [
     "JsonProvider",
     "ProviderError",
     "RateLimitError",
+    "SigNozProvider",
     "TraceProvider",
     "TraceSpan",
     "TraceViewModel",
