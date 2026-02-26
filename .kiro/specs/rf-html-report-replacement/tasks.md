@@ -862,7 +862,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add test in `tests/unit/test_trace_provider.py`
     - **Validates: Requirements 40.4, 41.1, 41.2, 41.5**
 
-  - [ ] 38.6 Write unit tests for TraceSpan and TraceViewModel
+  - [x] 38.6 Write unit tests for TraceSpan and TraceViewModel
     - Test dataclass construction with valid and edge-case values
     - Test that `TraceProvider` ABC cannot be instantiated directly
     - Test exception hierarchy (`isinstance` checks)
