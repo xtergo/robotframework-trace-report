@@ -911,7 +911,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 
 
 - [ ] 41. Implement Configuration loader
-  - [ ] 41.1 Create `src/rf_trace_viewer/config.py`
+  - [x] 41.1 Create `src/rf_trace_viewer/config.py`
     - Implement `AppConfig` dataclass with all fields: `provider`, `input_path`, `output_path`, `live`, `port`, `title`, `signoz_endpoint`, `signoz_api_key`, `execution_attribute`, `poll_interval`, `max_spans_per_page`, `max_spans`, `overlap_window_seconds`, plus existing settings (`receiver`, `forward`, `journal`, `no_journal`, `no_open`, `compact_html`, `gzip_embed`)
     - Implement `SigNozConfig` dataclass extracted from `AppConfig` for provider construction
     - Implement `load_config(cli_args, config_path)` with three-tier precedence: CLI args > config file > environment variables
