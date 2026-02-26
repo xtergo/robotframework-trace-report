@@ -959,13 +959,13 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Emit warning to stderr when span cap is reached
     - _Requirements: 43.1, 43.5_
 
-  - [ ] 42.3 Implement deduplication and live poll in `SigNozProvider`
+  - [x] 42.3 Implement deduplication and live poll in `SigNozProvider`
     - Implement `_seen_span_ids: set[str]` for cross-poll deduplication
     - Implement `poll_new_spans(since_ns)` with overlap window: query `startTimeNs > since_ns - overlap_window_ns`, deduplicate against `_seen_span_ids`
     - Implement `supports_live_poll()` returning `True`
     - _Requirements: 44.1, 44.2, 44.3, 44.6_
 
-  - [ ] 42.4 Create `tests/fixtures/signoz_response_spans.json` and `tests/fixtures/signoz_response_executions.json`
+  - [x] 42.4 Create `tests/fixtures/signoz_response_spans.json` and `tests/fixtures/signoz_response_executions.json`
     - Create mock SigNoz `query_range` response for span fetching (with `spanID`, `traceID`, `parentSpanID`, `startTime`, `durationNano`, `statusCode`, `name`, `tagMap` fields)
     - Create mock SigNoz aggregate response for execution listing
     - _Requirements: 42.3, 42.4_
@@ -988,7 +988,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add test in `tests/unit/test_signoz_provider.py`
     - **Validates: Requirements 44.2, 44.3**
 
-  - [ ] 42.8 Write unit tests for SigNozProvider
+  - [x] 42.8 Write unit tests for SigNozProvider
     - Test `_parse_spans` with `signoz_response_spans.json` fixture
     - Test `_parse_execution_list` with `signoz_response_executions.json` fixture
     - Test error handling: mock 401 → `AuthenticationError`, mock 429 → `RateLimitError`, mock connection error → `ProviderError`
