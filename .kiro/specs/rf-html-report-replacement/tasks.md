@@ -1246,8 +1246,8 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Accept `SIGNOZ_ENDPOINT` and `SIGNOZ_API_KEY` as environment variables
     - _Requirements: 47.1, 47.2, 47.3_
 
-- [ ] 55. Create RF test suite and integration test script for SigNoz verification
-  - [ ] 55.1 Create `tests/integration/signoz/suites/signoz_integration.robot`
+- [x] 55. Create RF test suite and integration test script for SigNoz verification
+  - [x] 55.1 Create `tests/integration/signoz/suites/signoz_integration.robot`
     - Implement 3 simple RF test cases exercising suite/test/keyword hierarchy:
       - `Passing Test With Keywords` — calls 2-3 built-in keywords (Log, Set Variable, Should Be Equal), expects PASS
       - `Failing Test For Verification` — calls Should Be Equal with mismatched values, expects FAIL
@@ -1256,7 +1256,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Set `essvt.execution_id` resource attribute for execution grouping
     - _Requirements: 42.1, 45.1_
 
-  - [ ] 55.2 Create `tests/integration/signoz/run_integration.sh`
+  - [x] 55.2 Create `tests/integration/signoz/run_integration.sh`
     - Start full Docker Compose stack with `docker compose up -d`
     - Wait for SigNoz health checks (poll query-service `/api/v1/health` endpoint, max 60s timeout)
     - Run RF test suite container (which sends traces to SigNoz via robotframework-tracer)
@@ -1269,7 +1269,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Exit 0 on all checks pass, exit 1 on any failure with descriptive error message
     - _Requirements: 42.1, 42.3, 44.1, 47.1, 50.1_
 
-  - [ ] 55.3 Create `tests/integration/signoz/wait_for_traces.sh` helper script
+  - [x] 55.3 Create `tests/integration/signoz/wait_for_traces.sh` helper script
     - Accept SigNoz query endpoint URL and execution_id as arguments
     - Poll SigNoz `query_range` API for spans matching the execution_id
     - Return 0 when spans are found, return 1 after timeout (configurable, default 30s)
