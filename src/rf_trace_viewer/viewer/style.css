@@ -1931,3 +1931,121 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer.theme-dark .status-icon-running::before {
   color: #60a5fa;
 }
+
+
+/* ── Loading Progress Bar (SigNoz paged loading) ── */
+.rf-trace-viewer .loading-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: opacity 0.3s ease;
+}
+
+.rf-trace-viewer .loading-progress-bar::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--focus-outline);
+  border-radius: 50%;
+  animation: progress-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes progress-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rf-trace-viewer .loading-progress-bar.complete::before {
+  animation: none;
+  border-color: var(--status-pass);
+  border-top-color: var(--status-pass);
+}
+
+.rf-trace-viewer .loading-progress-bar.complete {
+  opacity: 0.6;
+}
+
+.rf-trace-viewer .loading-progress-bar .progress-text {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Span Cap Notification ── */
+.rf-trace-viewer .span-cap-notification {
+  padding: 3px 10px;
+  background: var(--status-skip-bg);
+  color: var(--status-skip);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── Orphan Indicator ── */
+.rf-trace-viewer .orphan-indicator {
+  padding: 2px 8px;
+  background: var(--status-not-run-bg);
+  color: var(--status-not-run);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Snapshot Toggle (Live / Snapshot mode buttons) ── */
+.rf-trace-viewer .snapshot-toggle {
+  display: inline-flex;
+  margin-left: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rf-trace-viewer .snapshot-toggle-btn {
+  padding: 3px 12px;
+  background: var(--bg-primary);
+  border: none;
+  border-right: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rf-trace-viewer .snapshot-toggle-btn:last-child {
+  border-right: none;
+}
+
+.rf-trace-viewer .snapshot-toggle-btn:hover:not(.active) {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .snapshot-toggle-btn.active {
+  background: var(--focus-outline);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.rf-trace-viewer .snapshot-toggle-btn:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -2px;
+}
+
+/* Dark mode adjustments for progress indicators */
+.rf-trace-viewer.theme-dark .loading-progress-bar::before {
+  border-color: var(--border-color);
+  border-top-color: var(--focus-outline);
+}
+
+.rf-trace-viewer.theme-dark .loading-progress-bar.complete::before {
+  border-color: var(--status-pass);
+  border-top-color: var(--status-pass);
+}

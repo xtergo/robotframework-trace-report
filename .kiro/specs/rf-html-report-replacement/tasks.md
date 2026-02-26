@@ -1148,7 +1148,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Use `requestAnimationFrame` to yield to UI between page fetches
     - _Requirements: 43.4, 43.6, 43.7, 48.1, 48.2, 48.3, 49.3_
 
-  - [ ] 49.3 Add progress indicator styles to `src/rf_trace_viewer/viewer/style.css`
+  - [x] 49.3 Add progress indicator styles to `src/rf_trace_viewer/viewer/style.css`
     - Add CSS for `.loading-progress-bar` (persistent top bar during loading)
     - Add CSS for `.span-cap-notification` and `.orphan-indicator`
     - Add CSS for `.snapshot-toggle` button states (active/inactive)
