@@ -11,6 +11,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from rf_trace_viewer.server import LiveServer, _LiveRequestHandler
+from rf_trace_viewer.generator import ReportOptions
 
 
 def _make_otlp_payload(spans=None):
@@ -227,6 +228,8 @@ class TestCLIJournalArguments:
                 receiver_mode=True,
                 journal_path="traces.journal.json",
                 forward_url=None,
+                output_path="trace-report.html",
+                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
             )
 
     def test_custom_journal_path(self, monkeypatch):
@@ -247,6 +250,8 @@ class TestCLIJournalArguments:
                 receiver_mode=True,
                 journal_path="/tmp/custom.journal",
                 forward_url=None,
+                output_path="trace-report.html",
+                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
             )
 
     def test_no_journal_flag(self, monkeypatch):
@@ -267,6 +272,8 @@ class TestCLIJournalArguments:
                 receiver_mode=True,
                 journal_path=None,
                 forward_url=None,
+                output_path="trace-report.html",
+                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
             )
 
     def test_no_journal_overrides_custom_path(self, monkeypatch):
@@ -294,4 +301,6 @@ class TestCLIJournalArguments:
                 receiver_mode=True,
                 journal_path=None,
                 forward_url=None,
+                output_path="trace-report.html",
+                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
             )

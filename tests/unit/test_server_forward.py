@@ -11,6 +11,7 @@ from unittest.mock import patch, MagicMock, call
 import pytest
 
 from rf_trace_viewer.server import LiveServer, _LiveRequestHandler, _forward_payload
+from rf_trace_viewer.generator import ReportOptions
 from urllib.error import URLError
 
 
@@ -238,6 +239,8 @@ class TestCLIForwardArgument:
                 receiver_mode=True,
                 journal_path="traces.journal.json",
                 forward_url="http://collector:4318/v1/traces",
+                output_path="trace-report.html",
+                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
             )
 
     def test_forward_url_default_none(self, monkeypatch):
@@ -258,4 +261,6 @@ class TestCLIForwardArgument:
                 receiver_mode=True,
                 journal_path="traces.journal.json",
                 forward_url=None,
+                output_path="trace-report.html",
+                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
             )

@@ -903,7 +903,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Run via Docker: `make dev-test-file FILE=tests/unit/test_json_provider.py`
     - _Requirements: 40.2, 50.1, 50.3, 50.5_
 
-- [ ] 40. Checkpoint — Provider foundation and JsonProvider
+- [x] 40. Checkpoint — Provider foundation and JsonProvider
   - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
   - Verify `TraceSpan` and `TraceViewModel` dataclasses are correctly defined with all invariants
   - Verify `JsonProvider` produces identical RF model output to the pre-provider pipeline
