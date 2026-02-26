@@ -2925,3 +2925,113 @@ make test-signoz
 # Run specific property test
 docker compose run --rm test pytest tests/unit/test_signoz_provider.py -k "property_41" -v
 ```
+
+## SigNoz End-to-End Integration Test Architecture
+
+### Docker Compose Stack Topology
+
+The integration test uses a Docker Compose stack with five services that replicate a realistic SigNoz deployment:
+
+```mermaid
+graph TB
+    subgraph "Docker Compose Stack"
+        RF[RF Test Runner<br/>Python 3.11 + RF + tracer]
+        OC[SigNoz OTel Collector<br/>signoz/signoz-otel-collector]
+        CH[ClickHouse<br/>clickhouse/clickhouse-server]
+        QS[SigNoz Query Service<br/>signoz/query-service]
+        RTV[rf-trace-report<br/>serve --provider signoz]
+    end
+
+    RF -->|OTLP HTTP POST /v1/traces| OC
+    OC -->|insert spans| CH
+    QS -->|query spans| CH
+    RTV -->|SigNoz API query_range| QS
+    RTV -->|generates| HTML[Static HTML Report]
+```
+
+| Service | Image | Ports | Role |
+|---------|-------|-------|------|
+| clickhouse | `clickhouse/clickhouse-server` | 9000 (TCP), 8123 (HTTP) | Span storage backend |
+| signoz-otel-collector | `signoz/signoz-otel-collector` | 4318 (OTLP HTTP) | Receives OTLP traces from tracer |
+| query-service | `signoz/query-service` | 8080 (HTTP API) | Serves span query API for rf-trace-report |
+| rf-test-runner | Custom (Python 3.11 + RF) | — | Executes RF tests with robotframework-tracer |
+| rf-trace-report | Project Dockerfile | 8077 (HTTP) | Connects to query-service in SigNoz mode |
+
+### Startup Ordering
+
+Services start in dependency order using `depends_on` with health checks:
+
+1. **ClickHouse** — starts first, health check on TCP port 9000
+2. **signoz-otel-collector** — depends on ClickHouse, health check on HTTP port 4318
+3. **query-service** — depends on ClickHouse, health check on HTTP port 8080
+4. **rf-test-runner** — depends on signoz-otel-collector (waits for healthy collector before sending traces)
+5. **rf-trace-report** — depends on query-service (waits for healthy API before querying)
+
+### Data Flow
+
+```
+RF Test Suite (.robot files)
+    │
+    ▼
+Robot Framework + robotframework-tracer listener
+    │  Produces OTLP ExportTraceServiceRequest JSON
+    ▼
+OTLP HTTP POST → signoz-otel-collector:4318/v1/traces
+    │  Collector processes and forwards to storage
+    ▼
+ClickHouse (span storage)
+    │  Spans indexed by traceId, spanId, serviceName
+    ▼
+query-service:8080/api/v3/query_range
+    │  SigNoz Trace Query API
+    ▼
+rf-trace-report SigNoz_Provider
+    │  Fetches spans, builds TraceViewModel
+    ▼
+Span_Tree_Builder → RF_Attribute_Interpreter → Report_Generator
+    │
+    ▼
+Static HTML Report (test-report.html)
+```
+
+### Verification Strategy
+
+The integration test uses a script-driven verification approach (`run_integration.sh`) that:
+
+1. **Starts the stack**: `docker compose up -d` and waits for all health checks to pass
+2. **Triggers RF test execution**: The rf-test-runner container executes a small RF test suite (2-3 tests with known pass/fail outcomes) and exits
+3. **Waits for ingestion**: Polls the SigNoz query-service API until the expected number of traces appear (with a timeout)
+4. **Runs rf-trace-report**: Invokes the CLI in SigNoz mode to list executions and generate a static HTML report
+5. **Asserts correctness**:
+   - The execution list contains the expected execution ID
+   - The generated HTML file exists and is non-empty
+   - The HTML contains the expected test names (grep-based check)
+   - The HTML contains the expected pass/fail status indicators
+6. **Tears down**: `docker compose down -v` to clean up all resources
+7. **Reports results**: Exits with 0 on success, non-zero on any assertion failure
+
+### Test RF Suite
+
+The integration test includes a minimal RF test suite designed for predictable verification:
+
+```robot
+*** Settings ***
+Library    BuiltIn
+
+*** Test Cases ***
+Passing Test
+    [Tags]    smoke
+    Log    This test passes
+    Should Be True    ${TRUE}
+
+Failing Test
+    [Tags]    regression
+    Log    This test will fail
+    Should Be Equal    1    2
+
+Skipped Test
+    [Tags]    optional
+    Skip    Intentionally skipped for integration testing
+```
+
+This provides one PASS, one FAIL, and one SKIP result for comprehensive status verification.

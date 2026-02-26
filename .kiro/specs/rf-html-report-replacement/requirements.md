@@ -697,6 +697,23 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 4. WHEN the `--provider` option is not specified, THE CLI SHALL NOT require SigNoz-related configuration (endpoint, API key) to be present.
 5. THE static HTML report generation mode SHALL remain fully functional and independent of any SigNoz connectivity.
 
+### Requirement 51: End-to-End Integration Testing with SigNoz
+
+**User Story:** As a developer, I want an automated end-to-end integration test that exercises the full data flow from Robot Framework test execution through SigNoz ingestion to HTML report generation so that I can verify the SigNoz integration works correctly in a realistic deployment.
+
+#### Acceptance Criteria
+
+1. THE integration test SHALL provide a Docker Compose stack that starts all required services (SigNoz otel-collector, SigNoz query-service, ClickHouse, RF test runner with robotframework-tracer, and rf-trace-report) via a single `docker compose up` command.
+2. THE RF test runner service SHALL execute Robot Framework tests instrumented with `robotframework-tracer`, producing OTLP traces that are sent to the SigNoz otel-collector endpoint (`/v1/traces`).
+3. THE SigNoz stack SHALL ingest the OTLP traces into ClickHouse and make them queryable via the query-service API without any manual configuration beyond what the Docker Compose file provides.
+4. THE rf-trace-report service, running in `serve --provider signoz` mode, SHALL successfully connect to the SigNoz query-service and list the test executions produced by the RF test runner.
+5. THE rf-trace-report service SHALL fetch all spans for a listed execution from SigNoz and produce a static HTML report containing the correct test names, statuses, and suite hierarchy matching the RF tests that were executed.
+6. THE integration test SHALL include a verification script that asserts: (a) the SigNoz API returns the expected number of traces, (b) the generated HTML report contains the expected test names and pass/fail statuses, and (c) the RF model objects (suites, tests, keywords) are correctly reconstructed from SigNoz data.
+7. THE Docker Compose stack SHALL tear down cleanly via `docker compose down`, removing all containers, networks, and volumes with no orphaned resources.
+8. THE integration test SHALL be runnable independently of the unit test suite, triggered via a dedicated Makefile target (`make test-integration-signoz`).
+9. THE integration test SHALL NOT require any pre-existing SigNoz installation or external service dependencies beyond what the Docker Compose stack provides.
+10. THE integration test SHALL complete within 5 minutes on a standard CI runner, including stack startup, test execution, trace ingestion, report generation, and teardown.
+
 ## Appendix A: RF Core Output Gap Analysis
 
 This document identifies information and visualizations present in Robot Framework's built-in `log.html` and `report.html` that are not yet covered by `rf-trace-report`, either due to missing tracer data or missing viewer features.

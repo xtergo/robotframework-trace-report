@@ -1207,13 +1207,13 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Verify all existing tests still pass (backward compatibility)
   - Run `black --check` and `ruff check` to verify code quality
 
-- [ ] 53. Add Requirement 51 and design section for SigNoz end-to-end integration testing
-  - [ ] 53.1 Add Requirement 51 to `.kiro/specs/rf-html-report-replacement/requirements.md`
+- [x] 53. Add Requirement 51 and design section for SigNoz end-to-end integration testing
+  - [x] 53.1 Add Requirement 51 to `.kiro/specs/rf-html-report-replacement/requirements.md`
     - Add "Requirement 51: End-to-End Integration Testing with SigNoz" covering: Docker Compose stack with SigNoz services, RF test runner with robotframework-tracer, rf-trace-report in SigNoz mode, full-flow verification (RF test → tracer → SigNoz → rf-trace-report → HTML)
     - Acceptance criteria: stack starts via single Docker Compose command, RF tests produce OTLP traces ingested by SigNoz, rf-trace-report in `serve --provider signoz` mode can list executions and fetch spans, static HTML report generated from SigNoz data contains correct test results, teardown cleans up all containers
     - _Requirements: 42.1, 44.1, 47.1, 47.5, 50.1_
 
-  - [ ] 53.2 Add integration test architecture section to `.kiro/specs/rf-html-report-replacement/design.md`
+  - [x] 53.2 Add integration test architecture section to `.kiro/specs/rf-html-report-replacement/design.md`
     - Describe the Docker Compose stack topology: SigNoz (otel-collector, query-service, clickhouse), RF test runner, rf-trace-report service
     - Describe the data flow: RF test → robotframework-tracer listener → OTLP HTTP → SigNoz collector → ClickHouse → query-service → rf-trace-report SigNoz provider → HTML
     - Describe the verification strategy: script-driven assertions against rf-trace-report CLI/API output
