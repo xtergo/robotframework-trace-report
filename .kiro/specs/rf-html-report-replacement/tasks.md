@@ -1220,7 +1220,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - _Requirements: 42.1, 47.1_
 
 - [ ] 54. Create SigNoz integration test Docker Compose stack
-  - [ ] 54.1 Create `tests/integration/signoz/docker-compose.yml`
+  - [x] 54.1 Create `tests/integration/signoz/docker-compose.yml`
     - Define SigNoz services using official images: `signoz/signoz-otel-collector`, `signoz/query-service`, `clickhouse/clickhouse-server`
     - Define RF test runner service based on `tests/browser/Dockerfile` pattern (Python 3.11 + robotframework + robotframework-tracer), configured to send OTLP traces to SigNoz collector endpoint (`http://signoz-otel-collector:4318/v1/traces`)
     - Define rf-trace-report service built from project root Dockerfile, running `serve --provider signoz --signoz-endpoint http://query-service:8080 --no-open --port 8077`
@@ -1230,7 +1230,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Mount project source into rf-trace-report container for live code
     - _Requirements: 42.1, 47.1, 47.5_
 
-  - [ ] 54.2 Create `tests/integration/signoz/Dockerfile.rf-runner`
+  - [x] 54.2 Create `tests/integration/signoz/Dockerfile.rf-runner`
     - Base on Python 3.11-slim
     - Install `robotframework==7.1.1` and `robotframework-tracer` (pip install)
     - Set `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable to SigNoz collector
@@ -1238,7 +1238,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Default CMD runs robot with tracer listener and `essvt.execution_id` attribute
     - _Requirements: 42.1, 44.1_
 
-  - [ ] 54.3 Create `tests/integration/signoz/Dockerfile.report`
+  - [x] 54.3 Create `tests/integration/signoz/Dockerfile.report`
     - Base on Python 3.11-slim
     - Copy project source and install rf-trace-report in the container
     - Expose port 8077

@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY . .
+RUN pip install --no-cache-dir -e .
+
+ENV SIGNOZ_ENDPOINT=""
+ENV SIGNOZ_API_KEY=""
+
+EXPOSE 8077
+
+CMD ["rf-trace-report", "serve", "--provider", "signoz", "--no-open", "--port", "8077"]

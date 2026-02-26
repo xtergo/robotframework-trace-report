@@ -218,7 +218,7 @@ services:
   rf-trace-report:
     build:
       context: ../../..
-      dockerfile: Dockerfile
+      dockerfile: tests/integration/signoz/Dockerfile.report
     ports:
       - "8077:8077"
     volumes:
