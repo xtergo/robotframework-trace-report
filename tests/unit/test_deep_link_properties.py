@@ -18,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 
-
 # ---------------------------------------------------------------------------
 # Default values (matching deep-link.js)
 # ---------------------------------------------------------------------------
@@ -200,7 +199,9 @@ _hex_id = st.text(
 )
 
 # View tab names
-_view_names = st.sampled_from(["overview", "tree", "timeline", "stats", "keywords", "flaky", "compare"])
+_view_names = st.sampled_from(
+    ["overview", "tree", "timeline", "stats", "keywords", "flaky", "compare"]
+)
 
 # Status values for test statuses
 _test_status_values = st.lists(
@@ -352,7 +353,10 @@ def _states_equivalent(original, decoded):
     if sorted(fs_o.get("testStatuses", DEFAULT_TEST_STATUSES)) != sorted(
         fs_d.get("testStatuses", DEFAULT_TEST_STATUSES)
     ):
-        return False, f"testStatuses mismatch: {fs_o.get('testStatuses')} != {fs_d.get('testStatuses')}"
+        return (
+            False,
+            f"testStatuses mismatch: {fs_o.get('testStatuses')} != {fs_d.get('testStatuses')}",
+        )
 
     # Keyword statuses (sorted for comparison)
     if sorted(fs_o.get("kwStatuses", DEFAULT_KW_STATUSES)) != sorted(
@@ -370,23 +374,41 @@ def _states_equivalent(original, decoded):
 
     # Keyword types
     if fs_o.get("keywordTypes", []) != fs_d.get("keywordTypes", []):
-        return False, f"keywordTypes mismatch: {fs_o.get('keywordTypes')} != {fs_d.get('keywordTypes')}"
+        return (
+            False,
+            f"keywordTypes mismatch: {fs_o.get('keywordTypes')} != {fs_d.get('keywordTypes')}",
+        )
 
     # Duration range (float comparison)
     if not _floats_equal(fs_o.get("durationMin"), fs_d.get("durationMin")):
-        return False, f"durationMin mismatch: {fs_o.get('durationMin')} != {fs_d.get('durationMin')}"
+        return (
+            False,
+            f"durationMin mismatch: {fs_o.get('durationMin')} != {fs_d.get('durationMin')}",
+        )
     if not _floats_equal(fs_o.get("durationMax"), fs_d.get("durationMax")):
-        return False, f"durationMax mismatch: {fs_o.get('durationMax')} != {fs_d.get('durationMax')}"
+        return (
+            False,
+            f"durationMax mismatch: {fs_o.get('durationMax')} != {fs_d.get('durationMax')}",
+        )
 
     # Time range (float comparison)
     if not _floats_equal(fs_o.get("timeRangeStart"), fs_d.get("timeRangeStart")):
-        return False, f"timeRangeStart mismatch: {fs_o.get('timeRangeStart')} != {fs_d.get('timeRangeStart')}"
+        return (
+            False,
+            f"timeRangeStart mismatch: {fs_o.get('timeRangeStart')} != {fs_d.get('timeRangeStart')}",
+        )
     if not _floats_equal(fs_o.get("timeRangeEnd"), fs_d.get("timeRangeEnd")):
-        return False, f"timeRangeEnd mismatch: {fs_o.get('timeRangeEnd')} != {fs_d.get('timeRangeEnd')}"
+        return (
+            False,
+            f"timeRangeEnd mismatch: {fs_o.get('timeRangeEnd')} != {fs_d.get('timeRangeEnd')}",
+        )
 
     # Scope to test context
     if fs_o.get("scopeToTestContext", True) != fs_d.get("scopeToTestContext", True):
-        return False, f"scopeToTestContext mismatch: {fs_o.get('scopeToTestContext')} != {fs_d.get('scopeToTestContext')}"
+        return (
+            False,
+            f"scopeToTestContext mismatch: {fs_o.get('scopeToTestContext')} != {fs_d.get('scopeToTestContext')}",
+        )
 
     return True, ""
 

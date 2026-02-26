@@ -17,6 +17,15 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 - **OTLP_NDJSON**: Newline-delimited JSON format where each line is an `ExportTraceServiceRequest` containing `resource_spans` → `scope_spans` → `spans`.
 - **Signal_Span**: A span with an `rf.signal` attribute indicating a lifecycle event (e.g., `test.starting`) rather than a completed execution unit.
 - **Orphan_Span**: A span whose `parent_span_id` references a span not present in the dataset.
+- **Trace_Provider**: An abstraction layer that supplies normalized trace span data to the viewer and report pipeline, decoupling data acquisition from rendering. Implementations include `Json_Provider` and `SigNoz_Provider`.
+- **Json_Provider**: The `Trace_Provider` implementation that reads OTLP NDJSON trace files from disk or stdin (existing behavior).
+- **SigNoz_Provider**: The `Trace_Provider` implementation that fetches OpenTelemetry trace data from a SigNoz backend via its HTTP API.
+- **TraceViewModel**: The canonical internal data model that all `Trace_Provider` implementations produce. Contains `TraceSpan` objects with `spanId`, `parentSpanId`, `traceId`, `startTimeNs`, `durationNs`, `status`, and `attributes` (key-value map).
+- **TraceSpan**: A normalized span record within the `TraceViewModel`, containing `spanId`, `parentSpanId`, `traceId`, `startTimeNs`, `durationNs`, `status`, and an `attributes` key-value map. All providers must emit `TraceSpan` objects regardless of the upstream data source.
+- **SigNoz_API**: The SigNoz Trace Query API (`query_range` endpoint) used by the `SigNoz_Provider` to list executions, fetch traces, and retrieve spans.
+- **Execution_Attribute**: A configurable span attribute name (default: `essvt.execution_id`) used to group and identify distinct test executions within SigNoz trace data.
+- **Live_Poll_Mode**: An operating mode of the `SigNoz_Provider` where the provider periodically polls SigNoz for new spans, enabling real-time trace observation in the viewer.
+- **Robot_Semantics_Layer**: The component that reconstructs Robot Framework hierarchy (suite → test → keyword) from span attributes (`robot.type`, `robot.suite`, `robot.test`, `robot.keyword`), operating above the generic `TraceViewModel`.
 
 ## Requirements
 
@@ -537,6 +546,156 @@ This document specifies the requirements for `robotframework-trace-report`, a st
 4. THE JS_Viewer SHALL provide an "Auto-Collapse Passed" toggle (enabled by default) that the user can disable to keep all completed nodes expanded during live execution.
 5. WHEN a keyword or test is currently executing (detected via signal spans or open spans without end time), THE JS_Viewer SHALL display a prominent animated "in progress" indicator (e.g., pulsing dot or spinner) on that node in the tree view and timeline.
 6. THE JS_Viewer SHALL render lightweight hover tooltips on tree nodes showing keyword name, execution time, status, and arguments without requiring the user to expand the node or open a detail panel.
+
+### Requirement 40: Pluggable Trace Provider Architecture
+
+**User Story:** As a developer, I want a pluggable provider abstraction for trace data sources so that the system can support multiple backends (JSON files, SigNoz, future providers) without coupling the rendering pipeline to a specific data format.
+
+#### Acceptance Criteria
+
+1. THE system SHALL define a `Trace_Provider` interface with methods for listing executions, fetching traces, and retrieving spans, which all data source implementations must satisfy.
+2. THE system SHALL include a `Json_Provider` implementation of `Trace_Provider` that encapsulates the existing NDJSON file-based trace reading behavior (Requirements 1 and 9).
+3. THE system SHALL include a `SigNoz_Provider` implementation of `Trace_Provider` that fetches trace data from a SigNoz backend via the SigNoz_API.
+4. WHEN a `Trace_Provider` returns data, THE provider SHALL normalize all spans into `TraceSpan` objects within a `TraceViewModel`, containing `spanId`, `parentSpanId`, `traceId`, `startTimeNs`, `durationNs`, `status`, and `attributes` (key-value map).
+5. THE JS_Viewer, Span_Tree_Builder, RF_Attribute_Interpreter, and Report_Generator SHALL consume only `TraceViewModel` data and SHALL NOT depend on the raw input format of any specific provider.
+6. THE system SHALL allow new `Trace_Provider` implementations to be registered without modifying existing provider code or the rendering pipeline.
+7. FOR ALL valid trace data, converting to `TraceViewModel` via `Json_Provider` and then serializing back to NDJSON and re-parsing SHALL produce an equivalent `TraceViewModel` (round-trip property).
+
+### Requirement 41: Canonical TraceViewModel
+
+**User Story:** As a developer, I want a single canonical internal data model so that all downstream components (tree builder, RF interpreter, viewer) operate on a consistent structure regardless of the data source.
+
+#### Acceptance Criteria
+
+1. THE `TraceViewModel` SHALL contain a list of `TraceSpan` objects, each with fields: `spanId` (string), `parentSpanId` (string or empty), `traceId` (string), `startTimeNs` (integer, nanoseconds since epoch), `durationNs` (integer, nanoseconds), `status` (string: OK, ERROR, or UNSET), and `attributes` (key-value map of string keys to string values).
+2. THE `TraceViewModel` SHALL preserve all span attributes from the source data in the `attributes` map without loss, regardless of which provider produced the data.
+3. WHEN a `TraceSpan` has no `parentSpanId` in the source data, THE provider SHALL set `parentSpanId` to an empty string.
+4. THE `TraceViewModel` SHALL include a `resourceAttributes` map containing resource-level attributes (e.g., service name, host, OS) from the source data.
+5. FOR ALL `TraceSpan` objects in a `TraceViewModel`, the `startTimeNs` field SHALL be a non-negative integer and `durationNs` SHALL be a non-negative integer.
+6. THE `TraceViewModel` SHALL be serializable to JSON and deserializable back to an equivalent `TraceViewModel` (round-trip property).
+
+### Requirement 42: SigNoz API Integration
+
+**User Story:** As a test engineer, I want to connect the trace viewer to a SigNoz backend so that I can browse and visualize Robot Framework execution traces stored in SigNoz without exporting files.
+
+#### Acceptance Criteria
+
+1. THE `SigNoz_Provider` SHALL connect to a SigNoz instance using the SigNoz Trace API (`query_range` endpoint) at a user-configured endpoint URL.
+2. THE `SigNoz_Provider` SHALL authenticate with the SigNoz API using an API key provided via configuration.
+3. THE `SigNoz_Provider` SHALL support listing distinct test executions by querying spans that contain the configured Execution_Attribute (default: `essvt.execution_id`).
+4. THE `SigNoz_Provider` SHALL support fetching all traces associated with a specific execution by filtering on the Execution_Attribute value.
+5. THE `SigNoz_Provider` SHALL support fetching all spans for a specific `traceId`.
+6. THE `SigNoz_Provider` SHALL support fetching the root span of a trace (the span with no `parentSpanId`).
+7. THE `SigNoz_Provider` SHALL support fetching spans within a specified time window (start timestamp to end timestamp).
+8. THE `SigNoz_Provider` SHALL NOT require any modifications to a vanilla SigNoz installation.
+9. IF the SigNoz API returns an authentication error, THEN THE `SigNoz_Provider` SHALL return a descriptive error message indicating the authentication failure.
+10. IF the SigNoz API is unreachable, THEN THE `SigNoz_Provider` SHALL return a descriptive error message including the endpoint URL and connection error details.
+
+### Requirement 43: Large Trace Scalability
+
+**User Story:** As a test engineer working with large-scale test suites, I want the system to handle traces with over 1,000,000 spans so that I can visualize complex execution data without the viewer becoming unresponsive.
+
+#### Acceptance Criteria
+
+1. THE `SigNoz_Provider` SHALL implement paged span retrieval using limit/offset or time-window-based pagination, with a configurable page size (default: 10,000 spans per page).
+2. THE Span_Tree_Builder SHALL support incremental tree construction, adding spans to the tree as pages arrive without requiring all spans to be loaded first.
+3. WHEN a span references a `parentSpanId` that has not yet been loaded, THE Span_Tree_Builder SHALL mark that span as an orphan and reconcile it into the correct tree position when the parent span arrives in a subsequent page.
+4. THE JS_Viewer SHALL begin rendering the tree and timeline as soon as the first page of spans is available, without waiting for the full trace to load.
+5. THE system SHALL enforce a configurable hard cap on the maximum number of raw spans fetched from SigNoz (default: 500,000), emitting a warning when the cap is reached.
+6. THE JS_Viewer SHALL display a loading progress indicator showing the number of spans loaded versus the estimated total during paged retrieval.
+7. WHEN the span cap is reached, THE JS_Viewer SHALL display a notification indicating that the trace has been partially loaded and the total span count exceeds the configured limit.
+
+### Requirement 44: SigNoz Live Poll Mode
+
+**User Story:** As a test engineer, I want to watch Robot Framework execution traces update in real-time from SigNoz so that I can monitor test progress as spans are ingested into the backend.
+
+#### Acceptance Criteria
+
+1. THE `SigNoz_Provider` SHALL support a Live_Poll_Mode that periodically queries SigNoz for new spans at a configurable interval (default: 5 seconds, configurable between 1 and 30 seconds).
+2. WHEN in Live_Poll_Mode, THE `SigNoz_Provider` SHALL fetch only spans with a `startTimeNs` greater than the timestamp of the most recently seen span, avoiding re-fetching already loaded data.
+3. THE `SigNoz_Provider` SHALL implement span de-duplication by `spanId`, discarding spans that have already been loaded in a previous poll cycle.
+4. WHEN new spans arrive during live polling, THE JS_Viewer SHALL update the tree view, timeline, and statistics incrementally without re-rendering the entire page (consistent with Requirement 9.6).
+5. WHEN a span has no `end_time` or has a duration of zero in the SigNoz data, THE JS_Viewer SHALL render that span with an animated "in progress" indicator (consistent with Requirement 39.5).
+6. THE `SigNoz_Provider` SHALL use an overlap fetch window (configurable, default: 2 seconds) when querying by timestamp to tolerate clock skew between the SigNoz ingest pipeline and the query API.
+7. THE JS_Viewer SHALL provide a toggle to switch between Live_Poll_Mode and snapshot mode, where snapshot mode loads data once and does not poll for updates.
+
+### Requirement 45: Robot Framework Semantics Layer for SigNoz Data
+
+**User Story:** As a test engineer, I want Robot Framework hierarchy (suite → test → keyword) reconstructed from SigNoz trace data so that the viewer renders the same structured view regardless of whether data comes from a JSON file or SigNoz.
+
+#### Acceptance Criteria
+
+1. THE Robot_Semantics_Layer SHALL reconstruct Robot Framework hierarchy from `TraceSpan` attributes including `robot.type`, `robot.suite`, `robot.test`, `robot.keyword`, and the configured Execution_Attribute.
+2. THE Robot_Semantics_Layer SHALL operate on `TraceViewModel` data and SHALL NOT depend on the `SigNoz_Provider` transport logic.
+3. THE `SigNoz_Provider` SHALL NOT hardcode Robot Framework assumptions into its API query or span retrieval logic; Robot Framework interpretation SHALL remain in the Robot_Semantics_Layer.
+4. WHEN a `TraceSpan` from SigNoz contains `rf.*` attributes, THE Robot_Semantics_Layer SHALL produce the same `RFSuite`, `RFTest`, and `RFKeyword` model objects as the RF_Attribute_Interpreter produces from JSON-sourced spans.
+5. WHEN a `TraceSpan` from SigNoz lacks `rf.*` attributes, THE Robot_Semantics_Layer SHALL classify it as a generic span, consistent with Requirement 3.6.
+6. FOR ALL `TraceSpan` data containing `rf.*` attributes, THE Robot_Semantics_Layer SHALL produce equivalent RF model objects regardless of whether the data originated from `Json_Provider` or `SigNoz_Provider` (provider equivalence property).
+
+### Requirement 46: SigNoz Mode Configuration
+
+**User Story:** As a developer, I want to configure SigNoz connection details via CLI arguments or a configuration file so that I can connect to different SigNoz instances without modifying code.
+
+#### Acceptance Criteria
+
+1. THE CLI SHALL accept `--provider signoz` to select the `SigNoz_Provider` instead of the default `Json_Provider`.
+2. THE CLI SHALL accept `--provider json` (or omit `--provider`) to select the `Json_Provider` (existing default behavior).
+3. WHEN `--provider signoz` is specified, THE CLI SHALL require `--signoz-endpoint` specifying the SigNoz API base URL.
+4. THE CLI SHALL accept `--signoz-api-key` to provide the SigNoz API authentication key.
+5. THE CLI SHALL accept `--execution-attribute` to override the default Execution_Attribute name (default: `essvt.execution_id`).
+6. THE CLI SHALL accept `--poll-interval` to configure the Live_Poll_Mode polling interval in seconds (default: 5, range: 1-30), applicable to both JSON live mode and SigNoz Live_Poll_Mode.
+7. THE CLI SHALL accept `--max-spans-per-page` to configure the paged retrieval page size (default: 10,000).
+8. THE system SHALL support reading all SigNoz configuration from a YAML or JSON configuration file specified via `--config <path>`, with fields: `provider`, `signoz.endpoint`, `signoz.apiKey`, `signoz.executionAttribute`, `signoz.pollIntervalSeconds`, `signoz.maxSpansPerPage`.
+9. WHEN both CLI arguments and a configuration file provide the same setting, THE CLI argument SHALL take precedence over the configuration file value.
+10. IF `--provider signoz` is specified without `--signoz-endpoint` and no configuration file provides the endpoint, THEN THE CLI SHALL exit with a non-zero exit code and a descriptive error message.
+11. THE CLI SHALL accept `--signoz-api-key` via the `SIGNOZ_API_KEY` environment variable as an alternative to the command-line argument, to avoid exposing secrets in process listings.
+
+### Requirement 47: SigNoz Deployment Model
+
+**User Story:** As a DevOps engineer, I want flexible deployment options for the SigNoz-connected trace viewer so that I can run it as a standalone service, a Docker container, or a sidecar alongside SigNoz.
+
+#### Acceptance Criteria
+
+1. THE system SHALL support running in SigNoz mode as a CLI server via `rf-trace-report serve --provider signoz --signoz-endpoint <url>`.
+2. THE system SHALL provide a Docker image that supports SigNoz mode, accepting configuration via environment variables (`SIGNOZ_ENDPOINT`, `SIGNOZ_API_KEY`, `EXECUTION_ATTRIBUTE`, `POLL_INTERVAL`, `MAX_SPANS_PER_PAGE`).
+3. THE system SHALL support deployment as a sidecar container alongside SigNoz, connecting to SigNoz's internal API endpoint without requiring external network access.
+4. THE system SHALL support deployment behind a reverse proxy, operating correctly when served under a URL sub-path configured via `--base-url` (consistent with Requirement 23.4).
+5. THE system SHALL NOT require any modifications to a vanilla SigNoz installation for any deployment model.
+
+### Requirement 48: Non-Blocking UI for Large Trace Loading
+
+**User Story:** As a test engineer, I want the viewer to remain responsive while loading large traces from SigNoz so that I can interact with already-loaded data while additional spans are still being fetched.
+
+#### Acceptance Criteria
+
+1. THE JS_Viewer SHALL NOT block the main UI thread while the `SigNoz_Provider` is fetching span pages from the API.
+2. THE JS_Viewer SHALL allow the user to interact with (expand, collapse, filter, search) already-loaded tree nodes and timeline bars while additional span pages are being fetched in the background.
+3. WHEN a background fetch completes and new spans are added to the tree, THE JS_Viewer SHALL merge the new nodes into the existing view without resetting the user's scroll position, expanded/collapsed state, or active filters.
+4. IF the SigNoz API returns a rate-limiting response, THEN THE `SigNoz_Provider` SHALL implement exponential backoff and retry, and THE JS_Viewer SHALL display a notification indicating that data loading has been throttled.
+5. IF the SigNoz API returns a server error during paged retrieval, THEN THE `SigNoz_Provider` SHALL retry the failed page up to 3 times before reporting the error, and THE JS_Viewer SHALL display the partial data loaded so far with a warning indicating incomplete data.
+
+### Requirement 49: Partial and Incomplete Trace Handling
+
+**User Story:** As a test engineer, I want the viewer to gracefully handle partial or incomplete traces from SigNoz so that I can still inspect available data even when some spans are missing or the trace is still being ingested.
+
+#### Acceptance Criteria
+
+1. WHEN the `SigNoz_Provider` returns a trace where some spans reference `parentSpanId` values not present in the loaded data, THE Span_Tree_Builder SHALL render those orphan spans as root-level nodes with a visual indicator that their parent is missing.
+2. WHEN additional spans arrive (via paging or live polling) that resolve previously orphaned spans, THE Span_Tree_Builder SHALL re-parent the orphan spans under their correct parent and update the tree view.
+3. THE JS_Viewer SHALL display a trace completeness indicator showing the count of orphan spans versus total spans, so the user can assess whether the trace is fully loaded.
+4. WHEN a trace contains spans with overlapping or inconsistent timestamps (due to clock skew between instrumented services), THE Span_Tree_Builder SHALL use `parentSpanId` relationships as the primary hierarchy signal rather than timestamp ordering.
+
+### Requirement 50: Backward Compatibility with JSON Mode
+
+**User Story:** As an existing user of the JSON-based report generation, I want the introduction of SigNoz mode to have zero impact on my current workflow so that I can continue generating reports from NDJSON files without any changes.
+
+#### Acceptance Criteria
+
+1. WHEN the CLI is invoked without `--provider` or with `--provider json`, THE system SHALL behave identically to the pre-SigNoz implementation, using the `Json_Provider` to read NDJSON files.
+2. THE introduction of the `Trace_Provider` abstraction SHALL NOT change the command-line interface, output format, or behavior of any existing CLI commands or options.
+3. THE `Json_Provider` SHALL produce `TraceViewModel` data that, when consumed by the Span_Tree_Builder and RF_Attribute_Interpreter, produces identical output to the pre-provider-abstraction pipeline for the same input data.
+4. WHEN the `--provider` option is not specified, THE CLI SHALL NOT require SigNoz-related configuration (endpoint, API key) to be present.
+5. THE static HTML report generation mode SHALL remain fully functional and independent of any SigNoz connectivity.
 
 ## Appendix A: RF Core Output Gap Analysis
 

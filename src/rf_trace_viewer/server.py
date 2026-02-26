@@ -12,7 +12,12 @@ from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
-from rf_trace_viewer.generator import embed_viewer_assets, _escape_html, ReportOptions, generate_report
+from rf_trace_viewer.generator import (
+    embed_viewer_assets,
+    _escape_html,
+    ReportOptions,
+    generate_report,
+)
 from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree

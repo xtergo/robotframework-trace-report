@@ -7,7 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 
-from rf_trace_viewer.providers.base import ConfigurationError
+from rf_trace_viewer.exceptions import ConfigurationError
 
 
 @dataclass
@@ -138,9 +138,7 @@ def _validate(config: AppConfig) -> None:
         )
 
 
-def load_config(
-    cli_args: dict, config_path: str | None = None
-) -> AppConfig:
+def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
     """Build an ``AppConfig`` with three-tier precedence.
 
     Priority (highest → lowest): CLI args → config file → environment variables.

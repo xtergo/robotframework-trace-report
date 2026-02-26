@@ -153,9 +153,7 @@ class TestReceiveTracesForwarding:
 
         _post_traces(server, payload)
 
-        mock_forward.assert_called_once_with(
-            "http://collector:4318/v1/traces", body_bytes
-        )
+        mock_forward.assert_called_once_with("http://collector:4318/v1/traces", body_bytes)
 
     @patch("rf_trace_viewer.server._forward_payload")
     def test_forward_not_called_when_url_none(self, mock_forward):
@@ -186,7 +184,6 @@ class TestReceiveTracesForwarding:
         handler = _post_traces(server, payload)
 
         handler.send_response.assert_called_with(200)
-
 
 
 class TestLiveServerForwardInit:
@@ -240,7 +237,14 @@ class TestCLIForwardArgument:
                 journal_path="traces.journal.json",
                 forward_url="http://collector:4318/v1/traces",
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )
 
     def test_forward_url_default_none(self, monkeypatch):
@@ -262,5 +266,12 @@ class TestCLIForwardArgument:
                 journal_path="traces.journal.json",
                 forward_url=None,
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )

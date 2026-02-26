@@ -953,7 +953,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement `_parse_execution_list(response)` mapping aggregate response to `ExecutionSummary` list
     - _Requirements: 42.1, 42.2, 42.3, 42.4, 42.5, 42.7, 42.8, 42.9, 42.10_
 
-  - [ ] 42.2 Implement pagination and span cap in `SigNozProvider`
+  - [x] 42.2 Implement pagination and span cap in `SigNozProvider`
     - Implement `fetch_spans()` with limit/offset pagination, `next_offset == -1` when no more pages
     - Implement `fetch_all()` with automatic pagination loop, respecting `max_spans` cap
     - Emit warning to stderr when span cap is reached

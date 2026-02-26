@@ -154,7 +154,14 @@ class TestArgumentParsing:
                 journal_path="traces.journal.json",
                 forward_url=None,
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -187,7 +194,14 @@ class TestArgumentParsing:
                 journal_path="traces.journal.json",
                 forward_url=None,
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )
 
     def test_no_open_argument(self, monkeypatch):

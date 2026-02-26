@@ -1655,3 +1655,1273 @@ if (newState.scopeToTestContext !== undefined) {
 *For any* filter state including a `scopeToTestContext` boolean value, encoding the state as a URL hash string and then decoding it should produce a filter state with the same `scopeToTestContext` value.
 
 **Validates: Requirements 37.10**
+
+
+## SigNoz Integration Mode Design (Requirements 40–50)
+
+### Motivation
+
+The existing pipeline is tightly coupled to NDJSON file I/O: `parser.py` reads files, `tree.py` builds trees from `ParsedSpan` objects, and `rf_model.py` interprets RF attributes. This works well for local trace files but prevents the system from consuming trace data from remote backends like SigNoz, where spans are fetched via HTTP API with pagination, authentication, and live polling.
+
+Requirements 40–50 introduce a pluggable `Trace_Provider` abstraction that decouples data acquisition from rendering. The existing file-based pipeline becomes `Json_Provider`, and a new `SigNoz_Provider` fetches spans from SigNoz's `query_range` API. Both providers emit a canonical `TraceViewModel` that the rest of the pipeline consumes unchanged.
+
+### Updated Architecture
+
+```mermaid
+graph TB
+    subgraph "Trace Provider Layer"
+        TP[Trace_Provider Interface]
+        JP[Json_Provider<br/>NDJSON file/stdin]
+        SP[SigNoz_Provider<br/>SigNoz HTTP API]
+        TP --> JP
+        TP --> SP
+    end
+
+    subgraph "Python CLI (rf-trace-report)"
+        CLI[cli.py<br/>argparse + provider selection]
+        Config[config.py<br/>Config file + env var loader]
+        Tree[tree.py<br/>Span Tree Builder]
+        RSL[robot_semantics.py<br/>Robot Semantics Layer]
+        RFModel[rf_model.py<br/>RF Attribute Interpreter]
+        Gen[generator.py<br/>HTML Report Generator]
+        Server[server.py<br/>Live HTTP Server]
+    end
+
+    subgraph "SigNoz_Provider Internals"
+        APIClient[signoz_api.py<br/>HTTP Client + Auth]
+        Pager[Paged Retriever<br/>limit/offset pagination]
+        Dedup[Span Deduplicator<br/>spanId set]
+        Poller[Live Poller<br/>timestamp-based fetch]
+    end
+
+    subgraph "JS Viewer (embedded in HTML)"
+        App[app.js<br/>Main Application]
+        TreeView[tree.js<br/>Tree Renderer]
+        Timeline[timeline.js<br/>Canvas Timeline]
+        Stats[stats.js<br/>Statistics Panel]
+        Search[search.js<br/>Search & Filter]
+        Live[live.js<br/>Live Polling + SigNoz Poll]
+        Progress[progress.js<br/>Loading Progress Indicator]
+    end
+
+    CLI --> Config
+    Config --> CLI
+    CLI -->|selects provider| TP
+    JP -->|TraceViewModel| Tree
+    SP -->|TraceViewModel| Tree
+    SP --> APIClient
+    APIClient --> Pager
+    APIClient --> Dedup
+    APIClient --> Poller
+    Tree --> RSL
+    RSL --> RFModel
+    RFModel --> Gen
+    Gen -->|embeds| App
+    Server -->|serves| App
+    Server -->|proxies SigNoz API| SP
+
+    App --> TreeView
+    App --> Timeline
+    App --> Stats
+    App --> Search
+    App --> Live
+    App --> Progress
+```
+
+
+### Data Flow: SigNoz Mode (Static Report)
+
+```
+1. CLI parses arguments, loads config (CLI args > config file > env vars)
+2. CLI selects SigNoz_Provider based on --provider signoz
+3. SigNoz_Provider authenticates with API key
+4. SigNoz_Provider lists executions via query_range (Execution_Attribute filter)
+5. User selects execution (or CLI specifies --execution-id)
+6. SigNoz_Provider fetches spans page-by-page (10,000 per page default)
+7. Each page → TraceViewModel → Tree Builder (incremental merge)
+8. Orphan spans parked as roots, reconciled when parents arrive
+9. After all pages loaded (or cap reached):
+   Robot Semantics Layer → RF models → Generator → HTML file
+```
+
+### Data Flow: SigNoz Live Poll Mode
+
+```
+1. CLI starts server with --provider signoz --live
+2. Server starts HTTP server, opens browser
+3. JS Viewer requests /api/spans?offset=0
+4. Server proxies to SigNoz_Provider.fetch_page(offset=0)
+5. SigNoz_Provider queries query_range with startTimeNs > last_seen
+6. Response → deduplicate by spanId → TraceViewModel page
+7. Server returns page to JS Viewer
+8. JS Viewer merges into tree, updates views incrementally
+9. After poll_interval seconds, JS Viewer requests /api/spans?offset=N
+10. Repeat 4-8 until user stops or switches to snapshot mode
+```
+
+
+### Components and Interfaces: Provider Layer
+
+#### Trace_Provider Interface (`providers/base.py`)
+
+```python
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
+
+@dataclass
+class TraceSpan:
+    """Canonical span record. All providers must emit these."""
+    span_id: str                    # hex string
+    parent_span_id: str             # hex string or "" for roots
+    trace_id: str                   # hex string
+    start_time_ns: int              # nanoseconds since epoch
+    duration_ns: int                # nanoseconds (non-negative)
+    status: str                     # "OK" | "ERROR" | "UNSET"
+    attributes: dict[str, str]      # key → string value
+    resource_attributes: dict[str, str] = field(default_factory=dict)
+    events: list[dict] = field(default_factory=list)
+    status_message: str = ""
+    name: str = ""
+
+
+@dataclass
+class TraceViewModel:
+    """Canonical container returned by all providers."""
+    spans: list[TraceSpan]
+    resource_attributes: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class ExecutionSummary:
+    """Summary of a test execution found in the backend."""
+    execution_id: str
+    start_time_ns: int
+    span_count: int
+    root_span_name: str = ""
+
+
+class TraceProvider(ABC):
+    """Interface that all trace data sources must implement."""
+
+    @abstractmethod
+    def list_executions(
+        self, start_ns: int | None = None, end_ns: int | None = None
+    ) -> list[ExecutionSummary]:
+        """List available test executions in the time range."""
+
+    @abstractmethod
+    def fetch_spans(
+        self,
+        execution_id: str | None = None,
+        trace_id: str | None = None,
+        offset: int = 0,
+        limit: int = 10_000,
+    ) -> tuple[TraceViewModel, int]:
+        """Fetch a page of spans. Returns (view_model, next_offset).
+        next_offset == -1 means no more pages."""
+
+    @abstractmethod
+    def fetch_all(
+        self,
+        execution_id: str | None = None,
+        trace_id: str | None = None,
+        max_spans: int = 500_000,
+    ) -> TraceViewModel:
+        """Fetch all spans up to max_spans cap. Handles pagination internally."""
+
+    @abstractmethod
+    def supports_live_poll(self) -> bool:
+        """Whether this provider supports live polling."""
+
+    @abstractmethod
+    def poll_new_spans(self, since_ns: int) -> TraceViewModel:
+        """Fetch spans newer than since_ns. For live poll mode."""
+```
+
+
+#### Json_Provider (`providers/json_provider.py`)
+
+Wraps the existing `parser.py` logic behind the `TraceProvider` interface. No new parsing code — just adapts `ParsedSpan` → `TraceSpan` conversion.
+
+```python
+class JsonProvider(TraceProvider):
+    """Reads OTLP NDJSON files. Wraps existing parser.py."""
+
+    def __init__(self, path: str | None = None, stream=None):
+        self._parser = NDJSONParser()
+        self._path = path
+        self._stream = stream
+
+    def list_executions(self, start_ns=None, end_ns=None) -> list[ExecutionSummary]:
+        """JSON files represent a single execution. Returns one entry."""
+        spans = self._parse_all()
+        if not spans:
+            return []
+        return [ExecutionSummary(
+            execution_id=spans[0].trace_id,
+            start_time_ns=min(s.start_time_ns for s in spans),
+            span_count=len(spans),
+            root_span_name=self._find_root_name(spans),
+        )]
+
+    def fetch_spans(self, execution_id=None, trace_id=None,
+                    offset=0, limit=10_000) -> tuple[TraceViewModel, int]:
+        """Return a page of spans from the file."""
+        all_spans = self._parse_all()
+        page = all_spans[offset:offset + limit]
+        next_offset = offset + limit if offset + limit < len(all_spans) else -1
+        return TraceViewModel(spans=page), next_offset
+
+    def fetch_all(self, execution_id=None, trace_id=None,
+                  max_spans=500_000) -> TraceViewModel:
+        """Parse entire file and convert to TraceViewModel."""
+        parsed = self._parser.parse_file(self._path) if self._path else \
+                 self._parser.parse_stream(self._stream)
+        spans = [self._to_trace_span(p) for p in parsed[:max_spans]]
+        return TraceViewModel(spans=spans)
+
+    def supports_live_poll(self) -> bool:
+        return False  # JSON live mode uses existing file-offset polling
+
+    def poll_new_spans(self, since_ns: int) -> TraceViewModel:
+        raise NotImplementedError("JSON provider uses file-offset polling")
+
+    @staticmethod
+    def _to_trace_span(p: ParsedSpan) -> TraceSpan:
+        """Convert ParsedSpan to canonical TraceSpan."""
+        return TraceSpan(
+            span_id=p.span_id,
+            parent_span_id=p.parent_span_id,
+            trace_id=p.trace_id,
+            start_time_ns=int(p.start_time * 1_000_000_000),
+            duration_ns=int((p.end_time - p.start_time) * 1_000_000_000),
+            status=_map_otlp_status(p.status_code),
+            attributes={k: str(v) for k, v in p.attributes.items()},
+            resource_attributes={k: str(v) for k, v in p.resource_attributes.items()},
+            events=p.events,
+            status_message=p.status_message,
+            name=p.name,
+        )
+```
+
+Key design decision: `JsonProvider` delegates to the existing `NDJSONParser` and only adds a thin conversion layer. The existing file-offset-based live mode (`parse_incremental`) continues to work through the `LiveServer` as before — `JsonProvider` does not replace that path. This preserves backward compatibility (Req 50).
+
+
+#### SigNoz_Provider (`providers/signoz_provider.py`)
+
+```python
+import json
+import time
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+
+
+@dataclass
+class SigNozConfig:
+    endpoint: str               # e.g. "https://signoz.example.com"
+    api_key: str                # Bearer token
+    execution_attribute: str = "essvt.execution_id"
+    poll_interval: int = 5      # seconds (1-30)
+    max_spans_per_page: int = 10_000
+    overlap_window_ns: int = 2_000_000_000  # 2 seconds in nanoseconds
+
+
+class SigNozProvider(TraceProvider):
+    """Fetches trace data from SigNoz via query_range API."""
+
+    def __init__(self, config: SigNozConfig):
+        self._config = config
+        self._seen_span_ids: set[str] = set()  # for deduplication
+        self._last_poll_ns: int = 0
+
+    def list_executions(self, start_ns=None, end_ns=None) -> list[ExecutionSummary]:
+        """Query SigNoz for distinct execution_id values."""
+        query = self._build_aggregate_query(
+            attribute=self._config.execution_attribute,
+            start_ns=start_ns or 0,
+            end_ns=end_ns or int(time.time() * 1e9),
+        )
+        response = self._api_request("/api/v3/query_range", query)
+        return self._parse_execution_list(response)
+
+    def fetch_spans(self, execution_id=None, trace_id=None,
+                    offset=0, limit=None) -> tuple[TraceViewModel, int]:
+        """Fetch one page of spans from SigNoz."""
+        limit = limit or self._config.max_spans_per_page
+        filters = self._build_span_filters(execution_id, trace_id)
+        query = self._build_span_query(filters, offset=offset, limit=limit)
+        response = self._api_request("/api/v3/query_range", query)
+        spans = self._parse_spans(response)
+        # Deduplicate
+        new_spans = [s for s in spans if s.span_id not in self._seen_span_ids]
+        self._seen_span_ids.update(s.span_id for s in new_spans)
+        next_offset = offset + limit if len(spans) == limit else -1
+        return TraceViewModel(spans=new_spans), next_offset
+
+    def fetch_all(self, execution_id=None, trace_id=None,
+                  max_spans=500_000) -> TraceViewModel:
+        """Fetch all spans with automatic pagination."""
+        all_spans: list[TraceSpan] = []
+        offset = 0
+        while len(all_spans) < max_spans:
+            remaining = max_spans - len(all_spans)
+            page_limit = min(self._config.max_spans_per_page, remaining)
+            page, next_offset = self.fetch_spans(
+                execution_id=execution_id, trace_id=trace_id,
+                offset=offset, limit=page_limit,
+            )
+            all_spans.extend(page.spans)
+            if next_offset == -1:
+                break
+            offset = next_offset
+        return TraceViewModel(spans=all_spans)
+
+    def supports_live_poll(self) -> bool:
+        return True
+
+    def poll_new_spans(self, since_ns: int) -> TraceViewModel:
+        """Fetch spans newer than since_ns with overlap window."""
+        query_start = since_ns - self._config.overlap_window_ns
+        filters = [{"key": "startTimeNs", "op": ">", "value": str(query_start)}]
+        query = self._build_span_query(filters, offset=0,
+                                        limit=self._config.max_spans_per_page)
+        response = self._api_request("/api/v3/query_range", query)
+        spans = self._parse_spans(response)
+        # Deduplicate against all previously seen spans
+        new_spans = [s for s in spans if s.span_id not in self._seen_span_ids]
+        self._seen_span_ids.update(s.span_id for s in new_spans)
+        return TraceViewModel(spans=new_spans)
+
+    def _api_request(self, path: str, payload: dict) -> dict:
+        """Make authenticated HTTP request to SigNoz API."""
+        url = self._config.endpoint.rstrip("/") + path
+        data = json.dumps(payload).encode("utf-8")
+        req = Request(url, data=data, method="POST")
+        req.add_header("Content-Type", "application/json")
+        req.add_header("SIGNOZ-API-KEY", self._config.api_key)
+        try:
+            with urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read())
+        except HTTPError as e:
+            if e.code == 401:
+                raise AuthenticationError(
+                    f"SigNoz authentication failed (401) at {url}. "
+                    "Check your API key."
+                ) from e
+            if e.code == 429:
+                raise RateLimitError(
+                    f"SigNoz rate limit hit (429) at {url}."
+                ) from e
+            raise ProviderError(
+                f"SigNoz API error ({e.code}) at {url}: {e.reason}"
+            ) from e
+        except URLError as e:
+            raise ProviderError(
+                f"Cannot reach SigNoz at {url}: {e.reason}"
+            ) from e
+```
+
+
+Key design decisions for `SigNoz_Provider`:
+
+1. **stdlib-only HTTP**: Uses `urllib.request` to maintain the zero-dependency constraint. No `requests` or `httpx`.
+2. **Deduplication via `_seen_span_ids` set**: The overlap window (default 2s) means some spans may be returned twice across poll cycles. The set ensures each span is emitted exactly once.
+3. **Pagination via limit/offset**: SigNoz's `query_range` supports `limit` and `offset` parameters. Pages are fetched sequentially; `next_offset == -1` signals completion.
+4. **Error hierarchy**: `AuthenticationError`, `RateLimitError`, and `ProviderError` are distinct exception types so callers can handle them differently (e.g., exponential backoff for rate limits).
+5. **No RF assumptions**: The provider fetches raw spans and converts them to `TraceSpan`. It does not inspect `rf.*` attributes — that's the Robot Semantics Layer's job (Req 45.3).
+
+#### SigNoz API Query Format
+
+The SigNoz `query_range` endpoint accepts a composite query body. The provider builds queries for two use cases:
+
+**List executions** (aggregate distinct execution IDs):
+```json
+{
+  "compositeQuery": {
+    "builderQueries": {
+      "A": {
+        "dataSource": "traces",
+        "aggregateOperator": "count",
+        "groupBy": [{"key": "essvt.execution_id", "dataType": "string", "type": "tag"}],
+        "filters": {"items": [], "op": "AND"},
+        "selectColumns": [],
+        "orderBy": [{"columnName": "timestamp", "order": "desc"}]
+      }
+    },
+    "queryType": "builder"
+  },
+  "start": 1700000000,
+  "end": 1700100000,
+  "step": 60
+}
+```
+
+**Fetch spans** (list spans with filters):
+```json
+{
+  "compositeQuery": {
+    "builderQueries": {
+      "A": {
+        "dataSource": "traces",
+        "aggregateOperator": "noop",
+        "filters": {
+          "items": [
+            {"key": {"key": "essvt.execution_id", "dataType": "string", "type": "tag"},
+             "op": "=", "value": "exec-123"}
+          ],
+          "op": "AND"
+        },
+        "selectColumns": [
+          {"key": "spanID"}, {"key": "parentSpanID"}, {"key": "traceID"},
+          {"key": "startTime"}, {"key": "durationNano"}, {"key": "statusCode"},
+          {"key": "name"}
+        ],
+        "orderBy": [{"columnName": "timestamp", "order": "asc"}],
+        "limit": 10000,
+        "offset": 0
+      }
+    },
+    "queryType": "builder"
+  },
+  "start": 1700000000,
+  "end": 1700100000,
+  "step": 60
+}
+```
+
+The provider maps SigNoz response rows to `TraceSpan` objects, extracting span attributes from the `tagMap` and `stringTagMap` fields in the response.
+
+
+### TraceViewModel Data Model
+
+The canonical data model that bridges providers and the rendering pipeline:
+
+```python
+@dataclass
+class TraceSpan:
+    span_id: str                        # hex string, unique identifier
+    parent_span_id: str                 # hex string or "" for root spans
+    trace_id: str                       # hex string
+    start_time_ns: int                  # nanoseconds since epoch (non-negative)
+    duration_ns: int                    # nanoseconds (non-negative)
+    status: str                         # "OK" | "ERROR" | "UNSET"
+    attributes: dict[str, str]          # all span attributes as string k/v
+    resource_attributes: dict[str, str] = field(default_factory=dict)
+    events: list[dict] = field(default_factory=list)
+    status_message: str = ""
+    name: str = ""
+
+
+@dataclass
+class TraceViewModel:
+    spans: list[TraceSpan]
+    resource_attributes: dict[str, str] = field(default_factory=dict)
+```
+
+**Invariants:**
+- `start_time_ns >= 0`
+- `duration_ns >= 0`
+- `status` is one of `"OK"`, `"ERROR"`, `"UNSET"`
+- `span_id` is a non-empty hex string
+- `trace_id` is a non-empty hex string
+- `parent_span_id` is either `""` (root) or a valid hex string
+- All attribute values are strings (providers must stringify non-string values)
+
+**Relationship to existing `ParsedSpan`:**
+
+| `ParsedSpan` field | `TraceSpan` field | Conversion |
+|---|---|---|
+| `span_id` | `span_id` | identity |
+| `parent_span_id` | `parent_span_id` | identity |
+| `trace_id` | `trace_id` | identity |
+| `start_time` (float seconds) | `start_time_ns` (int nanoseconds) | `int(start_time * 1e9)` |
+| `end_time` (float seconds) | `duration_ns` (int nanoseconds) | `int((end_time - start_time) * 1e9)` |
+| `status_code` | `status` | `STATUS_CODE_OK` → `"OK"`, etc. |
+| `attributes` (mixed values) | `attributes` (string values) | `str(v)` for each value |
+| `resource_attributes` | `resource_attributes` | `str(v)` for each value |
+| `events` | `events` | identity |
+| `status_message` | `status_message` | identity |
+| `name` | `name` | identity |
+
+The `TraceViewModel` is JSON-serializable by design (Req 41.6). Round-tripping through `json.dumps` / `json.loads` produces an equivalent object since all fields are primitives, strings, or lists/dicts of primitives.
+
+
+### Paged Loading and Incremental Tree Building
+
+#### Paged Retrieval Strategy
+
+The `SigNoz_Provider` fetches spans in pages of configurable size (default 10,000). The tree builder processes each page incrementally:
+
+```mermaid
+sequenceDiagram
+    participant CLI as CLI / Server
+    participant SP as SigNoz_Provider
+    participant TB as Tree Builder
+    participant UI as JS Viewer
+
+    CLI->>SP: fetch_spans(offset=0, limit=10000)
+    SP->>SP: query_range API call
+    SP-->>CLI: TraceViewModel (page 1), next_offset=10000
+    CLI->>TB: merge(page_1_spans)
+    TB->>TB: Build partial tree, park orphans
+    TB-->>UI: Render partial tree + timeline
+
+    CLI->>SP: fetch_spans(offset=10000, limit=10000)
+    SP-->>CLI: TraceViewModel (page 2), next_offset=20000
+    CLI->>TB: merge(page_2_spans)
+    TB->>TB: Reconcile orphans, extend tree
+    TB-->>UI: Update tree + timeline incrementally
+
+    Note over CLI,UI: Repeat until next_offset == -1 or max_spans reached
+```
+
+#### Incremental Tree Builder Extension
+
+The existing `SpanTreeBuilder.merge()` method already supports incremental span addition (designed for live mode). For SigNoz paged loading, the same method is used with an added orphan reconciliation step:
+
+```python
+class SpanTreeBuilder:
+    def __init__(self):
+        self._orphans: dict[str, list[SpanNode]] = {}  # parent_span_id → orphan nodes
+        self._node_index: dict[str, SpanNode] = {}     # span_id → node (for fast lookup)
+
+    def merge(self, existing: dict, new_spans: list[TraceSpan]) -> dict:
+        """Incrementally merge new spans into existing trees.
+        Handles orphan reconciliation."""
+        for span in new_spans:
+            node = SpanNode(span=span, children=[], depth=0)
+            self._node_index[span.span_id] = node
+
+            # Check if this span resolves any orphans
+            if span.span_id in self._orphans:
+                for orphan in self._orphans.pop(span.span_id):
+                    node.children.append(orphan)
+                    orphan.depth = node.depth + 1
+                node.children.sort(key=lambda n: n.span.start_time_ns)
+
+            # Try to attach to parent
+            if span.parent_span_id and span.parent_span_id in self._node_index:
+                parent = self._node_index[span.parent_span_id]
+                parent.children.append(node)
+                node.depth = parent.depth + 1
+                parent.children.sort(key=lambda n: n.span.start_time_ns)
+            elif span.parent_span_id:
+                # Parent not yet loaded — park as orphan
+                self._orphans.setdefault(span.parent_span_id, []).append(node)
+            else:
+                # Root span
+                trace_id = span.trace_id
+                existing.setdefault(trace_id, []).append(node)
+
+        return existing
+
+    @property
+    def orphan_count(self) -> int:
+        """Number of spans waiting for their parent."""
+        return sum(len(v) for v in self._orphans.values())
+
+    @property
+    def total_count(self) -> int:
+        """Total spans indexed."""
+        return len(self._node_index)
+```
+
+Orphan spans are initially invisible in the tree (parked in `_orphans`). When their parent arrives in a later page, they are automatically re-parented. If all pages are loaded and orphans remain, they are promoted to root-level nodes with a visual "orphan" indicator (Req 49.1).
+
+
+### SigNoz Live Poll Mode Design
+
+Live poll mode for SigNoz reuses the existing `live.js` polling infrastructure but replaces the file-offset mechanism with a timestamp-based fetch through the server proxy.
+
+#### Server-Side Proxy
+
+When running in SigNoz mode, the `LiveServer` adds a proxy route:
+
+```
+GET /api/spans?since_ns=<timestamp>  →  SigNoz_Provider.poll_new_spans(since_ns)
+```
+
+The server maintains the `SigNoz_Provider` instance and its deduplication state. The JS viewer calls this endpoint instead of `/traces.json?offset=N`.
+
+```python
+# In server.py — SigNoz mode route handler
+class SigNozLiveHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.startswith("/api/spans"):
+            since_ns = int(self._parse_param("since_ns", "0"))
+            try:
+                vm = self.server.provider.poll_new_spans(since_ns)
+                self._respond_json({
+                    "spans": [self._serialize_span(s) for s in vm.spans],
+                    "orphan_count": self.server.tree_builder.orphan_count,
+                    "total_count": self.server.tree_builder.total_count,
+                })
+            except RateLimitError:
+                self._respond_json({"error": "rate_limited", "retry_after": 10}, status=429)
+            except ProviderError as e:
+                self._respond_json({"error": str(e)}, status=502)
+```
+
+#### JS Viewer Changes (`live.js`)
+
+The existing `live.js` polling loop is extended with a provider-aware branch:
+
+```javascript
+// In live.js polling loop
+function _pollForUpdates() {
+  if (window.__RF_PROVIDER === 'signoz') {
+    _pollSigNoz();
+  } else {
+    _pollFile();  // existing file-offset logic
+  }
+}
+
+function _pollSigNoz() {
+  var url = '/api/spans?since_ns=' + _lastSeenNs;
+  fetch(url)
+    .then(function(resp) {
+      if (resp.status === 429) {
+        // Rate limited — back off
+        _showNotification('Data loading throttled. Retrying...');
+        _pollInterval = Math.min(_pollInterval * 2, 30000);
+        return null;
+      }
+      return resp.json();
+    })
+    .then(function(data) {
+      if (!data || data.error) return;
+      if (data.spans.length > 0) {
+        _mergeNewSpans(data.spans);
+        _lastSeenNs = Math.max.apply(null,
+          data.spans.map(function(s) { return s.start_time_ns + s.duration_ns; })
+        );
+      }
+      _updateProgressIndicator(data.total_count, data.orphan_count);
+      _updateLiveStatus();
+    });
+}
+```
+
+#### Overlap Window
+
+The overlap window (default 2 seconds) handles clock skew between SigNoz ingest and query. When polling with `since_ns = last_seen - 2s`, some spans from the previous poll may be returned again. The server-side `_seen_span_ids` set ensures these duplicates are filtered before reaching the viewer.
+
+#### Snapshot Mode Toggle
+
+The viewer provides a toggle button in the live status bar:
+
+```
+[● Live] [⏸ Snapshot]   Loading: 45,230 spans | 12 orphans | Last update: 2s ago
+```
+
+Clicking "Snapshot" stops polling. Clicking "Live" resumes from the last seen timestamp.
+
+
+### Robot Semantics Layer Design
+
+The Robot Semantics Layer (`robot_semantics.py`) operates on `TraceViewModel` data and reconstructs RF hierarchy from span attributes. It sits between the tree builder and the RF model interpreter, ensuring that SigNoz-sourced spans produce the same RF model objects as JSON-sourced spans.
+
+```python
+class RobotSemanticsLayer:
+    """Reconstructs RF hierarchy from TraceSpan attributes.
+    Operates on TraceViewModel — provider-agnostic."""
+
+    def __init__(self, execution_attribute: str = "essvt.execution_id"):
+        self._execution_attribute = execution_attribute
+
+    def enrich(self, vm: TraceViewModel) -> TraceViewModel:
+        """Normalize attribute names and ensure RF attributes are present.
+        Maps alternative attribute names to canonical rf.* names."""
+        for span in vm.spans:
+            attrs = span.attributes
+            # Map robot.type → rf.* attributes if rf.* not already present
+            if "robot.type" in attrs and "rf.suite.name" not in attrs \
+               and "rf.test.name" not in attrs and "rf.keyword.name" not in attrs:
+                rtype = attrs["robot.type"]
+                if rtype == "suite" and "robot.suite" in attrs:
+                    attrs["rf.suite.name"] = attrs["robot.suite"]
+                elif rtype == "test" and "robot.test" in attrs:
+                    attrs["rf.test.name"] = attrs["robot.test"]
+                elif rtype == "keyword" and "robot.keyword" in attrs:
+                    attrs["rf.keyword.name"] = attrs["robot.keyword"]
+        return vm
+
+    def group_by_execution(self, vm: TraceViewModel) -> dict[str, TraceViewModel]:
+        """Group spans by execution_id attribute.
+        Returns {execution_id: TraceViewModel}."""
+        groups: dict[str, list[TraceSpan]] = {}
+        for span in vm.spans:
+            exec_id = span.attributes.get(self._execution_attribute, "unknown")
+            groups.setdefault(exec_id, []).append(span)
+        return {
+            eid: TraceViewModel(spans=spans, resource_attributes=vm.resource_attributes)
+            for eid, spans in groups.items()
+        }
+```
+
+Key design decisions:
+
+1. **Attribute normalization**: SigNoz spans may use `robot.type` / `robot.suite` / `robot.test` / `robot.keyword` attribute names (from the OpenTelemetry semantic conventions used by the tracer). The semantics layer maps these to the canonical `rf.*` names that `RFAttributeInterpreter` expects.
+
+2. **Provider-agnostic**: The layer takes `TraceViewModel` input and produces `TraceViewModel` output. It does not import or reference `SigNoz_Provider` or `JsonProvider`.
+
+3. **Execution grouping**: When SigNoz returns spans from multiple executions (e.g., listing all recent runs), the semantics layer groups them by `execution_attribute` so each execution can be rendered as a separate trace.
+
+4. **Passthrough for JSON data**: When data comes from `JsonProvider`, the spans already have `rf.*` attributes. The `enrich()` method is a no-op in that case — it only maps alternative names when `rf.*` attributes are absent.
+
+#### Pipeline Integration
+
+```
+SigNoz_Provider.fetch_all()
+    → TraceViewModel
+    → RobotSemanticsLayer.enrich()
+    → TraceViewModel (with normalized rf.* attributes)
+    → SpanTreeBuilder.build()
+    → RFAttributeInterpreter.interpret_tree()
+    → RFSuite / RFTest / RFKeyword models
+    → ReportGenerator / LiveServer
+```
+
+For `JsonProvider`, the pipeline is identical — `enrich()` is called but has no effect since `rf.*` attributes are already present.
+
+
+### Configuration Design (Requirement 46)
+
+Configuration follows a three-tier precedence model: CLI arguments > config file > environment variables.
+
+#### Configuration Loader (`config.py`)
+
+```python
+import json
+import os
+from dataclasses import dataclass, field
+
+
+@dataclass
+class AppConfig:
+    """Merged configuration from all sources."""
+    # Provider selection
+    provider: str = "json"                          # "json" | "signoz"
+
+    # JSON provider settings (existing)
+    input_path: str | None = None
+    output_path: str = "trace-report.html"
+    live: bool = False
+    port: int = 8077
+    title: str | None = None
+
+    # SigNoz provider settings
+    signoz_endpoint: str | None = None
+    signoz_api_key: str | None = None
+    execution_attribute: str = "essvt.execution_id"
+    poll_interval: int = 5                          # seconds (1-30)
+    max_spans_per_page: int = 10_000
+    max_spans: int = 500_000
+    overlap_window_seconds: float = 2.0
+
+    # Existing settings preserved
+    receiver: bool = False
+    forward: str | None = None
+    journal: str = "traces.journal.json"
+    no_journal: bool = False
+    no_open: bool = False
+    compact_html: bool = False
+    gzip_embed: bool = False
+
+
+def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
+    """Load configuration with precedence: CLI > config file > env vars."""
+    # Start with defaults
+    config = AppConfig()
+
+    # Layer 1: Environment variables (lowest precedence)
+    env_map = {
+        "SIGNOZ_ENDPOINT": "signoz_endpoint",
+        "SIGNOZ_API_KEY": "signoz_api_key",
+        "EXECUTION_ATTRIBUTE": "execution_attribute",
+        "POLL_INTERVAL": "poll_interval",
+        "MAX_SPANS_PER_PAGE": "max_spans_per_page",
+    }
+    for env_key, attr in env_map.items():
+        val = os.environ.get(env_key)
+        if val is not None:
+            setattr(config, attr, _coerce(attr, val))
+
+    # Layer 2: Config file (middle precedence)
+    if config_path:
+        file_config = _load_config_file(config_path)
+        for key, val in file_config.items():
+            if hasattr(config, key) and val is not None:
+                setattr(config, key, val)
+
+    # Layer 3: CLI arguments (highest precedence)
+    for key, val in cli_args.items():
+        if val is not None and hasattr(config, key):
+            setattr(config, key, val)
+
+    return config
+
+
+def _load_config_file(path: str) -> dict:
+    """Load JSON or YAML config file. Returns flat dict."""
+    with open(path) as f:
+        raw = json.load(f)
+    # Flatten nested signoz.* keys
+    flat = {}
+    for key, val in raw.items():
+        if isinstance(val, dict):
+            for subkey, subval in val.items():
+                flat_key = f"{key}_{subkey}"
+                # Convert camelCase to snake_case
+                flat[_to_snake(flat_key)] = subval
+        else:
+            flat[_to_snake(key)] = val
+    return flat
+```
+
+#### Config File Format
+
+```json
+{
+  "provider": "signoz",
+  "signoz": {
+    "endpoint": "https://signoz.example.com",
+    "apiKey": "your-api-key-here",
+    "executionAttribute": "essvt.execution_id",
+    "pollIntervalSeconds": 5,
+    "maxSpansPerPage": 10000
+  }
+}
+```
+
+#### CLI Arguments Extension
+
+New arguments added to `cli.py`:
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `--provider` | `json\|signoz` | `json` | Trace data source |
+| `--signoz-endpoint` | string | — | SigNoz API base URL |
+| `--signoz-api-key` | string | — | SigNoz API key (also via `SIGNOZ_API_KEY` env) |
+| `--execution-attribute` | string | `essvt.execution_id` | Span attribute for execution grouping |
+| `--max-spans-per-page` | int | `10000` | Page size for SigNoz retrieval |
+| `--max-spans` | int | `500000` | Hard cap on total spans fetched |
+| `--config` | path | — | Path to JSON config file |
+| `--overlap-window` | float | `2.0` | Overlap window in seconds for live poll |
+
+Validation rules:
+- `--provider signoz` requires `--signoz-endpoint` (from CLI, config file, or env)
+- `--poll-interval` must be 1–30 (applies to both JSON live and SigNoz live)
+- `--provider json` (default) ignores all `--signoz-*` arguments
+- Missing `--signoz-endpoint` with `--provider signoz` → exit code 1 with descriptive error
+
+
+### Deployment Model Design (Requirement 47)
+
+#### CLI Server Mode
+
+SigNoz mode adds a `serve` subcommand for long-running server operation:
+
+```
+rf-trace-report serve --provider signoz --signoz-endpoint https://signoz.example.com
+```
+
+This starts the HTTP server (same as `--live`) but without an input file. The server proxies SigNoz API calls and serves the viewer. The `serve` command implies `--live` behavior.
+
+#### Docker Image
+
+The existing Dockerfile is extended with SigNoz support via environment variables:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install -e .
+
+ENV SIGNOZ_ENDPOINT=""
+ENV SIGNOZ_API_KEY=""
+ENV EXECUTION_ATTRIBUTE="essvt.execution_id"
+ENV POLL_INTERVAL="5"
+ENV MAX_SPANS_PER_PAGE="10000"
+ENV PORT="8077"
+
+EXPOSE 8077
+
+CMD ["rf-trace-report", "serve", "--provider", "signoz", "--port", "8077", "--no-open"]
+```
+
+Usage:
+```bash
+docker run -p 8077:8077 \
+  -e SIGNOZ_ENDPOINT=https://signoz.internal:3301 \
+  -e SIGNOZ_API_KEY=your-key \
+  rf-trace-viewer
+```
+
+#### Sidecar Deployment
+
+When deployed as a sidecar alongside SigNoz (e.g., in Kubernetes), the viewer connects to SigNoz's internal API endpoint:
+
+```yaml
+# Kubernetes pod spec (example)
+containers:
+  - name: signoz-otel-collector
+    image: signoz/signoz-otel-collector:latest
+  - name: rf-trace-viewer
+    image: rf-trace-viewer:latest
+    env:
+      - name: SIGNOZ_ENDPOINT
+        value: "http://localhost:3301"  # SigNoz internal port
+      - name: SIGNOZ_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: signoz-secrets
+            key: api-key
+    ports:
+      - containerPort: 8077
+```
+
+No modifications to SigNoz are required (Req 47.5). The viewer uses the same public API that the SigNoz UI uses.
+
+#### Reverse Proxy Support
+
+The existing `--base-url` option (Req 23.4) works for SigNoz mode. When served under a sub-path (e.g., `/rf-viewer/`), the viewer prefixes all API calls with the base URL:
+
+```javascript
+var baseUrl = window.__RF_BASE_URL || '';
+fetch(baseUrl + '/api/spans?since_ns=' + _lastSeenNs);
+```
+
+
+### Non-Blocking UI Design (Requirement 48)
+
+The JS viewer uses `fetch` with `async`/`await` patterns (or `.then()` chains in ES2020 style) to keep the main thread responsive during SigNoz data loading.
+
+#### Background Fetch Architecture
+
+```javascript
+var _fetchInProgress = false;
+var _fetchQueue = [];
+
+function _startBackgroundFetch(executionId) {
+  _fetchInProgress = true;
+  _updateProgressUI(0, 'Loading...');
+  _fetchNextPage(executionId, 0);
+}
+
+function _fetchNextPage(executionId, sinceNs) {
+  fetch('/api/spans?since_ns=' + sinceNs)
+    .then(function(resp) {
+      if (resp.status === 429) {
+        // Rate limited — exponential backoff
+        var retryAfter = parseInt(resp.headers.get('Retry-After') || '10', 10);
+        _showNotification('Rate limited. Retrying in ' + retryAfter + 's...');
+        setTimeout(function() { _fetchNextPage(executionId, sinceNs); },
+                   retryAfter * 1000);
+        return null;
+      }
+      if (!resp.ok) {
+        _retryCount++;
+        if (_retryCount <= 3) {
+          setTimeout(function() { _fetchNextPage(executionId, sinceNs); }, 2000);
+          return null;
+        }
+        _showWarning('Failed to load complete trace. Showing partial data.');
+        _fetchInProgress = false;
+        return null;
+      }
+      return resp.json();
+    })
+    .then(function(data) {
+      if (!data) return;
+      _retryCount = 0;
+      if (data.spans.length > 0) {
+        // Merge into existing tree without disrupting UI state
+        _mergeSpansPreservingState(data.spans);
+        var maxNs = Math.max.apply(null,
+          data.spans.map(function(s) { return s.start_time_ns + s.duration_ns; }));
+        _updateProgressUI(data.total_count,
+          data.orphan_count > 0 ? data.orphan_count + ' orphans' : '');
+        // Continue fetching if more pages available
+        if (data.spans.length >= _pageSize) {
+          // Use requestAnimationFrame to yield to UI between pages
+          requestAnimationFrame(function() {
+            _fetchNextPage(executionId, maxNs);
+          });
+          return;
+        }
+      }
+      // All pages loaded
+      _fetchInProgress = false;
+      _finalizeOrphans();
+      _updateProgressUI(data.total_count, 'Complete');
+    });
+}
+```
+
+#### State Preservation During Merge
+
+`_mergeSpansPreservingState` captures the current UI state before merging and restores it after:
+
+```javascript
+function _mergeSpansPreservingState(newSpans) {
+  // Capture current state
+  var scrollPos = _treeContainer.scrollTop;
+  var expandedIds = _getExpandedNodeIds();
+  var selectedId = _getSelectedNodeId();
+
+  // Merge spans into tree data model
+  _treeBuilder.merge(newSpans);
+
+  // Re-render only affected subtrees (not full re-render)
+  _updateAffectedSubtrees(newSpans);
+
+  // Restore state
+  _restoreExpandedNodes(expandedIds);
+  if (selectedId) _selectNode(selectedId);
+  _treeContainer.scrollTop = scrollPos;
+
+  // Update timeline and stats incrementally
+  _timeline.addSpans(newSpans);
+  _stats.recalculate();
+}
+```
+
+#### Progress Indicator
+
+A persistent progress bar appears at the top of the viewer during loading:
+
+```
+┌──────────────────────────────────────────────────────┐
+│ ████████████░░░░░░░░  45,230 / ~100,000 spans       │
+│ 12 orphan spans pending reconciliation               │
+└──────────────────────────────────────────────────────┘
+```
+
+The estimated total is derived from the first page response (SigNoz returns total count in some query modes) or is shown as "unknown" if not available.
+
+
+### SigNoz-Specific Error Handling
+
+| Error Condition | Component | Handling |
+|---|---|---|
+| Authentication failure (401) | `SigNoz_Provider` | Raise `AuthenticationError` with endpoint URL and "check API key" message. CLI exits with code 1. |
+| SigNoz unreachable (connection refused/timeout) | `SigNoz_Provider` | Raise `ProviderError` with endpoint URL and connection details. CLI exits with code 1. |
+| Rate limited (429) | `SigNoz_Provider` | Raise `RateLimitError`. Server returns 429 to viewer. Viewer implements exponential backoff (2s, 4s, 8s, max 30s). |
+| Server error (5xx) during paged retrieval | `SigNoz_Provider` | Retry failed page up to 3 times with 2s delay. After 3 failures, raise `ProviderError`. Viewer shows partial data with warning. |
+| Missing `--signoz-endpoint` | CLI | Exit code 1 with message: "Error: --signoz-endpoint is required when --provider signoz is specified." |
+| Invalid `--poll-interval` (outside 1-30) | CLI | Exit code 1 with message: "Error: --poll-interval must be between 1 and 30 seconds." |
+| Span cap reached (500K default) | `SigNoz_Provider` | Emit warning to stderr. Viewer shows notification: "Trace partially loaded: 500,000 span limit reached." |
+| Orphan spans after all pages loaded | Tree Builder | Promote orphans to root level with visual "orphan" indicator. Viewer shows completeness indicator. |
+| Malformed SigNoz API response | `SigNoz_Provider` | Log warning, skip malformed entries, continue with valid data. |
+| Config file not found | `config.py` | Exit code 1 with message: "Error: config file not found: {path}" |
+| Config file parse error | `config.py` | Exit code 1 with message: "Error: invalid config file: {details}" |
+
+#### Exception Hierarchy
+
+```python
+class ProviderError(Exception):
+    """Base exception for all provider errors."""
+
+class AuthenticationError(ProviderError):
+    """SigNoz API key invalid or missing."""
+
+class RateLimitError(ProviderError):
+    """SigNoz API rate limit exceeded."""
+
+class ConfigurationError(Exception):
+    """Invalid or missing configuration."""
+```
+
+### Files Changed Summary (SigNoz Integration)
+
+| File | Status | Description |
+|---|---|---|
+| `src/rf_trace_viewer/providers/__init__.py` | New | Provider package init |
+| `src/rf_trace_viewer/providers/base.py` | New | `TraceProvider` interface, `TraceSpan`, `TraceViewModel` |
+| `src/rf_trace_viewer/providers/json_provider.py` | New | `JsonProvider` wrapping existing parser |
+| `src/rf_trace_viewer/providers/signoz_provider.py` | New | `SigNozProvider` with API client, pagination, dedup |
+| `src/rf_trace_viewer/robot_semantics.py` | New | Robot Semantics Layer |
+| `src/rf_trace_viewer/config.py` | New | Configuration loader (CLI + file + env) |
+| `src/rf_trace_viewer/cli.py` | Modified | Add `--provider`, `--signoz-*`, `--config` args; provider selection logic |
+| `src/rf_trace_viewer/tree.py` | Modified | Add orphan tracking, `orphan_count`/`total_count` properties, `_node_index` |
+| `src/rf_trace_viewer/server.py` | Modified | Add SigNoz proxy routes (`/api/spans`), provider-aware handler |
+| `src/rf_trace_viewer/viewer/live.js` | Modified | Add SigNoz poll branch, progress indicator, snapshot toggle |
+| `src/rf_trace_viewer/viewer/app.js` | Modified | Provider detection (`window.__RF_PROVIDER`), progress UI |
+
+
+### Correctness Properties for SigNoz Integration (Requirements 40–50)
+
+### Property 37: TraceViewModel JSON round-trip
+
+*For any* valid `TraceViewModel` containing arbitrary `TraceSpan` objects with random `spanId`, `parentSpanId`, `traceId`, `startTimeNs` (non-negative), `durationNs` (non-negative), `status` (one of OK/ERROR/UNSET), and `attributes` (string key-value pairs), serializing the `TraceViewModel` to JSON and deserializing it back should produce an equivalent `TraceViewModel` with all fields preserved.
+
+**Validates: Requirements 41.6**
+
+### Property 38: TraceSpan structural invariants
+
+*For any* valid input data (OTLP NDJSON content or SigNoz API response), every `TraceSpan` produced by any `TraceProvider` implementation should satisfy: (a) `span_id` is a non-empty string, (b) `trace_id` is a non-empty string, (c) `start_time_ns` is a non-negative integer, (d) `duration_ns` is a non-negative integer, (e) `status` is one of `"OK"`, `"ERROR"`, or `"UNSET"`, (f) `parent_span_id` is either an empty string or a non-empty string, and (g) all keys and values in `attributes` are strings.
+
+**Validates: Requirements 40.4, 41.1, 41.2, 41.5**
+
+### Property 39: JsonProvider backward compatibility
+
+*For any* valid OTLP NDJSON content, parsing it through the `JsonProvider` to produce a `TraceViewModel`, then feeding that `TraceViewModel` through the `SpanTreeBuilder` and `RFAttributeInterpreter`, should produce RF model objects (RFSuite, RFTest, RFKeyword) with identical field values to those produced by the pre-provider pipeline (`NDJSONParser` → `SpanTreeBuilder` → `RFAttributeInterpreter`) for the same input.
+
+**Validates: Requirements 40.2, 50.1, 50.3**
+
+
+### Property 40: JsonProvider NDJSON round-trip
+
+*For any* valid OTLP NDJSON content, converting it to a `TraceViewModel` via `JsonProvider`, then serializing the `TraceViewModel` spans back to NDJSON format (reconstructing `ExportTraceServiceRequest` lines), and re-parsing with `JsonProvider`, should produce a `TraceViewModel` with equivalent span data (same `spanId`, `traceId`, `parentSpanId`, `startTimeNs`, `durationNs`, `status`, and `attributes` for each span).
+
+**Validates: Requirements 40.7**
+
+### Property 41: SigNoz response to TraceSpan conversion
+
+*For any* valid SigNoz `query_range` API response containing span rows with arbitrary `spanID`, `traceID`, `parentSpanID`, `startTime`, `durationNano`, `statusCode`, `name`, and `tagMap` fields, the `SigNoz_Provider._parse_spans` method should produce `TraceSpan` objects where: (a) `span_id` matches the input `spanID`, (b) `trace_id` matches the input `traceID`, (c) `start_time_ns` matches the input `startTime`, (d) `duration_ns` matches the input `durationNano`, and (e) all tag map entries appear in the output `attributes` dict.
+
+**Validates: Requirements 42.7**
+
+### Property 42: Incremental tree building equivalence
+
+*For any* set of spans with known parent-child relationships, splitting the spans into an arbitrary number of pages (in any order) and building the tree incrementally via `SpanTreeBuilder.merge()` for each page should produce a tree with the same parent-child relationships and the same set of root nodes as building the tree from the complete span set in a single call. Orphan spans that are resolved by later pages should end up in the correct position.
+
+**Validates: Requirements 43.2, 43.3, 49.1, 49.2**
+
+### Property 43: Span cap enforcement
+
+*For any* total span count N and configured max_spans cap M where N > M, the `SigNoz_Provider.fetch_all()` method should return at most M spans, and the returned spans should be a prefix of the full ordered span set (i.e., the first M spans by query order).
+
+**Validates: Requirements 43.5**
+
+
+### Property 44: Live poll deduplication
+
+*For any* sequence of poll cycles where the SigNoz API returns overlapping span sets (due to the overlap fetch window), the `SigNoz_Provider` should emit each unique `spanId` exactly once across all calls to `poll_new_spans()`. No span should appear in the output of more than one poll cycle, and no span from the API response should be lost (every unique span should appear in exactly one poll cycle's output).
+
+**Validates: Requirements 44.2, 44.3**
+
+### Property 45: Robot Semantics Layer attribute normalization
+
+*For any* `TraceSpan` with `robot.type`, `robot.suite`, `robot.test`, or `robot.keyword` attributes (but without `rf.*` attributes), the `RobotSemanticsLayer.enrich()` method should produce a `TraceSpan` with the corresponding `rf.suite.name`, `rf.test.name`, or `rf.keyword.name` attributes set to the values from the `robot.*` attributes. The original `robot.*` attributes should be preserved.
+
+**Validates: Requirements 45.1**
+
+### Property 46: Provider equivalence for RF model output
+
+*For any* `TraceSpan` containing `rf.*` attributes (suite, test, or keyword), passing it through the `RobotSemanticsLayer.enrich()` and then `RFAttributeInterpreter.interpret()` should produce the same RF model object (same type, same field values) regardless of whether the `TraceSpan` was constructed by `JsonProvider` or `SigNozProvider`. The RF model output depends only on the `TraceSpan` content, not on its origin.
+
+**Validates: Requirements 45.4, 45.6**
+
+### Property 47: Configuration precedence
+
+*For any* configuration setting that can be specified via CLI argument, config file, and environment variable simultaneously, the merged `AppConfig` should use the CLI value when present, falling back to the config file value, and finally to the environment variable value. Specifically: for any three distinct values V_cli, V_file, V_env assigned to the same setting, `load_config({setting: V_cli}, config_with_V_file)` with env set to V_env should produce `AppConfig` with `setting == V_cli`.
+
+**Validates: Requirements 46.8, 46.9, 46.11**
+
+
+### Testing Strategy for SigNoz Integration
+
+#### Test Organization (New Files)
+
+```
+tests/
+├── unit/
+│   ├── test_trace_provider.py      # TraceSpan/TraceViewModel invariants + properties 37-38
+│   ├── test_json_provider.py       # JsonProvider backward compat + properties 39-40
+│   ├── test_signoz_provider.py     # SigNoz response parsing + properties 41, 43-44
+│   ├── test_robot_semantics.py     # Semantics layer + properties 45-46
+│   ├── test_config.py              # Config loading + property 47
+│   └── test_tree.py                # Extended with incremental merge + property 42
+├── fixtures/
+│   ├── signoz_response_spans.json  # Mock SigNoz query_range response
+│   ├── signoz_response_executions.json  # Mock execution list response
+│   └── sample_config.json          # Sample config file
+└── conftest.py                     # Extended with TraceSpan/TraceViewModel strategies
+```
+
+#### New Hypothesis Strategies
+
+```python
+# In conftest.py — additions for SigNoz integration
+
+from hypothesis import strategies as st
+
+# Generate valid TraceSpan objects
+trace_span_strategy = st.builds(
+    TraceSpan,
+    span_id=st.text(alphabet="0123456789abcdef", min_size=16, max_size=16),
+    parent_span_id=st.one_of(
+        st.just(""),
+        st.text(alphabet="0123456789abcdef", min_size=16, max_size=16),
+    ),
+    trace_id=st.text(alphabet="0123456789abcdef", min_size=32, max_size=32),
+    start_time_ns=st.integers(min_value=0, max_value=2**63 - 1),
+    duration_ns=st.integers(min_value=0, max_value=2**53),
+    status=st.sampled_from(["OK", "ERROR", "UNSET"]),
+    attributes=st.dictionaries(
+        st.text(min_size=1, max_size=50, alphabet=st.characters(blacklist_categories=("Cs",))),
+        st.text(max_size=200),
+        max_size=20,
+    ),
+    resource_attributes=st.dictionaries(st.text(min_size=1, max_size=30), st.text(max_size=100), max_size=5),
+    events=st.just([]),
+    status_message=st.text(max_size=200),
+    name=st.text(min_size=1, max_size=100),
+)
+
+# Generate valid TraceViewModel
+trace_view_model_strategy = st.builds(
+    TraceViewModel,
+    spans=st.lists(trace_span_strategy, min_size=1, max_size=50),
+    resource_attributes=st.dictionaries(st.text(min_size=1, max_size=30), st.text(max_size=100), max_size=5),
+)
+
+# Generate mock SigNoz API response rows
+signoz_span_row = st.fixed_dictionaries({
+    "spanID": st.text(alphabet="0123456789abcdef", min_size=16, max_size=16),
+    "traceID": st.text(alphabet="0123456789abcdef", min_size=32, max_size=32),
+    "parentSpanID": st.one_of(
+        st.just(""),
+        st.text(alphabet="0123456789abcdef", min_size=16, max_size=16),
+    ),
+    "startTime": st.integers(min_value=0, max_value=2**63 - 1),
+    "durationNano": st.integers(min_value=0, max_value=2**53),
+    "statusCode": st.sampled_from([0, 1, 2]),
+    "name": st.text(min_size=1, max_size=100),
+    "tagMap": st.dictionaries(st.text(min_size=1, max_size=30), st.text(max_size=100), max_size=10),
+})
+
+# Generate span trees with known parent-child relationships (for incremental merge testing)
+def span_tree_strategy(max_depth=4, max_children=3):
+    """Generate a tree of TraceSpans with valid parent-child relationships."""
+    # ... builds random trees and returns (flat_span_list, expected_tree_structure)
+```
+
+#### Property Test Tagging
+
+Each property test is tagged with the design document property number:
+
+```python
+@given(vm=trace_view_model_strategy)
+@settings(max_examples=100)
+def test_property_37_trace_view_model_json_round_trip(vm):
+    """Feature: rf-html-report-replacement, Property 37: TraceViewModel JSON round-trip"""
+    serialized = json.dumps(vm_to_dict(vm))
+    deserialized = vm_from_dict(json.loads(serialized))
+    assert vm == deserialized
+```
+
+#### Docker Test Execution
+
+All tests run in Docker containers per the project's testing strategy:
+
+```bash
+# Run all SigNoz integration tests
+make test-signoz
+
+# Run specific property test
+docker compose run --rm test pytest tests/unit/test_signoz_provider.py -k "property_41" -v
+```

@@ -9,6 +9,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+from rf_trace_viewer.exceptions import ConfigurationError
 
 # --- Exception hierarchy ---
 
@@ -25,10 +26,6 @@ class RateLimitError(ProviderError):
     """SigNoz API rate limit exceeded."""
 
 
-class ConfigurationError(Exception):
-    """Invalid or missing configuration."""
-
-
 # --- Data models ---
 
 
@@ -36,13 +33,13 @@ class ConfigurationError(Exception):
 class TraceSpan:
     """Canonical span record. All providers must emit these."""
 
-    span_id: str                        # hex string, unique identifier
-    parent_span_id: str                 # hex string or "" for root spans
-    trace_id: str                       # hex string
-    start_time_ns: int                  # nanoseconds since epoch (non-negative)
-    duration_ns: int                    # nanoseconds (non-negative)
-    status: str                         # "OK" | "ERROR" | "UNSET"
-    attributes: dict[str, str]          # all span attributes as string k/v
+    span_id: str  # hex string, unique identifier
+    parent_span_id: str  # hex string or "" for root spans
+    trace_id: str  # hex string
+    start_time_ns: int  # nanoseconds since epoch (non-negative)
+    duration_ns: int  # nanoseconds (non-negative)
+    status: str  # "OK" | "ERROR" | "UNSET"
+    attributes: dict[str, str]  # all span attributes as string k/v
     resource_attributes: dict[str, str] = field(default_factory=dict)
     events: list[dict] = field(default_factory=list)
     status_message: str = ""
@@ -58,9 +55,7 @@ class TraceSpan:
         if self.duration_ns < 0:
             raise ValueError("duration_ns must be non-negative")
         if self.status not in {"OK", "ERROR", "UNSET"}:
-            raise ValueError(
-                f"status must be one of 'OK', 'ERROR', 'UNSET', got '{self.status}'"
-            )
+            raise ValueError(f"status must be one of 'OK', 'ERROR', 'UNSET', got '{self.status}'")
 
 
 @dataclass

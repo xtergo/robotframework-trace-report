@@ -179,17 +179,13 @@ class TestTruncatedIndicatorUsesConfiguredIndent:
         """Truncated indicator padding does NOT use hardcoded 16px per depth level."""
         js, _ = _load_assets()
         # Find the truncated indicator padding line
-        trunc_lines = [
-            line
-            for line in js.splitlines()
-            if "truncEl.style.paddingLeft" in line
-        ]
+        trunc_lines = [line for line in js.splitlines() if "truncEl.style.paddingLeft" in line]
         assert len(trunc_lines) > 0, "Should have truncated indicator padding line"
         for line in trunc_lines:
             # Should NOT contain "depth * 16" — should use _cachedIndentSize instead
-            assert "* 16" not in line, (
-                f"Truncated indicator should not use hardcoded 16: {line.strip()}"
-            )
+            assert (
+                "* 16" not in line
+            ), f"Truncated indicator should not use hardcoded 16: {line.strip()}"
 
 
 class TestSliderSynchronization:

@@ -314,11 +314,13 @@ def test_poll_interval_boundary_high(monkeypatch):
 def test_json_provider_ignores_signoz_validation(monkeypatch):
     """Validates: Requirements 46.1 — provider=json doesn't require signoz endpoint."""
     _clear_env(monkeypatch)
-    config = load_config({
-        "provider": "json",
-        "signoz_endpoint": "https://ignored.example.com",
-        "signoz_api_key": "some-key",
-    })
+    config = load_config(
+        {
+            "provider": "json",
+            "signoz_endpoint": "https://ignored.example.com",
+            "signoz_api_key": "some-key",
+        }
+    )
     assert config.provider == "json"
     # Values are stored but don't trigger validation errors
     assert config.signoz_endpoint == "https://ignored.example.com"

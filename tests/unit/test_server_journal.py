@@ -229,7 +229,14 @@ class TestCLIJournalArguments:
                 journal_path="traces.journal.json",
                 forward_url=None,
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )
 
     def test_custom_journal_path(self, monkeypatch):
@@ -251,7 +258,14 @@ class TestCLIJournalArguments:
                 journal_path="/tmp/custom.journal",
                 forward_url=None,
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )
 
     def test_no_journal_flag(self, monkeypatch):
@@ -273,7 +287,14 @@ class TestCLIJournalArguments:
                 journal_path=None,
                 forward_url=None,
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )
 
     def test_no_journal_overrides_custom_path(self, monkeypatch):
@@ -302,5 +323,12 @@ class TestCLIJournalArguments:
                 journal_path=None,
                 forward_url=None,
                 output_path="trace-report.html",
-                report_options=ReportOptions(title=None, compact=False, gzip_embed=False, max_keyword_depth=None, exclude_passing_keywords=False, max_spans=None),
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
             )

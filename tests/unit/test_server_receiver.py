@@ -13,10 +13,10 @@ import pytest
 from rf_trace_viewer.server import LiveServer, _LiveRequestHandler
 from rf_trace_viewer.parser import parse_line
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_otlp_payload(spans=None):
     """Create a minimal valid OTLP ExportTraceServiceRequest payload."""
@@ -147,6 +147,7 @@ def _get_traces(server, offset=0):
 # 1. POST /v1/traces acceptance and buffering
 # ---------------------------------------------------------------------------
 
+
 class TestReceiveTracesBuffering:
     """POST /v1/traces acceptance and span buffering."""
 
@@ -234,6 +235,7 @@ class TestReceiveTracesBuffering:
 # ---------------------------------------------------------------------------
 # 2. GET /traces.json?offset=N serving from buffer
 # ---------------------------------------------------------------------------
+
 
 class TestServeTracesReceiver:
     """GET /traces.json?offset=N from in-memory receiver buffer."""
@@ -323,6 +325,7 @@ class TestServeTracesReceiver:
 # 3. Journal file recovery (round-trip)
 # ---------------------------------------------------------------------------
 
+
 class TestJournalRecovery:
     """Journal file content can be re-parsed to recover the same spans."""
 
@@ -372,6 +375,7 @@ class TestJournalRecovery:
 # 4. Forwarding integration (simple — detailed tests in test_server_forward.py)
 # ---------------------------------------------------------------------------
 
+
 class TestForwardingTriggered:
     """Forwarding is triggered during POST when forward_url is set."""
 
@@ -389,6 +393,7 @@ class TestForwardingTriggered:
 # ---------------------------------------------------------------------------
 # 5. Auto-report generation on shutdown
 # ---------------------------------------------------------------------------
+
 
 class TestShutdownReportGeneration:
     """_generate_shutdown_report produces HTML from buffered spans."""
