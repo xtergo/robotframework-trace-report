@@ -1068,7 +1068,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 
 
 - [ ] 46. Extend CLI with SigNoz arguments and provider selection
-  - [ ] 46.1 Modify `src/rf_trace_viewer/cli.py` to add SigNoz CLI arguments
+  - [x] 46.1 Modify `src/rf_trace_viewer/cli.py` to add SigNoz CLI arguments
     - Add `--provider` argument (`json` | `signoz`, default `json`)
     - Add `--signoz-endpoint` argument (SigNoz API base URL)
     - Add `--signoz-api-key` argument (also readable from `SIGNOZ_API_KEY` env var)

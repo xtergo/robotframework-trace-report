@@ -115,6 +115,50 @@ def main() -> int:
         help="Forward received OTLP payloads to an upstream collector URL",
     )
 
+    # Provider and SigNoz arguments
+    parser.add_argument(
+        "--provider",
+        choices=["json", "signoz"],
+        default="json",
+        help="Trace data provider (default: json)",
+    )
+    parser.add_argument(
+        "--signoz-endpoint",
+        default=None,
+        metavar="<url>",
+        help="SigNoz API base URL (required when --provider signoz)",
+    )
+    parser.add_argument(
+        "--signoz-api-key",
+        default=None,
+        help="SigNoz API key (also readable from SIGNOZ_API_KEY env var)",
+    )
+    parser.add_argument(
+        "--execution-attribute",
+        default="essvt.execution_id",
+        help="Span attribute name for grouping executions (default: essvt.execution_id)",
+    )
+    parser.add_argument(
+        "--max-spans-per-page",
+        type=int,
+        default=10000,
+        metavar="N",
+        help="Page size for paged span retrieval (default: 10000)",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="<path>",
+        help="Path to JSON configuration file",
+    )
+    parser.add_argument(
+        "--overlap-window",
+        type=float,
+        default=2.0,
+        metavar="SECONDS",
+        help="Overlap window in seconds for live poll deduplication (default: 2.0)",
+    )
+
     args = parser.parse_args()
 
     # Receiver mode implies live mode
