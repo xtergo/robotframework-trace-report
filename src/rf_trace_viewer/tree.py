@@ -74,6 +74,7 @@ def build_tree(spans: list[RawSpan]) -> list[SpanNode]:
     roots.sort(key=lambda n: n.span.start_time_unix_nano)
     return roots
 
+
 class IncrementalTreeBuilder:
     """Incremental tree builder with orphan tracking for paged span loading.
 
@@ -169,4 +170,3 @@ class IncrementalTreeBuilder:
 
         self._roots.sort(key=lambda n: n.span.start_time_unix_nano)
         return list(self._roots)
-

@@ -46,9 +46,7 @@ class RobotSemanticsLayer:
                     attrs["rf.keyword.name"] = attrs["robot.keyword"]
         return vm
 
-    def group_by_execution(
-        self, vm: TraceViewModel
-    ) -> dict[str, TraceViewModel]:
+    def group_by_execution(self, vm: TraceViewModel) -> dict[str, TraceViewModel]:
         """Group spans by execution_id attribute.
 
         Returns {execution_id: TraceViewModel}.
@@ -59,8 +57,6 @@ class RobotSemanticsLayer:
             exec_id = span.attributes.get(self._execution_attribute, "unknown")
             groups.setdefault(exec_id, []).append(span)
         return {
-            eid: TraceViewModel(
-                spans=spans, resource_attributes=vm.resource_attributes
-            )
+            eid: TraceViewModel(spans=spans, resource_attributes=vm.resource_attributes)
             for eid, spans in groups.items()
         }

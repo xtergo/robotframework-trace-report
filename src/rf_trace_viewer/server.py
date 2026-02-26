@@ -52,7 +52,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
         # Determine provider type for JS viewer
         provider = getattr(self.server, "provider", None)
-        if provider is not None and hasattr(provider, "supports_live_poll") and provider.supports_live_poll():
+        if (
+            provider is not None
+            and hasattr(provider, "supports_live_poll")
+            and provider.supports_live_poll()
+        ):
             provider_type = "signoz"
         else:
             provider_type = "json"
@@ -102,7 +106,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
     def _serve_signoz_spans(self, since_ns: int) -> None:
         """Serve spans from a live-poll provider (e.g. SigNoz)."""
         provider = getattr(self.server, "provider", None)
-        if provider is None or not (hasattr(provider, "supports_live_poll") and provider.supports_live_poll()):
+        if provider is None or not (
+            hasattr(provider, "supports_live_poll") and provider.supports_live_poll()
+        ):
             self.send_error(404)
             return
 
@@ -114,9 +120,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             # found among the returned span IDs.
             span_ids = {s.span_id for s in view_model.spans}
             orphan_count = sum(
-                1
-                for s in view_model.spans
-                if s.parent_span_id and s.parent_span_id not in span_ids
+                1 for s in view_model.spans if s.parent_span_id and s.parent_span_id not in span_ids
             )
 
             result = {

@@ -237,6 +237,8 @@ class TestCLIJournalArguments:
                     exclude_passing_keywords=False,
                     max_spans=None,
                 ),
+                provider=None,
+                base_url=None,
             )
 
     def test_custom_journal_path(self, monkeypatch):
@@ -266,6 +268,8 @@ class TestCLIJournalArguments:
                     exclude_passing_keywords=False,
                     max_spans=None,
                 ),
+                provider=None,
+                base_url=None,
             )
 
     def test_no_journal_flag(self, monkeypatch):
@@ -295,6 +299,8 @@ class TestCLIJournalArguments:
                     exclude_passing_keywords=False,
                     max_spans=None,
                 ),
+                provider=None,
+                base_url=None,
             )
 
     def test_no_journal_overrides_custom_path(self, monkeypatch):
@@ -331,4 +337,6 @@ class TestCLIJournalArguments:
                     exclude_passing_keywords=False,
                     max_spans=None,
                 ),
+                provider=None,
+                base_url=None,
             )

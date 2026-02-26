@@ -777,7 +777,9 @@ def test_incremental_orphan_reparenting():
     builder = IncrementalTreeBuilder()
 
     # Add child first (parent not yet seen)
-    child = _make_span("child001", parent_span_id="parent01", start_ns=2000000000000000000, name="Child")
+    child = _make_span(
+        "child001", parent_span_id="parent01", start_ns=2000000000000000000, name="Child"
+    )
     builder.merge([child])
 
     assert builder.orphan_count == 1
@@ -856,9 +858,9 @@ def test_incremental_multi_page_merge_matches_build_tree():
     inc_structure = _collect_tree_structure(inc_roots)
 
     # Same number of roots
-    assert len(inc_roots) == len(ref_roots), (
-        f"Root count mismatch: incremental={len(inc_roots)}, build_tree={len(ref_roots)}"
-    )
+    assert len(inc_roots) == len(
+        ref_roots
+    ), f"Root count mismatch: incremental={len(inc_roots)}, build_tree={len(ref_roots)}"
 
     # Same span_ids indexed
     assert set(ref_structure.keys()) == set(inc_structure.keys()), "Span ID sets differ"
@@ -881,8 +883,12 @@ def test_incremental_finalize_promotes_remaining_orphans():
     # Add a root span
     root = _make_span("root0001", parent_span_id="", start_ns=1000000000000000000, name="Root")
     # Add orphans whose parents will never arrive
-    orphan1 = _make_span("orphan01", parent_span_id="missing01", start_ns=2000000000000000000, name="Orphan 1")
-    orphan2 = _make_span("orphan02", parent_span_id="missing02", start_ns=3000000000000000000, name="Orphan 2")
+    orphan1 = _make_span(
+        "orphan01", parent_span_id="missing01", start_ns=2000000000000000000, name="Orphan 1"
+    )
+    orphan2 = _make_span(
+        "orphan02", parent_span_id="missing02", start_ns=3000000000000000000, name="Orphan 2"
+    )
 
     builder.merge([root, orphan1, orphan2])
 
@@ -905,9 +911,15 @@ def test_build_tree_unchanged():
     Sanity check that build_tree() still works correctly with a simple
     parent-child-grandchild structure (backward compatibility).
     """
-    grandparent = _make_span("gp000001", parent_span_id="", start_ns=1000000000000000000, name="Grandparent")
-    parent = _make_span("parent01", parent_span_id="gp000001", start_ns=2000000000000000000, name="Parent")
-    child = _make_span("child001", parent_span_id="parent01", start_ns=3000000000000000000, name="Child")
+    grandparent = _make_span(
+        "gp000001", parent_span_id="", start_ns=1000000000000000000, name="Grandparent"
+    )
+    parent = _make_span(
+        "parent01", parent_span_id="gp000001", start_ns=2000000000000000000, name="Parent"
+    )
+    child = _make_span(
+        "child001", parent_span_id="parent01", start_ns=3000000000000000000, name="Child"
+    )
 
     roots = build_tree([grandparent, parent, child])
 
@@ -954,4 +966,3 @@ def test_incremental_duplicate_span_ids():
     # Verify first occurrence was kept
     root = builder.roots[0]
     assert root.span.name == "First"
-

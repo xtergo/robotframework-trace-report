@@ -558,6 +558,7 @@ class TestCLIPipeline:
                             assert mock_interpret.call_args[0][0] == mock_roots
                             assert mock_generate.call_args[0][0] == mock_model
 
+
 class TestServeSubcommand:
     """Test the 'serve' subcommand behavior."""
 
@@ -609,9 +610,7 @@ class TestServeSubcommand:
 
     def test_serve_provider_signoz_without_endpoint_exits_1(self, monkeypatch, capsys):
         """'serve --provider signoz' without endpoint should exit with code 1."""
-        monkeypatch.setattr(
-            "sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"]
-        )
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"])
         monkeypatch.delenv("SIGNOZ_ENDPOINT", raising=False)
 
         exit_code = main()
@@ -644,9 +643,7 @@ class TestServeSubcommand:
 
     def test_serve_provider_signoz_with_env_var_ok(self, monkeypatch):
         """'serve --provider signoz' with SIGNOZ_ENDPOINT env var should succeed."""
-        monkeypatch.setattr(
-            "sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"]
-        )
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"])
         monkeypatch.setenv("SIGNOZ_ENDPOINT", "https://signoz.example.com")
 
         with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
@@ -659,9 +656,7 @@ class TestServeSubcommand:
 
     def test_serve_provider_json_ignores_signoz_config(self, monkeypatch):
         """'serve --provider json' should work without any SigNoz config."""
-        monkeypatch.setattr(
-            "sys.argv", ["rf-trace-report", "serve", "--provider", "json"]
-        )
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve", "--provider", "json"])
         monkeypatch.delenv("SIGNOZ_ENDPOINT", raising=False)
 
         with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
@@ -731,10 +726,12 @@ class TestSigNozArguments:
             ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
         )
 
-        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
-             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
-             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
-             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+        with (
+            patch("rf_trace_viewer.cli.parse_file") as mock_parse,
+            patch("rf_trace_viewer.cli.build_tree") as mock_tree,
+            patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret,
+            patch("rf_trace_viewer.cli.generate_report") as mock_generate,
+        ):
             mock_parse.return_value = []
             mock_tree.return_value = []
             mock_model = MagicMock()
@@ -758,9 +755,12 @@ class TestSigNozArguments:
             "sys.argv",
             [
                 "rf-trace-report",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "-o", str(output_file),
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "-o",
+                str(output_file),
             ],
         )
 
@@ -796,9 +796,12 @@ class TestSigNozArguments:
             "sys.argv",
             [
                 "rf-trace-report",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://my-signoz.io",
-                "-o", str(output_file),
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://my-signoz.io",
+                "-o",
+                str(output_file),
             ],
         )
 
@@ -815,10 +818,14 @@ class TestSigNozArguments:
             "sys.argv",
             [
                 "rf-trace-report",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "--signoz-api-key", "my-secret-key",
-                "-o", str(output_file),
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "--signoz-api-key",
+                "my-secret-key",
+                "-o",
+                str(output_file),
             ],
         )
 
@@ -835,10 +842,14 @@ class TestSigNozArguments:
             "sys.argv",
             [
                 "rf-trace-report",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "--execution-attribute", "custom.exec_id",
-                "-o", str(output_file),
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "--execution-attribute",
+                "custom.exec_id",
+                "-o",
+                str(output_file),
             ],
         )
 
@@ -855,10 +866,14 @@ class TestSigNozArguments:
             "sys.argv",
             [
                 "rf-trace-report",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "--max-spans-per-page", "5000",
-                "-o", str(output_file),
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "--max-spans-per-page",
+                "5000",
+                "-o",
+                str(output_file),
             ],
         )
 
@@ -875,10 +890,14 @@ class TestSigNozArguments:
             "sys.argv",
             [
                 "rf-trace-report",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "--overlap-window", "5.0",
-                "-o", str(output_file),
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "--overlap-window",
+                "5.0",
+                "-o",
+                str(output_file),
             ],
         )
 
@@ -898,15 +917,19 @@ class TestSigNozArguments:
             [
                 "rf-trace-report",
                 "tests/fixtures/simple_trace.json",
-                "--config", str(config_file),
-                "-o", str(output_file),
+                "--config",
+                str(config_file),
+                "-o",
+                str(output_file),
             ],
         )
 
-        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
-             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
-             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
-             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+        with (
+            patch("rf_trace_viewer.cli.parse_file") as mock_parse,
+            patch("rf_trace_viewer.cli.build_tree") as mock_tree,
+            patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret,
+            patch("rf_trace_viewer.cli.generate_report") as mock_generate,
+        ):
             mock_parse.return_value = []
             mock_tree.return_value = []
             mock_model = MagicMock()
@@ -931,17 +954,23 @@ class TestSigNozArguments:
             [
                 "rf-trace-report",
                 "tests/fixtures/simple_trace.json",
-                "--provider", "json",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "--signoz-api-key", "some-key",
-                "-o", str(output_file),
+                "--provider",
+                "json",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "--signoz-api-key",
+                "some-key",
+                "-o",
+                str(output_file),
             ],
         )
 
-        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
-             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
-             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
-             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+        with (
+            patch("rf_trace_viewer.cli.parse_file") as mock_parse,
+            patch("rf_trace_viewer.cli.build_tree") as mock_tree,
+            patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret,
+            patch("rf_trace_viewer.cli.generate_report") as mock_generate,
+        ):
             mock_parse.return_value = []
             mock_tree.return_value = []
             mock_model = MagicMock()
@@ -968,10 +997,12 @@ class TestSigNozArguments:
             ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
         )
 
-        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
-             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
-             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
-             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+        with (
+            patch("rf_trace_viewer.cli.parse_file") as mock_parse,
+            patch("rf_trace_viewer.cli.build_tree") as mock_tree,
+            patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret,
+            patch("rf_trace_viewer.cli.generate_report") as mock_generate,
+        ):
             mock_parse.return_value = []
             mock_tree.return_value = []
             mock_model = MagicMock()
@@ -1004,9 +1035,12 @@ class TestSigNozArguments:
             "sys.argv",
             [
                 "rf-trace-report",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "-o", str(output_file),
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "-o",
+                str(output_file),
             ],
         )
 
@@ -1024,14 +1058,22 @@ class TestSigNozArguments:
         monkeypatch.setattr(
             "sys.argv",
             [
-                "rf-trace-report", "serve",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
-                "--signoz-api-key", "key123",
-                "--execution-attribute", "my.exec_id",
-                "--max-spans-per-page", "2000",
-                "--overlap-window", "3.5",
-                "--poll-interval", "10",
+                "rf-trace-report",
+                "serve",
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "--signoz-api-key",
+                "key123",
+                "--execution-attribute",
+                "my.exec_id",
+                "--max-spans-per-page",
+                "2000",
+                "--overlap-window",
+                "3.5",
+                "--poll-interval",
+                "10",
             ],
         )
 
@@ -1079,14 +1121,19 @@ class TestServeSubcommandEndToEnd:
         monkeypatch.setattr(
             "sys.argv",
             [
-                "rf-trace-report", "serve",
-                "--provider", "signoz",
-                "--signoz-endpoint", "https://signoz.example.com",
+                "rf-trace-report",
+                "serve",
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
             ],
         )
 
-        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls, \
-             patch("rf_trace_viewer.cli._build_provider") as mock_build:
+        with (
+            patch("rf_trace_viewer.server.LiveServer") as mock_server_cls,
+            patch("rf_trace_viewer.cli._build_provider") as mock_build,
+        ):
             mock_provider = MagicMock()
             mock_build.return_value = mock_provider
             mock_server = MagicMock()
@@ -1102,7 +1149,8 @@ class TestServeSubcommandEndToEnd:
     def test_serve_json_provider_is_none(self, monkeypatch):
         """serve --provider json should pass provider=None to LiveServer."""
         monkeypatch.setattr(
-            "sys.argv", ["rf-trace-report", "serve", "--provider", "json"],
+            "sys.argv",
+            ["rf-trace-report", "serve", "--provider", "json"],
         )
 
         with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
@@ -1130,13 +1178,16 @@ class TestServeSubcommandEndToEnd:
     def test_serve_env_var_config_docker_use_case(self, monkeypatch):
         """serve --provider signoz with env vars only (Docker deployment)."""
         monkeypatch.setattr(
-            "sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"],
+            "sys.argv",
+            ["rf-trace-report", "serve", "--provider", "signoz"],
         )
         monkeypatch.setenv("SIGNOZ_ENDPOINT", "https://signoz.internal:3301")
         monkeypatch.setenv("SIGNOZ_API_KEY", "docker-secret-key")
 
-        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls, \
-             patch("rf_trace_viewer.cli._build_provider") as mock_build:
+        with (
+            patch("rf_trace_viewer.server.LiveServer") as mock_server_cls,
+            patch("rf_trace_viewer.cli._build_provider") as mock_build,
+        ):
             mock_provider = MagicMock()
             mock_build.return_value = mock_provider
             mock_server = MagicMock()
@@ -1185,14 +1236,19 @@ class TestServeSubcommandEndToEnd:
         monkeypatch.setattr(
             "sys.argv",
             [
-                "rf-trace-report", "serve",
-                "--provider", "signoz",
-                "--signoz-endpoint", "http://localhost:3301",
+                "rf-trace-report",
+                "serve",
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "http://localhost:3301",
             ],
         )
 
-        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls, \
-             patch("rf_trace_viewer.cli._build_provider") as mock_build:
+        with (
+            patch("rf_trace_viewer.server.LiveServer") as mock_server_cls,
+            patch("rf_trace_viewer.cli._build_provider") as mock_build,
+        ):
             mock_provider = MagicMock()
             mock_build.return_value = mock_provider
             mock_server = MagicMock()

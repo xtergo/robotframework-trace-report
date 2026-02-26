@@ -1184,7 +1184,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Verify sidecar deployment scenario: `SIGNOZ_ENDPOINT=http://localhost:3301` connects to co-located SigNoz
     - _Requirements: 47.1, 47.3, 47.4, 47.5_
 
-  - [ ] 51.3 Write unit tests for deployment scenarios
+  - [x] 51.3 Write unit tests for deployment scenarios
     - Test that env vars are picked up by `load_config` when no CLI args provided
     - Test that `--base-url` is propagated to served HTML as `window.__RF_BASE_URL`
     - Test that `serve` subcommand without `--provider` defaults to `json` and requires input file

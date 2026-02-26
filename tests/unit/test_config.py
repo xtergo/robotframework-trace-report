@@ -387,3 +387,100 @@ def test_signoz_config_defaults():
     assert cfg.max_spans_per_page == 10_000
     assert cfg.max_spans == 500_000
     assert cfg.overlap_window_seconds == 2.0
+
+
+# ============================================================================
+# Section 10: Deployment scenarios
+# ============================================================================
+
+
+class TestEnvVarsDockerDeployment:
+    """Validates: Requirements 47.1, 47.2 — Docker deployment via env vars only."""
+
+    def test_all_env_vars_no_cli_args(self, monkeypatch):
+        """All 5 env vars set with empty CLI dict → all values in AppConfig."""
+        _clear_env(monkeypatch)
+        monkeypatch.setenv("SIGNOZ_ENDPOINT", "https://signoz.docker.local")
+        monkeypatch.setenv("SIGNOZ_API_KEY", "docker-secret")
+        monkeypatch.setenv("EXECUTION_ATTRIBUTE", "custom.exec_id")
+        monkeypatch.setenv("POLL_INTERVAL", "10")
+        monkeypatch.setenv("MAX_SPANS_PER_PAGE", "5000")
+
+        config = load_config({})
+        assert config.signoz_endpoint == "https://signoz.docker.local"
+        assert config.signoz_api_key == "docker-secret"
+        assert config.execution_attribute == "custom.exec_id"
+        assert config.poll_interval == 10
+        assert config.max_spans_per_page == 5000
+
+    def test_poll_interval_env_int_coercion(self, monkeypatch):
+        """POLL_INTERVAL env var string '10' is coerced to int 10."""
+        _clear_env(monkeypatch)
+        monkeypatch.setenv("POLL_INTERVAL", "10")
+        config = load_config({})
+        assert config.poll_interval == 10
+        assert isinstance(config.poll_interval, int)
+
+    def test_max_spans_per_page_env_int_coercion(self, monkeypatch):
+        """MAX_SPANS_PER_PAGE env var string '5000' is coerced to int 5000."""
+        _clear_env(monkeypatch)
+        monkeypatch.setenv("MAX_SPANS_PER_PAGE", "5000")
+        config = load_config({})
+        assert config.max_spans_per_page == 5000
+        assert isinstance(config.max_spans_per_page, int)
+
+    def test_execution_attribute_env_overrides_default(self, monkeypatch):
+        """EXECUTION_ATTRIBUTE env var overrides the default 'essvt.execution_id'."""
+        _clear_env(monkeypatch)
+        monkeypatch.setenv("EXECUTION_ATTRIBUTE", "my.custom.attribute")
+        config = load_config({})
+        assert config.execution_attribute == "my.custom.attribute"
+        assert config.execution_attribute != "essvt.execution_id"
+
+
+class TestBaseUrlDeployment:
+    """Validates: Requirements 47.4 — reverse proxy deployment with --base-url."""
+
+    def test_base_url_stored_in_config(self, monkeypatch):
+        """load_config({'base_url': '/trace-viewer'}) stores base_url correctly."""
+        _clear_env(monkeypatch)
+        config = load_config({"base_url": "/trace-viewer"})
+        assert config.base_url == "/trace-viewer"
+
+    def test_base_url_default_is_none(self, monkeypatch):
+        """load_config({}) has base_url=None by default."""
+        _clear_env(monkeypatch)
+        config = load_config({})
+        assert config.base_url is None
+
+    def test_base_url_from_config_file(self, monkeypatch, tmp_path):
+        """base_url passes through config file layer."""
+        _clear_env(monkeypatch)
+        cfg = {"baseUrl": "/from-file"}
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps(cfg))
+
+        config = load_config({}, config_path=str(cfg_file))
+        assert config.base_url == "/from-file"
+
+
+class TestServeDefaultProvider:
+    """Validates: Requirements 47.1 — serve subcommand defaults."""
+
+    def test_provider_defaults_to_json(self, monkeypatch):
+        """load_config({}) → provider defaults to 'json'."""
+        _clear_env(monkeypatch)
+        config = load_config({})
+        assert config.provider == "json"
+
+    def test_explicit_json_provider(self, monkeypatch):
+        """load_config({'provider': 'json'}) → provider is 'json', no error."""
+        _clear_env(monkeypatch)
+        config = load_config({"provider": "json"})
+        assert config.provider == "json"
+
+    def test_json_provider_no_input_path_required(self, monkeypatch):
+        """load_config({'provider': 'json'}) does NOT require input_path."""
+        _clear_env(monkeypatch)
+        config = load_config({"provider": "json"})
+        assert config.input_path is None  # No error raised

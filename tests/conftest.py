@@ -250,6 +250,14 @@ def rf_test_span(draw, parent_span_id: str | None = None, trace_id: str | None =
     """
     span = draw(otlp_span(parent_span_id=parent_span_id, trace_id=trace_id))
 
+    # Filter out any rf.suite.name or rf.signal that might have been randomly generated
+    # to ensure this is classified as TEST (not SUITE or SIGNAL)
+    span["attributes"] = [
+        attr
+        for attr in span["attributes"]
+        if attr["key"] not in ["rf.suite.name", "rf.keyword.name", "rf.signal"]
+    ]
+
     # Add RF test-specific attributes
     test_name = draw(st.text(min_size=1, max_size=100))
     test_id = draw(
@@ -358,6 +366,14 @@ def rf_signal_span(draw, trace_id: str | None = None) -> dict:
         Dict representing an OTLP span with RF signal attribute
     """
     span = draw(otlp_span(trace_id=trace_id))
+
+    # Filter out any rf.suite.name, rf.test.name, rf.keyword.name that might have been
+    # randomly generated to ensure this is classified as SIGNAL
+    span["attributes"] = [
+        attr
+        for attr in span["attributes"]
+        if attr["key"] not in ["rf.suite.name", "rf.test.name", "rf.keyword.name"]
+    ]
 
     # Add RF signal-specific attributes
     signal_type = draw(
@@ -584,9 +600,7 @@ def trace_span_strategy(
     span_id = draw(hex_id(length=16))
 
     if parent_span_id is None:
-        parent_span_id = draw(
-            st.one_of(st.just(""), hex_id(length=16))
-        )
+        parent_span_id = draw(st.one_of(st.just(""), hex_id(length=16)))
 
     reference_time_ns = 1_700_000_000_000_000_000
     start_time_ns = draw(
@@ -595,18 +609,20 @@ def trace_span_strategy(
             max_value=reference_time_ns + int(86400 * 1e9),
         )
     )
-    duration_ns = draw(
-        st.integers(min_value=1000, max_value=int(3600 * 1e9))
-    )
+    duration_ns = draw(st.integers(min_value=1000, max_value=int(3600 * 1e9)))
 
     status = draw(st.sampled_from(["OK", "ERROR", "UNSET"]))
 
     num_attrs = draw(st.integers(min_value=0, max_value=10))
     attr_keys = draw(
         st.lists(
-            st.text(min_size=1, max_size=50, alphabet=st.characters(
-                whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="._-"
-            )),
+            st.text(
+                min_size=1,
+                max_size=50,
+                alphabet=st.characters(
+                    whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="._-"
+                ),
+            ),
             min_size=num_attrs,
             max_size=num_attrs,
             unique=True,
@@ -656,9 +672,13 @@ def trace_view_model_strategy(draw) -> TraceViewModel:
     num_res_attrs = draw(st.integers(min_value=0, max_value=5))
     res_keys = draw(
         st.lists(
-            st.text(min_size=1, max_size=50, alphabet=st.characters(
-                whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="._-"
-            )),
+            st.text(
+                min_size=1,
+                max_size=50,
+                alphabet=st.characters(
+                    whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="._-"
+                ),
+            ),
             min_size=num_res_attrs,
             max_size=num_res_attrs,
             unique=True,
@@ -697,9 +717,7 @@ def signoz_span_row(draw) -> dict:
             )
         )
     )
-    duration_nano = str(
-        draw(st.integers(min_value=1000, max_value=int(3600 * 1e9)))
-    )
+    duration_nano = str(draw(st.integers(min_value=1000, max_value=int(3600 * 1e9))))
 
     status_code = draw(st.sampled_from([0, 1, 2]))
     name = draw(st.text(min_size=1, max_size=100))
@@ -744,9 +762,7 @@ def signoz_span_row(draw) -> dict:
 
 
 @st.composite
-def span_tree_strategy(
-    draw, max_depth: int = 3, max_children: int = 3
-) -> list[TraceSpan]:
+def span_tree_strategy(draw, max_depth: int = 3, max_children: int = 3) -> list[TraceSpan]:
     """
     Generate a list of TraceSpan objects forming a tree.
 

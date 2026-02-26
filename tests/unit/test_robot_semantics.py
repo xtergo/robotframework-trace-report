@@ -37,10 +37,12 @@ class TestEnrichSuiteMapping:
     """robot.type=suite + robot.suite=MySuite → rf.suite.name=MySuite"""
 
     def test_enrich_suite_mapping(self) -> None:
-        span = _make_span(attributes={
-            "robot.type": "suite",
-            "robot.suite": "MySuite",
-        })
+        span = _make_span(
+            attributes={
+                "robot.type": "suite",
+                "robot.suite": "MySuite",
+            }
+        )
         vm = _make_vm([span])
 
         result = RobotSemanticsLayer().enrich(vm)
@@ -52,10 +54,12 @@ class TestEnrichTestMapping:
     """robot.type=test + robot.test=MyTest → rf.test.name=MyTest"""
 
     def test_enrich_test_mapping(self) -> None:
-        span = _make_span(attributes={
-            "robot.type": "test",
-            "robot.test": "MyTest",
-        })
+        span = _make_span(
+            attributes={
+                "robot.type": "test",
+                "robot.test": "MyTest",
+            }
+        )
         vm = _make_vm([span])
 
         result = RobotSemanticsLayer().enrich(vm)
@@ -67,10 +71,12 @@ class TestEnrichKeywordMapping:
     """robot.type=keyword + robot.keyword=Log → rf.keyword.name=Log"""
 
     def test_enrich_keyword_mapping(self) -> None:
-        span = _make_span(attributes={
-            "robot.type": "keyword",
-            "robot.keyword": "Log",
-        })
+        span = _make_span(
+            attributes={
+                "robot.type": "keyword",
+                "robot.keyword": "Log",
+            }
+        )
         vm = _make_vm([span])
 
         result = RobotSemanticsLayer().enrich(vm)
@@ -87,11 +93,13 @@ class TestEnrichNoopWhenRfPresent:
     """Spans with rf.* attributes already set are not modified."""
 
     def test_enrich_noop_when_rf_attributes_present(self) -> None:
-        span = _make_span(attributes={
-            "rf.suite.name": "OriginalSuite",
-            "robot.type": "suite",
-            "robot.suite": "ShouldNotOverwrite",
-        })
+        span = _make_span(
+            attributes={
+                "rf.suite.name": "OriginalSuite",
+                "robot.type": "suite",
+                "robot.suite": "ShouldNotOverwrite",
+            }
+        )
         vm = _make_vm([span])
 
         result = RobotSemanticsLayer().enrich(vm)
@@ -112,10 +120,12 @@ class TestEnrichPreservesRobotAttributes:
     """Original robot.* attributes remain after normalization."""
 
     def test_enrich_preserves_robot_attributes(self) -> None:
-        span = _make_span(attributes={
-            "robot.type": "test",
-            "robot.test": "MyTest",
-        })
+        span = _make_span(
+            attributes={
+                "robot.type": "test",
+                "robot.test": "MyTest",
+            }
+        )
         vm = _make_vm([span])
 
         result = RobotSemanticsLayer().enrich(vm)
