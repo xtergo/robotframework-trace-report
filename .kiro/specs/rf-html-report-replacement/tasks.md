@@ -1079,7 +1079,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add `--overlap-window` argument (float, default: 2.0 seconds)
     - _Requirements: 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.11_
 
-  - [ ] 46.2 Add `serve` subcommand to CLI
+  - [x] 46.2 Add `serve` subcommand to CLI
     - Add `serve` subcommand that implies `--live` behavior without requiring an input file
     - Wire `serve` to start the HTTP server with provider selection
     - Validate: `--provider signoz` requires `--signoz-endpoint` (from CLI, config file, or env); exit code 1 with descriptive error if missing

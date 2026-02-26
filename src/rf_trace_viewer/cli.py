@@ -13,33 +13,13 @@ from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 
 
-def main() -> int:
-    """CLI entry point. Returns 0 on success, 1 on error."""
-    parser = argparse.ArgumentParser(
-        prog="rf-trace-report",
-        description="Generate HTML reports from Robot Framework OpenTelemetry trace files",
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
-    )
-    parser.add_argument(
-        "input",
-        nargs="?",
-        default=None,
-        help="Trace file path (.json or .json.gz), or - for stdin",
-    )
+def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add arguments shared between the default command and the serve subcommand."""
     parser.add_argument(
         "-o",
         "--output",
         default="trace-report.html",
         help="Output HTML file path (default: trace-report.html)",
-    )
-    parser.add_argument(
-        "--live",
-        action="store_true",
-        help="Start live server instead of generating static file",
     )
     parser.add_argument(
         "--port",
@@ -159,6 +139,119 @@ def main() -> int:
         help="Overlap window in seconds for live poll deduplication (default: 2.0)",
     )
 
+
+def _validate_provider_config(args: argparse.Namespace) -> str | None:
+    """Validate provider configuration. Returns error message or None."""
+    if args.provider == "signoz":
+        endpoint = args.signoz_endpoint or os.environ.get("SIGNOZ_ENDPOINT")
+        if not endpoint:
+            return (
+                "Error: --provider signoz requires --signoz-endpoint "
+                "(via CLI, config file, or SIGNOZ_ENDPOINT env var)"
+            )
+    return None
+
+
+def _build_report_options(args: argparse.Namespace) -> ReportOptions:
+    """Build ReportOptions from parsed arguments."""
+    return ReportOptions(
+        title=args.title,
+        compact=args.compact_html,
+        gzip_embed=args.gzip_embed,
+        max_keyword_depth=args.max_keyword_depth,
+        exclude_passing_keywords=args.exclude_passing_keywords,
+        max_spans=args.max_spans,
+    )
+
+
+def _run_live_server(args: argparse.Namespace) -> int:
+    """Start the live HTTP server. Returns exit code."""
+    from rf_trace_viewer.server import LiveServer
+
+    # Validate provider config
+    error = _validate_provider_config(args)
+    if error:
+        print(error, file=sys.stderr)
+        return 1
+
+    trace_path = getattr(args, "input", None) or ""
+
+    journal_path = None if args.no_journal else args.journal
+    report_options = _build_report_options(args)
+
+    server = LiveServer(
+        trace_path=trace_path,
+        port=args.port,
+        title=args.title,
+        poll_interval=args.poll_interval,
+        receiver_mode=args.receiver,
+        journal_path=journal_path,
+        forward_url=args.forward,
+        output_path=args.output,
+        report_options=report_options,
+    )
+    server.start(open_browser=not args.no_open)
+    return 0
+
+
+def _is_serve_subcommand() -> bool:
+    """Check if the first non-option argument in sys.argv is 'serve'."""
+    for arg in sys.argv[1:]:
+        if arg.startswith("-"):
+            continue
+        return arg == "serve"
+    return False
+
+
+def _build_serve_parser() -> argparse.ArgumentParser:
+    """Build the parser for the 'serve' subcommand."""
+    parser = argparse.ArgumentParser(
+        prog="rf-trace-report serve",
+        description="Start HTTP server for live trace viewing without requiring an input file",
+    )
+    _add_shared_arguments(parser)
+    return parser
+
+
+def _build_default_parser() -> argparse.ArgumentParser:
+    """Build the default (legacy) parser."""
+    parser = argparse.ArgumentParser(
+        prog="rf-trace-report",
+        description="Generate HTML reports from Robot Framework OpenTelemetry trace files",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    parser.add_argument(
+        "input",
+        nargs="?",
+        default=None,
+        help="Trace file path (.json or .json.gz), or - for stdin",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Start live server instead of generating static file",
+    )
+    _add_shared_arguments(parser)
+    return parser
+
+
+def main() -> int:
+    """CLI entry point. Returns 0 on success, 1 on error."""
+
+    # Detect 'serve' subcommand before argparse to avoid positional arg conflict
+    if _is_serve_subcommand():
+        parser = _build_serve_parser()
+        # Strip 'serve' from argv before parsing
+        args = parser.parse_args(sys.argv[2:])
+        args.live = True
+        return _run_live_server(args)
+
+    # Default (legacy) parser
+    parser = _build_default_parser()
     args = parser.parse_args()
 
     # Receiver mode implies live mode
@@ -167,42 +260,11 @@ def main() -> int:
 
     # Live mode
     if args.live:
-        from rf_trace_viewer.server import LiveServer
-
-        trace_path = args.input or ""
-        if trace_path and trace_path != "-" and not os.path.exists(trace_path):
-            # In live mode, the file may not exist yet — that's OK, the server handles it
-            pass
-
-        journal_path = None if args.no_journal else args.journal
-
-        # Build report options for shutdown report generation
-        report_options = ReportOptions(
-            title=args.title,
-            compact=args.compact_html,
-            gzip_embed=args.gzip_embed,
-            max_keyword_depth=args.max_keyword_depth,
-            exclude_passing_keywords=args.exclude_passing_keywords,
-            max_spans=args.max_spans,
-        )
-
-        server = LiveServer(
-            trace_path=trace_path,
-            port=args.port,
-            title=args.title,
-            poll_interval=args.poll_interval,
-            receiver_mode=args.receiver,
-            journal_path=journal_path,
-            forward_url=args.forward,
-            output_path=args.output,
-            report_options=report_options,
-        )
-        server.start(open_browser=not args.no_open)
-        return 0
+        return _run_live_server(args)
 
     # Static mode requires an input file
     if args.input is None:
-        print("Error: input file is required (or use --receiver)", file=sys.stderr)
+        print("Error: input file is required (or use --receiver or serve)", file=sys.stderr)
         return 1
 
     # Static mode pipeline: parse → build tree → interpret → generate → write
@@ -211,14 +273,7 @@ def main() -> int:
         roots = build_tree(spans)
         model = interpret_tree(roots)
 
-        options = ReportOptions(
-            title=args.title,
-            compact=args.compact_html,
-            gzip_embed=args.gzip_embed,
-            max_keyword_depth=args.max_keyword_depth,
-            exclude_passing_keywords=args.exclude_passing_keywords,
-            max_spans=args.max_spans,
-        )
+        options = _build_report_options(args)
         html = generate_report(model, options)
 
         with open(args.output, "w", encoding="utf-8") as f:

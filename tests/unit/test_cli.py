@@ -553,3 +553,161 @@ class TestCLIPipeline:
                             assert mock_tree.call_args[0][0] == mock_spans
                             assert mock_interpret.call_args[0][0] == mock_roots
                             assert mock_generate.call_args[0][0] == mock_model
+
+class TestServeSubcommand:
+    """Test the 'serve' subcommand behavior."""
+
+    def test_serve_starts_live_server(self, monkeypatch):
+        """'serve' subcommand should start LiveServer without requiring input file."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve"])
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_server_cls.assert_called_once_with(
+                trace_path="",
+                port=8077,
+                title=None,
+                poll_interval=5,
+                receiver_mode=False,
+                journal_path="traces.journal.json",
+                forward_url=None,
+                output_path="trace-report.html",
+                report_options=ReportOptions(
+                    title=None,
+                    compact=False,
+                    gzip_embed=False,
+                    max_keyword_depth=None,
+                    exclude_passing_keywords=False,
+                    max_spans=None,
+                ),
+            )
+            mock_server.start.assert_called_once_with(open_browser=True)
+
+    def test_serve_with_custom_port(self, monkeypatch):
+        """'serve --port 9000' should pass port to LiveServer."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve", "--port", "9000"])
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            assert mock_server_cls.call_args.kwargs["port"] == 9000
+
+    def test_serve_provider_signoz_without_endpoint_exits_1(self, monkeypatch, capsys):
+        """'serve --provider signoz' without endpoint should exit with code 1."""
+        monkeypatch.setattr(
+            "sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"]
+        )
+        monkeypatch.delenv("SIGNOZ_ENDPOINT", raising=False)
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "--provider signoz requires --signoz-endpoint" in captured.err
+
+    def test_serve_provider_signoz_with_endpoint_ok(self, monkeypatch):
+        """'serve --provider signoz --signoz-endpoint <url>' should succeed."""
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "serve",
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+            ],
+        )
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    def test_serve_provider_signoz_with_env_var_ok(self, monkeypatch):
+        """'serve --provider signoz' with SIGNOZ_ENDPOINT env var should succeed."""
+        monkeypatch.setattr(
+            "sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"]
+        )
+        monkeypatch.setenv("SIGNOZ_ENDPOINT", "https://signoz.example.com")
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    def test_serve_provider_json_ignores_signoz_config(self, monkeypatch):
+        """'serve --provider json' should work without any SigNoz config."""
+        monkeypatch.setattr(
+            "sys.argv", ["rf-trace-report", "serve", "--provider", "json"]
+        )
+        monkeypatch.delenv("SIGNOZ_ENDPOINT", raising=False)
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    def test_serve_default_provider_is_json(self, monkeypatch):
+        """'serve' without --provider should default to json and not require SigNoz config."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve"])
+        monkeypatch.delenv("SIGNOZ_ENDPOINT", raising=False)
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    def test_serve_with_no_open(self, monkeypatch):
+        """'serve --no-open' should pass open_browser=False."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve", "--no-open"])
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_server.start.assert_called_once_with(open_browser=False)
+
+    def test_legacy_command_still_works_with_serve_subcommand(self, monkeypatch, tmp_path):
+        """Legacy 'rf-trace-report <file>' should still work when serve subcommand exists."""
+        output_file = tmp_path / "report.html"
+
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "tests/fixtures/simple_trace.json",
+                "-o",
+                str(output_file),
+            ],
+        )
+
+        exit_code = main()
+
+        assert exit_code == 0
+        assert output_file.exists()
+
