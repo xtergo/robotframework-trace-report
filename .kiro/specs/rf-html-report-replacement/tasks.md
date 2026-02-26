@@ -290,7 +290,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Print report path to stdout on completion
     - _Requirements: 9.14_
 
-  - [ ] 14.8 Write unit tests for OTLP receiver mode
+  - [x] 14.8 Write unit tests for OTLP receiver mode
     - Test POST /v1/traces accepts valid OTLP JSON and buffers spans
     - Test /traces.json?offset=N serves from buffer with correct offset
     - Test journal file is written and can be used for recovery
