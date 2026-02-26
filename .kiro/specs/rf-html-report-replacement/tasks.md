@@ -1000,7 +1000,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
 
 
 - [ ] 43. Implement Robot Semantics Layer
-  - [ ] 43.1 Create `src/rf_trace_viewer/robot_semantics.py`
+  - [x] 43.1 Create `src/rf_trace_viewer/robot_semantics.py`
     - Implement `RobotSemanticsLayer` class with configurable `execution_attribute` (default: `essvt.execution_id`)
     - Implement `enrich(vm: TraceViewModel) -> TraceViewModel`: normalize `robot.type`/`robot.suite`/`robot.test`/`robot.keyword` attributes to canonical `rf.suite.name`/`rf.test.name`/`rf.keyword.name` when `rf.*` attributes are not already present
     - Implement `group_by_execution(vm: TraceViewModel) -> dict[str, TraceViewModel]`: group spans by `execution_attribute` value
@@ -1020,7 +1020,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add test in `tests/unit/test_robot_semantics.py`
     - **Validates: Requirements 45.4, 45.6**
 
-  - [ ] 43.4 Write unit tests for Robot Semantics Layer
+  - [x] 43.4 Write unit tests for Robot Semantics Layer
     - Test `enrich()` with spans containing `robot.type=suite` + `robot.suite=MySuite` → `rf.suite.name=MySuite`
     - Test `enrich()` with spans containing `robot.type=test` + `robot.test=MyTest` → `rf.test.name=MyTest`
     - Test `enrich()` with spans containing `robot.type=keyword` + `robot.keyword=Log` → `rf.keyword.name=Log`
@@ -1031,7 +1031,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Run via Docker: `make dev-test-file FILE=tests/unit/test_robot_semantics.py`
     - _Requirements: 45.1, 45.2, 45.4, 45.5_
 
-- [ ] 44. Checkpoint — SigNoz provider and semantics layer
+- [x] 44. Checkpoint — SigNoz provider and semantics layer
   - Ensure all tests pass (run via Docker: `make test` or `docker compose run --rm test`)
   - Verify `SigNozProvider` correctly parses mock SigNoz responses into `TraceSpan` objects
   - Verify `RobotSemanticsLayer.enrich()` normalizes `robot.*` → `rf.*` attributes
