@@ -835,7 +835,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Export `TraceProvider`, `TraceSpan`, `TraceViewModel`, `ExecutionSummary` from `base.py`
     - _Requirements: 40.1_
 
-  - [ ] 38.2 Create `src/rf_trace_viewer/providers/base.py` with core interfaces and data models
+  - [x] 38.2 Create `src/rf_trace_viewer/providers/base.py` with core interfaces and data models
     - Implement `TraceSpan` dataclass with fields: `span_id`, `parent_span_id`, `trace_id`, `start_time_ns`, `duration_ns`, `status`, `attributes`, `resource_attributes`, `events`, `status_message`, `name`
     - Implement `TraceViewModel` dataclass with `spans: list[TraceSpan]` and `resource_attributes: dict[str, str]`
     - Implement `ExecutionSummary` dataclass with `execution_id`, `start_time_ns`, `span_count`, `root_span_name`
