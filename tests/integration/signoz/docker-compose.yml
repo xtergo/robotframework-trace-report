@@ -1,0 +1,255 @@
+# SigNoz integration test stack
+# Stands up a minimal SigNoz instance + RF test runner + rf-trace-report viewer
+# for end-to-end integration testing of the SigNoz provider.
+
+services:
+  # ── Config init (run-once) ────────────────────────────────────────────
+
+  otel-conf:
+    image: alpine:3.20
+    restart: "no"
+    volumes:
+      - otel-config:/otel
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cat > /otel/config.yaml <<'EOF'
+        receivers:
+          otlp:
+            protocols:
+              grpc:
+                endpoint: 0.0.0.0:4317
+              http:
+                endpoint: 0.0.0.0:4318
+
+        processors:
+          batch:
+            send_batch_size: 10000
+            send_batch_max_size: 11000
+            timeout: 10s
+
+        exporters:
+          clickhousetraces:
+            datasource: tcp://clickhouse:9000/signoz_traces
+            use_new_schema: true
+          clickhousemetricswrite:
+            datasource: tcp://clickhouse:9000/signoz_metrics
+            resource_to_telemetry_conversion:
+              enabled: true
+          clickhouselogsexporter:
+            datasource: tcp://clickhouse:9000/signoz_logs
+            use_new_schema: true
+          metadataexporter:
+            datasource: tcp://clickhouse:9000/signoz_metadata
+
+        extensions:
+          health_check:
+            endpoint: 0.0.0.0:13133
+
+        service:
+          extensions: [health_check]
+          pipelines:
+            traces:
+              receivers: [otlp]
+              processors: [batch]
+              exporters: [clickhousetraces]
+            metrics:
+              receivers: [otlp]
+              processors: [batch]
+              exporters: [clickhousemetricswrite]
+            logs:
+              receivers: [otlp]
+              processors: [batch]
+              exporters: [clickhouselogsexporter]
+        EOF
+    networks:
+      - signoz-net
+
+  ch-conf:
+    image: alpine:3.20
+    restart: "no"
+    volumes:
+      - ch-config:/config
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cat > /config/cluster.xml <<'EOF'
+        <clickhouse>
+          <remote_servers>
+            <cluster>
+              <shard>
+                <replica>
+                  <host>clickhouse</host>
+                  <port>9000</port>
+                </replica>
+              </shard>
+            </cluster>
+          </remote_servers>
+          <zookeeper>
+            <node>
+              <host>zookeeper-1</host>
+              <port>2181</port>
+            </node>
+          </zookeeper>
+        </clickhouse>
+        EOF
+    networks:
+      - signoz-net
+
+  # ── SigNoz infrastructure ──────────────────────────────────────────
+
+  zookeeper-1:
+    image: bitnami/zookeeper:3.9
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    volumes:
+      - zookeeper-data:/bitnami/zookeeper
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc -w 2 127.0.0.1 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - signoz-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1.2-alpine
+    volumes:
+      - ch-config:/etc/clickhouse-server/config.d
+      - clickhouse-data:/var/lib/clickhouse
+    depends_on:
+      ch-conf:
+        condition: service_completed_successfully
+      zookeeper-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q 0.0.0.0:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - signoz-net
+
+  schema-migrator-sync:
+    image: signoz/signoz-schema-migrator:v0.129.0
+    restart: "no"
+    command: ["sync", "--dsn=tcp://clickhouse:9000", "--cluster-name=cluster", "--up="]
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - signoz-net
+
+  schema-migrator-async:
+    image: signoz/signoz-schema-migrator:v0.129.0
+    restart: "no"
+    command: ["async", "--dsn=tcp://clickhouse:9000", "--cluster-name=cluster", "--up="]
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      schema-migrator-sync:
+        condition: service_completed_successfully
+    networks:
+      - signoz-net
+
+  signoz:
+    image: signoz/signoz:v0.92.1
+    ports:
+      - "8080:8080"
+    environment:
+      - STORAGE=clickhouse
+      - SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://clickhouse:9000
+      - SIGNOZ_ANALYTICS_ENABLED=false
+      - SIGNOZ_JWT_SECRET=test-secret-key-for-integration
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      schema-migrator-sync:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - signoz-net
+
+  signoz-otel-collector:
+    image: signoz/signoz-otel-collector:v0.129.0
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - otel-config:/otel
+    command: ["--config=/otel/config.yaml"]
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      otel-conf:
+        condition: service_completed_successfully
+      schema-migrator-sync:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - signoz-net
+
+  # ── Application services ───────────────────────────────────────────
+
+  rf-test-runner:
+    build:
+      context: ../../..
+      dockerfile: tests/integration/signoz/Dockerfile.rf-runner
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4318/v1/traces
+    depends_on:
+      signoz-otel-collector:
+        condition: service_healthy
+    networks:
+      - signoz-net
+
+  rf-trace-report:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    ports:
+      - "8077:8077"
+    volumes:
+      - ../../..:/app
+    environment:
+      - SIGNOZ_ENDPOINT=http://signoz:8080
+      - SIGNOZ_API_KEY=
+      - PYTHONPATH=/app/src
+    command:
+      [
+        "rf-trace-report",
+        "serve",
+        "--provider", "signoz",
+        "--signoz-endpoint", "http://signoz:8080",
+        "--no-open",
+        "--port", "8077",
+      ]
+    depends_on:
+      signoz:
+        condition: service_healthy
+    networks:
+      - signoz-net
+
+# ── Infrastructure ─────────────────────────────────────────────────
+
+networks:
+  signoz-net:
+    driver: bridge
+
+volumes:
+  otel-config:
+  ch-config:
+  clickhouse-data:
+  zookeeper-data:
