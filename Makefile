@@ -8,7 +8,7 @@
 #   dev-test:        6 GB  (quick run, no coverage)
 #   dev-test-file:   3 GB  (single file, may include slow tests)
 
-.PHONY: help test test-unit test-slow test-browser test-properties format lint check clean
+.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties format lint check clean
 
 help: ## Show this help message
 	@echo "robotframework-trace-report - Docker-based development commands"
@@ -38,6 +38,10 @@ test-properties: ## Run property-based tests only
 test-browser: ## Run browser tests with Robot Framework
 	@echo "Running browser tests in Docker..."
 	@cd tests/browser && docker compose up --build
+
+test-integration-signoz: ## Run end-to-end SigNoz integration test (requires Docker)
+	@echo "Running SigNoz integration test..."
+	@cd tests/integration/signoz && bash run_integration.sh
 
 format: ## Format code with Black
 	@echo "Formatting code in Docker..."

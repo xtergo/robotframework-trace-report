@@ -68,3 +68,7 @@ test-reports/
 tests/fixtures/large_trace.json
 tests/fixtures/large_diverse_trace.json
 tests/fixtures/large_diverse_trace.json.gz
+
+# SigNoz integration test artifacts
+tests/integration/signoz/results/
+tests/integration/signoz/*.html
