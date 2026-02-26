@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
 from rf_trace_viewer import __version__
+from rf_trace_viewer.config import AppConfig, SigNozConfig, load_config
+from rf_trace_viewer.exceptions import ConfigurationError
 from rf_trace_viewer.generator import ReportOptions, generate_report
-from rf_trace_viewer.parser import parse_file
+from rf_trace_viewer.parser import RawSpan, parse_file
+from rf_trace_viewer.providers.base import TraceProvider, TraceSpan
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 
@@ -140,16 +142,40 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _validate_provider_config(args: argparse.Namespace) -> str | None:
-    """Validate provider configuration. Returns error message or None."""
-    if args.provider == "signoz":
-        endpoint = args.signoz_endpoint or os.environ.get("SIGNOZ_ENDPOINT")
-        if not endpoint:
-            return (
-                "Error: --provider signoz requires --signoz-endpoint "
-                "(via CLI, config file, or SIGNOZ_ENDPOINT env var)"
-            )
-    return None
+def _args_to_cli_dict(args: argparse.Namespace) -> dict:
+    """Convert argparse Namespace to a dict for load_config().
+
+    Maps CLI argument names to AppConfig field names.
+    Only includes explicitly provided (non-None) values.
+    """
+    mapping = {
+        "provider": "provider",
+        "input": "input_path",
+        "output": "output_path",
+        "live": "live",
+        "port": "port",
+        "title": "title",
+        "signoz_endpoint": "signoz_endpoint",
+        "signoz_api_key": "signoz_api_key",
+        "execution_attribute": "execution_attribute",
+        "poll_interval": "poll_interval",
+        "max_spans_per_page": "max_spans_per_page",
+        "max_spans": "max_spans",
+        "overlap_window": "overlap_window_seconds",
+        "receiver": "receiver",
+        "forward": "forward",
+        "journal": "journal",
+        "no_journal": "no_journal",
+        "no_open": "no_open",
+        "compact_html": "compact_html",
+        "gzip_embed": "gzip_embed",
+    }
+    result = {}
+    for arg_name, config_name in mapping.items():
+        val = getattr(args, arg_name, None)
+        if val is not None:
+            result[config_name] = val
+    return result
 
 
 def _build_report_options(args: argparse.Namespace) -> ReportOptions:
@@ -164,33 +190,115 @@ def _build_report_options(args: argparse.Namespace) -> ReportOptions:
     )
 
 
+def _trace_span_to_raw_span(ts: TraceSpan) -> RawSpan:
+    """Convert a canonical TraceSpan to a RawSpan for the existing pipeline."""
+    status_code_map = {
+        "OK": "STATUS_CODE_OK",
+        "ERROR": "STATUS_CODE_ERROR",
+        "UNSET": "STATUS_CODE_UNSET",
+    }
+    status = {"code": status_code_map.get(ts.status, "STATUS_CODE_UNSET")}
+    if ts.status_message:
+        status["message"] = ts.status_message
+
+    return RawSpan(
+        trace_id=ts.trace_id,
+        span_id=ts.span_id,
+        parent_span_id=ts.parent_span_id,
+        name=ts.name,
+        kind="",
+        start_time_unix_nano=ts.start_time_ns,
+        end_time_unix_nano=ts.start_time_ns + ts.duration_ns,
+        attributes=dict(ts.attributes),
+        status=status,
+        events=list(ts.events),
+        resource_attributes=dict(ts.resource_attributes),
+    )
+
+
+def _build_provider(config: AppConfig) -> TraceProvider:
+    """Instantiate the appropriate TraceProvider based on configuration."""
+    if config.provider == "signoz":
+        from rf_trace_viewer.providers import SigNozProvider
+
+        signoz_config = SigNozConfig(
+            endpoint=config.signoz_endpoint or "",
+            api_key=config.signoz_api_key or "",
+            execution_attribute=config.execution_attribute,
+            poll_interval=config.poll_interval,
+            max_spans_per_page=config.max_spans_per_page,
+            max_spans=config.max_spans,
+            overlap_window_seconds=config.overlap_window_seconds,
+        )
+        return SigNozProvider(signoz_config)
+    else:
+        from rf_trace_viewer.providers import JsonProvider
+
+        return JsonProvider(path=config.input_path)
+
+
+def _run_provider_pipeline(config: AppConfig, report_options: ReportOptions) -> int:
+    """Run the provider-based static report pipeline. Returns exit code."""
+    from rf_trace_viewer.robot_semantics import RobotSemanticsLayer
+
+    provider = _build_provider(config)
+    semantics = RobotSemanticsLayer(execution_attribute=config.execution_attribute)
+
+    # Fetch all spans via provider
+    vm = provider.fetch_all()
+    vm = semantics.enrich(vm)
+
+    # Convert TraceSpan → RawSpan for existing pipeline
+    raw_spans = [_trace_span_to_raw_span(ts) for ts in vm.spans]
+    roots = build_tree(raw_spans)
+    model = interpret_tree(roots)
+
+    html = generate_report(model, report_options)
+
+    output_path = config.output_path
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    test_count = model.statistics.total_tests
+    passed = model.statistics.passed
+    failed = model.statistics.failed
+    skipped = model.statistics.skipped
+    print(
+        f"Report generated: {output_path} "
+        f"({len(raw_spans)} spans, {test_count} tests: "
+        f"{passed} passed, {failed} failed, {skipped} skipped)"
+    )
+    return 0
+
+
 def _run_live_server(args: argparse.Namespace) -> int:
     """Start the live HTTP server. Returns exit code."""
     from rf_trace_viewer.server import LiveServer
 
-    # Validate provider config
-    error = _validate_provider_config(args)
-    if error:
-        print(error, file=sys.stderr)
+    try:
+        cli_dict = _args_to_cli_dict(args)
+        config = load_config(cli_dict, config_path=getattr(args, "config", None))
+    except ConfigurationError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    trace_path = getattr(args, "input", None) or ""
+    trace_path = config.input_path or ""
 
-    journal_path = None if args.no_journal else args.journal
+    journal_path = None if config.no_journal else config.journal
     report_options = _build_report_options(args)
 
     server = LiveServer(
         trace_path=trace_path,
-        port=args.port,
-        title=args.title,
-        poll_interval=args.poll_interval,
-        receiver_mode=args.receiver,
+        port=config.port,
+        title=config.title,
+        poll_interval=config.poll_interval,
+        receiver_mode=config.receiver,
         journal_path=journal_path,
-        forward_url=args.forward,
-        output_path=args.output,
+        forward_url=config.forward,
+        output_path=config.output_path,
         report_options=report_options,
     )
-    server.start(open_browser=not args.no_open)
+    server.start(open_browser=not config.no_open)
     return 0
 
 
@@ -262,34 +370,50 @@ def main() -> int:
     if args.live:
         return _run_live_server(args)
 
-    # Static mode requires an input file
-    if args.input is None:
-        print("Error: input file is required (or use --receiver or serve)", file=sys.stderr)
+    # Static mode requires an input file (for json provider) or signoz config
+    if args.input is None and args.provider != "signoz":
+        print(
+            "Error: input file is required (or use --receiver, serve, or --provider signoz)",
+            file=sys.stderr,
+        )
         return 1
 
-    # Static mode pipeline: parse → build tree → interpret → generate → write
+    # Static mode pipeline via load_config + provider abstraction
     try:
-        spans = parse_file(args.input)
-        roots = build_tree(spans)
-        model = interpret_tree(roots)
+        cli_dict = _args_to_cli_dict(args)
+        config = load_config(cli_dict, config_path=args.config)
 
-        options = _build_report_options(args)
-        html = generate_report(model, options)
+        # For json provider, use the direct pipeline for backward compatibility
+        # (parse_file → build_tree → interpret_tree → generate_report)
+        if config.provider == "json":
+            spans = parse_file(config.input_path)
+            roots = build_tree(spans)
+            model = interpret_tree(roots)
 
-        with open(args.output, "w", encoding="utf-8") as f:
-            f.write(html)
+            options = _build_report_options(args)
+            html = generate_report(model, options)
 
-        test_count = model.statistics.total_tests
-        passed = model.statistics.passed
-        failed = model.statistics.failed
-        skipped = model.statistics.skipped
-        print(
-            f"Report generated: {args.output} "
-            f"({len(spans)} spans, {test_count} tests: "
-            f"{passed} passed, {failed} failed, {skipped} skipped)"
-        )
-        return 0
+            with open(config.output_path, "w", encoding="utf-8") as f:
+                f.write(html)
 
+            test_count = model.statistics.total_tests
+            passed = model.statistics.passed
+            failed = model.statistics.failed
+            skipped = model.statistics.skipped
+            print(
+                f"Report generated: {config.output_path} "
+                f"({len(spans)} spans, {test_count} tests: "
+                f"{passed} passed, {failed} failed, {skipped} skipped)"
+            )
+            return 0
+
+        # Non-json providers use the provider pipeline
+        report_options = _build_report_options(args)
+        return _run_provider_pipeline(config, report_options)
+
+    except ConfigurationError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     except FileNotFoundError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

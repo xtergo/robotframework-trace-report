@@ -1086,7 +1086,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Validate: `--provider json` (default) ignores all `--signoz-*` arguments; does not require SigNoz config
     - _Requirements: 46.10, 47.1, 50.2, 50.4_
 
-  - [ ] 46.3 Integrate `load_config()` into CLI flow
+  - [x] 46.3 Integrate `load_config()` into CLI flow
     - Call `load_config(cli_args, config_path)` to merge CLI args, config file, and env vars
     - Construct `SigNozConfig` from `AppConfig` when `provider == "signoz"`
     - Instantiate appropriate provider (`JsonProvider` or `SigNozProvider`) based on `AppConfig.provider`
