@@ -1,0 +1,152 @@
+{
+  "result": [
+    {
+      "list": [
+        {
+          "data": {
+            "spanID": "a1b2c3d4e5f60001",
+            "traceID": "00aabbccddeeff1122334455667788ff",
+            "parentSpanID": "",
+            "startTime": "1700000000000000000",
+            "durationNano": "5200000000",
+            "statusCode": 1,
+            "name": "rf.suite",
+            "tagMap": {
+              "rf.suite.name": "Login Tests",
+              "rf.suite.source": "/tests/login_tests.robot",
+              "rf.status": "PASS",
+              "rf.elapsed_time": "5200"
+            },
+            "stringTagMap": {
+              "service.name": "robot-framework",
+              "rf.suite.doc": "Tests for login functionality"
+            }
+          }
+        },
+        {
+          "data": {
+            "spanID": "a1b2c3d4e5f60002",
+            "traceID": "00aabbccddeeff1122334455667788ff",
+            "parentSpanID": "a1b2c3d4e5f60001",
+            "startTime": "1700000000100000000",
+            "durationNano": "3000000000",
+            "statusCode": 1,
+            "name": "rf.test",
+            "tagMap": {
+              "rf.test.name": "Valid Login",
+              "rf.status": "PASS",
+              "rf.elapsed_time": "3000"
+            },
+            "stringTagMap": {
+              "rf.test.doc": "Test valid user login"
+            }
+          }
+        },
+        {
+          "data": {
+            "spanID": "a1b2c3d4e5f60003",
+            "traceID": "00aabbccddeeff1122334455667788ff",
+            "parentSpanID": "a1b2c3d4e5f60002",
+            "startTime": "1700000000200000000",
+            "durationNano": "1500000000",
+            "statusCode": 1,
+            "name": "rf.keyword",
+            "tagMap": {
+              "rf.keyword.name": "Input Text",
+              "rf.keyword.type": "KEYWORD",
+              "rf.keyword.args": "id=username, testuser",
+              "rf.status": "PASS",
+              "rf.elapsed_time": "1500"
+            },
+            "stringTagMap": {
+              "rf.keyword.library": "SeleniumLibrary"
+            }
+          }
+        },
+        {
+          "data": {
+            "spanID": "a1b2c3d4e5f60004",
+            "traceID": "00aabbccddeeff1122334455667788ff",
+            "parentSpanID": "a1b2c3d4e5f60002",
+            "startTime": "1700000001800000000",
+            "durationNano": "1200000000",
+            "statusCode": 1,
+            "name": "rf.keyword",
+            "tagMap": {
+              "rf.keyword.name": "Click Button",
+              "rf.keyword.type": "KEYWORD",
+              "rf.status": "PASS"
+            },
+            "stringTagMap": {
+              "rf.keyword.args": "id=login-btn",
+              "rf.keyword.library": "SeleniumLibrary",
+              "rf.elapsed_time": "1200"
+            }
+          }
+        },
+        {
+          "data": {
+            "spanID": "a1b2c3d4e5f60005",
+            "traceID": "00aabbccddeeff1122334455667788ff",
+            "parentSpanID": "a1b2c3d4e5f60001",
+            "startTime": "1700000003200000000",
+            "durationNano": "2000000000",
+            "statusCode": 2,
+            "name": "rf.test",
+            "tagMap": {
+              "rf.test.name": "Invalid Login Shows Error",
+              "rf.status": "FAIL",
+              "rf.elapsed_time": "2000"
+            },
+            "stringTagMap": {
+              "rf.test.doc": "Test that invalid credentials show error message",
+              "rf.message": "Element 'id=error-banner' not found within 5 seconds"
+            }
+          }
+        },
+        {
+          "data": {
+            "spanID": "a1b2c3d4e5f60006",
+            "traceID": "00aabbccddeeff1122334455667788ff",
+            "parentSpanID": "a1b2c3d4e5f60005",
+            "startTime": "1700000003300000000",
+            "durationNano": "1800000000",
+            "statusCode": 2,
+            "name": "rf.keyword",
+            "tagMap": {
+              "rf.keyword.name": "Wait Until Element Is Visible",
+              "rf.keyword.type": "KEYWORD",
+              "rf.keyword.args": "id=error-banner, timeout=5s",
+              "rf.status": "FAIL",
+              "rf.elapsed_time": "1800"
+            },
+            "stringTagMap": {
+              "rf.keyword.library": "SeleniumLibrary",
+              "rf.message": "Element 'id=error-banner' not found within 5 seconds"
+            }
+          }
+        },
+        {
+          "data": {
+            "spanID": "a1b2c3d4e5f60007",
+            "traceID": "00aabbccddeeff1122334455667788ff",
+            "parentSpanID": "a1b2c3d4e5f60002",
+            "startTime": "1700000000500000000",
+            "durationNano": "800000000",
+            "statusCode": 0,
+            "name": "POST /api/auth/login",
+            "tagMap": {
+              "http.method": "POST",
+              "http.url": "https://app.example.com/api/auth/login",
+              "http.status_code": "200"
+            },
+            "stringTagMap": {
+              "service.name": "auth-service",
+              "http.route": "/api/auth/login"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
