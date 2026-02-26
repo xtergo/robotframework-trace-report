@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import sys
@@ -19,6 +20,7 @@ from rf_trace_viewer.generator import (
     generate_report,
 )
 from rf_trace_viewer.parser import parse_line
+from rf_trace_viewer.providers.base import ProviderError, RateLimitError
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 
@@ -33,6 +35,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/":
             self._serve_viewer()
+        elif path == "/api/spans":
+            since_ns = int(query.get("since_ns", ["0"])[0])
+            self._serve_signoz_spans(since_ns)
         elif path == "/traces.json":
             offset = int(query.get("offset", ["0"])[0])
             self._serve_traces(offset)
@@ -44,6 +49,13 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         title = self.server.title or "RF Trace Report (Live)"
         poll_interval = self.server.poll_interval
         js_content, css_content = embed_viewer_assets()
+
+        # Determine provider type for JS viewer
+        provider = getattr(self.server, "provider", None)
+        if provider is not None and hasattr(provider, "supports_live_poll") and provider.supports_live_poll():
+            provider_type = "signoz"
+        else:
+            provider_type = "json"
 
         html = (
             "<!DOCTYPE html>\n"
@@ -61,6 +73,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             "<script>\n"
             "window.__RF_TRACE_LIVE__ = true;\n"
             f"window.__RF_TRACE_POLL_INTERVAL__ = {poll_interval};\n"
+            f'window.__RF_PROVIDER = "{provider_type}";\n'
             "</script>\n"
             "<script>\n"
             f"{js_content}\n"
@@ -84,6 +97,54 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._receive_traces()
         else:
             self.send_error(404)
+
+    def _serve_signoz_spans(self, since_ns: int) -> None:
+        """Serve spans from a live-poll provider (e.g. SigNoz)."""
+        provider = getattr(self.server, "provider", None)
+        if provider is None or not (hasattr(provider, "supports_live_poll") and provider.supports_live_poll()):
+            self.send_error(404)
+            return
+
+        try:
+            view_model = provider.poll_new_spans(since_ns)
+            spans_dicts = [dataclasses.asdict(s) for s in view_model.spans]
+
+            # Compute orphan count: spans with a parent_span_id that isn't
+            # found among the returned span IDs.
+            span_ids = {s.span_id for s in view_model.spans}
+            orphan_count = sum(
+                1
+                for s in view_model.spans
+                if s.parent_span_id and s.parent_span_id not in span_ids
+            )
+
+            result = {
+                "spans": spans_dicts,
+                "orphan_count": orphan_count,
+                "total_count": len(view_model.spans),
+            }
+            body = json.dumps(result).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        except RateLimitError:
+            body = json.dumps({"error": "rate_limit", "retry_after": 30}).encode("utf-8")
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        except ProviderError as exc:
+            body = json.dumps({"error": "provider_error", "message": str(exc)}).encode("utf-8")
+            self.send_response(502)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
     def _receive_traces(self) -> None:
         """Handle OTLP ExportTraceServiceRequest via POST."""
@@ -240,6 +301,7 @@ class LiveServer:
         forward_url: str | None = None,
         output_path: str = "trace-report.html",
         report_options: ReportOptions | None = None,
+        provider: object | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -252,6 +314,7 @@ class LiveServer:
         self.forward_url = forward_url if receiver_mode else None
         self.output_path = output_path
         self.report_options = report_options
+        self.provider = provider
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -266,6 +329,7 @@ class LiveServer:
         self._httpd.receiver_lock = threading.Lock()  # type: ignore[attr-defined]
         self._httpd.journal_path = self.journal_path  # type: ignore[attr-defined]
         self._httpd.forward_url = self.forward_url  # type: ignore[attr-defined]
+        self._httpd.provider = self.provider  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")

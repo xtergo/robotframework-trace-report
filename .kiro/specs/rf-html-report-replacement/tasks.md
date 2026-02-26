@@ -1102,8 +1102,8 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Run via Docker: `make dev-test-file FILE=tests/unit/test_cli.py`
     - _Requirements: 46.1, 46.3, 46.10, 50.2, 50.4_
 
-- [ ] 47. Extend Server with SigNoz proxy routes
-  - [ ] 47.1 Modify `src/rf_trace_viewer/server.py` to add provider-aware handler
+- [x] 47. Extend Server with SigNoz proxy routes
+  - [x] 47.1 Modify `src/rf_trace_viewer/server.py` to add provider-aware handler
     - Add `SigNozLiveHandler` (or extend existing handler) with `GET /api/spans?since_ns=<timestamp>` route
     - Handler calls `SigNoz_Provider.poll_new_spans(since_ns)` and returns JSON response with `spans`, `orphan_count`, `total_count`
     - Handle `RateLimitError`: return 429 with `retry_after` field
@@ -1112,7 +1112,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Preserve existing file-based routes (`/traces.json`, `/v1/traces`) when provider is `json`
     - _Requirements: 44.4, 47.1, 48.4, 48.5, 50.1_
 
-  - [ ] 47.2 Write unit tests for SigNoz server routes
+  - [x] 47.2 Write unit tests for SigNoz server routes
     - Test `GET /api/spans?since_ns=0` returns JSON with `spans` array
     - Test rate limit handling: mock `RateLimitError` → 429 response
     - Test provider error handling: mock `ProviderError` → 502 response
