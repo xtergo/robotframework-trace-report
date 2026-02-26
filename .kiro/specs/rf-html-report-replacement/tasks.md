@@ -1138,7 +1138,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Implement snapshot mode toggle: "Live" / "Snapshot" buttons in status bar, stop/resume polling
     - _Requirements: 44.1, 44.4, 44.7, 48.4_
 
-  - [ ] 49.2 Modify `src/rf_trace_viewer/viewer/app.js` for provider detection and progress UI
+  - [x] 49.2 Modify `src/rf_trace_viewer/viewer/app.js` for provider detection and progress UI
     - Detect provider from `window.__RF_PROVIDER` variable (set by server in served HTML)
     - Add progress indicator UI: persistent bar showing "N spans loaded | M orphans pending" during paged loading
     - Implement `_startBackgroundFetch()` and `_fetchNextPage()` for non-blocking paged retrieval

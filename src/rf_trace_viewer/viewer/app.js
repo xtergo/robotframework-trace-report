@@ -39,12 +39,27 @@
     filterState: {}
   };
 
+  // Provider detection — set by server in served HTML for SigNoz mode
+  var _provider = window.__RF_PROVIDER || 'json';
+
+  // Background fetch state for SigNoz paged loading
+  var _fetchInProgress = false;
+  var _retryCount = 0;
+  var _pageSize = 10000;
+  var _lastFetchNs = 0;
+  var _totalSpansLoaded = 0;
+  var _orphanCount = 0;
+  var _spanCapReached = false;
+  var _progressBarEl = null;
+  var _orphanIndicatorEl = null;
+  var _spanCapNotificationEl = null;
+
   // Expose public API on window.RFTraceViewer
   window.RFTraceViewer = window.RFTraceViewer || {};
   window.RFTraceViewer.on = eventBus.on.bind(eventBus);
   window.RFTraceViewer.emit = eventBus.emit.bind(eventBus);
   window.RFTraceViewer.off = eventBus.off.bind(eventBus);
-  
+
   // Public API methods
   window.RFTraceViewer.setFilter = function (filterState) {
     appState.filterState = filterState;
@@ -67,6 +82,9 @@
     console.log('Plugin registered:', plugin.name);
     eventBus.emit('plugin-registered', plugin);
   };
+
+  window.RFTraceViewer.getProvider = function () { return _provider; };
+  window.RFTraceViewer.isFetchInProgress = function () { return _fetchInProgress; };
 
   /**
    * Decode compact trace data format back to full format.
@@ -201,6 +219,247 @@
       moff += chunks[j].length;
     }
     return JSON.parse(new TextDecoder().decode(merged));
+  }
+
+  // ── Progress UI for SigNoz paged loading ──────────────────────────────
+
+  /**
+   * Create the progress bar UI for background span loading.
+   * Inserted at the top of .rf-trace-viewer, after header and before tab-nav.
+   */
+  function _createProgressUI() {
+    var root = document.querySelector('.rf-trace-viewer');
+    if (!root) return;
+
+    _progressBarEl = document.createElement('div');
+    _progressBarEl.className = 'loading-progress-bar';
+
+    var progressText = document.createElement('span');
+    progressText.className = 'progress-text';
+    progressText.textContent = '0 spans loaded | 0 orphans pending';
+    _progressBarEl.appendChild(progressText);
+
+    _orphanIndicatorEl = document.createElement('span');
+    _orphanIndicatorEl.className = 'orphan-indicator';
+    _orphanIndicatorEl.style.display = 'none';
+    _progressBarEl.appendChild(_orphanIndicatorEl);
+
+    _spanCapNotificationEl = document.createElement('div');
+    _spanCapNotificationEl.className = 'span-cap-notification';
+    _spanCapNotificationEl.style.display = 'none';
+    _progressBarEl.appendChild(_spanCapNotificationEl);
+
+    // Insert after header, before tab-nav
+    var tabNav = root.querySelector('.tab-nav');
+    if (tabNav) {
+      root.insertBefore(_progressBarEl, tabNav);
+    } else {
+      root.appendChild(_progressBarEl);
+    }
+  }
+
+  /**
+   * Update the progress bar text and orphan indicator.
+   * @param {number} totalCount  Total spans loaded so far
+   * @param {number} orphanCount Number of orphan spans pending
+   * @param {string} message     Status message; 'Complete' triggers auto-hide
+   */
+  function _updateProgressUI(totalCount, orphanCount, message) {
+    if (!_progressBarEl) return;
+
+    var textEl = _progressBarEl.querySelector('.progress-text');
+    if (textEl) {
+      textEl.textContent = totalCount + ' spans loaded | ' + orphanCount + ' orphans pending';
+    }
+
+    if (_orphanIndicatorEl) {
+      if (orphanCount > 0) {
+        _orphanIndicatorEl.style.display = '';
+        _orphanIndicatorEl.textContent = orphanCount + ' orphans';
+      } else {
+        _orphanIndicatorEl.style.display = 'none';
+      }
+    }
+
+    if (message === 'Complete') {
+      _progressBarEl.classList.add('complete');
+      setTimeout(function () {
+        if (_progressBarEl) {
+          _progressBarEl.style.display = 'none';
+        }
+      }, 3000);
+    }
+  }
+
+  /**
+   * Show a notification that the span cap has been reached.
+   * @param {number} totalLoaded Number of spans loaded before cap
+   */
+  function _showSpanCapNotification(totalLoaded) {
+    _spanCapReached = true;
+    if (_spanCapNotificationEl) {
+      _spanCapNotificationEl.textContent = 'Trace partially loaded: ' + totalLoaded + ' span limit reached';
+      _spanCapNotificationEl.style.display = '';
+    }
+  }
+
+  // ── Background paged fetch for SigNoz provider ────────────────────────
+
+  /**
+   * Kick off background paged loading from the /api/spans endpoint.
+   * Only runs when provider is 'signoz' and not already in progress.
+   */
+  function _startBackgroundFetch() {
+    if (_provider !== 'signoz') return;
+    if (_fetchInProgress) return;
+    _fetchInProgress = true;
+    _retryCount = 0;
+    _totalSpansLoaded = 0;
+    _orphanCount = 0;
+    _spanCapReached = false;
+    _createProgressUI();
+    _updateProgressUI(0, 0, 'Loading\u2026');
+    _fetchNextPage(0);
+  }
+
+  /**
+   * Fetch the next page of spans from the server.
+   * @param {number} sinceNs  Fetch spans with start_time_ns > sinceNs
+   */
+  function _fetchNextPage(sinceNs) {
+    fetch('/api/spans?since_ns=' + sinceNs)
+      .then(function (response) {
+        if (response.status === 429) {
+          // Rate-limited — exponential backoff, max 30s
+          var delay = Math.min(1000 * Math.pow(2, _retryCount), 30000);
+          _retryCount++;
+          _updateProgressUI(_totalSpansLoaded, _orphanCount, 'Rate limited, retrying\u2026');
+          setTimeout(function () {
+            _fetchNextPage(sinceNs);
+          }, delay);
+          return null; // signal handled
+        }
+        if (!response.ok) {
+          _retryCount++;
+          if (_retryCount <= 3) {
+            setTimeout(function () {
+              _fetchNextPage(sinceNs);
+            }, 2000);
+          } else {
+            console.warn('[rf-trace-viewer] Background fetch failed after 3 retries');
+            _fetchInProgress = false;
+            _updateProgressUI(_totalSpansLoaded, _orphanCount, 'Complete');
+          }
+          return null;
+        }
+        _retryCount = 0;
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data) return; // handled above (429 or error)
+
+        if (data.spans && data.spans.length > 0) {
+          _mergeSpansPreservingState(data.spans);
+
+          // Compute maxNs from this page
+          var maxNs = 0;
+          for (var i = 0; i < data.spans.length; i++) {
+            var span = data.spans[i];
+            var endNs = (span.start_time_ns || 0) + (span.duration_ns || 0);
+            if (endNs > maxNs) maxNs = endNs;
+          }
+
+          _totalSpansLoaded += data.spans.length;
+          _orphanCount = data.orphan_count || 0;
+          _updateProgressUI(_totalSpansLoaded, _orphanCount, '');
+
+          if (data.spans.length >= _pageSize) {
+            // More pages — yield to UI thread then fetch next
+            requestAnimationFrame(function () {
+              _fetchNextPage(maxNs);
+            });
+          } else {
+            // Last page — loading complete
+            _fetchInProgress = false;
+            _updateProgressUI(_totalSpansLoaded, _orphanCount, 'Complete');
+          }
+        } else {
+          // No spans returned — loading complete
+          _fetchInProgress = false;
+          _updateProgressUI(_totalSpansLoaded, _orphanCount, 'Complete');
+        }
+      })
+      .catch(function (err) {
+        console.warn('[rf-trace-viewer] Background fetch error:', err);
+        _retryCount++;
+        if (_retryCount <= 3) {
+          setTimeout(function () {
+            _fetchNextPage(sinceNs);
+          }, 2000);
+        } else {
+          _fetchInProgress = false;
+          _updateProgressUI(_totalSpansLoaded, _orphanCount, 'Complete');
+        }
+      });
+  }
+
+  /**
+   * Merge new spans into the live view while preserving UI state.
+   * Emits events for live.js to ingest spans and rebuild the tree,
+   * then restores expanded/selected/scroll state after a microtask.
+   * @param {Array} newSpans  Array of span objects from the server
+   */
+  function _mergeSpansPreservingState(newSpans) {
+    // 1. Capture current UI state
+    var treePanel = document.querySelector('.panel-tree');
+    var scrollPos = treePanel ? treePanel.scrollTop : 0;
+
+    var expandedIds = [];
+    var expandedNodes = document.querySelectorAll('.tree-node.expanded');
+    for (var i = 0; i < expandedNodes.length; i++) {
+      var sid = expandedNodes[i].getAttribute('data-span-id');
+      if (sid) expandedIds.push(sid);
+    }
+
+    var selectedId = null;
+    var selectedNode = document.querySelector('.tree-node.selected');
+    if (selectedNode) {
+      selectedId = selectedNode.getAttribute('data-span-id');
+    }
+
+    // 2. Emit events for live.js to ingest and rebuild
+    eventBus.emit('spans-merge', { spans: newSpans });
+    eventBus.emit('live-rebuild', {});
+
+    // 3. Restore state after a microtask (let DOM update first)
+    setTimeout(function () {
+      // Restore expanded nodes
+      for (var j = 0; j < expandedIds.length; j++) {
+        var node = document.querySelector('.tree-node[data-span-id="' + expandedIds[j] + '"]');
+        if (node && !node.classList.contains('expanded')) {
+          // Trigger expand by clicking the toggle or adding the class
+          var toggle = node.querySelector('.tree-toggle');
+          if (toggle) {
+            toggle.click();
+          } else {
+            node.classList.add('expanded');
+          }
+        }
+      }
+
+      // Restore selection
+      if (selectedId) {
+        var selNode = document.querySelector('.tree-node[data-span-id="' + selectedId + '"]');
+        if (selNode) {
+          selNode.classList.add('selected');
+        }
+      }
+
+      // Restore scroll position
+      if (treePanel) {
+        treePanel.scrollTop = scrollPos;
+      }
+    }, 0);
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -399,6 +658,11 @@
 
     // Emit app-ready event
     eventBus.emit('app-ready', { data: data });
+
+    // Start background paged fetch for SigNoz provider (non-live mode)
+    if (_provider === 'signoz' && !window.__RF_TRACE_LIVE__) {
+      _startBackgroundFetch();
+    }
   }
 
   /**

@@ -51,6 +51,15 @@
     // app.js emits 'app-ready' after DOM is built
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
       window.RFTraceViewer.on('app-ready', _onAppReady);
+      // Listen for background fetch merge events from app.js (SigNoz paged loading)
+      window.RFTraceViewer.on('spans-merge', function (data) {
+        if (data && data.spans) {
+          _ingestSigNozSpans(data.spans);
+        }
+      });
+      window.RFTraceViewer.on('live-rebuild', function () {
+        _rebuildAndRender();
+      });
     }
   });
 
