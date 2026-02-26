@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import webbrowser
@@ -64,8 +65,45 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        if path == "/v1/traces":
+            self._receive_traces()
+        else:
+            self.send_error(404)
+
+    def _receive_traces(self) -> None:
+        """Handle OTLP ExportTraceServiceRequest via POST."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length)
+
+        try:
+            # Validate it's valid JSON
+            json.loads(body)
+        except (json.JSONDecodeError, ValueError):
+            self.send_error(400, "Invalid JSON")
+            return
+
+        # Store the entire request body as one NDJSON line
+        line = body.decode("utf-8").replace("\n", " ")
+        with self.server.receiver_lock:
+            self.server.receiver_buffer.append(line)
+
+        response = b"{}"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response)))
+        self.end_headers()
+        self.wfile.write(response)
+
     def _serve_traces(self, offset: int = 0) -> None:
-        """Serve the raw trace file, optionally from a byte offset."""
+        """Serve trace data from file or in-memory buffer."""
+        if self.server.receiver_mode:
+            self._serve_traces_receiver(offset)
+            return
+
         trace_path = self.server.trace_path
         try:
             file_size = os.path.getsize(trace_path)
@@ -106,6 +144,32 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         except OSError as exc:
             self.send_error(500, str(exc))
 
+    def _serve_traces_receiver(self, offset: int = 0) -> None:
+        """Serve traces from the in-memory receiver buffer (NDJSON lines)."""
+        if offset < 0:
+            offset = 0
+        with self.server.receiver_lock:
+            lines = self.server.receiver_buffer[offset:]
+            total = len(self.server.receiver_buffer)
+
+        if not lines:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "0")
+            self.send_header("X-File-Offset", str(total))
+            self.send_header("Access-Control-Expose-Headers", "X-File-Offset")
+            self.end_headers()
+            return
+
+        body = ("\n".join(lines) + "\n").encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-File-Offset", str(total))
+        self.send_header("Access-Control-Expose-Headers", "X-File-Offset")
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, format: str, *args: object) -> None:
         """Suppress default request logging to stderr."""
         pass
@@ -124,11 +188,13 @@ class LiveServer:
         port: int = 8077,
         title: str | None = None,
         poll_interval: int = 5,
+        receiver_mode: bool = False,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
         self.title = title
         self.poll_interval = max(1, min(30, poll_interval))
+        self.receiver_mode = receiver_mode
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -138,10 +204,16 @@ class LiveServer:
         self._httpd.trace_path = self.trace_path  # type: ignore[attr-defined]
         self._httpd.title = self.title  # type: ignore[attr-defined]
         self._httpd.poll_interval = self.poll_interval  # type: ignore[attr-defined]
+        self._httpd.receiver_mode = self.receiver_mode  # type: ignore[attr-defined]
+        self._httpd.receiver_buffer: list[str] = []  # type: ignore[attr-defined]
+        self._httpd.receiver_lock = threading.Lock()  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")
-        print(f"Serving trace file: {self.trace_path}")
+        if self.receiver_mode:
+            print("OTLP receiver mode — POST traces to /v1/traces")
+        else:
+            print(f"Serving trace file: {self.trace_path}")
         print(f"Poll interval: {self.poll_interval}s")
         print("Press Ctrl+C to stop.")
 

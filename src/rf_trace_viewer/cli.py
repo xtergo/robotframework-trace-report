@@ -26,6 +26,8 @@ def main() -> int:
     )
     parser.add_argument(
         "input",
+        nargs="?",
+        default=None,
         help="Trace file path (.json or .json.gz), or - for stdin",
     )
     parser.add_argument(
@@ -90,25 +92,41 @@ def main() -> int:
         metavar="N",
         help="Limit total spans in the report to N, prioritising FAIL > SKIP > PASS (shallowest first)",
     )
+    parser.add_argument(
+        "--receiver",
+        action="store_true",
+        help="Start live server in OTLP receiver mode (no input file required)",
+    )
 
     args = parser.parse_args()
+
+    # Receiver mode implies live mode
+    if args.receiver:
+        args.live = True
 
     # Live mode
     if args.live:
         from rf_trace_viewer.server import LiveServer
 
-        if args.input != "-" and not os.path.exists(args.input):
+        trace_path = args.input or ""
+        if trace_path and trace_path != "-" and not os.path.exists(trace_path):
             # In live mode, the file may not exist yet — that's OK, the server handles it
             pass
 
         server = LiveServer(
-            trace_path=args.input,
+            trace_path=trace_path,
             port=args.port,
             title=args.title,
             poll_interval=args.poll_interval,
+            receiver_mode=args.receiver,
         )
         server.start(open_browser=not args.no_open)
         return 0
+
+    # Static mode requires an input file
+    if args.input is None:
+        print("Error: input file is required (or use --receiver)", file=sys.stderr)
+        return 1
 
     # Static mode pipeline: parse → build tree → interpret → generate → write
     try:

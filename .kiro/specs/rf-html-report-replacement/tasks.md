@@ -263,7 +263,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Test offset-based incremental serving
     - _Requirements: 9.1, 9.5_
 
-  - [ ] 14.4 Implement OTLP receiver mode in `src/rf_trace_viewer/server.py`
+  - [x] 14.4 Implement OTLP receiver mode in `src/rf_trace_viewer/server.py`
     - Add `POST /v1/traces` handler that accepts OTLP JSON `ExportTraceServiceRequest`
     - Buffer received NDJSON lines in an in-memory list
     - Implement `/traces.json?offset=N` serving from in-memory buffer (N = line index)

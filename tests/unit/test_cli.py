@@ -149,6 +149,7 @@ class TestArgumentParsing:
                 port=8077,
                 title=None,
                 poll_interval=5,
+                receiver_mode=False,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -177,6 +178,7 @@ class TestArgumentParsing:
                 port=9000,
                 title=None,
                 poll_interval=5,
+                receiver_mode=False,
             )
 
     def test_no_open_argument(self, monkeypatch):
