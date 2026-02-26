@@ -894,7 +894,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add test in `tests/unit/test_json_provider.py`
     - **Validates: Requirements 40.7**
 
-  - [ ] 39.4 Write unit tests for JsonProvider
+  - [x] 39.4 Write unit tests for JsonProvider
     - Test `fetch_all()` with `simple_trace.json` and `pabot_trace.json` fixtures
     - Test `_to_trace_span` conversion: verify nanosecond timestamps, status mapping, attribute stringification
     - Test `fetch_spans()` pagination: offset=0 limit=5 returns first 5 spans, correct `next_offset`
