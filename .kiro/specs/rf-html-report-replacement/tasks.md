@@ -921,7 +921,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Raise `ConfigurationError` for missing required settings, invalid values, missing/unparseable config files
     - _Requirements: 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.11_
 
-  - [ ] 41.2 Create `tests/fixtures/sample_config.json` fixture
+  - [x] 41.2 Create `tests/fixtures/sample_config.json` fixture
     - Create sample config file with `provider`, `signoz.endpoint`, `signoz.apiKey`, `signoz.executionAttribute`, `signoz.pollIntervalSeconds`, `signoz.maxSpansPerPage`
     - _Requirements: 46.8_
 
@@ -931,7 +931,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Add test in `tests/unit/test_config.py`
     - **Validates: Requirements 46.8, 46.9, 46.11**
 
-  - [ ] 41.4 Write unit tests for configuration loader
+  - [x] 41.4 Write unit tests for configuration loader
     - Test `load_config` with CLI-only args, config-file-only, env-var-only, and mixed precedence
     - Test `_load_config_file` with `sample_config.json` fixture: verify nested key flattening and camelCase conversion
     - Test validation: `--provider signoz` without endpoint raises `ConfigurationError`
