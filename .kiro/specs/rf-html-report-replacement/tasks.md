@@ -1177,7 +1177,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Ensure existing Docker build and JSON-mode usage are unaffected
     - _Requirements: 47.2, 47.3, 47.5_
 
-  - [ ] 51.2 Wire `serve` subcommand end-to-end
+  - [x] 51.2 Wire `serve` subcommand end-to-end
     - Verify `serve` subcommand starts server with `SigNozProvider` when `--provider signoz` is specified
     - Verify `serve` reads config from env vars when no CLI args provided (Docker use case)
     - Verify `--base-url` works correctly for reverse proxy deployment (API calls prefixed with base URL)

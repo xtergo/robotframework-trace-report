@@ -74,6 +74,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             "window.__RF_TRACE_LIVE__ = true;\n"
             f"window.__RF_TRACE_POLL_INTERVAL__ = {poll_interval};\n"
             f'window.__RF_PROVIDER = "{provider_type}";\n'
+            f'window.__RF_BASE_URL = "{_escape_html(getattr(self.server, "base_url", None) or "")}";\n'
             "</script>\n"
             "<script>\n"
             f"{js_content}\n"
@@ -302,6 +303,7 @@ class LiveServer:
         output_path: str = "trace-report.html",
         report_options: ReportOptions | None = None,
         provider: object | None = None,
+        base_url: str | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -315,6 +317,7 @@ class LiveServer:
         self.output_path = output_path
         self.report_options = report_options
         self.provider = provider
+        self.base_url = base_url
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -330,6 +333,7 @@ class LiveServer:
         self._httpd.journal_path = self.journal_path  # type: ignore[attr-defined]
         self._httpd.forward_url = self.forward_url  # type: ignore[attr-defined]
         self._httpd.provider = self.provider  # type: ignore[attr-defined]
+        self._httpd.base_url = self.base_url  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")

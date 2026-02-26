@@ -140,6 +140,12 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="SECONDS",
         help="Overlap window in seconds for live poll deduplication (default: 2.0)",
     )
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        metavar="<url>",
+        help="Base URL path for reverse proxy deployment (e.g. /trace-viewer)",
+    )
 
 
 def _args_to_cli_dict(args: argparse.Namespace) -> dict:
@@ -169,6 +175,7 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
         "no_open": "no_open",
         "compact_html": "compact_html",
         "gzip_embed": "gzip_embed",
+        "base_url": "base_url",
     }
     result = {}
     for arg_name, config_name in mapping.items():
@@ -287,6 +294,11 @@ def _run_live_server(args: argparse.Namespace) -> int:
     journal_path = None if config.no_journal else config.journal
     report_options = _build_report_options(args)
 
+    # Build provider for non-json modes
+    provider = None
+    if config.provider != "json":
+        provider = _build_provider(config)
+
     server = LiveServer(
         trace_path=trace_path,
         port=config.port,
@@ -297,6 +309,8 @@ def _run_live_server(args: argparse.Namespace) -> int:
         forward_url=config.forward,
         output_path=config.output_path,
         report_options=report_options,
+        provider=provider,
+        base_url=config.base_url,
     )
     server.start(open_browser=not config.no_open)
     return 0

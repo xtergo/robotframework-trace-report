@@ -304,3 +304,44 @@ class TestViewerHtmlProvider:
 
         html = handler.wfile.data.decode("utf-8")
         assert 'window.__RF_PROVIDER = "json"' in html
+
+
+# ---------------------------------------------------------------------------
+# 7. Viewer HTML contains base_url
+# ---------------------------------------------------------------------------
+
+
+class TestViewerHtmlBaseUrl:
+    """Served HTML contains window.__RF_BASE_URL set correctly."""
+
+    @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
+    def test_viewer_html_contains_base_url(self, _mock_assets):
+        server = _create_server_with_provider(provider=None)
+        server.base_url = "/trace-viewer"
+
+        handler = _get_viewer(server)
+
+        html = handler.wfile.data.decode("utf-8")
+        assert 'window.__RF_BASE_URL = "/trace-viewer"' in html
+
+    @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
+    def test_viewer_html_base_url_empty_when_none(self, _mock_assets):
+        server = _create_server_with_provider(provider=None)
+        server.base_url = None
+
+        handler = _get_viewer(server)
+
+        html = handler.wfile.data.decode("utf-8")
+        assert 'window.__RF_BASE_URL = ""' in html
+
+    @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
+    def test_viewer_html_base_url_with_signoz_provider(self, _mock_assets):
+        provider = _make_mock_provider(supports_live=True)
+        server = _create_server_with_provider(provider=provider)
+        server.base_url = "/my-app/traces"
+
+        handler = _get_viewer(server)
+
+        html = handler.wfile.data.decode("utf-8")
+        assert 'window.__RF_BASE_URL = "/my-app/traces"' in html
+        assert 'window.__RF_PROVIDER = "signoz"' in html

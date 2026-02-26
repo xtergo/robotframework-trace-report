@@ -41,6 +41,7 @@ class AppConfig:
     no_open: bool = False
     compact_html: bool = False
     gzip_embed: bool = False
+    base_url: str | None = None
 
 
 @dataclass

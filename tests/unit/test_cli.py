@@ -162,6 +162,8 @@ class TestArgumentParsing:
                     exclude_passing_keywords=False,
                     max_spans=None,
                 ),
+                provider=None,
+                base_url=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -202,6 +204,8 @@ class TestArgumentParsing:
                     exclude_passing_keywords=False,
                     max_spans=None,
                 ),
+                provider=None,
+                base_url=None,
             )
 
     def test_no_open_argument(self, monkeypatch):
@@ -585,6 +589,8 @@ class TestServeSubcommand:
                     exclude_passing_keywords=False,
                     max_spans=None,
                 ),
+                provider=None,
+                base_url=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -1063,3 +1069,138 @@ class TestSigNozArguments:
             main()
 
         assert exc_info.value.code == 2  # argparse exits with 2 for invalid choices
+
+
+class TestServeSubcommandEndToEnd:
+    """Test serve subcommand wires provider and base_url end-to-end (Task 51.2)."""
+
+    def test_serve_signoz_builds_provider(self, monkeypatch):
+        """serve --provider signoz should build SigNozProvider and pass to LiveServer."""
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report", "serve",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+            ],
+        )
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls, \
+             patch("rf_trace_viewer.cli._build_provider") as mock_build:
+            mock_provider = MagicMock()
+            mock_build.return_value = mock_provider
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_build.assert_called_once()
+            # Provider should be passed to LiveServer
+            assert mock_server_cls.call_args.kwargs["provider"] is mock_provider
+
+    def test_serve_json_provider_is_none(self, monkeypatch):
+        """serve --provider json should pass provider=None to LiveServer."""
+        monkeypatch.setattr(
+            "sys.argv", ["rf-trace-report", "serve", "--provider", "json"],
+        )
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            assert mock_server_cls.call_args.kwargs["provider"] is None
+
+    def test_serve_default_provider_passes_none(self, monkeypatch):
+        """serve without --provider should pass provider=None (json default)."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve"])
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            assert mock_server_cls.call_args.kwargs["provider"] is None
+
+    def test_serve_env_var_config_docker_use_case(self, monkeypatch):
+        """serve --provider signoz with env vars only (Docker deployment)."""
+        monkeypatch.setattr(
+            "sys.argv", ["rf-trace-report", "serve", "--provider", "signoz"],
+        )
+        monkeypatch.setenv("SIGNOZ_ENDPOINT", "https://signoz.internal:3301")
+        monkeypatch.setenv("SIGNOZ_API_KEY", "docker-secret-key")
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls, \
+             patch("rf_trace_viewer.cli._build_provider") as mock_build:
+            mock_provider = MagicMock()
+            mock_build.return_value = mock_provider
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            # Verify _build_provider was called (env vars resolved by load_config)
+            mock_build.assert_called_once()
+            config = mock_build.call_args[0][0]
+            assert config.signoz_endpoint == "https://signoz.internal:3301"
+            assert config.signoz_api_key == "docker-secret-key"
+
+    def test_serve_base_url_passed_to_server(self, monkeypatch):
+        """serve --base-url should propagate to LiveServer."""
+        monkeypatch.setattr(
+            "sys.argv",
+            ["rf-trace-report", "serve", "--base-url", "/trace-viewer"],
+        )
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            assert mock_server_cls.call_args.kwargs["base_url"] == "/trace-viewer"
+
+    def test_serve_base_url_default_none(self, monkeypatch):
+        """serve without --base-url should pass base_url=None."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve"])
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            assert mock_server_cls.call_args.kwargs["base_url"] is None
+
+    def test_serve_sidecar_localhost_endpoint(self, monkeypatch):
+        """Sidecar deployment: SIGNOZ_ENDPOINT=http://localhost:3301."""
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report", "serve",
+                "--provider", "signoz",
+                "--signoz-endpoint", "http://localhost:3301",
+            ],
+        )
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls, \
+             patch("rf_trace_viewer.cli._build_provider") as mock_build:
+            mock_provider = MagicMock()
+            mock_build.return_value = mock_provider
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            config = mock_build.call_args[0][0]
+            assert config.signoz_endpoint == "http://localhost:3301"
+            mock_build.assert_called_once()
