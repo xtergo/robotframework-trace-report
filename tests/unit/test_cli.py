@@ -711,3 +711,355 @@ class TestServeSubcommand:
         assert exit_code == 0
         assert output_file.exists()
 
+
+class TestSigNozArguments:
+    """Test CLI argument parsing for SigNoz provider options."""
+
+    # --- Argument parsing for new options on the default command ---
+
+    def test_provider_argument_defaults_to_json(self, monkeypatch, tmp_path):
+        """Default --provider should be 'json' when not specified."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
+        )
+
+        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
+             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
+             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
+             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+            mock_parse.return_value = []
+            mock_tree.return_value = []
+            mock_model = MagicMock()
+            mock_model.statistics.total_tests = 0
+            mock_model.statistics.passed = 0
+            mock_model.statistics.failed = 0
+            mock_model.statistics.skipped = 0
+            mock_interpret.return_value = mock_model
+            mock_generate.return_value = "<html></html>"
+
+            exit_code = main()
+
+            assert exit_code == 0
+            # json provider uses direct pipeline (parse_file called)
+            mock_parse.assert_called_once()
+
+    def test_provider_signoz_static_mode(self, monkeypatch, tmp_path):
+        """--provider signoz in static mode should use provider pipeline."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_pipeline.assert_called_once()
+            config = mock_pipeline.call_args[0][0]
+            assert config.provider == "signoz"
+            assert config.signoz_endpoint == "https://signoz.example.com"
+
+    def test_provider_signoz_without_endpoint_exits_error(self, monkeypatch, capsys):
+        """--provider signoz without --signoz-endpoint should exit with code 1."""
+        monkeypatch.setattr(
+            "sys.argv",
+            ["rf-trace-report", "--provider", "signoz"],
+        )
+        monkeypatch.delenv("SIGNOZ_ENDPOINT", raising=False)
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "--provider signoz requires --signoz-endpoint" in captured.err
+
+    def test_signoz_endpoint_argument(self, monkeypatch, tmp_path):
+        """--signoz-endpoint should be passed through to config."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://my-signoz.io",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+            main()
+            config = mock_pipeline.call_args[0][0]
+            assert config.signoz_endpoint == "https://my-signoz.io"
+
+    def test_signoz_api_key_argument(self, monkeypatch, tmp_path):
+        """--signoz-api-key should be passed through to config."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "--signoz-api-key", "my-secret-key",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+            main()
+            config = mock_pipeline.call_args[0][0]
+            assert config.signoz_api_key == "my-secret-key"
+
+    def test_execution_attribute_argument(self, monkeypatch, tmp_path):
+        """--execution-attribute should override the default."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "--execution-attribute", "custom.exec_id",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+            main()
+            config = mock_pipeline.call_args[0][0]
+            assert config.execution_attribute == "custom.exec_id"
+
+    def test_max_spans_per_page_argument(self, monkeypatch, tmp_path):
+        """--max-spans-per-page should be passed through to config."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "--max-spans-per-page", "5000",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+            main()
+            config = mock_pipeline.call_args[0][0]
+            assert config.max_spans_per_page == 5000
+
+    def test_overlap_window_argument(self, monkeypatch, tmp_path):
+        """--overlap-window should be passed through to config."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "--overlap-window", "5.0",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+            main()
+            config = mock_pipeline.call_args[0][0]
+            assert config.overlap_window_seconds == 5.0
+
+    def test_config_file_argument(self, monkeypatch, tmp_path):
+        """--config should be accepted and the config file should be loaded."""
+        config_file = tmp_path / "my_config.json"
+        config_file.write_text('{"title": "Config Title"}')
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "tests/fixtures/simple_trace.json",
+                "--config", str(config_file),
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
+             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
+             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
+             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+            mock_parse.return_value = []
+            mock_tree.return_value = []
+            mock_model = MagicMock()
+            mock_model.statistics.total_tests = 0
+            mock_model.statistics.passed = 0
+            mock_model.statistics.failed = 0
+            mock_model.statistics.skipped = 0
+            mock_interpret.return_value = mock_model
+            mock_generate.return_value = "<html></html>"
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    # --- provider json ignores SigNoz config ---
+
+    def test_provider_json_ignores_signoz_arguments(self, monkeypatch, tmp_path):
+        """--provider json should work even when SigNoz args are provided."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "tests/fixtures/simple_trace.json",
+                "--provider", "json",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "--signoz-api-key", "some-key",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
+             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
+             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
+             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+            mock_parse.return_value = []
+            mock_tree.return_value = []
+            mock_model = MagicMock()
+            mock_model.statistics.total_tests = 0
+            mock_model.statistics.passed = 0
+            mock_model.statistics.failed = 0
+            mock_model.statistics.skipped = 0
+            mock_interpret.return_value = mock_model
+            mock_generate.return_value = "<html></html>"
+
+            exit_code = main()
+
+            assert exit_code == 0
+            # json provider uses parse_file, not the provider pipeline
+            mock_parse.assert_called_once_with("tests/fixtures/simple_trace.json")
+
+    # --- Existing behavior unchanged ---
+
+    def test_no_provider_flag_uses_json_pipeline(self, monkeypatch, tmp_path):
+        """Without --provider, the legacy json pipeline should be used."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/simple_trace.json", "-o", str(output_file)],
+        )
+
+        with patch("rf_trace_viewer.cli.parse_file") as mock_parse, \
+             patch("rf_trace_viewer.cli.build_tree") as mock_tree, \
+             patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret, \
+             patch("rf_trace_viewer.cli.generate_report") as mock_generate:
+            mock_parse.return_value = []
+            mock_tree.return_value = []
+            mock_model = MagicMock()
+            mock_model.statistics.total_tests = 0
+            mock_model.statistics.passed = 0
+            mock_model.statistics.failed = 0
+            mock_model.statistics.skipped = 0
+            mock_interpret.return_value = mock_model
+            mock_generate.return_value = "<html></html>"
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_parse.assert_called_once_with("tests/fixtures/simple_trace.json")
+
+    def test_no_input_file_without_provider_exits_error(self, monkeypatch, capsys):
+        """Without input file and without --provider signoz, should exit with error."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report"])
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "input file is required" in captured.err
+
+    def test_signoz_provider_no_input_file_ok(self, monkeypatch, tmp_path):
+        """--provider signoz should not require an input file."""
+        output_file = tmp_path / "report.html"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "-o", str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    # --- serve subcommand with SigNoz arguments ---
+
+    def test_serve_signoz_all_arguments(self, monkeypatch):
+        """serve with all SigNoz arguments should pass them through."""
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report", "serve",
+                "--provider", "signoz",
+                "--signoz-endpoint", "https://signoz.example.com",
+                "--signoz-api-key", "key123",
+                "--execution-attribute", "my.exec_id",
+                "--max-spans-per-page", "2000",
+                "--overlap-window", "3.5",
+                "--poll-interval", "10",
+            ],
+        )
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_server.start.assert_called_once()
+
+    def test_serve_is_recognized_as_subcommand(self, monkeypatch):
+        """'serve' should be recognized and not treated as an input file."""
+        monkeypatch.setattr("sys.argv", ["rf-trace-report", "serve"])
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+            # Should start live server, not try to parse 'serve' as a file
+            mock_server.start.assert_called_once()
+
+    def test_invalid_provider_choice_exits_error(self, monkeypatch, capsys):
+        """--provider with invalid value should exit with error."""
+        monkeypatch.setattr(
+            "sys.argv",
+            ["rf-trace-report", "tests/fixtures/simple_trace.json", "--provider", "invalid"],
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 2  # argparse exits with 2 for invalid choices

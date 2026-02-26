@@ -1093,7 +1093,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Wire provider into existing static mode and live mode flows
     - _Requirements: 46.8, 46.9, 50.1_
 
-  - [ ] 46.4 Write unit tests for CLI SigNoz arguments
+  - [x] 46.4 Write unit tests for CLI SigNoz arguments
     - Test argument parsing for all new options
     - Test `serve` subcommand is recognized
     - Test validation: `--provider signoz` without `--signoz-endpoint` exits with error
