@@ -1155,15 +1155,15 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Ensure dark mode compatibility via CSS custom properties
     - _Requirements: 43.6, 44.7_
 
-- [ ] 50. Implement test fixtures and Hypothesis strategies for SigNoz integration
-  - [ ] 50.1 Extend `tests/conftest.py` with new Hypothesis strategies
+- [x] 50. Implement test fixtures and Hypothesis strategies for SigNoz integration
+  - [x] 50.1 Extend `tests/conftest.py` with new Hypothesis strategies
     - Add `trace_span_strategy`: generates valid `TraceSpan` objects with hex IDs, non-negative timestamps, valid status values, string attribute k/v pairs
     - Add `trace_view_model_strategy`: generates `TraceViewModel` with list of `TraceSpan` objects
     - Add `signoz_span_row` strategy: generates mock SigNoz API response rows with `spanID`, `traceID`, `parentSpanID`, `startTime`, `durationNano`, `statusCode`, `name`, `tagMap`
     - Add `span_tree_strategy(max_depth, max_children)`: generates span trees with known parent-child relationships for incremental merge testing
     - _Requirements: 40.4, 41.1, 42.7_
 
-  - [ ] 50.2 Verify all SigNoz fixture files are created
+  - [x] 50.2 Verify all SigNoz fixture files are created
     - Verify `tests/fixtures/signoz_response_spans.json` exists (created in task 42.4)
     - Verify `tests/fixtures/signoz_response_executions.json` exists (created in task 42.4)
     - Verify `tests/fixtures/sample_config.json` exists (created in task 41.2)

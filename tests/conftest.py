@@ -553,3 +553,234 @@ def multi_trace_spans(draw, num_traces: int = 3) -> list[dict]:
             all_spans.append(span)
 
     return all_spans
+
+
+# ============================================================================
+# Provider Layer / SigNoz Strategies
+# ============================================================================
+
+from rf_trace_viewer.providers.base import TraceSpan, TraceViewModel
+
+
+@st.composite
+def trace_span_strategy(
+    draw,
+    parent_span_id: str | None = None,
+    trace_id: str | None = None,
+) -> TraceSpan:
+    """
+    Generate a valid TraceSpan object.
+
+    Args:
+        parent_span_id: If provided, use this value; otherwise draw root ("") or random hex.
+        trace_id: If provided, use this value; otherwise draw a random 32-char hex ID.
+
+    Returns:
+        A valid TraceSpan instance.
+    """
+    if trace_id is None:
+        trace_id = draw(hex_id(length=32))
+
+    span_id = draw(hex_id(length=16))
+
+    if parent_span_id is None:
+        parent_span_id = draw(
+            st.one_of(st.just(""), hex_id(length=16))
+        )
+
+    reference_time_ns = 1_700_000_000_000_000_000
+    start_time_ns = draw(
+        st.integers(
+            min_value=reference_time_ns,
+            max_value=reference_time_ns + int(86400 * 1e9),
+        )
+    )
+    duration_ns = draw(
+        st.integers(min_value=1000, max_value=int(3600 * 1e9))
+    )
+
+    status = draw(st.sampled_from(["OK", "ERROR", "UNSET"]))
+
+    num_attrs = draw(st.integers(min_value=0, max_value=10))
+    attr_keys = draw(
+        st.lists(
+            st.text(min_size=1, max_size=50, alphabet=st.characters(
+                whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="._-"
+            )),
+            min_size=num_attrs,
+            max_size=num_attrs,
+            unique=True,
+        )
+    )
+    attr_vals = draw(
+        st.lists(
+            st.text(max_size=200),
+            min_size=num_attrs,
+            max_size=num_attrs,
+        )
+    )
+    attributes = dict(zip(attr_keys, attr_vals))
+
+    name = draw(st.text(min_size=1, max_size=100))
+
+    return TraceSpan(
+        span_id=span_id,
+        parent_span_id=parent_span_id,
+        trace_id=trace_id,
+        start_time_ns=start_time_ns,
+        duration_ns=duration_ns,
+        status=status,
+        attributes=attributes,
+        name=name,
+    )
+
+
+@st.composite
+def trace_view_model_strategy(draw) -> TraceViewModel:
+    """
+    Generate a TraceViewModel with spans sharing the same trace_id.
+
+    Returns:
+        A valid TraceViewModel instance.
+    """
+    shared_trace_id = draw(hex_id(length=32))
+
+    spans = draw(
+        st.lists(
+            trace_span_strategy(trace_id=shared_trace_id),
+            min_size=1,
+            max_size=20,
+        )
+    )
+
+    num_res_attrs = draw(st.integers(min_value=0, max_value=5))
+    res_keys = draw(
+        st.lists(
+            st.text(min_size=1, max_size=50, alphabet=st.characters(
+                whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="._-"
+            )),
+            min_size=num_res_attrs,
+            max_size=num_res_attrs,
+            unique=True,
+        )
+    )
+    res_vals = draw(
+        st.lists(
+            st.text(max_size=200),
+            min_size=num_res_attrs,
+            max_size=num_res_attrs,
+        )
+    )
+    resource_attributes = dict(zip(res_keys, res_vals))
+
+    return TraceViewModel(spans=spans, resource_attributes=resource_attributes)
+
+
+@st.composite
+def signoz_span_row(draw) -> dict:
+    """
+    Generate a mock SigNoz API response row (``{"data": {...}}``).
+
+    Returns:
+        Dict matching the SigNoz span payload shape.
+    """
+    span_id = draw(hex_id(length=16))
+    trace_id = draw(hex_id(length=32))
+    parent_span_id = draw(st.one_of(st.just(""), hex_id(length=16)))
+
+    reference_time_ns = 1_700_000_000_000_000_000
+    start_time = str(
+        draw(
+            st.integers(
+                min_value=reference_time_ns,
+                max_value=reference_time_ns + int(86400 * 1e9),
+            )
+        )
+    )
+    duration_nano = str(
+        draw(st.integers(min_value=1000, max_value=int(3600 * 1e9)))
+    )
+
+    status_code = draw(st.sampled_from([0, 1, 2]))
+    name = draw(st.text(min_size=1, max_size=100))
+
+    num_tags = draw(st.integers(min_value=0, max_value=10))
+    tag_keys = draw(
+        st.lists(
+            st.text(
+                min_size=1,
+                max_size=50,
+                alphabet=st.characters(
+                    whitelist_categories=("Lu", "Ll", "Nd"),
+                    whitelist_characters="._-",
+                ),
+            ),
+            min_size=num_tags,
+            max_size=num_tags,
+            unique=True,
+        )
+    )
+    tag_vals = draw(
+        st.lists(
+            st.text(max_size=200),
+            min_size=num_tags,
+            max_size=num_tags,
+        )
+    )
+    tag_map = dict(zip(tag_keys, tag_vals))
+
+    return {
+        "data": {
+            "spanID": span_id,
+            "traceID": trace_id,
+            "parentSpanID": parent_span_id,
+            "startTime": start_time,
+            "durationNano": duration_nano,
+            "statusCode": status_code,
+            "name": name,
+            "tagMap": tag_map,
+        }
+    }
+
+
+@st.composite
+def span_tree_strategy(
+    draw, max_depth: int = 3, max_children: int = 3
+) -> list[TraceSpan]:
+    """
+    Generate a list of TraceSpan objects forming a tree.
+
+    All spans share the same trace_id. The root span has
+    ``parent_span_id = ""``, and children reference their parent's span_id.
+
+    Args:
+        max_depth: Maximum tree depth (default 3).
+        max_children: Maximum children per node (default 3).
+
+    Returns:
+        List of TraceSpan objects with valid parent-child relationships.
+    """
+    shared_trace_id = draw(hex_id(length=32))
+    spans: list[TraceSpan] = []
+
+    def _build_subtree(parent_id: str, depth: int) -> None:
+        if depth > max_depth:
+            return
+
+        span = draw(
+            trace_span_strategy(
+                parent_span_id=parent_id,
+                trace_id=shared_trace_id,
+            )
+        )
+        spans.append(span)
+
+        if depth < max_depth:
+            num_children = draw(st.integers(min_value=0, max_value=max_children))
+            for _ in range(num_children):
+                _build_subtree(span.span_id, depth + 1)
+
+    # Root span
+    _build_subtree("", 0)
+
+    return spans
