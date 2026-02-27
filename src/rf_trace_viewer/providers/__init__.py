@@ -4,9 +4,10 @@ Exports the canonical data models and provider interface that all
 trace data sources must implement.
 """
 
+from rf_trace_viewer.exceptions import ConfigurationError
+
 from .base import (
     AuthenticationError,
-    ConfigurationError,
     ExecutionSummary,
     ProviderError,
     RateLimitError,

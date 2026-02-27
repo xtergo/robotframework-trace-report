@@ -8,15 +8,15 @@ import os
 import sys
 import threading
 import webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
-from urllib.request import Request, urlopen
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.error import URLError
+from urllib.parse import parse_qs, urlparse
+from urllib.request import Request, urlopen
 
 from rf_trace_viewer.generator import (
-    embed_viewer_assets,
-    _escape_html,
     ReportOptions,
+    _escape_html,
+    embed_viewer_assets,
     generate_report,
 )
 from rf_trace_viewer.parser import parse_line
@@ -260,7 +260,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, format: str, *args: object) -> None:
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         """Suppress default request logging to stderr."""
         pass
 

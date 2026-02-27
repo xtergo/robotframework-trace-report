@@ -31,15 +31,15 @@ def _make_response(span_ids: list[str]) -> dict:
     """Build a minimal SigNoz query_range response with the given span IDs."""
     rows = [
         {
+            "timestamp": "1700000000000000000",
             "data": {
                 "spanID": sid,
                 "traceID": "trace001",
                 "parentSpanID": "",
                 "name": f"span-{sid}",
-                "startTime": "1700000000000000000",
                 "durationNano": "1000000",
                 "statusCode": "1",
-            }
+            },
         }
         for sid in span_ids
     ]
@@ -292,15 +292,15 @@ class TestParseSpansNegativeDuration:
                 {
                     "list": [
                         {
+                            "timestamp": "1700000000000000000",
                             "data": {
                                 "spanID": "neg1",
                                 "traceID": "trace001",
                                 "parentSpanID": "",
                                 "name": "negative-dur",
-                                "startTime": "1700000000000000000",
                                 "durationNano": "-500",
                                 "statusCode": "0",
-                            }
+                            },
                         }
                     ]
                 }

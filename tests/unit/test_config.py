@@ -22,7 +22,7 @@ from rf_trace_viewer.config import (
     _to_snake,
     load_config,
 )
-from rf_trace_viewer.providers.base import ConfigurationError
+from rf_trace_viewer.exceptions import ConfigurationError
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
 SAMPLE_CONFIG = os.path.join(FIXTURES_DIR, "sample_config.json")

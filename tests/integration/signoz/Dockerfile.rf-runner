@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /rf
+
+# Install dependencies (cached layer)
+RUN pip install --no-cache-dir robotframework==7.1.1 robotframework-tracer
+
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4318/v1/traces
+ENV OTEL_RESOURCE_ATTRIBUTES="essvt.execution_id=integration-test-run"
+# Flush spans every 1s instead of the default 5s
+ENV OTEL_BSP_SCHEDULE_DELAY=1000
+
+# Copy test files (changes less frequently than wrapper)
+COPY tests/integration/signoz/suites/ /rf/suites/
+
+# Wrapper that runs Robot Framework via a Python script that explicitly
+# flushes the trace provider before exiting. The BatchSpanProcessor's
+# atexit handler is unreliable in short-lived containers.
+COPY tests/integration/signoz/run_rf.py /rf/run_rf.py
+
+CMD ["python", "/rf/run_rf.py"]

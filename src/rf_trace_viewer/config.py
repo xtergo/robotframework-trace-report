@@ -80,14 +80,14 @@ def _coerce(attr: str, val: str) -> int | float | bool | str:
         except ValueError:
             raise ConfigurationError(
                 f"Environment variable for '{attr}' must be an integer, got '{val}'"
-            )
+            ) from None
     if attr in _FLOAT_FIELDS:
         try:
             return float(val)
         except ValueError:
             raise ConfigurationError(
                 f"Environment variable for '{attr}' must be a number, got '{val}'"
-            )
+            ) from None
     if attr in _BOOL_FIELDS:
         return val.lower() in ("1", "true", "yes")
     return val
@@ -113,7 +113,7 @@ def _load_config_file(path: str) -> dict:
         with open(path) as f:
             raw = json.load(f)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise ConfigurationError(f"Cannot parse config file {path}: {exc}")
+        raise ConfigurationError(f"Cannot parse config file {path}: {exc}") from exc
 
     flat: dict = {}
     for key, val in raw.items():

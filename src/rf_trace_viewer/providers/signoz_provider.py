@@ -7,8 +7,10 @@ rows into canonical TraceSpan objects consumed by the rendering pipeline.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
+from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -25,6 +27,52 @@ from .base import (
 
 # SigNoz status code mapping: 0=UNSET, 1=OK, 2=ERROR
 _STATUS_MAP = {"0": "UNSET", "1": "OK", "2": "ERROR"}
+
+
+def _parse_timestamp(value: object) -> int:
+    """Convert a SigNoz row-level timestamp to nanoseconds.
+
+    SigNoz may return the timestamp as:
+    - An ISO 8601 string (e.g. "2024-01-15T10:30:00.800542329Z")
+    - A nanosecond integer/string (> 1e15)
+    - A second-precision integer/string
+    """
+    if value is None:
+        return 0
+    s = str(value).strip()
+    if not s:
+        return 0
+    # Try numeric first
+    try:
+        n = int(float(s))
+        if n > 1e15:
+            return n  # already nanoseconds
+        return int(n * 1_000_000_000)  # seconds → nanoseconds
+    except (ValueError, OverflowError):
+        pass
+    # Try ISO 8601 datetime string — SigNoz returns nanosecond precision
+    # (9 fractional digits) which Python's %f can't handle. Truncate to
+    # microseconds and preserve the sub-microsecond remainder.
+    m = re.match(
+        r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"  # date+time
+        r"(?:\.(\d+))?"  # optional fractional seconds
+        r"(Z|[+-]\d{2}:\d{2})?$",  # timezone
+        s,
+    )
+    if m:
+        base, frac, tz = m.group(1), m.group(2) or "0", m.group(3) or "Z"
+        # Pad/truncate fractional part to 6 digits for strptime
+        frac_padded = frac[:6].ljust(6, "0")
+        # Remaining nanosecond digits beyond microseconds
+        extra_ns = int(frac[6:9].ljust(3, "0")) if len(frac) > 6 else 0
+        tz_str = "+00:00" if tz == "Z" else tz
+        iso = f"{base}.{frac_padded}{tz_str}"
+        try:
+            dt = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%S.%f%z")
+            return int(dt.timestamp() * 1_000_000_000) + extra_ns
+        except ValueError:
+            pass
+    return 0
 
 
 class SigNozProvider(TraceProvider):
@@ -104,19 +152,15 @@ class SigNozProvider(TraceProvider):
     def poll_new_spans(self, since_ns: int) -> TraceViewModel:
         """Fetch spans newer than since_ns with overlap window."""
         overlap_ns = int(self._config.overlap_window_seconds * 1_000_000_000)
-        query_start = since_ns - overlap_ns
-        filters: list[dict] = [
-            {
-                "key": {
-                    "key": "startTime",
-                    "dataType": "string",
-                    "type": "tag",
-                },
-                "op": ">",
-                "value": str(query_start),
-            }
-        ]
-        query = self._build_span_query(filters, offset=0, limit=self._config.max_spans_per_page)
+        query_start_ns = max(0, since_ns - overlap_ns)
+        # Use the start/end time parameters (in seconds) for time filtering
+        # instead of a filter on a non-existent startTime field.
+        query = self._build_span_query(filters=[], offset=0, limit=self._config.max_spans_per_page)
+        # Override start to filter by time (must be valid Unix timestamp)
+        start_s = query_start_ns // 1_000_000_000
+        if start_s < 1_000_000_000:
+            start_s = int(time.time()) - 86400  # fallback: 1 day ago
+        query["start"] = start_s
         response = self._api_request("/api/v3/query_range", query)
         spans = self._parse_spans(response)
         new_spans = [s for s in spans if s.span_id not in self._seen_span_ids]
@@ -133,7 +177,11 @@ class SigNozProvider(TraceProvider):
         data = json.dumps(payload).encode("utf-8")
         req = Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
-        req.add_header("SIGNOZ-API-KEY", self._config.api_key)
+        if self._config.api_key:
+            # Send both headers for compatibility with SigNoz Cloud (API key)
+            # and self-hosted (JWT Bearer token from /api/v1/login).
+            req.add_header("SIGNOZ-API-KEY", self._config.api_key)
+            req.add_header("Authorization", f"Bearer {self._config.api_key}")
         try:
             with urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read())  # type: ignore[no-any-return]
@@ -160,6 +208,8 @@ class SigNozProvider(TraceProvider):
             "compositeQuery": {
                 "builderQueries": {
                     "A": {
+                        "queryName": "A",
+                        "expression": "A",
                         "dataSource": "traces",
                         "aggregateOperator": "count",
                         "groupBy": [
@@ -167,6 +217,7 @@ class SigNozProvider(TraceProvider):
                                 "key": attribute,
                                 "dataType": "string",
                                 "type": "tag",
+                                "isColumn": False,
                             }
                         ],
                         "filters": {"items": [], "op": "AND"},
@@ -174,6 +225,7 @@ class SigNozProvider(TraceProvider):
                         "orderBy": [{"columnName": "timestamp", "order": "desc"}],
                     }
                 },
+                "panelType": "list",
                 "queryType": "builder",
             },
             "start": start_s,
@@ -192,6 +244,7 @@ class SigNozProvider(TraceProvider):
                         "key": "essvt.execution_id",
                         "dataType": "string",
                         "type": "tag",
+                        "isColumn": False,
                     },
                     "op": "=",
                     "value": execution_id,
@@ -203,7 +256,8 @@ class SigNozProvider(TraceProvider):
                     "key": {
                         "key": "traceID",
                         "dataType": "string",
-                        "type": "tag",
+                        "type": "",
+                        "isColumn": True,
                     },
                     "op": "=",
                     "value": trace_id,
@@ -218,26 +272,68 @@ class SigNozProvider(TraceProvider):
             "compositeQuery": {
                 "builderQueries": {
                     "A": {
+                        "queryName": "A",
+                        "expression": "A",
                         "dataSource": "traces",
                         "aggregateOperator": "noop",
                         "filters": {"items": filters, "op": "AND"},
                         "selectColumns": [
-                            {"key": "spanID"},
-                            {"key": "parentSpanID"},
-                            {"key": "traceID"},
-                            {"key": "startTime"},
-                            {"key": "durationNano"},
-                            {"key": "statusCode"},
-                            {"key": "name"},
+                            {"key": "spanID", "dataType": "string", "type": "", "isColumn": True},
+                            {
+                                "key": "parentSpanID",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            },
+                            {"key": "traceID", "dataType": "string", "type": "", "isColumn": True},
+                            {
+                                "key": "durationNano",
+                                "dataType": "float64",
+                                "type": "",
+                                "isColumn": True,
+                            },
+                            {
+                                "key": "statusCode",
+                                "dataType": "float64",
+                                "type": "",
+                                "isColumn": True,
+                            },
+                            {"key": "name", "dataType": "string", "type": "", "isColumn": True},
+                            # RF-specific tag attributes for test/suite/keyword classification
+                            {
+                                "key": "rf.suite.name",
+                                "dataType": "string",
+                                "type": "tag",
+                                "isColumn": False,
+                            },
+                            {
+                                "key": "rf.test.name",
+                                "dataType": "string",
+                                "type": "tag",
+                                "isColumn": False,
+                            },
+                            {
+                                "key": "rf.keyword.name",
+                                "dataType": "string",
+                                "type": "tag",
+                                "isColumn": False,
+                            },
+                            {
+                                "key": "rf.status",
+                                "dataType": "string",
+                                "type": "tag",
+                                "isColumn": False,
+                            },
                         ],
                         "orderBy": [{"columnName": "timestamp", "order": "asc"}],
                         "limit": limit,
                         "offset": offset,
                     }
                 },
+                "panelType": "list",
                 "queryType": "builder",
             },
-            "start": 0,
+            "start": now_s - 86400 * 30,  # 30 days ago (must be valid Unix ts)
             "end": now_s,
             "step": 60,
         }
@@ -250,7 +346,9 @@ class SigNozProvider(TraceProvider):
     def _parse_spans(response: dict) -> list[TraceSpan]:
         """Map SigNoz query_range response rows to TraceSpan objects."""
         spans: list[TraceSpan] = []
-        result = response.get("result") or []
+        # SigNoz wraps result under "data" key: {"status":"success","data":{"result":[...]}}
+        result_container = response.get("data") or response
+        result = result_container.get("result") or []
         for series in result:
             for row in series.get("list") or []:
                 data = row.get("data") or {}
@@ -262,14 +360,21 @@ class SigNozProvider(TraceProvider):
                 parent_span_id = data.get("parentSpanID", "")
                 name = data.get("name", "")
 
-                # startTime comes as nanosecond string
-                start_time_ns = int(data.get("startTime", "0"))
-                duration_ns = int(data.get("durationNano", "0"))
+                # Start time: prefer row-level "timestamp" (ISO string from
+                # SigNoz v0.113+), fall back to data["startTime"] (legacy).
+                start_time_ns = 0
+                row_ts = row.get("timestamp")
+                if row_ts is not None:
+                    start_time_ns = _parse_timestamp(row_ts)
+                if start_time_ns == 0:
+                    start_time_ns = int(data.get("startTime", "0"))
+
+                duration_ns = int(float(data.get("durationNano", "0")))
                 if duration_ns < 0:
                     duration_ns = 0
 
                 # Status code: 0=UNSET, 1=OK, 2=ERROR
-                raw_status = str(data.get("statusCode", "0"))
+                raw_status = str(int(float(data.get("statusCode", "0"))))
                 status = _STATUS_MAP.get(raw_status, "UNSET")
 
                 # Merge tagMap and stringTagMap into attributes
@@ -279,6 +384,14 @@ class SigNozProvider(TraceProvider):
                     if isinstance(tag_map, dict):
                         for k, v in tag_map.items():
                             attributes[k] = str(v)
+
+                # Extract RF-specific attributes from data dict (SigNoz v0.113+
+                # returns requested tag attributes directly in the data dict)
+                for k, v in data.items():
+                    if k.startswith("rf.") and k not in attributes:
+                        val = str(v)
+                        if val:  # skip empty strings
+                            attributes[k] = val
 
                 spans.append(
                     TraceSpan(
@@ -298,7 +411,9 @@ class SigNozProvider(TraceProvider):
     def _parse_execution_list(response: dict) -> list[ExecutionSummary]:
         """Map SigNoz aggregate response to ExecutionSummary list."""
         executions: list[ExecutionSummary] = []
-        result = response.get("result") or []
+        # SigNoz wraps result under "data" key: {"status":"success","data":{"result":[...]}}
+        result_container = response.get("data") or response
+        result = result_container.get("result") or []
         for series in result:
             for row in series.get("list") or []:
                 data = row.get("data") or {}

@@ -1276,14 +1276,14 @@ Incremental implementation of the robotframework-trace-report, building from cor
     - Used by `run_integration.sh` to wait for trace ingestion before verification
     - _Requirements: 42.3_
 
-- [ ] 56. Add Makefile target and verify full integration flow
-  - [ ] 56.1 Add `test-integration-signoz` target to `Makefile`
+- [x] 56. Add Makefile target and verify full integration flow
+  - [x] 56.1 Add `test-integration-signoz` target to `Makefile`
     - Target runs `cd tests/integration/signoz && bash run_integration.sh`
     - Add help text: "Run end-to-end SigNoz integration test (requires Docker)"
     - Ensure target is independent of other test targets (not included in `make test`)
     - _Requirements: 47.1, 47.5_
 
-  - [ ] 56.2 Add `.gitignore` entries for integration test artifacts
+  - [x] 56.2 Add `.gitignore` entries for integration test artifacts
     - Add `tests/integration/signoz/results/` to `.gitignore`
     - Add `tests/integration/signoz/*.html` to `.gitignore`
     - _Requirements: 47.1_
@@ -1297,7 +1297,7 @@ Incremental implementation of the robotframework-trace-report, building from cor
   - Verify existing tests still pass: `make test`
   - Ask the user if questions arise.
 
-- [ ] 58. Final checkpoint — All integration tests complete
+- [x] 58. Final checkpoint — All integration tests complete
   - Ensure all unit tests pass: `make test`
   - Ensure SigNoz integration test passes: `make test-integration-signoz`
   - Verify no regressions in existing functionality

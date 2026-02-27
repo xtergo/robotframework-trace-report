@@ -191,3 +191,111 @@ The trace file format is standard OTLP NDJSON. The viewer doesn't define its own
 
 ### No dependency on robotframework-tracer
 The viewer reads OTLP JSON files. It doesn't import or depend on the tracer package. The RF-specific rendering is based on attribute naming conventions (`rf.*`), not code coupling.
+
+
+## SigNoz Integration
+
+### Overview
+
+The SigNoz provider (`signoz_provider.py`) enables fetching trace data from a running SigNoz instance instead of reading from local NDJSON files. This supports both SigNoz Cloud and self-hosted deployments.
+
+```
+┌──────────────────┐     OTLP/gRPC      ┌──────────────────┐
+│  RF Test Runner   │ ──────────────────→ │  OTel Collector   │
+│  (robotframework  │                     │  (signoz-otel-    │
+│   -tracer)        │                     │   collector)      │
+└──────────────────┘                     └────────┬─────────┘
+                                                  │ ClickHouse
+                                                  ▼ exporters
+                                         ┌──────────────────┐
+                                         │   ClickHouse      │
+                                         │  (trace storage)  │
+                                         └────────┬─────────┘
+                                                  │
+                                                  ▼
+                                         ┌──────────────────┐
+                                         │     SigNoz        │
+                                         │  (query API on    │
+                                         │   port 8080)      │
+                                         └────────┬─────────┘
+                                                  │ /api/v3/
+                                                  │ query_range
+                                                  ▼
+                                         ┌──────────────────┐
+                                         │  rf-trace-report  │
+                                         │  (SigNozProvider) │
+                                         └──────────────────┘
+```
+
+### Authentication
+
+SigNoz v0.76+ uses a single binary architecture serving both the SPA frontend and API on port 8080. Authentication is handled via two middleware chains that run in sequence:
+
+1. **API Key middleware** — checks `SIGNOZ-API-KEY` header, looks up token in `factor_api_key` table
+2. **AuthN middleware** — checks `Authorization` header, validates JWT or opaque token
+
+The provider sends both headers for maximum compatibility:
+```python
+req.add_header("SIGNOZ-API-KEY", api_key)
+req.add_header("Authorization", f"Bearer {api_key}")
+```
+
+#### JWT Token Format (v0.113.0+)
+
+The default tokenizer is JWT (HS256). Claims structure from `pkg/tokenizer/jwttokenizer/claims.go`:
+
+```json
+{
+  "id": "<user-uuid>",
+  "email": "<user-email>",
+  "role": "ADMIN",
+  "orgId": "<org-uuid>",
+  "exp": 1234567890,
+  "iat": 1234567890
+}
+```
+
+Signed with the value of `SIGNOZ_TOKENIZER_JWT_SECRET` env var.
+
+### Known Issues (v0.113.0)
+
+- **POST `/api/v1/login` returns HTML**: The SPA catch-all route intercepts the login POST endpoint. This is a routing bug in the single-binary architecture where the frontend's catch-all handler takes precedence over the API route for this specific endpoint.
+- **Workaround**: Use POST `/api/v1/register` (works on first boot when no user exists) to create the admin user, then generate a JWT manually using the known secret and user data from the register response.
+- **GET routes affected**: Some GET API routes (e.g., `/api/v1/services`) also return HTML. POST routes like `/api/v3/query_range` work correctly.
+
+### Integration Test Stack
+
+The end-to-end integration test (`make test-integration-signoz`) runs a full SigNoz stack in Docker:
+
+| Service | Image | Purpose |
+|---------|-------|---------|
+| zookeeper-1 | signoz/zookeeper:3.7.1 | ClickHouse coordination |
+| clickhouse | clickhouse/clickhouse-server:25.12.5 | Trace storage |
+| schema-migrator-sync | signoz/signoz-schema-migrator:v0.144.1 | DB schema setup (~90s first run) |
+| signoz | signoz/signoz-community:v0.113.0 | Query API + SPA frontend |
+| signoz-otel-collector | signoz/signoz-otel-collector:v0.144.1 | OTLP receiver → ClickHouse |
+| rf-test-runner | python:3.11-slim + robotframework-tracer | Runs RF tests, emits traces |
+| rf-trace-report | python:3.11-slim + this project | Serves the trace viewer |
+
+The test orchestrator (`run_integration.sh`) uses a three-phase startup:
+1. Infrastructure (ZK, CH, schema migration)
+2. Core services (SigNoz, OTel collector, RF test runner)
+3. Report viewer (after obtaining auth token)
+
+Trace ingestion is verified by querying ClickHouse directly (no SigNoz auth needed), avoiding the login endpoint issue entirely.
+
+### SigNoz Environment Variables
+
+Key env var naming convention: `SIGNOZ_` prefix, dots become underscores, underscores become double underscores.
+
+| Env Var | Purpose |
+|---------|---------|
+| `SIGNOZ_TELEMETRYSTORE_PROVIDER` | Storage backend (`clickhouse`) |
+| `SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN` | ClickHouse connection string |
+| `SIGNOZ_SQLSTORE_SQLITE_PATH` | SQLite DB path for user/org data |
+| `SIGNOZ_TOKENIZER_JWT_SECRET` | JWT signing secret |
+| `SIGNOZ_ANALYTICS_ENABLED` | Disable telemetry (`false`) |
+| `SIGNOZ_USER_ROOT_ENABLED` | Auto-provision root user on boot |
+| `SIGNOZ_USER_ROOT_EMAIL` | Root user email |
+| `SIGNOZ_USER_ROOT_PASSWORD` | Root user password (12+ chars, upper/lower/number/symbol) |
+| `SIGNOZ_USER_ROOT_ORG__NAME` | Root user org name (note double underscore) |

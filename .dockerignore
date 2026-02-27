@@ -1,0 +1,17 @@
+# Docker build context exclusions
+.git/
+.hypothesis/
+.pytest_cache/
+.coverage
+htmlcov/
+node_modules/
+test-reports/
+tests/browser/results/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/

@@ -11,7 +11,6 @@ import pytest
 
 from rf_trace_viewer.providers.base import (
     AuthenticationError,
-    ConfigurationError,
     ExecutionSummary,
     ProviderError,
     RateLimitError,
@@ -19,6 +18,7 @@ from rf_trace_viewer.providers.base import (
     TraceSpan,
     TraceViewModel,
 )
+from rf_trace_viewer.exceptions import ConfigurationError
 
 # ============================================================================
 # Helpers
