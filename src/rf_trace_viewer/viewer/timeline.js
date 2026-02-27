@@ -49,7 +49,7 @@
     topMargin: 10,
     bottomMargin: 20,
     showTimeMarkers: false,
-    showSecondsGrid: false
+    showSecondsGrid: true
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -214,21 +214,21 @@
     markerToggle.appendChild(document.createTextNode('Grid lines'));
     zoomBar.appendChild(markerToggle);
 
-    // Seconds grid toggle
-    var secondsToggle = document.createElement('label');
-    secondsToggle.className = 'timeline-seconds-toggle';
-    secondsToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
-    var secondsCb = document.createElement('input');
-    secondsCb.type = 'checkbox';
-    secondsCb.checked = false;
-    secondsCb.setAttribute('aria-label', 'Show seconds grid lines');
-    secondsCb.addEventListener('change', function () {
-      timelineState.showSecondsGrid = secondsCb.checked;
+    // Time grid toggle (adaptive — always on by default)
+    var gridToggle = document.createElement('label');
+    gridToggle.className = 'timeline-grid-toggle';
+    gridToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
+    var gridCb = document.createElement('input');
+    gridCb.type = 'checkbox';
+    gridCb.checked = true;
+    gridCb.setAttribute('aria-label', 'Show time grid lines');
+    gridCb.addEventListener('change', function () {
+      timelineState.showSecondsGrid = gridCb.checked;
       _render();
     });
-    secondsToggle.appendChild(secondsCb);
-    secondsToggle.appendChild(document.createTextNode('Seconds'));
-    zoomBar.appendChild(secondsToggle);
+    gridToggle.appendChild(gridCb);
+    gridToggle.appendChild(document.createTextNode('Grid'));
+    zoomBar.appendChild(gridToggle);
 
     headerEl.appendChild(zoomBar);
 
@@ -1175,52 +1175,66 @@
    * Render timeline header with time axis.
    */
   function _renderHeader() {
-    var headerCanvas = timelineState.headerCanvas;
-    var ctx = timelineState.headerCtx;
-    if (!headerCanvas || !ctx) return;
+      var headerCanvas = timelineState.headerCanvas;
+      var ctx = timelineState.headerCtx;
+      if (!headerCanvas || !ctx) return;
 
-    var width = headerCanvas.width / (window.devicePixelRatio || 1);
-    var height = headerCanvas.height / (window.devicePixelRatio || 1);
-    var textColor = _css('--text-primary', '#1a1a1a');
-    var borderColor = _css('--border-color', '#d0d0d0');
+      var width = headerCanvas.width / (window.devicePixelRatio || 1);
+      var height = headerCanvas.height / (window.devicePixelRatio || 1);
+      var textColor = _css('--text-primary', '#1a1a1a');
+      var borderColor = _css('--border-color', '#d0d0d0');
 
-    // Clear header canvas
-    ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, width, height);
 
-    ctx.fillStyle = _css('--bg-secondary', '#f5f5f5');
-    ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = _css('--bg-secondary', '#f5f5f5');
+      ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, height);
-    ctx.lineTo(width, height);
-    ctx.stroke();
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, height);
+      ctx.lineTo(width, height);
+      ctx.stroke();
 
-    // Time axis labels
-    ctx.fillStyle = textColor;
-    ctx.font = '11px sans-serif';
-    ctx.textAlign = 'center';
+      // Adaptive tick interval — same logic as the grid
+      var timeRange = timelineState.viewEnd - timelineState.viewStart;
+      if (timeRange <= 0) return;
 
-    var timeRange = timelineState.viewEnd - timelineState.viewStart;
-    var numTicks = 10;
-    var tickInterval = timeRange / numTicks;
+      var niceIntervals = [
+        0.05, 0.1, 0.2, 0.5,
+        1, 2, 5, 10, 15, 30,
+        60, 120, 300, 600, 900, 1800,
+        3600, 7200, 14400, 28800, 43200
+      ];
+      var interval = niceIntervals[niceIntervals.length - 1];
+      for (var ni = 0; ni < niceIntervals.length; ni++) {
+        var lines = timeRange / niceIntervals[ni];
+        if (lines >= 4 && lines <= 20) {
+          interval = niceIntervals[ni];
+          break;
+        }
+      }
 
-    for (var i = 0; i <= numTicks; i++) {
-      var time = timelineState.viewStart + i * tickInterval;
-      var x = _timeToScreenX(time);
-      if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
-        ctx.fillText(_formatTime(time), x, height - 10);
-        
-        // Tick mark
-        ctx.strokeStyle = borderColor;
-        ctx.beginPath();
-        ctx.moveTo(x, height - 5);
-        ctx.lineTo(x, height);
-        ctx.stroke();
+      ctx.fillStyle = textColor;
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+
+      var firstTick = Math.ceil(timelineState.viewStart / interval) * interval;
+
+      for (var t = firstTick; t <= timelineState.viewEnd; t += interval) {
+        var x = _timeToScreenX(t);
+        if (x >= timelineState.leftMargin + 20 && x <= width - timelineState.rightMargin - 20) {
+          ctx.fillText(_formatTime(t), x, height - 10);
+
+          ctx.strokeStyle = borderColor;
+          ctx.beginPath();
+          ctx.moveTo(x, height - 5);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
       }
     }
-  }
+
 
   /**
    * Render worker lanes with spans.
@@ -1527,52 +1541,94 @@
    * Adapts interval based on zoom level to avoid overcrowding.
    */
   function _renderSecondsGrid(ctx, width, height) {
-    var viewStart = timelineState.viewStart;
-    var viewEnd = timelineState.viewEnd;
-    var viewRange = viewEnd - viewStart;
+      var viewStart = timelineState.viewStart;
+      var viewEnd = timelineState.viewEnd;
+      var viewRange = viewEnd - viewStart;
+      if (viewRange <= 0) return;
 
-    // Choose interval: 1s, 5s, 10s, 30s, 60s depending on zoom
-    // Aim for roughly 10-60 lines visible at a time
-    var interval;
-    if (viewRange <= 10) {
-      interval = 0.1;  // 100ms for very zoomed in
-    } else if (viewRange <= 60) {
-      interval = 1;
-    } else if (viewRange <= 300) {
-      interval = 5;
-    } else if (viewRange <= 600) {
-      interval = 10;
-    } else if (viewRange <= 1800) {
-      interval = 30;
-    } else {
-      interval = 60;
-    }
-
-    // Theme-aware: black lines on light bg, white lines on dark bg
-    var isDark = _isDarkMode();
-    var gridColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.35)';
-
-    ctx.save();
-    ctx.strokeStyle = gridColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 3]);
-
-    // Start from the first interval boundary at or after viewStart
-    var firstTick = Math.ceil(viewStart / interval) * interval;
-
-    for (var t = firstTick; t <= viewEnd; t += interval) {
-      var x = _timeToScreenX(t);
-      if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
+      // Adaptive interval selection — pick the largest "nice" interval that
+      // yields between 4 and ~40 grid lines in the visible viewport.
+      // Covers sub-second through multi-hour ranges.
+      var niceIntervals = [
+        0.05, 0.1, 0.2, 0.5,           // sub-second
+        1, 2, 5, 10, 15, 30,            // seconds
+        60, 120, 300, 600, 900, 1800,   // minutes
+        3600, 7200, 14400, 28800, 43200 // hours
+      ];
+      var interval = niceIntervals[niceIntervals.length - 1];
+      for (var ni = 0; ni < niceIntervals.length; ni++) {
+        var lines = viewRange / niceIntervals[ni];
+        if (lines >= 4 && lines <= 40) {
+          interval = niceIntervals[ni];
+          break;
+        }
       }
+
+      var isDark = _isDarkMode();
+      var gridColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
+      var labelColor = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)';
+
+      ctx.save();
+      ctx.strokeStyle = gridColor;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+
+      var firstTick = Math.ceil(viewStart / interval) * interval;
+
+      // Draw grid lines
+      for (var t = firstTick; t <= viewEnd; t += interval) {
+        var x = _timeToScreenX(t);
+        if (x >= timelineState.leftMargin && x <= width - timelineState.rightMargin) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+      }
+
+      ctx.setLineDash([]);
+
+      // Draw small labels at the bottom of the main canvas for each grid line
+      ctx.font = '9px sans-serif';
+      ctx.fillStyle = labelColor;
+      ctx.textAlign = 'center';
+      for (var t2 = firstTick; t2 <= viewEnd; t2 += interval) {
+        var x2 = _timeToScreenX(t2);
+        if (x2 >= timelineState.leftMargin + 20 && x2 <= width - timelineState.rightMargin - 20) {
+          ctx.fillText(_formatGridLabel(t2, interval), x2, height - 4);
+        }
+      }
+
+      ctx.restore();
     }
 
-    ctx.setLineDash([]);
-    ctx.restore();
+  /**
+   * Format a grid label appropriate to the current interval granularity.
+   * - Sub-second intervals: show seconds.milliseconds (e.g. "42.150")
+   * - Second intervals (< 60s): show MM:SS (e.g. "14:32")
+   * - Minute intervals (< 3600s): show HH:MM (e.g. "13:05")
+   * - Hour intervals: show HH:MM (e.g. "13:00")
+   */
+  function _formatGridLabel(epochSeconds, interval) {
+    var date = new Date(epochSeconds * 1000);
+    var hh = date.getHours().toString().padStart(2, '0');
+    var mm = date.getMinutes().toString().padStart(2, '0');
+    var ss = date.getSeconds().toString().padStart(2, '0');
+    var ms = date.getMilliseconds().toString().padStart(3, '0');
+
+    if (interval < 1) {
+      // Sub-second: show SS.mmm
+      return ss + '.' + ms;
+    }
+    if (interval < 60) {
+      // Seconds: show MM:SS
+      return mm + ':' + ss;
+    }
+    // Minutes / hours: show HH:MM
+    return hh + ':' + mm;
   }
+
+
 
   /**
    * Render a red dotted vertical line at the selected span's start time.
