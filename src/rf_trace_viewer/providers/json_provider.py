@@ -130,7 +130,7 @@ class JsonProvider(TraceProvider):
     def supports_live_poll(self) -> bool:
         return False
 
-    def poll_new_spans(self, since_ns: int) -> TraceViewModel:
+    def poll_new_spans(self, since_ns: int, service_name: str | None = None) -> TraceViewModel:
         raise NotImplementedError(
             "JsonProvider does not support live polling. "
             "Use file-offset based incremental parsing instead."

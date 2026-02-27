@@ -123,7 +123,11 @@ class SigNozProvider(TraceProvider):
         trace_id: str | None = None,
         max_spans: int = 500_000,
     ) -> TraceViewModel:
-        """Fetch all spans with automatic pagination."""
+        """Fetch all spans with automatic pagination.
+
+        Resets the dedup set so static report generation always starts fresh.
+        """
+        self._seen_span_ids.clear()
         all_spans: list[TraceSpan] = []
         offset = 0
         while len(all_spans) < max_spans:
@@ -149,13 +153,38 @@ class SigNozProvider(TraceProvider):
     def supports_live_poll(self) -> bool:
         return True
 
-    def poll_new_spans(self, since_ns: int) -> TraceViewModel:
-        """Fetch spans newer than since_ns with overlap window."""
+    def poll_new_spans(self, since_ns: int, service_name: str | None = None) -> TraceViewModel:
+        """Fetch spans newer than since_ns with overlap window.
+
+        No server-side dedup here — the browser's lastSeenNs watermark
+        handles incremental polling. This allows page refreshes to get
+        all spans again (the browser starts fresh with since_ns=0).
+
+        If service_name is provided, only spans from that service.name are returned.
+        """
         overlap_ns = int(self._config.overlap_window_seconds * 1_000_000_000)
         query_start_ns = max(0, since_ns - overlap_ns)
-        # Use the start/end time parameters (in seconds) for time filtering
-        # instead of a filter on a non-existent startTime field.
-        query = self._build_span_query(filters=[], offset=0, limit=self._config.max_spans_per_page)
+
+        # Build filters — service.name filter if provided by end user
+        filters: list[dict] = []
+        svc = service_name or self._config.service_name
+        if svc:
+            filters.append(
+                {
+                    "key": {
+                        "key": "serviceName",
+                        "dataType": "string",
+                        "type": "",
+                        "isColumn": True,
+                    },
+                    "op": "=",
+                    "value": svc,
+                }
+            )
+
+        query = self._build_span_query(
+            filters=filters, offset=0, limit=self._config.max_spans_per_page
+        )
         # Override start to filter by time (must be valid Unix timestamp)
         start_s = query_start_ns // 1_000_000_000
         if start_s < 1_000_000_000:
@@ -163,9 +192,7 @@ class SigNozProvider(TraceProvider):
         query["start"] = start_s
         response = self._api_request("/api/v3/query_range", query)
         spans = self._parse_spans(response)
-        new_spans = [s for s in spans if s.span_id not in self._seen_span_ids]
-        self._seen_span_ids.update(s.span_id for s in new_spans)
-        return TraceViewModel(spans=new_spans)
+        return TraceViewModel(spans=spans)
 
     # ------------------------------------------------------------------
     # HTTP client

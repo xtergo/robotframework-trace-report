@@ -153,6 +153,13 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         help="Only fetch spans from the last N duration on startup (e.g. 10m, 1h, 30s). "
         "Default: fetch all. Applies to live/SigNoz mode only.",
     )
+    parser.add_argument(
+        "--service-name",
+        default=None,
+        metavar="<name>",
+        help="Filter SigNoz spans by service.name (e.g. robot-framework). "
+        "Also settable via ?service=<name> URL param by end users.",
+    )
 
 
 def _args_to_cli_dict(args: argparse.Namespace) -> dict:
@@ -184,6 +191,7 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
         "gzip_embed": "gzip_embed",
         "base_url": "base_url",
         "lookback": "lookback",
+        "service_name": "service_name",
     }
     result = {}
     for arg_name, config_name in mapping.items():
@@ -244,6 +252,7 @@ def _build_provider(config: AppConfig) -> TraceProvider:
             max_spans_per_page=config.max_spans_per_page,
             max_spans=config.max_spans,
             overlap_window_seconds=config.overlap_window_seconds,
+            service_name=config.service_name,
         )
         return SigNozProvider(signoz_config)
     else:

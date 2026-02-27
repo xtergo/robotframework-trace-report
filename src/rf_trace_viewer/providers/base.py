@@ -111,5 +111,5 @@ class TraceProvider(ABC):
         """Whether this provider supports live polling."""
 
     @abstractmethod
-    def poll_new_spans(self, since_ns: int) -> TraceViewModel:
+    def poll_new_spans(self, since_ns: int, service_name: str | None = None) -> TraceViewModel:
         """Fetch spans newer than since_ns. For live poll mode."""

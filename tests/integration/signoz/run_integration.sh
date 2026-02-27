@@ -30,7 +30,7 @@ dc() { docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE}" "$@"; }
 
 cleanup() {
     info "Tearing down Docker Compose stack..."
-    dc --profile report down -v --remove-orphans 2>/dev/null || true
+    dc --profile report --profile browser down -v --remove-orphans 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -260,6 +260,32 @@ else
             fail "Spans missing '${TEST_NAME}'"; FAILURES=$((FAILURES + 1))
         fi
     done
+fi
+
+# ── Verify static report generation ─────────────────────────────────
+
+# ── Browser UI validation (Playwright) ───────────────────────────────
+
+info "Phase 4: Running Playwright browser validation of live viewer UI..."
+dc --profile browser up -d --build browser-validator 2>&1
+
+# Wait for the browser-validator container to finish
+BROWSER_CONTAINER="${COMPOSE_PROJECT}-browser-validator-1"
+if wait_for_container_exit "${BROWSER_CONTAINER}" "Browser UI validation" 120; then
+    pass "Browser UI validation passed"
+else
+    fail "Browser UI validation failed"
+    docker logs "${BROWSER_CONTAINER}" 2>&1 | tail -40 || true
+    FAILURES=$((FAILURES + 1))
+fi
+
+# Copy Robot output for inspection
+BROWSER_RESULTS_DIR="${SCRIPT_DIR}/browser-results"
+rm -rf "${BROWSER_RESULTS_DIR}"
+mkdir -p "${BROWSER_RESULTS_DIR}"
+docker cp "${BROWSER_CONTAINER}:/tests/results/." "${BROWSER_RESULTS_DIR}/" 2>/dev/null || true
+if [ -f "${BROWSER_RESULTS_DIR}/output.xml" ]; then
+    info "Browser test results copied to ${BROWSER_RESULTS_DIR}/"
 fi
 
 # ── Verify static report generation ─────────────────────────────────

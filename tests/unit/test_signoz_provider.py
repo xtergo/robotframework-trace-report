@@ -394,14 +394,14 @@ class TestErrorHandling:
 
 
 class TestDeduplication:
-    """Call poll_new_spans twice with overlapping spans, verify no duplicates."""
+    """Verify dedup behavior: poll_new_spans has NO server-side dedup (browser handles it),
+    while fetch_spans still deduplicates via _seen_span_ids."""
 
-    def test_second_poll_returns_only_new_spans(self):
+    def test_poll_returns_all_spans_without_dedup(self):
+        """poll_new_spans returns all spans from API, no server-side filtering."""
         provider = SigNozProvider(_make_config())
 
-        # First poll returns spans s1, s2, s3
         resp1 = _make_response(["s1", "s2", "s3"])
-        # Second poll returns s2, s3 (overlap) + s4, s5 (new)
         resp2 = _make_response(["s2", "s3", "s4", "s5"])
 
         with patch.object(provider, "_api_request", return_value=resp1):
@@ -410,27 +410,86 @@ class TestDeduplication:
         with patch.object(provider, "_api_request", return_value=resp2):
             vm2 = provider.poll_new_spans(since_ns=2_000_000_000)
 
-        # First poll should return all 3
+        # First poll returns all 3
         assert len(vm1.spans) == 3
         ids1 = {s.span_id for s in vm1.spans}
         assert ids1 == {"s1", "s2", "s3"}
 
-        # Second poll should return only the 2 new spans
-        assert len(vm2.spans) == 2
+        # Second poll returns ALL 4 (no server-side dedup)
+        assert len(vm2.spans) == 4
         ids2 = {s.span_id for s in vm2.spans}
-        assert ids2 == {"s4", "s5"}
+        assert ids2 == {"s2", "s3", "s4", "s5"}
 
-    def test_no_duplicates_across_polls(self):
-        """All span IDs across both polls are unique."""
+    def test_fetch_spans_still_deduplicates(self):
+        """fetch_spans uses _seen_span_ids for pagination dedup."""
         provider = SigNozProvider(_make_config())
 
         resp1 = _make_response(["a", "b"])
         resp2 = _make_response(["b", "c"])
 
         with patch.object(provider, "_api_request", return_value=resp1):
-            vm1 = provider.poll_new_spans(since_ns=0)
+            vm1, _ = provider.fetch_spans()
         with patch.object(provider, "_api_request", return_value=resp2):
-            vm2 = provider.poll_new_spans(since_ns=0)
+            vm2, _ = provider.fetch_spans()
 
-        all_ids = [s.span_id for s in vm1.spans] + [s.span_id for s in vm2.spans]
-        assert len(all_ids) == len(set(all_ids)), "Duplicate span IDs found across polls"
+        ids1 = {s.span_id for s in vm1.spans}
+        ids2 = {s.span_id for s in vm2.spans}
+        assert ids1 == {"a", "b"}
+        assert ids2 == {"c"}  # "b" was already seen
+
+    class TestPollNewSpansServiceNameFilter:
+        """Verify poll_new_spans builds the correct SigNoz query when service_name is provided."""
+
+        def test_service_name_adds_filter_to_query(self):
+            """When service_name is passed, the query payload includes a serviceName filter."""
+            provider = SigNozProvider(_make_config())
+            resp = _make_response(["s1"])
+
+            with patch.object(provider, "_api_request", return_value=resp) as mock_req:
+                provider.poll_new_spans(since_ns=1_000_000_000, service_name="robot-framework")
+
+            payload = mock_req.call_args[0][1]
+            filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
+            assert len(filters) == 1
+            f = filters[0]
+            assert f["key"]["key"] == "serviceName"
+            assert f["key"]["isColumn"] is True
+            assert f["op"] == "="
+            assert f["value"] == "robot-framework"
+
+        def test_no_service_name_no_filter(self):
+            """When service_name is None and config has no service_name, no filters are added."""
+            provider = SigNozProvider(_make_config())
+            resp = _make_response(["s1"])
+
+            with patch.object(provider, "_api_request", return_value=resp) as mock_req:
+                provider.poll_new_spans(since_ns=1_000_000_000)
+
+            payload = mock_req.call_args[0][1]
+            filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
+            assert len(filters) == 0
+
+        def test_config_service_name_used_as_fallback(self):
+            """When service_name param is None, config.service_name is used as fallback."""
+            provider = SigNozProvider(_make_config(service_name="admin-default-svc"))
+            resp = _make_response(["s1"])
+
+            with patch.object(provider, "_api_request", return_value=resp) as mock_req:
+                provider.poll_new_spans(since_ns=1_000_000_000)
+
+            payload = mock_req.call_args[0][1]
+            filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
+            assert len(filters) == 1
+            assert filters[0]["value"] == "admin-default-svc"
+
+        def test_explicit_service_name_overrides_config(self):
+            """Explicit service_name param takes precedence over config.service_name."""
+            provider = SigNozProvider(_make_config(service_name="admin-default"))
+            resp = _make_response(["s1"])
+
+            with patch.object(provider, "_api_request", return_value=resp) as mock_req:
+                provider.poll_new_spans(since_ns=1_000_000_000, service_name="user-override")
+
+            payload = mock_req.call_args[0][1]
+            filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
+            assert filters[0]["value"] == "user-override"

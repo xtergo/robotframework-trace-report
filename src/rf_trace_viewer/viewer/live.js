@@ -25,6 +25,17 @@
   // Default for SigNoz live mode: 10m. Use ?lookback=0 to fetch everything.
   var _lookbackNs = _parseLookback();
 
+  // Service name filter: ?service=robot-framework filters SigNoz queries
+  // to only return spans from that service.name. End-user controllable.
+  var _serviceFilter = _parseServiceFilter();
+
+  function _parseServiceFilter() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      return params.get('service') || '';
+    } catch (e) { return ''; }
+  }
+
   function _parseLookback() {
     // Check URL param first, then window config
     var raw = '';
@@ -117,7 +128,6 @@
       console.log('[live] Lookback active: fetching spans from last ' +
         Math.round(_lookbackNs / 1e9) + 's (since_ns=' + lastSeenNs + ')');
     }
-
     _startPolling();
     _startTick();
     _listenVisibility();
@@ -204,6 +214,7 @@
   function _pollSigNoz() {
     polling = true;
     var url = '/api/spans?since_ns=' + lastSeenNs;
+    if (_serviceFilter) url += '&service=' + encodeURIComponent(_serviceFilter);
 
     fetch(url)
       .then(function (res) {

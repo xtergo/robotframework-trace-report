@@ -279,7 +279,7 @@ def test_provider_complete_subclass_works():
         def supports_live_poll(self):
             return False
 
-        def poll_new_spans(self, since_ns):
+        def poll_new_spans(self, since_ns, service_name=None):
             return TraceViewModel(spans=[])
 
     provider = StubProvider()

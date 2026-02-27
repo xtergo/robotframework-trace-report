@@ -92,17 +92,20 @@ def _create_server_with_provider(provider=None):
     return server
 
 
-def _get_api_spans(server, since_ns=0):
-    """Simulate a GET /api/spans?since_ns=N request."""
+def _get_api_spans(server, since_ns=0, service_name=None):
+    """Simulate a GET /api/spans?since_ns=N&service=X request."""
     handler = _LiveRequestHandler.__new__(_LiveRequestHandler)
     handler.server = server
-    handler.path = f"/api/spans?since_ns={since_ns}"
+    path = f"/api/spans?since_ns={since_ns}"
+    if service_name:
+        path += f"&service={service_name}"
+    handler.path = path
     handler.wfile = _FakeWfile()
     handler.send_response = MagicMock()
     handler.send_header = MagicMock()
     handler.end_headers = MagicMock()
     handler.send_error = MagicMock()
-    handler._serve_signoz_spans(since_ns)
+    handler._serve_signoz_spans(since_ns, service_name=service_name)
     return handler
 
 
@@ -344,3 +347,93 @@ class TestViewerHtmlBaseUrl:
         html = handler.wfile.data.decode("utf-8")
         assert 'window.__RF_BASE_URL = "/my-app/traces"' in html
         assert 'window.__RF_PROVIDER = "signoz"' in html
+
+
+# ---------------------------------------------------------------------------
+# 8. Service name filter passed through to provider
+# ---------------------------------------------------------------------------
+
+
+class TestServiceNameFilter:
+    """GET /api/spans?service=X passes service_name to provider.poll_new_spans."""
+
+    def test_service_name_passed_to_provider(self):
+        provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
+        server = _create_server_with_provider(provider=provider)
+
+        _get_api_spans(server, since_ns=0, service_name="robot-framework")
+
+        provider.poll_new_spans.assert_called_once_with(0, service_name="robot-framework")
+
+    def test_service_name_none_when_not_provided(self):
+        provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
+        server = _create_server_with_provider(provider=provider)
+
+        _get_api_spans(server, since_ns=0)
+
+        provider.poll_new_spans.assert_called_once_with(0, service_name=None)
+
+    def test_service_name_returns_filtered_spans(self):
+        """When service_name is provided, response still contains valid JSON."""
+        provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
+        server = _create_server_with_provider(provider=provider)
+
+        handler = _get_api_spans(server, since_ns=0, service_name="my-service")
+
+        handler.send_response.assert_called_with(200)
+        body = json.loads(handler.wfile.data.decode("utf-8"))
+        assert "spans" in body
+        assert body["total_count"] == 3
+
+
+# ---------------------------------------------------------------------------
+# 9. Viewer HTML contains lookback and max_spans config
+# ---------------------------------------------------------------------------
+
+
+class TestViewerHtmlLookbackAndMaxSpans:
+    """Served HTML contains lookback and max_spans JS config when set."""
+
+    @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
+    def test_viewer_html_contains_lookback(self, _mock_assets):
+        server = _create_server_with_provider(provider=None)
+        server.lookback = "10m"
+        server.max_spans = None
+
+        handler = _get_viewer(server)
+
+        html = handler.wfile.data.decode("utf-8")
+        assert 'window.__RF_TRACE_LOOKBACK__ = "10m"' in html
+
+    @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
+    def test_viewer_html_contains_max_spans(self, _mock_assets):
+        server = _create_server_with_provider(provider=None)
+        server.lookback = None
+        server.max_spans = 500000
+
+        handler = _get_viewer(server)
+
+        html = handler.wfile.data.decode("utf-8")
+        assert "window.__RF_TRACE_MAX_SPANS__ = 500000" in html
+
+    @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
+    def test_viewer_html_omits_lookback_when_none(self, _mock_assets):
+        server = _create_server_with_provider(provider=None)
+        server.lookback = None
+        server.max_spans = None
+
+        handler = _get_viewer(server)
+
+        html = handler.wfile.data.decode("utf-8")
+        assert "__RF_TRACE_LOOKBACK__" not in html
+
+    @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
+    def test_viewer_html_omits_max_spans_when_none(self, _mock_assets):
+        server = _create_server_with_provider(provider=None)
+        server.lookback = None
+        server.max_spans = None
+
+        handler = _get_viewer(server)
+
+        html = handler.wfile.data.decode("utf-8")
+        assert "__RF_TRACE_MAX_SPANS__" not in html

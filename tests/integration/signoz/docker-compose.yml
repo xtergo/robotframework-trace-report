@@ -256,6 +256,21 @@ services:
     networks:
       - signoz-net
 
+  # Playwright-based browser test that validates the live viewer UI
+  # shows the correct spans after RF tests have run.
+  # Started via "browser" profile after spans are ingested.
+  browser-validator:
+    profiles: ["browser"]
+    build:
+      context: ../../..
+      dockerfile: tests/integration/signoz/Dockerfile.browser
+    volumes:
+      - browser-results:/tests/results
+    depends_on:
+      - rf-trace-report
+    networks:
+      - signoz-net
+
 # ── Infrastructure ─────────────────────────────────────────────────
 
 networks:
@@ -268,3 +283,4 @@ volumes:
   clickhouse-data:
   zookeeper-data:
   signoz-data:
+  browser-results:

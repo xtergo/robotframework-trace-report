@@ -247,6 +247,8 @@ class TestCLIForwardArgument:
                 ),
                 provider=None,
                 base_url=None,
+                lookback=None,
+                max_spans=500000,
             )
 
     def test_forward_url_default_none(self, monkeypatch):
@@ -278,4 +280,6 @@ class TestCLIForwardArgument:
                 ),
                 provider=None,
                 base_url=None,
+                lookback=None,
+                max_spans=500000,
             )

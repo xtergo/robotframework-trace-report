@@ -32,6 +32,7 @@ class AppConfig:
     max_spans_per_page: int = 10_000
     max_spans: int = 500_000
     overlap_window_seconds: float = 2.0
+    service_name: str | None = None  # filter by service.name in SigNoz queries
 
     # Existing settings preserved
     receiver: bool = False
@@ -56,6 +57,7 @@ class SigNozConfig:
     max_spans_per_page: int = 10_000
     max_spans: int = 500_000
     overlap_window_seconds: float = 2.0
+    service_name: str | None = None  # filter spans by service.name (e.g. "robot-framework")
 
 
 # Fields that hold int values (for env var coercion)

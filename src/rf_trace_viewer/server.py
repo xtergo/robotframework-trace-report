@@ -37,7 +37,8 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._serve_viewer()
         elif path == "/api/spans":
             since_ns = int(query.get("since_ns", ["0"])[0])
-            self._serve_signoz_spans(since_ns)
+            service = query.get("service", [None])[0]
+            self._serve_signoz_spans(since_ns, service_name=service)
         elif path == "/traces.json":
             offset = int(query.get("offset", ["0"])[0])
             self._serve_traces(offset)
@@ -63,7 +64,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
         # Lookback config (optional, for live SigNoz mode)
         lookback = getattr(self.server, "lookback", None) or ""
-        lookback_js = f'window.__RF_TRACE_LOOKBACK__ = "{_escape_html(lookback)}";\n' if lookback else ""
+        lookback_js = (
+            f'window.__RF_TRACE_LOOKBACK__ = "{_escape_html(lookback)}";\n' if lookback else ""
+        )
 
         # Max spans cap for live mode (configurable, default 1M in JS)
         max_spans = getattr(self.server, "max_spans", None)
@@ -113,7 +116,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-    def _serve_signoz_spans(self, since_ns: int) -> None:
+    def _serve_signoz_spans(self, since_ns: int, service_name: str | None = None) -> None:
         """Serve spans from a live-poll provider (e.g. SigNoz)."""
         provider = getattr(self.server, "provider", None)
         if provider is None or not (
@@ -123,7 +126,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            view_model = provider.poll_new_spans(since_ns)
+            view_model = provider.poll_new_spans(since_ns, service_name=service_name)
             spans_dicts = [dataclasses.asdict(s) for s in view_model.spans]
 
             # Compute orphan count: spans with a parent_span_id that isn't
