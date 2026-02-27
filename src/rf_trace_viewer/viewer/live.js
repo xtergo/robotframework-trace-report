@@ -105,7 +105,6 @@
 
   // RFTraceViewer.on may not exist yet (app.js creates it), so defer.
   document.addEventListener('DOMContentLoaded', function () {
-    _createStatusBar();
     // app.js emits 'app-ready' after DOM is built
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
       window.RFTraceViewer.on('app-ready', _onAppReady);
@@ -126,6 +125,7 @@
   function _onAppReady() {
     appReady = true;
     lastUpdateTs = Date.now();
+    _createStatusBar();
 
     // Apply lookback: set initial watermark so first poll only fetches recent spans
     if (_lookbackNs > 0 && provider === 'signoz') {
