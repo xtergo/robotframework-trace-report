@@ -669,14 +669,18 @@
    * Initialize all views with data.
    */
   function _initializeViews(data) {
+    var isLive = !!window.__RF_TRACE_LIVE__;
+
     // Initialize filter/search view in right sidebar
+    // In live mode, skip — live.js _renderAllViews will init with real data
     var filterContent = document.querySelector('.panel-filter .filter-content');
-    if (filterContent && typeof window.initSearch === 'function') {
+    if (filterContent && typeof window.initSearch === 'function' && !isLive) {
       window.initSearch(filterContent, data);
     }
 
     // Initialize timeline view (always visible at top)
-    if (typeof window.initTimeline === 'function') {
+    // In live mode, skip — live.js _renderAllViews will init with real data
+    if (typeof window.initTimeline === 'function' && !isLive) {
       var timelineSection = document.querySelector('.timeline-section');
       if (timelineSection) {
         window.initTimeline(timelineSection, data);

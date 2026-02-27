@@ -54,6 +54,9 @@
   // Parent-child relationships (spanId -> parentId)
   var spanParents = {};
 
+  // Guard against duplicate event listener registration in live mode
+  var _timeRangeListenerRegistered = false;
+
   /**
    * Initialize the search and filter system.
    * @param {HTMLElement} container - The container element for filter UI
@@ -64,8 +67,13 @@
 
     // Extract all spans from data
     allSpans = _extractAllSpans(data);
+    spanParents = {};  // Reset parent map (rebuilt by _extractAllSpans)
+    window._spanLookup = null;  // Reset span lookup cache
     resultCounts.total = allSpans.length;
     resultCounts.visible = allSpans.length;
+
+    console.log('[search] initSearch: suites=' + (data.suites ? data.suites.length : 0) +
+      ', extractedSpans=' + allSpans.length);
 
     // Extract available filter options
     _extractFilterOptions(allSpans);
@@ -77,8 +85,9 @@
     // Build filter UI
     _buildFilterUI(container);
 
-    // Listen for timeline time range selections
-    if (window.RFTraceViewer && window.RFTraceViewer.on) {
+    // Listen for timeline time range selections (register only once)
+    if (!_timeRangeListenerRegistered && window.RFTraceViewer && window.RFTraceViewer.on) {
+      _timeRangeListenerRegistered = true;
       window.RFTraceViewer.on('time-range-selected', function (data) {
         filterState.timeRangeStart = data.start;
         filterState.timeRangeEnd = data.end;
@@ -873,6 +882,7 @@
 
     // Update result counts
     resultCounts.visible = filteredSpans.length;
+    console.log('[search] _applyFilters: ' + filteredSpans.length + ' of ' + allSpans.length + ' visible');
     _updateResultCountDisplay();
     _updateTimeRangeDisplay();
     _updateFilterSummaryBar();

@@ -131,7 +131,11 @@
     container.innerHTML = '';
 
     // Process data first to know how many spans we have
-    _processSpans(data);
+    try {
+      _processSpans(data);
+    } catch (e) {
+      console.error('[Timeline] _processSpans error in initTimeline:', e.message, e.stack);
+    }
 
     // Calculate required canvas height based on content (no header in canvas)
     var requiredHeight = _calculateRequiredHeight();
@@ -158,8 +162,8 @@
     var zoomSlider = document.createElement('input');
     zoomSlider.type = 'range';
     zoomSlider.className = 'timeline-zoom-slider';
-    zoomSlider.min = '-10';
-    zoomSlider.max = '80';
+    zoomSlider.min = '-20';
+    zoomSlider.max = '60';
     zoomSlider.value = '0';
     zoomSlider.step = '1';
     zoomSlider.setAttribute('aria-label', 'Timeline zoom');
@@ -181,6 +185,18 @@
     zoomReset.textContent = 'Reset';
     zoomReset.setAttribute('aria-label', 'Reset zoom');
     zoomBar.appendChild(zoomReset);
+
+    var zoomLatest = document.createElement('button');
+    zoomLatest.className = 'timeline-zoom-btn timeline-zoom-latest';
+    zoomLatest.textContent = 'Latest';
+    zoomLatest.setAttribute('aria-label', 'Zoom to most recent test run');
+    zoomBar.appendChild(zoomLatest);
+
+    var zoomFitAll = document.createElement('button');
+    zoomFitAll.className = 'timeline-zoom-btn timeline-zoom-fitall';
+    zoomFitAll.textContent = 'Fit All';
+    zoomFitAll.setAttribute('aria-label', 'Fit all spans in view');
+    zoomBar.appendChild(zoomFitAll);
 
     // Time markers toggle
     var markerToggle = document.createElement('label');
@@ -217,13 +233,21 @@
     headerEl.appendChild(zoomBar);
 
     // Zoom slider ↔ state synchronization
-    // Slider uses logarithmic scale: value 0 = zoom 1.0, each step = ~12% change
-    function sliderToZoom(val) { return Math.pow(1.12, parseFloat(val)); }
-    function zoomToSlider(z) { return Math.log(z) / Math.log(1.12); }
+    // Slider uses logarithmic scale: value 0 = zoom 1.0, each step = ~8% change
+    function sliderToZoom(val) { return Math.pow(1.08, parseFloat(val)); }
+    function zoomToSlider(z) { return Math.log(z) / Math.log(1.08); }
     function syncSlider() {
       var val = zoomToSlider(timelineState.zoom);
       zoomSlider.value = Math.round(val);
-      zoomPct.textContent = Math.round(timelineState.zoom * 100) + '%';
+      // Show zoom as readable text: "100%" at 1x, "2.5x" above 200%, etc.
+      var z = timelineState.zoom;
+      if (z < 2) {
+        zoomPct.textContent = Math.round(z * 100) + '%';
+      } else if (z < 100) {
+        zoomPct.textContent = z.toFixed(1) + 'x';
+      } else {
+        zoomPct.textContent = Math.round(z) + 'x';
+      }
     }
 
     // Apply zoom around the center of the current viewport
@@ -238,7 +262,7 @@
 
     zoomSlider.addEventListener('input', function () {
       zoomAroundCenter(sliderToZoom(this.value));
-      zoomPct.textContent = Math.round(timelineState.zoom * 100) + '%';
+      syncSlider();
       _applyZoom();
     });
 
@@ -255,6 +279,20 @@
     });
 
     zoomReset.addEventListener('click', function () {
+      timelineState.zoom = 1.0;
+      timelineState.viewStart = timelineState.minTime;
+      timelineState.viewEnd = timelineState.maxTime;
+      syncSlider();
+      _applyZoom();
+    });
+
+    zoomLatest.addEventListener('click', function () {
+      _autoZoomToRecentCluster();
+      syncSlider();
+      _applyZoom();
+    });
+
+    zoomFitAll.addEventListener('click', function () {
       timelineState.zoom = 1.0;
       timelineState.viewStart = timelineState.minTime;
       timelineState.viewEnd = timelineState.maxTime;
@@ -282,6 +320,51 @@
     canvas.style.cursor = 'crosshair';
     canvas.style.display = 'block';
     container.appendChild(canvas);
+
+    // Horizontal scrollbar for panning
+    var hScrollWrap = document.createElement('div');
+    hScrollWrap.className = 'timeline-hscroll-wrap';
+    hScrollWrap.style.cssText = 'width:100%;overflow-x:auto;overflow-y:hidden;height:14px;';
+    var hScrollInner = document.createElement('div');
+    hScrollInner.className = 'timeline-hscroll-inner';
+    hScrollInner.style.cssText = 'height:1px;';
+    hScrollWrap.appendChild(hScrollInner);
+    container.appendChild(hScrollWrap);
+
+    // Sync scrollbar thumb size and position with viewport
+    var _hScrollSyncing = false;
+    function _syncHScroll() {
+      if (_hScrollSyncing) return;
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      if (totalRange <= 0) return;
+      var viewRange = timelineState.viewEnd - timelineState.viewStart;
+      var ratio = totalRange / Math.max(viewRange, 0.001);
+      // Inner width = container width * ratio (makes scrollbar thumb proportional)
+      var containerWidth = hScrollWrap.clientWidth;
+      hScrollInner.style.width = Math.round(containerWidth * ratio) + 'px';
+      // Set scroll position
+      var scrollFraction = (timelineState.viewStart - timelineState.minTime) / (totalRange - viewRange || 1);
+      var maxScrollLeft = hScrollInner.clientWidth - containerWidth;
+      _hScrollSyncing = true;
+      hScrollWrap.scrollLeft = Math.round(scrollFraction * maxScrollLeft);
+      _hScrollSyncing = false;
+    }
+    hScrollWrap.addEventListener('scroll', function () {
+      if (_hScrollSyncing) return;
+      var containerWidth = hScrollWrap.clientWidth;
+      var maxScrollLeft = hScrollInner.clientWidth - containerWidth;
+      if (maxScrollLeft <= 0) return;
+      var scrollFraction = hScrollWrap.scrollLeft / maxScrollLeft;
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var viewRange = timelineState.viewEnd - timelineState.viewStart;
+      var newStart = timelineState.minTime + scrollFraction * (totalRange - viewRange);
+      _hScrollSyncing = true;
+      timelineState.viewStart = newStart;
+      timelineState.viewEnd = newStart + viewRange;
+      _applyZoom();
+      _hScrollSyncing = false;
+    });
+    timelineState._syncHScroll = _syncHScroll;
 
     // Initialize timeline state
     timelineState.canvas = canvas;
@@ -315,6 +398,10 @@
         }
       });
     }
+
+    // Auto-zoom to recent cluster if spans are spread across a wide time range
+    _autoZoomToRecentCluster();
+    if (timelineState._syncSlider) timelineState._syncSlider();
 
     // Initial render
     _render();
@@ -385,6 +472,7 @@
   function _applyZoom() {
     _render();
     _renderHeader();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
   }
 
   /**
@@ -394,7 +482,19 @@
     var suites = data.suites || [];
     var allSpans = [];
 
-    console.log('[Timeline] Processing data:', { suiteCount: suites.length, data: data });
+    console.log('[Timeline] Processing data: suiteCount=' + suites.length);
+    if (suites.length > 0) {
+      var s0 = suites[0];
+      console.log('[Timeline] First suite: name=' + s0.name +
+        ', childCount=' + (s0.children ? s0.children.length : 0) +
+        ', start=' + s0.start_time + ', end=' + s0.end_time);
+      if (s0.children && s0.children.length > 0) {
+        var c0 = s0.children[0];
+        console.log('[Timeline] First child: name=' + c0.name +
+          ', hasKeywords=' + (c0.keywords !== undefined) +
+          ', hasChildren=' + (c0.children !== undefined));
+      }
+    }
 
     // Iterative flattening using explicit work stack to avoid stack overflow
     // on large traces (600K+ spans). Stack items: [node, type, depth, worker, parentSpan]
@@ -490,10 +590,8 @@
     timelineState.spans = allSpans;
     timelineState.flatSpans = allSpans;
 
-    console.log('[Timeline] Processed spans:', { 
-      totalSpans: allSpans.length,
-      sampleSpan: allSpans[0]
-    });
+    console.log('[Timeline] Processed spans: totalSpans=' + allSpans.length +
+      (allSpans.length > 0 ? ', first=' + allSpans[0].name + ' type=' + allSpans[0].type : ''));
 
     // Compute time bounds
     if (allSpans.length > 0) {
@@ -717,11 +815,33 @@
    * Set up canvas event listeners for interaction.
    */
   function _setupEventListeners(canvas) {
-    // Mouse wheel for zoom
+    // Mouse wheel: Shift+wheel = horizontal pan, plain wheel = zoom
     canvas.addEventListener('wheel', function (e) {
       e.preventDefault();
       var rect = canvas.getBoundingClientRect();
       var mouseX = e.clientX - rect.left;
+
+      if (e.shiftKey) {
+        // Horizontal pan: shift+wheel scrolls the viewport left/right
+        var viewRange = timelineState.viewEnd - timelineState.viewStart;
+        var panAmount = viewRange * 0.15 * (e.deltaY > 0 ? 1 : -1);
+        var newStart = timelineState.viewStart + panAmount;
+        var newEnd = timelineState.viewEnd + panAmount;
+        // Clamp to data bounds
+        if (newStart < timelineState.minTime) {
+          newStart = timelineState.minTime;
+          newEnd = newStart + viewRange;
+        }
+        if (newEnd > timelineState.maxTime) {
+          newEnd = timelineState.maxTime;
+          newStart = newEnd - viewRange;
+        }
+        timelineState.viewStart = newStart;
+        timelineState.viewEnd = newEnd;
+        _applyZoom();
+        return;
+      }
+
       // Zoom centered on mouse position
       var mouseTime = _screenXToTime(mouseX);
       var factor = e.deltaY > 0 ? 0.9 : 1.1;
@@ -749,11 +869,22 @@
       _applyZoom();
     }, { passive: false });
 
-    // Mouse down: start drag or selection
+    // Mouse down: middle-click drag = pan, left-click = select span or time range
     canvas.addEventListener('mousedown', function (e) {
       var rect = canvas.getBoundingClientRect();
       var x = e.clientX - rect.left;
       var y = e.clientY - rect.top;
+
+      // Middle mouse button (or left+alt) = start horizontal pan drag
+      if (e.button === 1 || (e.button === 0 && e.altKey)) {
+        e.preventDefault();
+        timelineState.isDragging = true;
+        timelineState.dragStartX = e.clientX;
+        timelineState._dragViewStart = timelineState.viewStart;
+        timelineState._dragViewEnd = timelineState.viewEnd;
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
 
       // Check if clicking on a span
       var clickedSpan = _getSpanAtPoint(x, y);
@@ -772,8 +903,32 @@
       timelineState.selectionEnd = timelineState.selectionStart;
     });
 
-    // Mouse move: update drag or selection
+    // Mouse move: update drag pan or selection
     canvas.addEventListener('mousemove', function (e) {
+      // Handle pan drag (middle-click or alt+click)
+      if (timelineState.isDragging && timelineState._dragViewStart !== undefined) {
+        var canvasWidth = canvas.width / (window.devicePixelRatio || 1);
+        var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
+        var viewRange = timelineState._dragViewEnd - timelineState._dragViewStart;
+        var dx = e.clientX - timelineState.dragStartX;
+        var timeDelta = -(dx / timelineWidth) * viewRange;
+        var newStart = timelineState._dragViewStart + timeDelta;
+        var newEnd = timelineState._dragViewEnd + timeDelta;
+        // Clamp
+        if (newStart < timelineState.minTime) {
+          newStart = timelineState.minTime;
+          newEnd = newStart + viewRange;
+        }
+        if (newEnd > timelineState.maxTime) {
+          newEnd = timelineState.maxTime;
+          newStart = newEnd - viewRange;
+        }
+        timelineState.viewStart = newStart;
+        timelineState.viewEnd = newEnd;
+        _applyZoom();
+        return;
+      }
+
       var rect = canvas.getBoundingClientRect();
       var x = e.clientX - rect.left;
       var y = e.clientY - rect.top;
@@ -795,15 +950,24 @@
 
     // Mouse up: end drag or selection
     canvas.addEventListener('mouseup', function (e) {
+      // End pan drag
+      if (timelineState.isDragging && timelineState._dragViewStart !== undefined) {
+        timelineState.isDragging = false;
+        delete timelineState._dragViewStart;
+        delete timelineState._dragViewEnd;
+        canvas.style.cursor = 'crosshair';
+        return;
+      }
+
       if (timelineState.isSelecting) {
         var startTime = Math.min(timelineState.selectionStart, timelineState.selectionEnd);
         var endTime = Math.max(timelineState.selectionStart, timelineState.selectionEnd);
         var totalRange = timelineState.maxTime - timelineState.minTime;
         var selectedRange = endTime - startTime;
 
-        // Only act if the selection is meaningful (more than 1% of current view)
+        // Only act if the selection is meaningful (more than 0.1% of current view)
         var viewRange = timelineState.viewEnd - timelineState.viewStart;
-        if (selectedRange > viewRange * 0.01) {
+        if (selectedRange > viewRange * 0.001) {
           // Set viewport to the selected range
           timelineState.viewStart = startTime;
           timelineState.viewEnd = endTime;
@@ -1457,7 +1621,14 @@
     var hours = date.getHours().toString().padStart(2, '0');
     var minutes = date.getMinutes().toString().padStart(2, '0');
     var seconds = date.getSeconds().toString().padStart(2, '0');
-    return hours + ':' + minutes + ':' + seconds;
+    var base = hours + ':' + minutes + ':' + seconds;
+    // Show milliseconds when zoomed in enough (view range < 30 seconds)
+    var viewRange = timelineState.viewEnd - timelineState.viewStart;
+    if (viewRange < 30) {
+      var ms = date.getMilliseconds().toString().padStart(3, '0');
+      return base + '.' + ms;
+    }
+    return base;
   }
 
   /**
@@ -1734,5 +1905,126 @@
     timelineState.selectionEnd = null;
     _render();
   };
+
+  /**
+   * Public API: Update timeline data without destroying canvas or zoom state.
+   * Used by live mode to add new spans incrementally.
+   * @param {Object} data - The trace data with suites
+   */
+  window.updateTimelineData = function (data) {
+    if (!timelineState.canvas || !timelineState.ctx) return;
+
+    // Save current zoom/pan state
+    var savedZoom = timelineState.zoom;
+    var savedViewStart = timelineState.viewStart;
+    var savedViewEnd = timelineState.viewEnd;
+    var savedPanY = timelineState.panY;
+    var savedSelected = timelineState.selectedSpan;
+    var wasUserZoomed = savedZoom > 1.01 || savedZoom < 0.99;
+    var hadSpansBefore = timelineState.flatSpans.length > 0;
+
+    // Re-process spans with new data
+    try {
+      _processSpans(data);
+    } catch (e) {
+      console.error('[Timeline] _processSpans error in updateTimelineData:', e.message, e.stack);
+      return;
+    }
+
+    // Recalculate canvas height for new content
+    var requiredHeight = _calculateRequiredHeight();
+    var canvas = timelineState.canvas;
+    canvas.style.height = requiredHeight + 'px';
+    _resizeCanvas(canvas);
+    if (timelineState.headerCanvas) {
+      _resizeHeaderCanvas(timelineState.headerCanvas);
+    }
+
+    // Restore zoom/pan if user had zoomed in, otherwise fit all data
+    if (wasUserZoomed) {
+      timelineState.zoom = savedZoom;
+      timelineState.viewStart = savedViewStart;
+      timelineState.viewEnd = savedViewEnd;
+    } else if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
+      // First data load: auto-zoom to the most recent cluster of spans
+      // to make short spans visible (they'd be invisible at full range)
+      _autoZoomToRecentCluster();
+    }
+    timelineState.panY = savedPanY;
+    timelineState.selectedSpan = savedSelected;
+
+    if (timelineState._syncSlider) timelineState._syncSlider();
+    _render();
+    _renderHeader();
+  };
+
+  /**
+   * Auto-zoom to the most recent cluster of spans.
+   * Finds the latest test run and zooms to show it with some padding.
+   * This makes short spans (e.g. 20ms) visible instead of being sub-pixel
+   * when the total time range spans many minutes across multiple runs.
+   */
+  function _autoZoomToRecentCluster() {
+    var spans = timelineState.flatSpans;
+    if (spans.length === 0) return;
+
+    var totalRange = timelineState.maxTime - timelineState.minTime;
+
+    // For short traces (< 5 minutes), show everything — no auto-zoom needed
+    if (totalRange < 300) return;
+
+    // Cluster detection: find the most recent group of spans that are
+    // temporally close together. Use a gap-based approach: if there's a
+    // gap > 30s between spans, that's a cluster boundary.
+    // Collect unique test/suite end times, sorted descending
+    var endTimes = [];
+    for (var i = 0; i < spans.length; i++) {
+      if (spans[i].type === 'test' || spans[i].type === 'suite') {
+        endTimes.push(spans[i].endTime);
+      }
+    }
+    if (endTimes.length === 0) return;
+    endTimes.sort(function (a, b) { return b - a; }); // descending
+
+    // Walk backwards from the latest end time, expanding the cluster
+    // until we hit a gap > 30 seconds
+    var clusterEnd = endTimes[0];
+    var clusterStart = clusterEnd;
+    var GAP_THRESHOLD = 30; // seconds
+    for (var j = 1; j < endTimes.length; j++) {
+      if (clusterStart - endTimes[j] > GAP_THRESHOLD) break;
+      clusterStart = endTimes[j];
+    }
+
+    // Now find the actual earliest start time of spans in this cluster
+    var actualStart = clusterEnd;
+    for (var k = 0; k < spans.length; k++) {
+      if (spans[k].endTime >= clusterStart && spans[k].startTime < actualStart) {
+        actualStart = spans[k].startTime;
+      }
+    }
+
+    // Add 15% padding on each side
+    var clusterRange = clusterEnd - actualStart;
+    if (clusterRange <= 0) clusterRange = 60; // fallback: 1 minute
+    var padding = clusterRange * 0.15;
+    var viewStart = actualStart - padding;
+    var viewEnd = clusterEnd + padding;
+
+    // Clamp to data bounds
+    if (viewStart < timelineState.minTime) viewStart = timelineState.minTime;
+    if (viewEnd > timelineState.maxTime) viewEnd = timelineState.maxTime;
+
+    // Only auto-zoom if it would actually zoom in meaningfully (> 1.5x)
+    var viewRange = viewEnd - viewStart;
+    if (totalRange > 0 && viewRange < totalRange * 0.67) {
+      timelineState.viewStart = viewStart;
+      timelineState.viewEnd = viewEnd;
+      timelineState.zoom = totalRange / viewRange;
+      console.log('[Timeline] Auto-zoomed to recent cluster: ' +
+        Math.round(clusterRange) + 's cluster, ' +
+        Math.round(viewRange) + 's view (zoom ' + timelineState.zoom.toFixed(1) + 'x)');
+    }
+  }
 
 })();

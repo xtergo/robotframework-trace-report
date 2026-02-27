@@ -146,6 +146,13 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="<url>",
         help="Base URL path for reverse proxy deployment (e.g. /trace-viewer)",
     )
+    parser.add_argument(
+        "--lookback",
+        default=None,
+        metavar="<duration>",
+        help="Only fetch spans from the last N duration on startup (e.g. 10m, 1h, 30s). "
+        "Default: fetch all. Applies to live/SigNoz mode only.",
+    )
 
 
 def _args_to_cli_dict(args: argparse.Namespace) -> dict:
@@ -176,6 +183,7 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
         "compact_html": "compact_html",
         "gzip_embed": "gzip_embed",
         "base_url": "base_url",
+        "lookback": "lookback",
     }
     result = {}
     for arg_name, config_name in mapping.items():
@@ -311,6 +319,8 @@ def _run_live_server(args: argparse.Namespace) -> int:
         report_options=report_options,
         provider=provider,
         base_url=config.base_url,
+        lookback=config.lookback or getattr(args, "lookback", None),
+        max_spans=config.max_spans,
     )
     server.start(open_browser=not config.no_open)
     return 0

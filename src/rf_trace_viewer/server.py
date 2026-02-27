@@ -61,6 +61,14 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         else:
             provider_type = "json"
 
+        # Lookback config (optional, for live SigNoz mode)
+        lookback = getattr(self.server, "lookback", None) or ""
+        lookback_js = f'window.__RF_TRACE_LOOKBACK__ = "{_escape_html(lookback)}";\n' if lookback else ""
+
+        # Max spans cap for live mode (configurable, default 1M in JS)
+        max_spans = getattr(self.server, "max_spans", None)
+        max_spans_js = f"window.__RF_TRACE_MAX_SPANS__ = {int(max_spans)};\n" if max_spans else ""
+
         html = (
             "<!DOCTYPE html>\n"
             '<html lang="en">\n'
@@ -79,6 +87,8 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             f"window.__RF_TRACE_POLL_INTERVAL__ = {poll_interval};\n"
             f'window.__RF_PROVIDER = "{provider_type}";\n'
             f'window.__RF_BASE_URL = "{_escape_html(getattr(self.server, "base_url", None) or "")}";\n'
+            f"{lookback_js}"
+            f"{max_spans_js}"
             "</script>\n"
             "<script>\n"
             f"{js_content}\n"
@@ -308,6 +318,8 @@ class LiveServer:
         report_options: ReportOptions | None = None,
         provider: object | None = None,
         base_url: str | None = None,
+        lookback: str | None = None,
+        max_spans: int | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -322,6 +334,8 @@ class LiveServer:
         self.report_options = report_options
         self.provider = provider
         self.base_url = base_url
+        self.lookback = lookback
+        self.max_spans = max_spans
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -338,6 +352,8 @@ class LiveServer:
         self._httpd.forward_url = self.forward_url  # type: ignore[attr-defined]
         self._httpd.provider = self.provider  # type: ignore[attr-defined]
         self._httpd.base_url = self.base_url  # type: ignore[attr-defined]
+        self._httpd.lookback = self.lookback  # type: ignore[attr-defined]
+        self._httpd.max_spans = self.max_spans  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")

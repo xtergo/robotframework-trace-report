@@ -119,7 +119,11 @@ function renderTree(container, model) {
         }
       }
       _currentFilteredSpanIds = filteredSpanIds;
-      _renderTreeWithFilter(container, model, filteredSpanIds);
+      // Use _originalModel (updated on each renderTree call) instead of
+      // the closure-captured model which would be stale in live mode
+      if (_originalModel && _treeContainer) {
+        _renderTreeWithFilter(_treeContainer, _originalModel, filteredSpanIds);
+      }
     });
   }
 }

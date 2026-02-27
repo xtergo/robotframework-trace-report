@@ -42,6 +42,7 @@ class AppConfig:
     compact_html: bool = False
     gzip_embed: bool = False
     base_url: str | None = None
+    lookback: str | None = None  # e.g. "10m", "1h", "30s" — only fetch recent spans in live mode
 
 
 @dataclass

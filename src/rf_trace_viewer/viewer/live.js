@@ -20,6 +20,39 @@
     Number(window.__RF_TRACE_POLL_INTERVAL__) || 5));
   var POLL_MS = pollInterval * 1000;
 
+  // Lookback: only fetch spans from the last N seconds on first poll.
+  // Supports URL param ?lookback=10m (or 30s, 2h, 1d) and window config.
+  // Default for SigNoz live mode: 10m. Use ?lookback=0 to fetch everything.
+  var _lookbackNs = _parseLookback();
+
+  function _parseLookback() {
+    // Check URL param first, then window config
+    var raw = '';
+    try {
+      var params = new URLSearchParams(window.location.search);
+      raw = params.get('lookback') || '';
+    } catch (e) { /* old browser */ }
+    if (!raw) raw = String(window.__RF_TRACE_LOOKBACK__ || '');
+
+    // Explicit "0" or "none" disables lookback
+    if (raw === '0' || raw.toLowerCase() === 'none') return 0;
+
+    // If nothing specified, default to 10m for signoz provider
+    if (!raw) {
+      if (provider === 'signoz') return 10 * 60 * 1e9; // 10 minutes in ns
+      return 0;
+    }
+
+    // Parse duration string: "10m", "30s", "2h", "1d", or plain seconds
+    var match = raw.match(/^(\d+(?:\.\d+)?)\s*(s|m|h|d)?$/i);
+    if (!match) return 0;
+    var num = parseFloat(match[1]);
+    var unit = (match[2] || 's').toLowerCase();
+    var multipliers = { s: 1, m: 60, h: 3600, d: 86400 };
+    var seconds = num * (multipliers[unit] || 1);
+    return Math.round(seconds * 1e9); // convert to nanoseconds
+  }
+
   /* ── state ─────────────────────────────────────────────────────── */
 
   var provider = window.__RF_PROVIDER || 'json';  // 'json' or 'signoz'
@@ -27,6 +60,7 @@
   var byteOffset = 0;          // current byte offset into the trace file
   var lineBuffer = '';          // partial line carried across polls
   var allSpans = [];            // flat list of all parsed spans
+  var seenSpanIds = {};         // browser-side dedup for SigNoz spans
   var pollTimer = null;         // setInterval id
   var tickTimer = null;         // 1-second status bar tick
   var lastUpdateTs = 0;         // Date.now() of last successful data fetch
@@ -38,6 +72,13 @@
   var lastSeenNs = 0;            // SigNoz: highest (start_time_ns + duration_ns) seen
   var backoffMs = POLL_MS;       // SigNoz: current backoff interval (for 429 handling)
   var snapshotMode = false;      // true = paused polling (snapshot), false = live
+  var _lastFilterSpanCount = 0;  // track span count to re-init filter only when data changes
+  var _timelineInitialized = false;  // track whether timeline has been initialized with real data
+
+  // Span cap — stop ingesting beyond this limit to prevent browser tab crash
+  var MAX_SPANS = Number(window.__RF_TRACE_MAX_SPANS__) || 1000000;
+  var _spanCapReached = false;
+  var _spanCapBannerEl = null;
 
   /* ── 1. Provide empty model for app.js ─────────────────────────── */
 
@@ -68,6 +109,15 @@
   function _onAppReady() {
     appReady = true;
     lastUpdateTs = Date.now();
+
+    // Apply lookback: set initial watermark so first poll only fetches recent spans
+    if (_lookbackNs > 0 && provider === 'signoz') {
+      var nowNs = Date.now() * 1e6; // ms → ns (approximate, good enough for lookback)
+      lastSeenNs = Math.max(0, nowNs - _lookbackNs);
+      console.log('[live] Lookback active: fetching spans from last ' +
+        Math.round(_lookbackNs / 1e9) + 's (since_ns=' + lastSeenNs + ')');
+    }
+
     _startPolling();
     _startTick();
     _listenVisibility();
@@ -181,9 +231,11 @@
         if (!data || !data.spans) return;
         var spans = data.spans;
         if (spans.length > 0) {
-          _ingestSigNozSpans(spans);
+          var added = _ingestSigNozSpans(spans);
           lastUpdateTs = Date.now();
-          _rebuildAndRender();
+          if (added > 0) {
+            _rebuildAndRender();
+          }
         }
       })
       .catch(function (err) {
@@ -198,18 +250,25 @@
 
   /** Parse incremental NDJSON text, handling partial trailing lines. */
   function _ingestNdjson(text) {
+    if (_spanCapReached) return;
+
     var combined = lineBuffer + text;
     var lines = combined.split('\n');
     // Last element may be incomplete — buffer it
     lineBuffer = lines.pop() || '';
 
     for (var i = 0; i < lines.length; i++) {
+      if (allSpans.length >= MAX_SPANS) {
+        _onSpanCapReached();
+        return;
+      }
       var line = lines[i].trim();
       if (!line) continue;
       try {
         var obj = JSON.parse(line);
         var spans = _extractSpans(obj);
         for (var j = 0; j < spans.length; j++) {
+          if (allSpans.length >= MAX_SPANS) { _onSpanCapReached(); return; }
           allSpans.push(spans[j]);
         }
       } catch (e) {
@@ -218,10 +277,27 @@
     }
   }
 
-  /** Ingest TraceSpan objects from SigNoz /api/spans response. */
+  /** Ingest TraceSpan objects from SigNoz /api/spans response.
+   *  Returns the number of NEW (not previously seen) spans added. */
   function _ingestSigNozSpans(spans) {
+    if (_spanCapReached) return 0;
+
+    var newCount = 0;
     for (var i = 0; i < spans.length; i++) {
+      // Check span cap before each insert
+      if (allSpans.length >= MAX_SPANS) {
+        _onSpanCapReached();
+        break;
+      }
+
       var s = spans[i];
+      var spanId = (s.span_id || '').toLowerCase();
+
+      // Browser-side dedup: skip spans we've already ingested
+      if (seenSpanIds[spanId]) continue;
+      seenSpanIds[spanId] = true;
+      newCount++;
+
       var startNs = s.start_time_ns || 0;
       var durationNs = s.duration_ns || 0;
       var endNs = startNs + durationNs;
@@ -254,6 +330,7 @@
         events: s.events || []
       });
     }
+    return newCount;
   }
 
   /* ── 5. OTLP span extraction ───────────────────────────────────── */
@@ -372,6 +449,9 @@
 
   function _rebuildAndRender() {
     var model = _buildModel(allSpans);
+    console.log('[live] rebuildAndRender: allSpans=' + allSpans.length +
+      ', rootSuites=' + model.suites.length +
+      ', stats.total_tests=' + (model.statistics ? model.statistics.total_tests : '?'));
     _renderAllViews(model);
   }
 
@@ -564,6 +644,15 @@
         rootSuites.push(buildSuite(span));
       }
     }
+
+    // Prune empty root suites: if a root suite has 0 children (no tests,
+    // no sub-suites, no keywords), it's likely a container suite whose
+    // children are separate root spans (common in RF tracer output).
+    // Remove these empty shells to avoid confusing the tree view.
+    rootSuites = rootSuites.filter(function (s) {
+      return s.children && s.children.length > 0;
+    });
+
     rootSuites.sort(function (a, b) { return (a.start_time || 0) - (b.start_time || 0); });
 
     // Compute statistics
@@ -601,6 +690,23 @@
   }
 
   /* ── helpers ────────────────────────────────────────────────────── */
+
+  /** Count total spans in a model (suites + tests + keywords). */
+  function _countModelSpans(model) {
+    var count = 0;
+    var stack = (model.suites || []).slice();
+    while (stack.length > 0) {
+      var item = stack.pop();
+      count++;
+      if (item.children) {
+        for (var i = 0; i < item.children.length; i++) stack.push(item.children[i]);
+      }
+      if (item.keywords) {
+        for (var j = 0; j < item.keywords.length; j++) stack.push(item.keywords[j]);
+      }
+    }
+    return count;
+  }
 
   /** Map rf.status attribute or OTLP status code → PASS/FAIL/SKIP/NOT_RUN. */
   function _mapStatus(span) {
@@ -732,6 +838,10 @@
   /* ── 7. View re-rendering ──────────────────────────────────────── */
 
   function _renderAllViews(model) {
+    var suiteCount = (model.suites || []).length;
+    var newSpanCount = _countModelSpans(model);
+    console.log('[live] _renderAllViews: suites=' + suiteCount + ', modelSpans=' + newSpanCount);
+
     // Tree
     var treePanel = document.querySelector('.panel-tree');
     if (treePanel && typeof renderTree === 'function') {
@@ -744,10 +854,19 @@
       renderStats(statsPanel, model.statistics || {});
     }
 
-    // Timeline
+    // Timeline — init once with real data, then use incremental updates.
+    // In live mode, app.js skips initTimeline (empty model), so we do the
+    // first init here when data arrives. Subsequent polls use updateTimelineData
+    // to preserve zoom/pan state.
     var timelineSection = document.querySelector('.timeline-section');
-    if (timelineSection && typeof window.initTimeline === 'function') {
-      window.initTimeline(timelineSection, model);
+    if (timelineSection) {
+      if (!_timelineInitialized && suiteCount > 0 && typeof window.initTimeline === 'function') {
+        console.log('[live] First timeline init with ' + suiteCount + ' suites');
+        window.initTimeline(timelineSection, model);
+        _timelineInitialized = true;
+      } else if (_timelineInitialized && typeof window.updateTimelineData === 'function') {
+        window.updateTimelineData(model);
+      }
     }
 
     // Keyword stats
@@ -756,10 +875,17 @@
       renderKeywordStats(keywordStatsSection, model);
     }
 
-    // Search / filter
+    // Search / filter — always re-init in live mode when data changes.
     var filterContent = document.querySelector('.panel-filter .filter-content');
-    if (filterContent && typeof window.initSearch === 'function') {
-      window.initSearch(filterContent, model);
+    if (!filterContent) {
+      console.warn('[live] filter-content element not found');
+    }
+    if (filterContent && typeof window.initSearch === 'function' && newSpanCount > 0) {
+      if (newSpanCount !== _lastFilterSpanCount) {
+        console.log('[live] Re-initializing filter: spanCount', _lastFilterSpanCount, '->', newSpanCount);
+        window.initSearch(filterContent, model);
+        _lastFilterSpanCount = newSpanCount;
+      }
     }
 
     // Flow table
@@ -865,6 +991,55 @@
     note._clearTimer = setTimeout(function () {
       note.textContent = '';
     }, 10000);
+  }
+
+  /* ── 9. Span cap enforcement ───────────────────────────────────── */
+
+  function _onSpanCapReached() {
+    if (_spanCapReached) return;
+    _spanCapReached = true;
+    _stopPolling();
+    console.warn('[live] Span cap reached: ' + allSpans.length + ' spans (max ' + MAX_SPANS + ')');
+
+    // Show persistent banner
+    var viewer = document.querySelector('.rf-trace-viewer');
+    if (!viewer) return;
+    _spanCapBannerEl = document.createElement('div');
+    _spanCapBannerEl.className = 'span-cap-banner';
+    _spanCapBannerEl.style.cssText =
+      'background:#d32f2f;color:#fff;padding:10px 16px;font-size:14px;' +
+      'display:flex;align-items:center;gap:12px;justify-content:space-between;';
+
+    var msgEl = document.createElement('span');
+    var formatted = allSpans.length >= 1000000
+      ? (allSpans.length / 1000000).toFixed(1) + 'M'
+      : allSpans.length >= 1000
+        ? Math.round(allSpans.length / 1000) + 'K'
+        : String(allSpans.length);
+    msgEl.innerHTML =
+      '\u26a0 Span limit reached (' + formatted + ' spans). ' +
+      'Polling paused to prevent browser slowdown. ' +
+      'Use <b>?lookback=5m</b> in the URL or narrow your time range to load fewer spans.';
+    _spanCapBannerEl.appendChild(msgEl);
+
+    var dismissBtn = document.createElement('button');
+    dismissBtn.textContent = 'Resume';
+    dismissBtn.title = 'Resume polling (may cause slowdown)';
+    dismissBtn.style.cssText =
+      'background:#fff;color:#d32f2f;border:none;padding:4px 12px;border-radius:3px;' +
+      'cursor:pointer;font-weight:bold;white-space:nowrap;';
+    dismissBtn.addEventListener('click', function () {
+      _spanCapReached = false;
+      MAX_SPANS = MAX_SPANS * 2; // double the cap
+      _spanCapBannerEl.remove();
+      _spanCapBannerEl = null;
+      _startPolling();
+      _poll();
+    });
+    _spanCapBannerEl.appendChild(dismissBtn);
+
+    // Insert at top of viewer
+    viewer.insertBefore(_spanCapBannerEl, viewer.firstChild);
   }
 
 })();
