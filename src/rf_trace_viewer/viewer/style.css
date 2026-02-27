@@ -2039,6 +2039,75 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline-offset: -2px;
 }
 
+/* ── Service Filter Dropdown ── */
+.rf-trace-viewer .service-filter {
+  position: relative;
+  display: inline-flex;
+  margin-left: 8px;
+}
+
+.rf-trace-viewer .service-filter-btn {
+  padding: 3px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .service-filter-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .service-filter-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 180px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.rf-trace-viewer .service-filter-list {
+  padding: 4px 0;
+}
+
+.rf-trace-viewer .service-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .service-filter-item:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .service-filter-item input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.rf-trace-viewer .service-filter-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 /* Dark mode adjustments for progress indicators */
 .rf-trace-viewer.theme-dark .loading-progress-bar::before {
   border-color: var(--border-color);

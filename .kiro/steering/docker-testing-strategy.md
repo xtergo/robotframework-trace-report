@@ -136,3 +136,34 @@ When implementing or testing code:
 ### "unrecognized arguments: -n"
 - The pre-built image includes `pytest-xdist` for parallel execution
 - If you see this, you're using the wrong image — use `rf-trace-test:latest`
+
+## Ensuring Latest Code in Running Containers
+
+### The rf-trace-report Container (SigNoz Integration Stack)
+
+The `rf-trace-report` container uses a volume mount (`../../..:/app`) so Python source changes are visible immediately. However:
+
+1. **Python bytecode cache** (`__pycache__/`, `.pyc` files) can serve stale code. Clear it before restarting:
+   ```bash
+   find src/ -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; find src/ -name '*.pyc' -delete 2>/dev/null
+   ```
+
+2. **JS viewer files** are cached at server startup. After editing JS files in `src/rf_trace_viewer/viewer/`, restart the container:
+   ```bash
+   docker restart rf-signoz-test-rf-trace-report-1
+   ```
+
+3. **Combined (recommended before integration tests)**:
+   ```bash
+   find src/ -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+   docker restart rf-signoz-test-rf-trace-report-1
+   ```
+
+4. **If the container was built with old code** (no volume mount, or `pip install -e .` cached old entry points), rebuild:
+   ```bash
+   docker compose -p rf-signoz-test -f tests/integration/signoz/docker-compose.yml --profile report up -d --build rf-trace-report
+   ```
+
+### Always Use Latest Code Rule
+
+Before running integration or browser tests, **always clear Python bytecode caches and restart/rebuild the relevant container**. Stale `.pyc` files are a common source of "it works locally but fails in Docker" issues.

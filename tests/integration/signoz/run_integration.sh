@@ -114,11 +114,12 @@ get_signoz_token() {
         local user_line
         user_line=$(echo "$db_strings" | grep "admin@test.local" | grep "ADMIN" | head -1 || true)
         if [ -n "$user_line" ]; then
-            # Extract all UUIDs from the line — first is org_id, second is user_id
+            # DB record order: <timestamps> <user_id> <display_name> <email> <org_id> <role>
+            # First UUID is user_id, second is org_id
             local uuids
             uuids=$(echo "$user_line" | grep -o '019[0-9a-f-]\{33\}' || true)
-            org_id=$(echo "$uuids" | head -1 || true)
-            user_id=$(echo "$uuids" | tail -1 || true)
+            user_id=$(echo "$uuids" | head -1 || true)
+            org_id=$(echo "$uuids" | tail -1 || true)
         fi
 
         if [ -z "$user_id" ] || [ -z "$org_id" ]; then
@@ -177,6 +178,11 @@ SIGNOZ_TOKEN=$(get_signoz_token) || true
 
 if [ -n "$SIGNOZ_TOKEN" ]; then
     pass "Obtained SigNoz JWT token"
+    # Extract user/org IDs from the token for auto-refresh support
+    TOKEN_PAYLOAD=$(echo "$SIGNOZ_TOKEN" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null || true)
+    SIGNOZ_USER_ID_VAL=$(echo "$TOKEN_PAYLOAD" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"$//' || true)
+    SIGNOZ_ORG_ID_VAL=$(echo "$TOKEN_PAYLOAD" | grep -o '"orgId":"[^"]*"' | head -1 | sed 's/"orgId":"//;s/"$//' || true)
+    SIGNOZ_EMAIL_VAL=$(echo "$TOKEN_PAYLOAD" | grep -o '"email":"[^"]*"' | head -1 | sed 's/"email":"//;s/"$//' || true)
 else
     fail "Could not obtain SigNoz JWT token — rf-trace-report will not be able to query SigNoz"
     FAILURES=$((FAILURES + 1))
@@ -186,6 +192,9 @@ fi
 
 info "Phase 3: Starting rf-trace-report with SigNoz auth token..."
 export SIGNOZ_API_KEY="${SIGNOZ_TOKEN}"
+export SIGNOZ_USER_ID="${SIGNOZ_USER_ID_VAL:-}"
+export SIGNOZ_ORG_ID="${SIGNOZ_ORG_ID_VAL:-}"
+export SIGNOZ_EMAIL="${SIGNOZ_EMAIL_VAL:-}"
 dc --profile report up -d --build rf-trace-report 2>&1
 
 # ── Wait for OTel collector ──────────────────────────────────────────

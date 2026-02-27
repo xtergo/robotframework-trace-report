@@ -239,6 +239,10 @@ services:
     environment:
       - SIGNOZ_ENDPOINT=http://signoz:8080
       - SIGNOZ_API_KEY=${SIGNOZ_API_KEY:-}
+      - SIGNOZ_JWT_SECRET=${SIGNOZ_JWT_SECRET:-test-secret-key-for-integration}
+      - SIGNOZ_USER_ID=${SIGNOZ_USER_ID:-}
+      - SIGNOZ_ORG_ID=${SIGNOZ_ORG_ID:-}
+      - SIGNOZ_EMAIL=${SIGNOZ_EMAIL:-}
       - PYTHONPATH=/app/src
     command:
       [

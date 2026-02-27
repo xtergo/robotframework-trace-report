@@ -20,7 +20,7 @@ from rf_trace_viewer.generator import (
     generate_report,
 )
 from rf_trace_viewer.parser import parse_line
-from rf_trace_viewer.providers.base import ProviderError, RateLimitError
+from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 
@@ -37,6 +37,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._serve_viewer()
         elif path == "/api/spans":
             since_ns = int(query.get("since_ns", ["0"])[0])
+            # "service" param: absent → use config default, empty string → no filter
             service = query.get("service", [None])[0]
             self._serve_signoz_spans(since_ns, service_name=service)
         elif path == "/traces.json":
@@ -72,6 +73,12 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         max_spans = getattr(self.server, "max_spans", None)
         max_spans_js = f"window.__RF_TRACE_MAX_SPANS__ = {int(max_spans)};\n" if max_spans else ""
 
+        # Default service name filter (from --service-name config)
+        svc_name = getattr(self.server, "service_name", None) or ""
+        svc_name_js = (
+            f'window.__RF_SERVICE_NAME__ = "{_escape_html(svc_name)}";\n' if svc_name else ""
+        )
+
         html = (
             "<!DOCTYPE html>\n"
             '<html lang="en">\n'
@@ -92,6 +99,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             f'window.__RF_BASE_URL = "{_escape_html(getattr(self.server, "base_url", None) or "")}";\n'
             f"{lookback_js}"
             f"{max_spans_js}"
+            f"{svc_name_js}"
             "</script>\n"
             "<script>\n"
             f"{js_content}\n"
@@ -143,6 +151,14 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             }
             body = json.dumps(result).encode("utf-8")
             self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        except AuthenticationError as exc:
+            body = json.dumps({"error": "auth_error", "message": str(exc)}).encode("utf-8")
+            self.send_response(401)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -323,6 +339,7 @@ class LiveServer:
         base_url: str | None = None,
         lookback: str | None = None,
         max_spans: int | None = None,
+        service_name: str | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -339,6 +356,7 @@ class LiveServer:
         self.base_url = base_url
         self.lookback = lookback
         self.max_spans = max_spans
+        self.service_name = service_name
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -357,6 +375,7 @@ class LiveServer:
         self._httpd.base_url = self.base_url  # type: ignore[attr-defined]
         self._httpd.lookback = self.lookback  # type: ignore[attr-defined]
         self._httpd.max_spans = self.max_spans  # type: ignore[attr-defined]
+        self._httpd.service_name = self.service_name  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")

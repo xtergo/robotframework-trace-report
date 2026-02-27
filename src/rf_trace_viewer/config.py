@@ -33,6 +33,10 @@ class AppConfig:
     max_spans: int = 500_000
     overlap_window_seconds: float = 2.0
     service_name: str | None = None  # filter by service.name in SigNoz queries
+    signoz_jwt_secret: str | None = None  # self-hosted JWT secret for auto token refresh
+    signoz_user_id: str | None = None  # SigNoz user ID for JWT self-signing
+    signoz_org_id: str | None = None  # SigNoz org ID for JWT self-signing
+    signoz_email: str | None = None  # SigNoz user email for JWT claims (must match DB)
 
     # Existing settings preserved
     receiver: bool = False
@@ -51,13 +55,17 @@ class SigNozConfig:
     """Configuration subset for SigNoz provider construction."""
 
     endpoint: str  # e.g. "https://signoz.example.com"
-    api_key: str  # Bearer token
+    api_key: str  # Bearer token or empty for auto-auth
     execution_attribute: str = "essvt.execution_id"
     poll_interval: int = 5
     max_spans_per_page: int = 10_000
     max_spans: int = 500_000
     overlap_window_seconds: float = 2.0
-    service_name: str | None = None  # filter spans by service.name (e.g. "robot-framework")
+    service_name: str | None = None  # filter spans by service.name
+    jwt_secret: str | None = None  # JWT signing secret for self-hosted auto-auth
+    signoz_user_id: str | None = None  # SigNoz user ID for JWT self-signing
+    signoz_org_id: str | None = None  # SigNoz org ID for JWT self-signing
+    signoz_email: str | None = None  # SigNoz user email for JWT claims
 
 
 # Fields that hold int values (for env var coercion)
@@ -153,6 +161,10 @@ def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
     env_map = {
         "SIGNOZ_ENDPOINT": "signoz_endpoint",
         "SIGNOZ_API_KEY": "signoz_api_key",
+        "SIGNOZ_JWT_SECRET": "signoz_jwt_secret",
+        "SIGNOZ_USER_ID": "signoz_user_id",
+        "SIGNOZ_ORG_ID": "signoz_org_id",
+        "SIGNOZ_EMAIL": "signoz_email",
         "EXECUTION_ATTRIBUTE": "execution_attribute",
         "POLL_INTERVAL": "poll_interval",
         "MAX_SPANS_PER_PAGE": "max_spans_per_page",

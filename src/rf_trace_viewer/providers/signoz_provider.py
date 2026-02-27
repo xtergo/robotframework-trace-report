@@ -24,6 +24,7 @@ from .base import (
     TraceSpan,
     TraceViewModel,
 )
+from .signoz_auth import SigNozAuth
 
 # SigNoz status code mapping: 0=UNSET, 1=OK, 2=ERROR
 _STATUS_MAP = {"0": "UNSET", "1": "OK", "2": "ERROR"}
@@ -82,6 +83,14 @@ class SigNozProvider(TraceProvider):
         self._config = config
         self._seen_span_ids: set[str] = set()
         self._last_poll_ns: int = 0
+        self._auth = SigNozAuth(
+            endpoint=config.endpoint,
+            api_key=config.api_key,
+            jwt_secret=config.jwt_secret,
+            user_id=config.signoz_user_id,
+            org_id=config.signoz_org_id,
+            email=config.signoz_email,
+        )
 
     # ------------------------------------------------------------------
     # TraceProvider interface
@@ -166,8 +175,12 @@ class SigNozProvider(TraceProvider):
         query_start_ns = max(0, since_ns - overlap_ns)
 
         # Build filters — service.name filter if provided by end user
+        # None = use config default, empty string = no filter (all services)
         filters: list[dict] = []
-        svc = service_name or self._config.service_name
+        if service_name is None:
+            svc = self._config.service_name
+        else:
+            svc = service_name  # explicit value from URL param (may be empty)
         if svc:
             filters.append(
                 {
@@ -199,16 +212,25 @@ class SigNozProvider(TraceProvider):
     # ------------------------------------------------------------------
 
     def _api_request(self, path: str, payload: dict) -> dict:
-        """Make authenticated HTTP POST to SigNoz API."""
+        """Make authenticated HTTP POST to SigNoz API.
+
+        On 401, attempts automatic token refresh and retries once.
+        """
+        try:
+            return self._do_request(path, payload)
+        except AuthenticationError:
+            if self._auth.refresh_token():
+                return self._do_request(path, payload)
+            raise
+
+    def _do_request(self, path: str, payload: dict) -> dict:
+        """Execute a single authenticated HTTP POST to SigNoz API."""
         url = self._config.endpoint.rstrip("/") + path
         data = json.dumps(payload).encode("utf-8")
         req = Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
-        if self._config.api_key:
-            # Send both headers for compatibility with SigNoz Cloud (API key)
-            # and self-hosted (JWT Bearer token from /api/v1/login).
-            req.add_header("SIGNOZ-API-KEY", self._config.api_key)
-            req.add_header("Authorization", f"Bearer {self._config.api_key}")
+        for key, val in self._auth.get_headers().items():
+            req.add_header(key, val)
         try:
             with urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read())  # type: ignore[no-any-return]
@@ -222,6 +244,9 @@ class SigNozProvider(TraceProvider):
             raise ProviderError(f"SigNoz API error ({e.code}) at {url}: {e.reason}") from e
         except URLError as e:
             raise ProviderError(f"Cannot reach SigNoz at {url}: {e.reason}") from e
+        except OSError as e:
+            raise ProviderError(f"Connection to SigNoz failed at {url}: {e}") from e
+
 
     # ------------------------------------------------------------------
     # Query builders
@@ -313,6 +338,12 @@ class SigNozProvider(TraceProvider):
                                 "isColumn": True,
                             },
                             {"key": "traceID", "dataType": "string", "type": "", "isColumn": True},
+                            {
+                                "key": "serviceName",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            },
                             {
                                 "key": "durationNano",
                                 "dataType": "float64",
@@ -420,6 +451,11 @@ class SigNozProvider(TraceProvider):
                         if val:  # skip empty strings
                             attributes[k] = val
 
+                # Include serviceName so the JS viewer can build a service filter
+                svc_name = data.get("serviceName", "")
+                if svc_name:
+                    attributes["service.name"] = str(svc_name)
+
                 spans.append(
                     TraceSpan(
                         span_id=span_id,
@@ -476,3 +512,13 @@ class SigNozProvider(TraceProvider):
                         )
                     )
         return executions
+
+
+
+
+
+
+
+
+
+

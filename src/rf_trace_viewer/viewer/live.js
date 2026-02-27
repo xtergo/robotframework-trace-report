@@ -25,9 +25,15 @@
   // Default for SigNoz live mode: 10m. Use ?lookback=0 to fetch everything.
   var _lookbackNs = _parseLookback();
 
-  // Service name filter: ?service=robot-framework filters SigNoz queries
-  // to only return spans from that service.name. End-user controllable.
+  // Service name filter: configurable default from server config,
+  // overridable via URL param ?service=robot-framework.
+  // In multi-service mode, _activeServices tracks which services are checked.
+  var _defaultService = String(window.__RF_SERVICE_NAME__ || 'rf');
   var _serviceFilter = _parseServiceFilter();
+  var _knownServices = {};       // service_name → true (discovered from spans)
+  var _activeServices = {};      // service_name → true (currently checked)
+  var _serviceDropdownEl = null; // dropdown container element
+  var _svcListEl = null;         // checkbox list inside dropdown
 
   function _parseServiceFilter() {
     try {
@@ -214,7 +220,10 @@
   function _pollSigNoz() {
     polling = true;
     var url = '/api/spans?since_ns=' + lastSeenNs;
-    if (_serviceFilter) url += '&service=' + encodeURIComponent(_serviceFilter);
+    var svc = _serviceFilter;
+    // Always send service param so server doesn't fall back to its config default
+    // Empty string = no filter (all services)
+    url += '&service=' + encodeURIComponent(svc || '');
 
     fetch(url)
       .then(function (res) {
@@ -227,15 +236,27 @@
             throw new Error('rate_limited');
           });
         }
+        if (res.status === 401) {
+          return res.json().then(function (body) {
+            _showAuthError(body.message || 'Authentication failed');
+            throw new Error('auth_error');
+          }).catch(function (e) {
+            if (e.message === 'auth_error') throw e;
+            _showAuthError('Authentication failed (401)');
+            throw new Error('auth_error');
+          });
+        }
         if (!res.ok) {
           return res.json().then(function (body) {
             throw new Error(body.message || 'HTTP ' + res.status);
-          }).catch(function () {
+          }).catch(function (e) {
+            if (e.message && e.message.indexOf('HTTP') === -1) throw e;
             throw new Error('HTTP ' + res.status);
           });
         }
-        // Success — reset backoff
+        // Success — reset backoff and clear any auth error banner
         backoffMs = POLL_MS;
+        _clearAuthError();
         return res.json();
       })
       .then(function (data) {
@@ -251,6 +272,7 @@
       })
       .catch(function (err) {
         if (err.message === 'rate_limited') return; // already handled
+        if (err.message === 'auth_error') return; // already handled
         console.warn('[live] SigNoz poll error:', err.message);
         _showNotification('SigNoz error: partial data may be shown');
       })
@@ -328,6 +350,13 @@
       for (key in ra) { attrs[key] = ra[key]; }
       var sa = s.attributes || {};
       for (key in sa) { attrs[key] = sa[key]; }
+
+      // Discover service names for the filter UI
+      var svcName = attrs['service.name'] || '';
+      if (svcName && !_knownServices[svcName]) {
+        _knownServices[svcName] = true;
+        _onServiceDiscovered(svcName);
+      }
 
       allSpans.push({
         trace_id: (s.trace_id || '').toLowerCase(),
@@ -911,7 +940,169 @@
     }
   }
 
-  /* ── 8. Status bar ─────────────────────────────────────────────── */
+  /* ── 8. Service filter ────────────────────────────────────────── */
+
+  function _createServiceFilter(header) {
+    _serviceDropdownEl = document.createElement('div');
+    _serviceDropdownEl.className = 'service-filter';
+
+    var btn = document.createElement('button');
+    btn.className = 'service-filter-btn';
+    btn.textContent = 'Services';
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-haspopup', 'true');
+
+    var dropdown = document.createElement('div');
+    dropdown.className = 'service-filter-dropdown';
+    dropdown.style.display = 'none';
+
+    _svcListEl = document.createElement('div');
+    _svcListEl.className = 'service-filter-list';
+
+    var emptyMsg = document.createElement('div');
+    emptyMsg.className = 'service-filter-empty';
+    emptyMsg.textContent = 'Waiting for spans\u2026';
+    _svcListEl.appendChild(emptyMsg);
+
+    dropdown.appendChild(_svcListEl);
+    _serviceDropdownEl.appendChild(btn);
+    _serviceDropdownEl.appendChild(dropdown);
+    header.appendChild(_serviceDropdownEl);
+
+    // Seed the default service as pre-checked
+    if (_defaultService) {
+      _knownServices[_defaultService] = true;
+      _activeServices[_defaultService] = true;
+      _serviceFilter = _defaultService;
+      _renderServiceList();
+    }
+
+    // Also seed from URL param if different
+    var urlSvc = '';
+    try { urlSvc = new URLSearchParams(window.location.search).get('service') || ''; } catch (e) {}
+    if (urlSvc && !_knownServices[urlSvc]) {
+      _knownServices[urlSvc] = true;
+      _activeServices[urlSvc] = true;
+      _serviceFilter = _getActiveServiceFilter();
+      _renderServiceList();
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = dropdown.style.display !== 'none';
+      dropdown.style.display = open ? 'none' : 'block';
+      btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+
+    // Close on outside click
+    document.addEventListener('click', function (e) {
+      if (!_serviceDropdownEl.contains(e.target)) {
+        dropdown.style.display = 'none';
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  function _onServiceDiscovered(svcName) {
+    // Auto-check the default service; leave others unchecked
+    if (svcName === _defaultService) {
+      _activeServices[svcName] = true;
+    }
+    _renderServiceList();
+    _updateServiceBtnLabel();
+  }
+
+  function _renderServiceList() {
+    if (!_svcListEl) return;
+    _svcListEl.innerHTML = '';
+
+    var names = Object.keys(_knownServices).sort();
+    if (names.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'service-filter-empty';
+      empty.textContent = 'Waiting for spans\u2026';
+      _svcListEl.appendChild(empty);
+      return;
+    }
+
+    for (var i = 0; i < names.length; i++) {
+      (function (name) {
+        var label = document.createElement('label');
+        label.className = 'service-filter-item';
+
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = name;
+        cb.checked = !!_activeServices[name];
+
+        cb.addEventListener('change', function () {
+          if (cb.checked) {
+            _activeServices[name] = true;
+          } else {
+            delete _activeServices[name];
+          }
+          _serviceFilter = _getActiveServiceFilter();
+          _updateServiceBtnLabel();
+          // Clear seen spans and re-poll with new filter
+          _resetAndRepoll();
+        });
+
+        var span = document.createElement('span');
+        span.textContent = name;
+
+        label.appendChild(cb);
+        label.appendChild(span);
+        _svcListEl.appendChild(label);
+      })(names[i]);
+    }
+  }
+
+  function _getActiveServiceFilter() {
+    var active = Object.keys(_activeServices);
+    if (active.length === 0) return '';
+    if (active.length === 1) return active[0];
+    // Multiple services: pass comma-separated (server-side will need to handle)
+    // For now, send the first one — server only supports single service filter
+    return active[0];
+  }
+
+  function _updateServiceBtnLabel() {
+    if (!_serviceDropdownEl) return;
+    var btn = _serviceDropdownEl.querySelector('.service-filter-btn');
+    if (!btn) return;
+    var active = Object.keys(_activeServices);
+    var total = Object.keys(_knownServices).length;
+    if (active.length === 0) {
+      btn.textContent = 'Services (all)';
+    } else if (active.length === 1) {
+      btn.textContent = 'Service: ' + active[0];
+    } else {
+      btn.textContent = 'Services (' + active.length + '/' + total + ')';
+    }
+  }
+
+  function _resetAndRepoll() {
+    // Reset state and re-fetch from scratch with new service filter
+    allSpans = [];
+    seenSpanIds = {};
+    lastSeenNs = 0;
+    _spanCapReached = false;
+    _lastFilterSpanCount = 0;
+    _timelineInitialized = false;
+
+    // Re-apply lookback
+    if (_lookbackNs > 0 && provider === 'signoz') {
+      var nowNs = Date.now() * 1e6;
+      lastSeenNs = Math.max(0, nowNs - _lookbackNs);
+    }
+
+    // Immediate re-poll
+    if (!snapshotMode) {
+      _poll();
+    }
+  }
+
+  /* ── 9. Status bar ─────────────────────────────────────────────── */
 
   function _createStatusBar() {
     var header = document.querySelector('.viewer-header');
@@ -922,6 +1113,9 @@
     header.appendChild(statusBarEl);
 
     if (provider === 'signoz') {
+      // Service filter dropdown
+      _createServiceFilter(header);
+
       var toggleContainer = document.createElement('span');
       toggleContainer.className = 'snapshot-toggle';
 
@@ -1002,6 +1196,60 @@
     note._clearTimer = setTimeout(function () {
       note.textContent = '';
     }, 10000);
+  }
+
+  /* ── Auth error banner ─────────────────────────────────────────── */
+
+  var _authErrorBannerEl = null;
+
+  function _showAuthError(msg) {
+    // Stop polling — no point retrying with bad auth
+    _stopPolling();
+    _stopTick();
+    if (statusBarEl) statusBarEl.textContent = 'Live \u2014 authentication error';
+
+    if (_authErrorBannerEl) {
+      // Update existing banner message
+      var msgEl = _authErrorBannerEl.querySelector('.auth-error-msg');
+      if (msgEl) msgEl.textContent = msg;
+      return;
+    }
+
+    var viewer = document.querySelector('.rf-trace-viewer');
+    if (!viewer) return;
+
+    _authErrorBannerEl = document.createElement('div');
+    _authErrorBannerEl.className = 'auth-error-banner';
+    _authErrorBannerEl.style.cssText =
+      'background:#d32f2f;color:#fff;padding:12px 16px;font-size:14px;' +
+      'display:flex;align-items:center;gap:12px;justify-content:space-between;';
+
+    var msgSpan = document.createElement('span');
+    msgSpan.className = 'auth-error-msg';
+    msgSpan.textContent = msg;
+    _authErrorBannerEl.appendChild(msgSpan);
+
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.style.cssText =
+      'background:#fff;color:#d32f2f;border:none;padding:4px 12px;border-radius:3px;' +
+      'cursor:pointer;font-weight:bold;white-space:nowrap;';
+    retryBtn.addEventListener('click', function () {
+      _clearAuthError();
+      _startPolling();
+      _startTick();
+      _poll();
+    });
+    _authErrorBannerEl.appendChild(retryBtn);
+
+    viewer.insertBefore(_authErrorBannerEl, viewer.firstChild);
+  }
+
+  function _clearAuthError() {
+    if (_authErrorBannerEl) {
+      _authErrorBannerEl.remove();
+      _authErrorBannerEl = null;
+    }
   }
 
   /* ── 9. Span cap enforcement ───────────────────────────────────── */

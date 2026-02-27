@@ -160,6 +160,12 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         help="Filter SigNoz spans by service.name (e.g. robot-framework). "
         "Also settable via ?service=<name> URL param by end users.",
     )
+    parser.add_argument(
+        "--signoz-jwt-secret",
+        default=None,
+        help="JWT signing secret for self-hosted SigNoz token auto-refresh "
+        "(also readable from SIGNOZ_JWT_SECRET env var)",
+    )
 
 
 def _args_to_cli_dict(args: argparse.Namespace) -> dict:
@@ -192,6 +198,7 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
         "base_url": "base_url",
         "lookback": "lookback",
         "service_name": "service_name",
+        "signoz_jwt_secret": "signoz_jwt_secret",
     }
     result = {}
     for arg_name, config_name in mapping.items():
@@ -253,6 +260,10 @@ def _build_provider(config: AppConfig) -> TraceProvider:
             max_spans=config.max_spans,
             overlap_window_seconds=config.overlap_window_seconds,
             service_name=config.service_name,
+            jwt_secret=config.signoz_jwt_secret,
+            signoz_user_id=config.signoz_user_id,
+            signoz_org_id=config.signoz_org_id,
+            signoz_email=config.signoz_email,
         )
         return SigNozProvider(signoz_config)
     else:
@@ -330,6 +341,7 @@ def _run_live_server(args: argparse.Namespace) -> int:
         base_url=config.base_url,
         lookback=config.lookback or getattr(args, "lookback", None),
         max_spans=config.max_spans,
+        service_name=config.service_name,
     )
     server.start(open_browser=not config.no_open)
     return 0
