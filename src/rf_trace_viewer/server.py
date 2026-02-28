@@ -20,6 +20,8 @@ from rf_trace_viewer.generator import (
     embed_viewer_assets,
     generate_report,
 )
+from rf_trace_viewer.config import BaseFilterConfig
+from rf_trace_viewer.error_codes import error_response
 from rf_trace_viewer.logging_config import StructuredLogger
 from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
@@ -47,24 +49,93 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         """Add X-Request-Id to the response headers."""
         self.send_header("X-Request-Id", request_id)
 
+    def _send_json_response(self, status: int, body: dict, request_id: str) -> None:
+        """Send a JSON response with standard headers."""
+        payload = json.dumps(body).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self._send_request_id_header(request_id)
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _check_rate_limit(self, request_id: str) -> bool:
+        """Check per-IP rate limit. Returns True if request is blocked (429 sent)."""
+        limiter = getattr(self.server, "_rate_limiter", None)
+        if limiter is None:
+            return False
+        client_ip = self.client_address[0]
+        allowed, retry_after = limiter.is_allowed(client_ip)
+        if allowed:
+            return False
+        status, body = error_response(
+            "RATE_LIMITED",
+            "Rate limit exceeded",
+            request_id,
+            status=429,
+        )
+        body["retry_after"] = retry_after
+        self._send_json_response(status, body, request_id)
+        return True
+
     def do_GET(self) -> None:
         request_id = self._get_or_generate_request_id()
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
 
+        # --- Health endpoints (no rate limiting) ---
+        health_router = getattr(self.server, "_health_router", None)
+        if path == "/health/live" and health_router is not None:
+            status, body = health_router.handle_live()
+            self._send_json_response(status, body, request_id)
+            return
+        if path == "/health/ready" and health_router is not None:
+            status, body = health_router.handle_ready()
+            self._send_json_response(status, body, request_id)
+            return
+        if path == "/health/drain" and health_router is not None:
+            status, body = health_router.handle_drain()
+            self._send_json_response(status, body, request_id)
+            return
+
+        # --- Viewer (no rate limiting) ---
         if path == "/":
             self._serve_viewer(request_id)
-        elif path == "/api/spans":
-            since_ns = int(query.get("since_ns", ["0"])[0])
-            # "service" param: absent → use config default, empty string → no filter
-            service = query.get("service", [None])[0]
-            self._serve_signoz_spans(since_ns, service_name=service, request_id=request_id)
-        elif path == "/traces.json":
+            return
+
+        # --- Backward-compat: /traces.json (no rate limiting) ---
+        if path == "/traces.json":
             offset = int(query.get("offset", ["0"])[0])
             self._serve_traces(offset, request_id=request_id)
-        else:
-            self.send_error(404)
+            return
+
+        # --- Rate-limited API endpoints ---
+        if path in ("/api/v1/status", "/api/v1/spans", "/api/v1/services", "/api/spans"):
+            if self._check_rate_limit(request_id):
+                return
+
+        if path == "/api/v1/status":
+            status_poller = getattr(self.server, "_status_poller", None)
+            if status_poller is not None:
+                status_data = status_poller.get_status(request_id)
+                self._send_json_response(200, status_data, request_id)
+            else:
+                self.send_error(404)
+            return
+
+        if path in ("/api/v1/spans", "/api/spans"):
+            since_ns = int(query.get("since_ns", ["0"])[0])
+            service = query.get("service", [None])[0]
+            self._serve_signoz_spans(since_ns, service_name=service, request_id=request_id)
+            return
+
+        if path == "/api/v1/services":
+            # Stub — will be fully implemented in task 5.4
+            self._send_json_response(200, [], request_id)
+            return
+
+        self.send_error(404)
 
     def _serve_viewer(self, request_id: str = "") -> None:
         """Serve the HTML viewer page with live mode flag (no embedded data)."""
@@ -380,6 +451,10 @@ class LiveServer:
         lookback: str | None = None,
         max_spans: int | None = None,
         service_name: str | None = None,
+        health_router: object | None = None,
+        status_poller: object | None = None,
+        rate_limiter: object | None = None,
+        base_filter: BaseFilterConfig | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -397,6 +472,10 @@ class LiveServer:
         self.lookback = lookback
         self.max_spans = max_spans
         self.service_name = service_name
+        self.health_router = health_router
+        self.status_poller = status_poller
+        self.rate_limiter = rate_limiter
+        self.base_filter = base_filter or BaseFilterConfig()
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -416,6 +495,12 @@ class LiveServer:
         self._httpd.lookback = self.lookback  # type: ignore[attr-defined]
         self._httpd.max_spans = self.max_spans  # type: ignore[attr-defined]
         self._httpd.service_name = self.service_name  # type: ignore[attr-defined]
+
+        # K8s integration: health, status, rate limiting, base filter
+        self._httpd._health_router = self.health_router  # type: ignore[attr-defined]
+        self._httpd._status_poller = self.status_poller  # type: ignore[attr-defined]
+        self._httpd._rate_limiter = self.rate_limiter  # type: ignore[attr-defined]
+        self._httpd._base_filter = self.base_filter  # type: ignore[attr-defined]
 
         # Structured logger for request logging (JSON when LOG_FORMAT=json)
         log_format = os.environ.get("LOG_FORMAT", "text")
