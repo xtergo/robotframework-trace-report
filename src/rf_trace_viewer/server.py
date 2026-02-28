@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import threading
+import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.error import URLError
@@ -19,6 +20,7 @@ from rf_trace_viewer.generator import (
     embed_viewer_assets,
     generate_report,
 )
+from rf_trace_viewer.logging_config import StructuredLogger
 from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
 from rf_trace_viewer.rf_model import interpret_tree
@@ -28,25 +30,43 @@ from rf_trace_viewer.tree import build_tree
 class _LiveRequestHandler(BaseHTTPRequestHandler):
     """HTTP request handler for live trace viewing."""
 
+    def _get_or_generate_request_id(self) -> str:
+        """Return X-Request-Id from request headers, or generate a UUID."""
+        headers = getattr(self, "headers", None)
+        if headers is not None:
+            rid = None
+            try:
+                rid = headers.get("X-Request-Id")
+            except Exception:
+                pass
+            if rid:
+                return rid
+        return str(uuid.uuid4())
+
+    def _send_request_id_header(self, request_id: str) -> None:
+        """Add X-Request-Id to the response headers."""
+        self.send_header("X-Request-Id", request_id)
+
     def do_GET(self) -> None:
+        request_id = self._get_or_generate_request_id()
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
 
         if path == "/":
-            self._serve_viewer()
+            self._serve_viewer(request_id)
         elif path == "/api/spans":
             since_ns = int(query.get("since_ns", ["0"])[0])
             # "service" param: absent → use config default, empty string → no filter
             service = query.get("service", [None])[0]
-            self._serve_signoz_spans(since_ns, service_name=service)
+            self._serve_signoz_spans(since_ns, service_name=service, request_id=request_id)
         elif path == "/traces.json":
             offset = int(query.get("offset", ["0"])[0])
-            self._serve_traces(offset)
+            self._serve_traces(offset, request_id=request_id)
         else:
             self.send_error(404)
 
-    def _serve_viewer(self) -> None:
+    def _serve_viewer(self, request_id: str = "") -> None:
         """Serve the HTML viewer page with live mode flag (no embedded data)."""
         title = self.server.title or "RF Trace Report (Live)"
         poll_interval = self.server.poll_interval
@@ -112,19 +132,23 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self._send_request_id_header(request_id)
         self.end_headers()
         self.wfile.write(body)
 
     def do_POST(self) -> None:
+        request_id = self._get_or_generate_request_id()
         parsed = urlparse(self.path)
         path = parsed.path
 
         if path == "/v1/traces":
-            self._receive_traces()
+            self._receive_traces(request_id=request_id)
         else:
             self.send_error(404)
 
-    def _serve_signoz_spans(self, since_ns: int, service_name: str | None = None) -> None:
+    def _serve_signoz_spans(
+        self, since_ns: int, service_name: str | None = None, request_id: str = ""
+    ) -> None:
         """Serve spans from a live-poll provider (e.g. SigNoz)."""
         provider = getattr(self.server, "provider", None)
         if provider is None or not (
@@ -153,6 +177,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
 
@@ -161,6 +186,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_response(401)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
 
@@ -169,6 +195,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_response(429)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
 
@@ -177,10 +204,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_response(502)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
 
-    def _receive_traces(self) -> None:
+    def _receive_traces(self, request_id: str = "") -> None:
         """Handle OTLP ExportTraceServiceRequest via POST."""
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length)
@@ -214,13 +242,14 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response)))
+        self._send_request_id_header(request_id)
         self.end_headers()
         self.wfile.write(response)
 
-    def _serve_traces(self, offset: int = 0) -> None:
+    def _serve_traces(self, offset: int = 0, request_id: str = "") -> None:
         """Serve trace data from file or in-memory buffer."""
         if self.server.receiver_mode:
-            self._serve_traces_receiver(offset)
+            self._serve_traces_receiver(offset, request_id=request_id)
             return
 
         trace_path = self.server.trace_path
@@ -235,6 +264,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", "0")
                 self.send_header("X-File-Offset", str(file_size))
                 self.send_header("Access-Control-Expose-Headers", "X-File-Offset")
+                self._send_request_id_header(request_id)
                 self.end_headers()
                 return
 
@@ -248,6 +278,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-File-Offset", str(offset + len(body)))
             self.send_header("Access-Control-Expose-Headers", "X-File-Offset")
+            self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
 
@@ -258,12 +289,13 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.send_header("X-File-Offset", "0")
             self.send_header("Access-Control-Expose-Headers", "X-File-Offset")
+            self._send_request_id_header(request_id)
             self.end_headers()
 
         except OSError as exc:
             self.send_error(500, str(exc))
 
-    def _serve_traces_receiver(self, offset: int = 0) -> None:
+    def _serve_traces_receiver(self, offset: int = 0, request_id: str = "") -> None:
         """Serve traces from the in-memory receiver buffer (NDJSON lines)."""
         if offset < 0:
             offset = 0
@@ -277,6 +309,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.send_header("X-File-Offset", str(total))
             self.send_header("Access-Control-Expose-Headers", "X-File-Offset")
+            self._send_request_id_header(request_id)
             self.end_headers()
             return
 
@@ -286,12 +319,19 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-File-Offset", str(total))
         self.send_header("Access-Control-Expose-Headers", "X-File-Offset")
+        self._send_request_id_header(request_id)
         self.end_headers()
         self.wfile.write(body)
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-        """Suppress default request logging to stderr."""
-        pass
+        """Log requests via StructuredLogger when available, else suppress."""
+        logger = getattr(self.server, "_logger", None)
+        if logger is not None:
+            logger.log("INFO", format % args)
+
+
+# Module-level logger instance, initialised lazily by LiveServer.start().
+_server_logger: StructuredLogger | None = None
 
 
 def _forward_payload(url: str, body: bytes) -> None:
@@ -376,6 +416,10 @@ class LiveServer:
         self._httpd.lookback = self.lookback  # type: ignore[attr-defined]
         self._httpd.max_spans = self.max_spans  # type: ignore[attr-defined]
         self._httpd.service_name = self.service_name  # type: ignore[attr-defined]
+
+        # Structured logger for request logging (JSON when LOG_FORMAT=json)
+        log_format = os.environ.get("LOG_FORMAT", "text")
+        self._httpd._logger = StructuredLogger(log_format)  # type: ignore[attr-defined]
 
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")
