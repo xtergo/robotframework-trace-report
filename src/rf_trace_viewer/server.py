@@ -229,6 +229,15 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         if base_filter is None:
             base_filter = BaseFilterConfig()
 
+        # Check query concurrency limit
+        semaphore = getattr(self.server, "_query_semaphore", None)
+        if semaphore is not None and not semaphore.acquire(blocking=False):
+            status, body = error_response(
+                "RATE_LIMITED", "Too many concurrent queries", request_id, status=503
+            )
+            self._send_json_response(status, body, request_id)
+            return
+
         try:
             now_ns = int(time.time() * 1e9)
             start_ns = now_ns - (86400 * 30 * 1_000_000_000)  # 30 days
@@ -262,6 +271,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             status, body = error_response("INTERNAL_ERROR", str(exc), request_id, status=500)
             self._send_json_response(status, body, request_id)
+        finally:
+            if semaphore is not None:
+                semaphore.release()
 
     def _serve_signoz_spans(
         self, since_ns: int, service_name: str | None = None, request_id: str = ""
@@ -279,6 +291,15 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         if base_filter and service_name and service_name in base_filter.hard_blocked:
             result = {"spans": [], "orphan_count": 0, "total_count": 0}
             self._send_json_response(200, result, request_id)
+            return
+
+        # Check query concurrency limit
+        semaphore = getattr(self.server, "_query_semaphore", None)
+        if semaphore is not None and not semaphore.acquire(blocking=False):
+            status, body = error_response(
+                "RATE_LIMITED", "Too many concurrent queries", request_id, status=503
+            )
+            self._send_json_response(status, body, request_id)
             return
 
         try:
@@ -346,6 +367,10 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
+
+        finally:
+            if semaphore is not None:
+                semaphore.release()
 
     def _receive_traces(self, request_id: str = "") -> None:
         """Handle OTLP ExportTraceServiceRequest via POST."""
@@ -523,6 +548,7 @@ class LiveServer:
         status_poller: object | None = None,
         rate_limiter: object | None = None,
         base_filter: BaseFilterConfig | None = None,
+        query_semaphore: threading.Semaphore | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -544,6 +570,7 @@ class LiveServer:
         self.status_poller = status_poller
         self.rate_limiter = rate_limiter
         self.base_filter = base_filter or BaseFilterConfig()
+        self.query_semaphore = query_semaphore
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -569,6 +596,7 @@ class LiveServer:
         self._httpd._status_poller = self.status_poller  # type: ignore[attr-defined]
         self._httpd._rate_limiter = self.rate_limiter  # type: ignore[attr-defined]
         self._httpd._base_filter = self.base_filter  # type: ignore[attr-defined]
+        self._httpd._query_semaphore = self.query_semaphore  # type: ignore[attr-defined]
 
         # Structured logger for request logging (JSON when LOG_FORMAT=json)
         log_format = os.environ.get("LOG_FORMAT", "text")
