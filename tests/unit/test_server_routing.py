@@ -193,12 +193,12 @@ class TestVersionedApiRouting:
         handler.do_GET()
         handler.send_error.assert_called_once_with(404)
 
-    def test_api_v1_services_returns_empty_list(self):
-        """Stub endpoint returns [] until task 5.4 implements it."""
+    def test_api_v1_services_returns_empty_when_no_provider(self):
+        """Service discovery returns 404 when no provider is available."""
         server = _create_server()
         handler = _make_handler(server, "/api/v1/services")
         handler.do_GET()
-        assert _response_body(handler) == []
+        handler.send_error.assert_called_once_with(404)
 
     def test_api_v1_spans_routes_to_signoz_handler(self):
         """Versioned spans endpoint uses the same handler as /api/spans."""

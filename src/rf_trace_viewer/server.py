@@ -131,8 +131,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/services":
-            # Stub — will be fully implemented in task 5.4
-            self._send_json_response(200, [], request_id)
+            self._serve_services(request_id)
             return
 
         self.send_error(404)
@@ -217,6 +216,53 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def _serve_services(self, request_id: str) -> None:
+        """Serve service discovery list from SigNoz with base filter annotations."""
+        import time
+
+        provider = getattr(self.server, "provider", None)
+        if provider is None or not hasattr(provider, "_api_request"):
+            self.send_error(404)
+            return
+
+        base_filter = getattr(self.server, "_base_filter", None)
+        if base_filter is None:
+            base_filter = BaseFilterConfig()
+
+        try:
+            now_ns = int(time.time() * 1e9)
+            start_ns = now_ns - (86400 * 30 * 1_000_000_000)  # 30 days
+            query = provider._build_aggregate_query("serviceName", start_ns, now_ns)
+            response = provider._api_request("/api/v3/query_range", query)
+
+            services = []
+            result_container = response.get("data") or response
+            result = result_container.get("result") or []
+            for series in result:
+                for row in series.get("list") or []:
+                    data = row.get("data") or {}
+                    name = ""
+                    span_count = 0
+                    for key, val in data.items():
+                        if key == "count":
+                            span_count = int(val)
+                        elif key not in ("timestamp",):
+                            name = str(val)
+                    if name:
+                        services.append(
+                            {
+                                "name": name,
+                                "span_count": span_count,
+                                "excluded_by_default": name in base_filter.excluded_by_default,
+                                "hard_blocked": name in base_filter.hard_blocked,
+                            }
+                        )
+
+            self._send_json_response(200, services, request_id)
+        except Exception as exc:
+            status, body = error_response("INTERNAL_ERROR", str(exc), request_id, status=500)
+            self._send_json_response(status, body, request_id)
+
     def _serve_signoz_spans(
         self, since_ns: int, service_name: str | None = None, request_id: str = ""
     ) -> None:
@@ -228,8 +274,30 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
 
+        # Enforce hard block: never return spans for hard-blocked services
+        base_filter = getattr(self.server, "_base_filter", None)
+        if base_filter and service_name and service_name in base_filter.hard_blocked:
+            result = {"spans": [], "orphan_count": 0, "total_count": 0}
+            self._send_json_response(200, result, request_id)
+            return
+
         try:
             view_model = provider.poll_new_spans(since_ns, service_name=service_name)
+
+            # Apply base filter: exclude spans from excluded-by-default services
+            # (and hard-blocked services) unless explicitly included via service param
+            if base_filter and service_name is None:
+                excluded = set(base_filter.excluded_by_default) | set(base_filter.hard_blocked)
+                if excluded:
+                    view_model = type(view_model)(
+                        spans=[
+                            s
+                            for s in view_model.spans
+                            if s.attributes.get("service.name", "") not in excluded
+                        ],
+                        resource_attributes=view_model.resource_attributes,
+                    )
+
             spans_dicts = [dataclasses.asdict(s) for s in view_model.spans]
 
             # Compute orphan count: spans with a parent_span_id that isn't
