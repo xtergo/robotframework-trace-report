@@ -5,7 +5,8 @@ WORKDIR /app
 # Install dependencies first (cached layer)
 COPY pyproject.toml ./
 COPY src/ src/
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e .
 
 ENV SIGNOZ_ENDPOINT=""
 ENV SIGNOZ_API_KEY=""

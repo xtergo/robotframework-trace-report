@@ -35,9 +35,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir \
-    robotframework==7.1.1 \
-    robotframework-browser==18.8.0 \
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+    robotframework==7.4.1 \
+    robotframework-browser==19.12.5 \
     robotframework-pabot==2.18.0
 
 # Initialize Browser library (downloads Playwright browsers)

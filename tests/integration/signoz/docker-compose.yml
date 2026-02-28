@@ -150,7 +150,7 @@ services:
       - signoz-net
 
   schema-migrator-sync:
-    image: signoz/signoz-schema-migrator:v0.144.1
+    image: signoz/signoz-schema-migrator:v0.144.2
     restart: on-failure
     command: ["sync", "--dsn=tcp://clickhouse:9000", "--up="]
     depends_on:
@@ -160,7 +160,7 @@ services:
       - signoz-net
 
   schema-migrator-async:
-    image: signoz/signoz-schema-migrator:v0.144.1
+    image: signoz/signoz-schema-migrator:v0.144.2
     restart: "no"
     command: ["async", "--dsn=tcp://clickhouse:9000", "--up="]
     depends_on:
@@ -199,7 +199,7 @@ services:
       - signoz-net
 
   signoz-otel-collector:
-    image: signoz/signoz-otel-collector:v0.144.1
+    image: signoz/signoz-otel-collector:v0.144.2
     volumes:
       - otel-config:/otel
     command: ["--config=/otel/config.yaml"]

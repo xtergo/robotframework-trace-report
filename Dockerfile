@@ -5,8 +5,9 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src/ src/
 
-# Install the package (no dev deps, no cache)
-RUN pip install --no-cache-dir --prefix=/install .
+# Ensure latest pip, then install the package (no dev deps, no cache)
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --prefix=/install .
 
 # ---- Runtime stage ----
 FROM python:3.11-slim

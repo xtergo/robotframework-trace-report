@@ -249,10 +249,10 @@ The project includes a complete SigNoz integration test stack at `tests/integrat
 |---------|-------|---------|
 | zookeeper-1 | signoz/zookeeper:3.7.1 | ClickHouse coordination |
 | clickhouse | clickhouse/clickhouse-server:25.12.5 | Trace storage |
-| schema-migrator-sync | signoz/signoz-schema-migrator:v0.144.1 | Synchronous DB schema setup |
-| schema-migrator-async | signoz/signoz-schema-migrator:v0.144.1 | Asynchronous schema migration |
+| schema-migrator-sync | signoz/signoz-schema-migrator:v0.144.2 | Synchronous DB schema setup |
+| schema-migrator-async | signoz/signoz-schema-migrator:v0.144.2 | Asynchronous schema migration |
 | signoz | signoz/signoz-community:v0.113.0 | Query API + SPA frontend |
-| signoz-otel-collector | signoz/signoz-otel-collector:v0.144.1 | OTLP receiver → ClickHouse |
+| signoz-otel-collector | signoz/signoz-otel-collector:v0.144.2 | OTLP receiver → ClickHouse |
 | rf-test-runner | Custom | Runs RF tests, emits OTLP traces |
 | rf-trace-report | Custom | Serves the trace viewer (profile: `report`) |
 | browser-validator | Custom | Playwright browser tests (profile: `browser`) |

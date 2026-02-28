@@ -276,10 +276,10 @@ Located at `tests/integration/signoz/docker-compose.yml`, this stack provides a 
 |---------|-------|---------|------|
 | zookeeper-1 | signoz/zookeeper:3.7.1 | ClickHouse coordination | — |
 | clickhouse | clickhouse/clickhouse-server:25.12.5 | Trace storage | — |
-| schema-migrator-sync | signoz/signoz-schema-migrator:v0.144.1 | Database schema setup | — |
-| schema-migrator-async | signoz/signoz-schema-migrator:v0.144.1 | Async schema migration | — |
+| schema-migrator-sync | signoz/signoz-schema-migrator:v0.144.2 | Database schema setup | — |
+| schema-migrator-async | signoz/signoz-schema-migrator:v0.144.2 | Async schema migration | — |
 | signoz | signoz/signoz-community:v0.113.0 | Query API + SPA frontend | 18080 |
-| signoz-otel-collector | signoz/signoz-otel-collector:v0.144.1 | OTLP receiver → ClickHouse | — |
+| signoz-otel-collector | signoz/signoz-otel-collector:v0.144.2 | OTLP receiver → ClickHouse | — |
 | rf-test-runner | Custom | Runs RF tests, emits traces | — |
 | rf-trace-report | Custom | Serves the trace viewer | 8077 |
 

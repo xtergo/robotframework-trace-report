@@ -157,8 +157,8 @@ To manually verify the fixes:
 
 Tests run in Docker with:
 - Python 3.11
-- Robot Framework 7.1.1
-- robotframework-browser 18.8.0 (Playwright)
+- Robot Framework 7.4.1
+- robotframework-browser 19.12.5 (Playwright)
 - Headless Chromium
 
 Run tests:

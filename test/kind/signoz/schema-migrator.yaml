@@ -19,5 +19,5 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: schema-migrator
-          image: signoz/signoz-schema-migrator:v0.144.1
+          image: signoz/signoz-schema-migrator:v0.144.2
           args: ["sync", "--dsn=tcp://clickhouse:9000", "--up="]

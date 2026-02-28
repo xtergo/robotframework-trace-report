@@ -3,7 +3,8 @@ FROM python:3.11-slim
 WORKDIR /rf
 
 # Install dependencies (cached layer)
-RUN pip install --no-cache-dir robotframework==7.1.1 robotframework-tracer
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir robotframework==7.4.1 robotframework-tracer
 
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4318/v1/traces
 ENV OTEL_RESOURCE_ATTRIBUTES="essvt.execution_id=integration-test-run"

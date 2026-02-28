@@ -420,9 +420,9 @@ This stack is used for integration testing (`tests/integration/signoz/`). It inc
 |---------|-------|---------|
 | zookeeper | signoz/zookeeper:3.7.1 | ClickHouse coordination |
 | clickhouse | clickhouse/clickhouse-server:25.12.5 | Trace storage |
-| schema-migrator | signoz/signoz-schema-migrator:v0.144.1 | DB schema setup (~90s first run) |
+| schema-migrator | signoz/signoz-schema-migrator:v0.144.2 | DB schema setup (~90s first run) |
 | signoz | signoz/signoz-community:v0.113.0 | Query API + SPA frontend |
-| signoz-otel-collector | signoz/signoz-otel-collector:v0.144.1 | OTLP receiver → ClickHouse |
+| signoz-otel-collector | signoz/signoz-otel-collector:v0.144.2 | OTLP receiver → ClickHouse |
 | rf-test-runner | Custom (robotframework-tracer) | Runs RF tests, emits traces |
 | rf-trace-report | Custom (this project) | Serves the trace viewer |
 
