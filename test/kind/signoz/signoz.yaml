@@ -1,0 +1,69 @@
+# SigNoz community edition Deployment.
+# Service named "signoz" for trace-report provider queries.
+# Uses SQLite for internal state (ephemeral, no PVC needed for tests).
+apiVersion: v1
+kind: Service
+metadata:
+  name: signoz
+  labels:
+    app.kubernetes.io/name: signoz
+    app.kubernetes.io/part-of: signoz-test
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: signoz
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signoz
+  labels:
+    app.kubernetes.io/name: signoz
+    app.kubernetes.io/part-of: signoz-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: signoz
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: signoz
+        app.kubernetes.io/part-of: signoz-test
+    spec:
+      containers:
+        - name: signoz
+          image: signoz/signoz-community:v0.113.0
+          env:
+            - name: SIGNOZ_TELEMETRYSTORE_PROVIDER
+              value: clickhouse
+            - name: SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN
+              value: tcp://clickhouse:9000
+            - name: SIGNOZ_SQLSTORE_SQLITE_PATH
+              value: /var/lib/signoz/signoz.db
+            - name: SIGNOZ_ANALYTICS_ENABLED
+              value: "false"
+            - name: SIGNOZ_TOKENIZER_JWT_SECRET
+              value: test-secret-key-for-integration
+            - name: GODEBUG
+              value: netdns=go
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5

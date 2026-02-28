@@ -1,0 +1,68 @@
+# ZooKeeper single-node StatefulSet for ClickHouse coordination.
+# Ephemeral — no persistent storage needed for integration tests.
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  labels:
+    app.kubernetes.io/name: zookeeper
+    app.kubernetes.io/part-of: signoz-test
+spec:
+  clusterIP: None
+  ports:
+    - name: client
+      port: 2181
+      targetPort: 2181
+  selector:
+    app.kubernetes.io/name: zookeeper
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  labels:
+    app.kubernetes.io/name: zookeeper
+    app.kubernetes.io/part-of: signoz-test
+spec:
+  serviceName: zookeeper
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zookeeper
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zookeeper
+        app.kubernetes.io/part-of: signoz-test
+    spec:
+      containers:
+        - name: zookeeper
+          image: signoz/zookeeper:3.7.1
+          env:
+            - name: ZOO_SERVER_ID
+              value: "1"
+            - name: ALLOW_ANONYMOUS_LOGIN
+              value: "yes"
+            - name: ZOO_AUTOPURGE_INTERVAL
+              value: "1"
+          ports:
+            - containerPort: 2181
+              name: client
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -s -m 2 http://localhost:8080/commands/ruok | grep error | grep null
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -s -m 2 http://localhost:8080/commands/ruok | grep error | grep null
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5

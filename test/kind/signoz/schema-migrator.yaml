@@ -1,0 +1,23 @@
+# Schema migrator Job — creates ClickHouse tables required by SigNoz.
+# Runs sync migration (creates tables for traces, metrics, logs).
+# Must complete before SigNoz can serve requests.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-migrator-sync
+  labels:
+    app.kubernetes.io/name: schema-migrator
+    app.kubernetes.io/part-of: signoz-test
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: schema-migrator
+        app.kubernetes.io/part-of: signoz-test
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: schema-migrator
+          image: signoz/signoz-schema-migrator:v0.144.1
+          args: ["sync", "--dsn=tcp://clickhouse:9000", "--up="]
