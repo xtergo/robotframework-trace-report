@@ -57,8 +57,8 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - **Property 9: Architecture guide covers all deployment scenarios** — for any scenario in {local static, local live, OTLP receiver, SigNoz provider, Docker Compose RF stack, Docker Compose SigNoz stack}, the Architecture Guide contains a dedicated section
     - **Validates: Requirements 3.2, 3.3, 3.5**
 
-- [ ] 4. Create User Guide
-  - [ ] 4.1 Create `docs/user-guide.md` with comprehensive end-user documentation
+- [x] 4. Create User Guide
+  - [x] 4.1 Create `docs/user-guide.md` with comprehensive end-user documentation
     - Document every CLI option from `cli.py` organized by category: input/output, live mode, OTLP receiver, SigNoz provider, compact serialization, report customization
     - Include "Getting Started" section with step-by-step workflow (run RF tests → generate report → open in browser)
     - Include step-by-step instructions for each deployment scenario (local static, local live, OTLP receiver, SigNoz provider, Docker Compose stacks)
