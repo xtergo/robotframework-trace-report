@@ -14,7 +14,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Initialize `dataSource` and `backendType` based on `provider` value (`'SigNoz'`/`'ClickHouse'` vs `'JSON file'`/`'Local file'`)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
 
-  - [ ] 1.2 Integrate status transitions into `_pollSigNoz()` and `_pollJson()` error handlers
+  - [x] 1.2 Integrate status transitions into `_pollSigNoz()` and `_pollJson()` error handlers
     - On successful poll with new spans: call `_setStatus('Live')`, update `lastSuccessTs`, clear `lastError`, reset `retryCount`
     - On successful poll with zero new spans: increment `zeroSpanCount`, if >= 3 call `_setStatus('Delayed')`
     - On fetch rejection (network error): call `_setStatus('Disconnected', 'SigNoz unreachable')`, increment `retryCount`, set `lastError`

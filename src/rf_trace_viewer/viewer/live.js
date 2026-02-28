@@ -135,6 +135,20 @@
     }
   }
 
+  function _emitDiagnostics() {
+    if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+      window.RFTraceViewer.emit('diagnostics-updated', {
+        dataSource: _connectionState.dataSource,
+        backendType: _connectionState.backendType,
+        lastSuccessTs: _connectionState.lastSuccessTs,
+        retryCount: _connectionState.retryCount,
+        lastError: _connectionState.lastError,
+        spansPerSec: _connectionState.spansPerSec,
+        retryCountdownSec: _connectionState.retryCountdownSec
+      });
+    }
+  }
+
   /* ── 1. Provide empty model for app.js ─────────────────────────── */
 
   window.__RF_TRACE_DATA__ = _emptyModel();
@@ -245,25 +259,93 @@
 
   function _pollJson() {
     polling = true;
+    var spansBefore = allSpans.length;
 
     fetch('/traces.json?offset=' + byteOffset)
       .then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (!res.ok) {
+          if (res.status === 401) {
+            _setStatus('Unauthorized', 'Token expired');
+            _connectionState.retryCount++;
+            _connectionState.lastError = 'HTTP 401';
+            throw new Error('HTTP 401');
+          }
+          if (res.status === 429) {
+            _setStatus('Disconnected', 'Rate limited');
+            _connectionState.retryCount++;
+            _connectionState.lastError = 'HTTP 429';
+            throw new Error('HTTP 429');
+          }
+          if (res.status === 502) {
+            return res.text().then(function (body) {
+              if (body && body.toLowerCase().indexOf('clickhouse') !== -1) {
+                _setStatus('Disconnected', 'ClickHouse timeout');
+              } else {
+                _setStatus('Disconnected', 'Unknown');
+              }
+              _connectionState.retryCount++;
+              _connectionState.lastError = 'HTTP 502';
+              throw new Error('HTTP 502');
+            });
+          }
+          _setStatus('Disconnected', 'Unknown');
+          _connectionState.retryCount++;
+          _connectionState.lastError = 'HTTP ' + res.status;
+          throw new Error('HTTP ' + res.status);
+        }
         var newOffset = res.headers.get('X-File-Offset');
         if (newOffset !== null) byteOffset = parseInt(newOffset, 10);
         return res.text();
       })
       .then(function (text) {
-        if (text.length > 0) {
-          _ingestNdjson(text);
-          lastUpdateTs = Date.now();
-          _rebuildAndRender();
+        if (text && text.length > 0) {
+          try {
+            _ingestNdjson(text);
+          } catch (e) {
+            _setStatus('Disconnected', 'Decode error');
+            _connectionState.retryCount++;
+            _connectionState.lastError = e.message || 'JSON parse failure';
+            return;
+          }
+          var newSpans = allSpans.length - spansBefore;
+          if (newSpans > 0) {
+            _setStatus('Live');
+            _connectionState.lastSuccessTs = Date.now();
+            _connectionState.lastError = '';
+            _connectionState.retryCount = 0;
+            lastUpdateTs = Date.now();
+            _rebuildAndRender();
+          } else {
+            _connectionState.zeroSpanCount++;
+            _connectionState.lastSuccessTs = Date.now();
+            _connectionState.lastError = '';
+            _connectionState.reasonChip = '';
+            if (_connectionState.zeroSpanCount >= 3) {
+              _setStatus('Delayed');
+            }
+          }
+        } else {
+          // Empty response counts as zero new spans
+          _connectionState.zeroSpanCount++;
+          _connectionState.lastSuccessTs = Date.now();
+          _connectionState.lastError = '';
+          _connectionState.reasonChip = '';
+          if (_connectionState.zeroSpanCount >= 3) {
+            _setStatus('Delayed');
+          }
         }
       })
       .catch(function (err) {
+        // Network-level fetch rejection (no HTTP response at all)
+        if (!_connectionState.lastError) {
+          _setStatus('Disconnected', 'SigNoz unreachable');
+          _connectionState.retryCount++;
+          _connectionState.lastError = err.message || 'Network error';
+        }
         console.warn('[live] poll error:', err.message);
       })
       .finally(function () {
+        _emitDiagnostics();
         polling = false;
       });
   }
@@ -280,6 +362,9 @@
       .then(function (res) {
         if (res.status === 429) {
           // Rate limited — exponential backoff
+          _setStatus('Disconnected', 'Rate limited');
+          _connectionState.retryCount++;
+          _connectionState.lastError = 'HTTP 429 rate limited';
           return res.json().then(function (body) {
             _showNotification('Rate limited by SigNoz. Backing off\u2026');
             backoffMs = Math.min(backoffMs * 2, 30000);
@@ -288,6 +373,9 @@
           });
         }
         if (res.status === 401) {
+          _setStatus('Unauthorized', 'Token expired');
+          _connectionState.retryCount++;
+          _connectionState.lastError = 'HTTP 401 authentication failed';
           return res.json().then(function (body) {
             _showAuthError(body.message || 'Authentication failed');
             throw new Error('auth_error');
@@ -297,7 +385,23 @@
             throw new Error('auth_error');
           });
         }
+        if (res.status === 502) {
+          return res.text().then(function (body) {
+            if (body && body.toLowerCase().indexOf('clickhouse') !== -1) {
+              _setStatus('Disconnected', 'ClickHouse timeout');
+              _connectionState.lastError = 'HTTP 502 ClickHouse timeout';
+            } else {
+              _setStatus('Disconnected', 'Unknown');
+              _connectionState.lastError = 'HTTP 502';
+            }
+            _connectionState.retryCount++;
+            throw new Error('HTTP 502');
+          });
+        }
         if (!res.ok) {
+          _setStatus('Disconnected', 'Unknown');
+          _connectionState.retryCount++;
+          _connectionState.lastError = 'HTTP ' + res.status;
           return res.json().then(function (body) {
             throw new Error(body.message || 'HTTP ' + res.status);
           }).catch(function (e) {
@@ -311,23 +415,63 @@
         return res.json();
       })
       .then(function (data) {
-        if (!data || !data.spans) return;
+        if (!data || !data.spans) {
+          // Successful response but no spans key — treat as zero spans
+          _connectionState.zeroSpanCount++;
+          _connectionState.lastSuccessTs = Date.now();
+          _connectionState.lastError = '';
+          _connectionState.reasonChip = '';
+          if (_connectionState.zeroSpanCount >= 3) {
+            _setStatus('Delayed');
+          }
+          return;
+        }
         var spans = data.spans;
         if (spans.length > 0) {
           var added = _ingestSigNozSpans(spans);
-          lastUpdateTs = Date.now();
           if (added > 0) {
+            _setStatus('Live');
+            _connectionState.lastSuccessTs = Date.now();
+            _connectionState.lastError = '';
+            _connectionState.retryCount = 0;
+            lastUpdateTs = Date.now();
             _rebuildAndRender();
+          } else {
+            // All spans were duplicates — treat as zero new spans
+            _connectionState.zeroSpanCount++;
+            _connectionState.lastSuccessTs = Date.now();
+            _connectionState.lastError = '';
+            _connectionState.reasonChip = '';
+            if (_connectionState.zeroSpanCount >= 3) {
+              _setStatus('Delayed');
+            }
+          }
+        } else {
+          // Empty spans array
+          _connectionState.zeroSpanCount++;
+          _connectionState.lastSuccessTs = Date.now();
+          _connectionState.lastError = '';
+          _connectionState.reasonChip = '';
+          if (_connectionState.zeroSpanCount >= 3) {
+            _setStatus('Delayed');
           }
         }
       })
       .catch(function (err) {
-        if (err.message === 'rate_limited') return; // already handled
-        if (err.message === 'auth_error') return; // already handled
+        if (err.message === 'rate_limited') return; // already handled above
+        if (err.message === 'auth_error') return; // already handled above
+        if (err.message === 'HTTP 502') return; // already handled above
+        // Network-level fetch rejection (no HTTP response at all)
+        if (_connectionState.primaryStatus !== 'Disconnected' || !_connectionState.lastError) {
+          _setStatus('Disconnected', 'SigNoz unreachable');
+          _connectionState.retryCount++;
+          _connectionState.lastError = err.message || 'Network error';
+        }
         console.warn('[live] SigNoz poll error:', err.message);
         _showNotification('SigNoz error: partial data may be shown');
       })
       .finally(function () {
+        _emitDiagnostics();
         polling = false;
       });
   }
