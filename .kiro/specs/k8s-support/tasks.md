@@ -7,7 +7,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
 ## Tasks
 
 - [ ] 1. Create error codes module and structured logger
-  - [ ] 1.1 Create `src/rf_trace_viewer/error_codes.py` with error code constants, `error_response()`, and `truncation_warning()` functions
+  - [x] 1.1 Create `src/rf_trace_viewer/error_codes.py` with error code constants, `error_response()`, and `truncation_warning()` functions
     - Define the `ERROR_CODES` set: `AUTH_MISSING`, `AUTH_EXPIRED`, `CLICKHOUSE_TIMEOUT`, `CLICKHOUSE_UNREACHABLE`, `SIGNOZ_TIMEOUT`, `SIGNOZ_UNREACHABLE`, `DNS_FAIL`, `TLS_ERROR`, `RATE_LIMITED`, `MAX_SPANS_TRUNCATED`, `INTERNAL_ERROR`
     - Implement `error_response(error_code, message, request_id, status, warning)` returning `(status_code, json_body)`
     - Implement `truncation_warning(data, error_code, limit)` adding a `warning` field to successful responses
@@ -20,7 +20,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert `error_code` is always a member of the `ERROR_CODES` set
     - **Validates: Requirements 6.1, 6.2**
 
-  - [ ] 1.3 Create `src/rf_trace_viewer/logging_config.py` with `StructuredLogger` class
+  - [x] 1.3 Create `src/rf_trace_viewer/logging_config.py` with `StructuredLogger` class
     - Implement JSON mode (`LOG_FORMAT=json`): single-line JSON to stdout with `timestamp`, `level`, `message`, `request_id`, `logger` fields
     - Implement text mode: pass-through to existing print-based behavior
     - Implement `mask_secrets()` using compiled regex for API keys, JWT secrets, passwords, Bearer tokens
@@ -46,8 +46,8 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert masked output replaces all secret values with `***` in both JSON and text modes
     - **Validates: Requirements 5.3**
 
-- [ ] 2. Create rate limiter and extend configuration
-  - [ ] 2.1 Create `src/rf_trace_viewer/rate_limit.py` with `SlidingWindowRateLimiter` class
+- [x] 2. Create rate limiter and extend configuration
+  - [x] 2.1 Create `src/rf_trace_viewer/rate_limit.py` with `SlidingWindowRateLimiter` class
     - Implement per-IP sliding window using stdlib `threading.Lock` and timestamp lists
     - Implement `is_allowed(client_ip)` returning `(allowed, retry_after_seconds)`
     - Implement `cleanup()` to remove expired entries
@@ -60,7 +60,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert that requests at or below the limit return `(True, None)`
     - **Validates: Requirements 12.1, 12.2**
 
-  - [ ] 2.3 Extend `src/rf_trace_viewer/config.py` with new K8s environment variables
+  - [x] 2.3 Extend `src/rf_trace_viewer/config.py` with new K8s environment variables
     - Add: `LOG_FORMAT`, `STATUS_POLL_INTERVAL`, `HEALTH_CHECK_TIMEOUT`, `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `MAX_CONCURRENT_QUERIES`, `BASE_FILTER_CONFIG`, `RATE_LIMIT_PER_IP`
     - Preserve existing 3-tier precedence: CLI args > config file > environment variables
     - Validate `STATUS_POLL_INTERVAL` range (5–120 seconds), reject out-of-range with config error
@@ -86,11 +86,11 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert that when any required key is missing, the server exits non-zero with a log message naming the missing key
     - **Validates: Requirements 8.8**
 
-- [ ] 3. Checkpoint
+- [x] 3. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Implement health router and status poller
-  - [ ] 4.1 Create `src/rf_trace_viewer/health.py` with `HealthRouter` class
+- [x] 4. Implement health router and status poller
+  - [x] 4.1 Create `src/rf_trace_viewer/health.py` with `HealthRouter` class
     - Implement `handle_live()` returning 200 when process is running
     - Implement `handle_ready()` returning 200 only when ClickHouse `/ping` reachable within timeout AND drain flag is false; return 503 with JSON `error` field otherwise
     - Implement `handle_drain()` setting drain flag, returning 200
@@ -116,7 +116,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert health endpoint requests never return 401, 403, or 429
     - **Validates: Requirements 1.6, 12.3**
 
-  - [ ] 4.5 Create `StatusPoller` class in `src/rf_trace_viewer/health.py`
+  - [x] 4.5 Create `StatusPoller` class in `src/rf_trace_viewer/health.py`
     - Implement background daemon thread polling ClickHouse `/ping` and SigNoz `/api/v1/health` at configurable interval
     - Cache results with thread-safe `threading.Lock`
     - Classify failures into error types: `DNS_FAIL`, `TIMEOUT`, `TLS_ERROR`, `AUTH_MISSING`, `AUTH_EXPIRED`, `HTTP_5XX`, `CONNECTION_REFUSED`
