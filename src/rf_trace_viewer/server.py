@@ -5,8 +5,10 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import signal
 import sys
 import threading
+import time
 import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -79,6 +81,18 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self) -> None:
+        inflight_lock = getattr(self.server, "_inflight_lock", None)
+        if inflight_lock is not None:
+            with inflight_lock:
+                self.server._inflight_count += 1
+        try:
+            self._do_GET()
+        finally:
+            if inflight_lock is not None:
+                with inflight_lock:
+                    self.server._inflight_count -= 1
+
+    def _do_GET(self) -> None:
         request_id = self._get_or_generate_request_id()
         parsed = urlparse(self.path)
         path = parsed.path
@@ -207,6 +221,18 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
+        inflight_lock = getattr(self.server, "_inflight_lock", None)
+        if inflight_lock is not None:
+            with inflight_lock:
+                self.server._inflight_count += 1
+        try:
+            self._do_POST()
+        finally:
+            if inflight_lock is not None:
+                with inflight_lock:
+                    self.server._inflight_count -= 1
+
+    def _do_POST(self) -> None:
         request_id = self._get_or_generate_request_id()
         parsed = urlparse(self.path)
         path = parsed.path
@@ -549,6 +575,7 @@ class LiveServer:
         rate_limiter: object | None = None,
         base_filter: BaseFilterConfig | None = None,
         query_semaphore: threading.Semaphore | None = None,
+        termination_grace_period: int = 30,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -571,10 +598,11 @@ class LiveServer:
         self.rate_limiter = rate_limiter
         self.base_filter = base_filter or BaseFilterConfig()
         self.query_semaphore = query_semaphore
+        self.termination_grace_period = termination_grace_period
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
-        """Start the HTTP server. Blocks until interrupted (Ctrl+C)."""
+        """Start the HTTP server. Blocks until interrupted (Ctrl+C or SIGTERM)."""
         self._httpd = HTTPServer(("", self.port), _LiveRequestHandler)
         # Attach config to the server instance so the handler can access it
         self._httpd.trace_path = self.trace_path  # type: ignore[attr-defined]
@@ -602,6 +630,13 @@ class LiveServer:
         log_format = os.environ.get("LOG_FORMAT", "text")
         self._httpd._logger = StructuredLogger(log_format)  # type: ignore[attr-defined]
 
+        # In-flight request tracking for graceful shutdown
+        self._httpd._inflight_count = 0  # type: ignore[attr-defined]
+        self._httpd._inflight_lock = threading.Lock()  # type: ignore[attr-defined]
+
+        # Install SIGTERM handler for graceful shutdown
+        self._install_signal_handlers()
+
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")
         if self.receiver_mode:
@@ -627,14 +662,60 @@ class LiveServer:
         finally:
             self.stop()
 
+    def _install_signal_handlers(self) -> None:
+        """Install SIGTERM handler for graceful shutdown."""
+        signal.signal(signal.SIGTERM, self._sigterm_handler)
+
+    def _sigterm_handler(self, signum: int, frame: object) -> None:
+        """Handle SIGTERM: set drain flag and stop accepting connections."""
+        # Set drain flag on health router
+        if self.health_router and hasattr(self.health_router, "set_draining"):
+            self.health_router.set_draining()
+
+        # Stop accepting new connections by shutting down in a thread
+        # (signal handlers can't call shutdown directly as it may deadlock)
+        if self._httpd is not None:
+            threading.Thread(target=self._httpd.shutdown, daemon=True).start()
+
     def stop(self) -> None:
         """Gracefully shut down the server.
 
-        In receiver mode, generates a static HTML report from buffered spans
+        Waits for in-flight requests to complete (up to termination_grace_period),
+        logs a drain summary, then in receiver mode generates a static HTML report
         before releasing the server resources.
         """
         if self._httpd is not None:
+            drain_start = time.monotonic()
             self._httpd.shutdown()
+
+            # Wait for in-flight requests to complete
+            inflight_lock = getattr(self._httpd, "_inflight_lock", None)
+            if inflight_lock is not None:
+                deadline = drain_start + self.termination_grace_period
+                while time.monotonic() < deadline:
+                    with inflight_lock:
+                        count = self._httpd._inflight_count
+                    if count <= 0:
+                        break
+                    time.sleep(0.1)
+
+                drain_duration = time.monotonic() - drain_start
+                with inflight_lock:
+                    remaining = self._httpd._inflight_count
+
+                # Log drain summary
+                logger = getattr(self._httpd, "_logger", None)
+                if logger:
+                    logger.log(
+                        "INFO",
+                        f"Graceful shutdown complete: drained in {drain_duration:.1f}s, "
+                        f"{remaining} requests still in-flight",
+                        drain_duration_ms=round(drain_duration * 1000, 2),
+                        inflight_remaining=remaining,
+                    )
+                else:
+                    print(f"Shutdown: drained in {drain_duration:.1f}s, " f"{remaining} in-flight")
+
             self._httpd.server_close()
             # Generate report from buffered spans in receiver mode
             if self.receiver_mode:
