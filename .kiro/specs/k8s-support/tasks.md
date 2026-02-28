@@ -243,19 +243,19 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
 - [x] 8. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Create kind test infrastructure and Robot Framework integration tests
-  - [ ] 9.1 Create kind cluster configuration and test harness scripts in `test/kind/`
+- [x] 9. Create kind test infrastructure and Robot Framework integration tests
+  - [x] 9.1 Create kind cluster configuration and test harness scripts in `test/kind/`
     - Create `cluster.yaml` kind configuration
     - Create `itest-up.sh`: create kind cluster, deploy SigNoz/ClickHouse and trace-report (dev overlay), wait for readiness, start port-forward, write `.env` file with `TRACE_REPORT_BASE_URL`
     - Create `itest-down.sh`: delete kind cluster
     - Create `itest.sh`: wrapper running up → test → down, keeping cluster on failure, dumping pod logs and cluster status before exit on failure
     - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6_
 
-  - [ ] 9.2 Create SigNoz/ClickHouse Kustomize manifests for kind in `test/kind/signoz/`
+  - [x] 9.2 Create SigNoz/ClickHouse Kustomize manifests for kind in `test/kind/signoz/`
     - Minimal manifests to deploy SigNoz and ClickHouse into the kind cluster for integration testing
     - _Requirements: 14.7_
 
-  - [ ] 9.3 Create Robot Framework integration test suite in `test/robot/tests/`
+  - [x] 9.3 Create Robot Framework integration test suite in `test/robot/tests/`
     - Create `docker-compose.yaml` and `.env.example` for running tests via Docker
     - Generate unique `${RUN_ID}` per execution, export as OTel resource attribute
     - Use poll-based waiting (no fixed sleeps) for trace appearance
