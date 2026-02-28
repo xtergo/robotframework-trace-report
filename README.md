@@ -61,6 +61,7 @@ rf-trace-report --receiver --live
 | **OTLP receiver** | Ingest OTLP traces directly, optionally forward upstream | [Architecture Guide](docs/architecture.md) |
 | **SigNoz provider** | Query traces from a SigNoz backend | [Architecture Guide](docs/architecture.md) |
 | **Docker Compose** | Pre-built stacks for RF+tracer or SigNoz+OTel setups | [Architecture Guide](docs/architecture.md) |
+| **Kubernetes** | Production deployment with Kustomize overlays, health probes, structured logging | [K8s Deployment Guide](docs/kubernetes.md) |
 
 See the [User Guide](docs/user-guide.md) for step-by-step setup instructions for each scenario.
 
@@ -89,6 +90,7 @@ See the [User Guide](docs/user-guide.md) for step-by-step setup instructions for
 | [Contributing](CONTRIBUTING.md) | Development workflow, Docker-only testing, code style |
 | [Testing](docs/testing.md) | Test types, Makefile targets, Docker test image |
 | [Docker Testing](docs/docker-testing.md) | Docker-only testing philosophy and setup |
+| [Kubernetes Deployment](docs/kubernetes.md) | K8s deployment guide, configuration reference, troubleshooting |
 | [CHANGELOG](CHANGELOG.md) | Release history |
 
 ## Related Projects
