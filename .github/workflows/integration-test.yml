@@ -1,0 +1,91 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        otel: ["false", "true"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kind
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
+      - name: Build trace-report image
+        run: docker build -t trace-report:dev .
+
+      - name: Create kind cluster and deploy
+        env:
+          TRACE_REPORT_OTEL: ${{ matrix.otel }}
+        run: bash test/kind/itest-up.sh
+
+      - name: Verify hardened runtime
+        run: |
+          CONTEXT="kind-trace-report-test"
+          # Verify non-root user
+          POD=$(kubectl get pods --context "$CONTEXT" -l app.kubernetes.io/name=trace-report -o jsonpath='{.items[0].metadata.name}')
+          UID=$(kubectl exec --context "$CONTEXT" "$POD" -- id -u 2>/dev/null || echo "unknown")
+          echo "Container UID: $UID"
+          if [ "$UID" != "10001" ] && [ "$UID" != "unknown" ]; then
+            echo "::error::Container is not running as non-root (UID 10001)"
+            exit 1
+          fi
+          # Verify readOnlyRootFilesystem via security context in pod spec
+          READONLY=$(kubectl get pod --context "$CONTEXT" "$POD" -o jsonpath='{.spec.containers[0].securityContext.readOnlyRootFilesystem}')
+          echo "readOnlyRootFilesystem: $READONLY"
+          if [ "$READONLY" != "true" ]; then
+            echo "::error::readOnlyRootFilesystem is not true"
+            exit 1
+          fi
+
+      - name: Run integration tests
+        env:
+          TRACE_REPORT_OTEL: ${{ matrix.otel }}
+        run: |
+          docker compose -f test/robot/docker-compose.yaml \
+            --env-file test/kind/.env \
+            up --build --abort-on-container-exit
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        run: |
+          CONTEXT="kind-trace-report-test"
+          echo "=== Cluster Status ==="
+          kubectl cluster-info --context "$CONTEXT" 2>/dev/null || true
+          echo ""
+          echo "=== Nodes ==="
+          kubectl get nodes --context "$CONTEXT" -o wide 2>/dev/null || true
+          echo ""
+          echo "=== All Pods ==="
+          kubectl get pods --context "$CONTEXT" --all-namespaces -o wide 2>/dev/null || true
+          echo ""
+          echo "=== Events ==="
+          kubectl get events --context "$CONTEXT" --sort-by='.lastTimestamp' 2>/dev/null | tail -30 || true
+          echo ""
+          echo "=== trace-report Pod Logs ==="
+          for POD in $(kubectl get pods --context "$CONTEXT" -l app.kubernetes.io/name=trace-report -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            echo "--- $POD ---"
+            kubectl logs --context "$CONTEXT" "$POD" --tail=100 2>/dev/null || true
+          done
+
+      - name: Upload pod logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs-otel-${{ matrix.otel }}
+          path: test/robot/results/
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: bash test/kind/itest-down.sh

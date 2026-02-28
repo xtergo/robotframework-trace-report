@@ -266,8 +266,8 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Ensure tests pass regardless of `TRACE_REPORT_OTEL` setting
     - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7_
 
-- [ ] 10. Add Makefile targets and CI pipeline
-  - [ ] 10.1 Add integration test Makefile targets
+- [x] 10. Add Makefile targets and CI pipeline
+  - [x] 10.1 Add integration test Makefile targets
     - Add `itest-up` target running `itest-up.sh`
     - Add `itest-run` target running Robot Framework tests via docker-compose
     - Add `itest-down` target running `itest-down.sh`
@@ -275,20 +275,20 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Verify existing targets (`test`, `test-unit`, `test-browser`, `test-integration-signoz`) still work without modification
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5_
 
-  - [ ] 10.2 Create or update CI workflow for integration test matrix
+  - [x] 10.2 Create or update CI workflow for integration test matrix
     - Run kind integration tests with `TRACE_REPORT_OTEL=false`
     - Run kind integration tests with `TRACE_REPORT_OTEL=true`
     - Enforce hardened runtime (non-root, readOnlyRootFilesystem) during integration tests
     - Attach pod logs and cluster status as artifacts on failure
     - _Requirements: 16.1, 16.2, 16.3, 16.4_
 
-  - [ ] 10.3 Create or update CI workflow for GHCR OCI image publishing
+  - [x] 10.3 Create or update CI workflow for GHCR OCI image publishing
     - Build and push OCI image to GHCR on release tag push
     - Tag with `:<X.Y.Z>` for released versions and `:sha-<shortsha>` for commit traceability
     - Align OCI image version with PyPI package version
     - _Requirements: 20.2, 20.4, 20.5, 20.6, 20.7_
 
-- [ ] 11. Checkpoint
+- [x] 11. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Write K8s documentation and verify backward compatibility

@@ -8,7 +8,7 @@
 #   dev-test:        6 GB  (quick run, no coverage)
 #   dev-test-file:   3 GB  (single file, may include slow tests)
 
-.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties test-full format lint check clean
+.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties test-full format lint check clean itest-up itest-run itest-down itest
 
 help: ## Show this help message
 	@echo "robotframework-trace-report - Docker-based development commands"
@@ -104,3 +104,21 @@ docker-pull: ## Pull latest Python image
 
 docker-clean: ## Remove Docker images and containers
 	@docker system prune -f
+
+# Kind integration test targets
+itest-up: ## Create kind cluster and deploy services for integration testing
+	@echo "Setting up kind integration test environment..."
+	@bash test/kind/itest-up.sh
+
+itest-run: ## Run Robot Framework integration tests via docker-compose
+	@echo "Running Robot Framework integration tests..."
+	@docker compose -f test/robot/docker-compose.yaml \
+		--env-file test/kind/.env \
+		up --build --abort-on-container-exit
+
+itest-down: ## Tear down kind cluster and clean up
+	@echo "Tearing down kind integration test environment..."
+	@bash test/kind/itest-down.sh
+
+itest: ## Run full integration test cycle (up → test → down, keeps cluster on failure)
+	@bash test/kind/itest.sh
