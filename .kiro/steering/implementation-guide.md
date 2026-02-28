@@ -128,29 +128,30 @@ All new fields must have defaults (`""`, `0`, `[]`, `{}`). Existing trace files 
 
 ## Testing Rules
 
-All tests run in Docker. Never execute raw Python on the host.
+All tests run in Docker. Never execute raw Python on the host. Use the pre-built `rf-trace-test:latest` image or Makefile targets.
 
 ```bash
+# Build the test image (first time or after Dockerfile.test changes)
+make docker-build-test
+
 # Unit tests
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest pytest-cov hypothesis black ruff &&
-  PYTHONPATH=src pytest tests/unit/ -v --cov=src/rf_trace_viewer
-"
+make test-unit
 
 # Specific test file
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest hypothesis &&
-  PYTHONPATH=src pytest tests/unit/test_rf_model.py -v
-"
+make dev-test-file FILE=tests/unit/test_rf_model.py
+
+# Direct Docker command (when Makefile isn't enough)
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest \
+    bash -c "PYTHONPATH=src pytest tests/unit/test_rf_model.py -v"
 
 # Browser tests
-cd tests/browser && docker compose up --build
+make test-browser
 ```
 
 ## Reference Files
 
-- Spec requirements: `.kiro/specs/rf-html-report-replacement/requirements.md`
-- Spec design: `.kiro/specs/rf-html-report-replacement/design.md`
-- Spec tasks: `.kiro/specs/rf-html-report-replacement/tasks.md`
+- Main spec: `.kiro/specs/rf-html-report-replacement/`
+- Documentation spec: `.kiro/specs/documentation-overhaul/`
 - Fixture traces: `tests/fixtures/*.json`
 - Test reports: `test-reports/report_*.html`
+- Docs: `docs/` (architecture.md, user-guide.md, signoz-integration.md, testing.md, docker-testing.md)

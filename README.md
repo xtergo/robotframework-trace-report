@@ -88,6 +88,7 @@ See the [User Guide](docs/user-guide.md) for step-by-step setup instructions for
 | [SigNoz Integration](docs/signoz-integration.md) | SigNoz setup, authentication, environment variables |
 | [Contributing](CONTRIBUTING.md) | Development workflow, Docker-only testing, code style |
 | [Testing](docs/testing.md) | Test types, Makefile targets, Docker test image |
+| [Docker Testing](docs/docker-testing.md) | Docker-only testing philosophy and setup |
 | [CHANGELOG](CHANGELOG.md) | Release history |
 
 ## Related Projects

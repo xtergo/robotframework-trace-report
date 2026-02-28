@@ -148,15 +148,15 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - **Property 16: Contributing guide documents current project structure** — for any key path in {providers/, viewer/app.js, viewer/tree.js, viewer/timeline.js, viewer/stats.js, viewer/search.js, viewer/keyword-stats.js, viewer/flow-table.js, viewer/deep-link.js, viewer/live.js, viewer/theme.js, tests/integration/}, the Contributing Guide references it
     - **Validates: Requirements 6.5, 6.9, 7.5, 7.6**
 
-- [ ] 9. Update steering files and cross-references
-  - [ ] 9.1 Update steering files in `.kiro/steering/`
+- [x] 9. Update steering files and cross-references
+  - [x] 9.1 Update steering files in `.kiro/steering/`
     - Update `docker-testing-strategy.md` to reference `rf-trace-test:latest` as primary approach
     - Update `implementation-guide.md` to reflect current codebase state (completed tasks, updated file references)
     - Update `.kiro/steering/README.md` to accurately list all active steering files with correct descriptions
     - Fix any stale file paths, outdated commands, or completed work items in steering files
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-  - [ ] 9.2 Verify and fix all cross-references
+  - [x] 9.2 Verify and fix all cross-references
     - Ensure README contains working relative links to all docs/ files, CONTRIBUTING.md, and CHANGELOG.md
     - Ensure CONTRIBUTING.md links to docs/testing.md and docs/docker-testing.md
     - Ensure Architecture Guide links to User Guide and SigNoz Guide
@@ -171,7 +171,7 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - **Property 19: Steering README lists all steering files** — for any `.md` file in `.kiro/steering/` (excluding README.md), the steering README references it
     - **Validates: Requirements 1.1, 10.3, 11.1, 11.2, 11.3, 11.4**
 
-- [ ] 10. Final checkpoint - Ensure all tests pass
+- [x] 10. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

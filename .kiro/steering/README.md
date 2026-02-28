@@ -9,7 +9,7 @@ This directory contains steering files that provide context and instructions to 
 
 Enforces the Docker-only development environment. Covers:
 - Never run raw Python on the host
-- Always use the pre-built test image or Makefile targets
+- Always use the pre-built `rf-trace-test:latest` image or Makefile targets
 - Direct Docker commands when needed
 - Keeping containers up to date with latest code
 
@@ -33,21 +33,23 @@ Contribution guidelines for the project. Covers:
 - Commit checklist
 - JavaScript file conventions
 - Architecture constraints
+- Auto-commit after spec tasks
 
 This steering file ensures consistent code quality across all contributions.
 
 ### implementation-guide.md
 **Inclusion:** Manual (reference with `#implementation-guide` in chat)
 
-Comprehensive implementation guide for the tree enhancement and UX superiority features. Covers:
+Implementation guide for the RF trace viewer features. Covers:
 - Architecture overview and data pipeline
-- Known data gaps between parser and RF model (what exists but is dropped)
+- Viewer JS files and load order
+- Known data gaps between parser and RF model
 - Recommended implementation order (6 waves)
 - Key code changes needed for each major task
 - Backward compatibility requirements
-- JS viewer file naming (tree.js, not tree-view.js)
+- Testing rules using pre-built `rf-trace-test:latest` image
 
-Use this when working on Tasks 28-33 or any of the remaining feature implementation.
+Use this when working on feature implementation tasks from the main spec.
 
 ### pbt-status-fix.md
 **Inclusion:** Auto (always active)
