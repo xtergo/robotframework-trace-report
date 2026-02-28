@@ -677,6 +677,13 @@
         }
       });
 
+      // Listen to diagnostics-updated events to refresh panel in-place
+      eventBus.on('diagnostics-updated', function () {
+        if (diagPanel.style.display !== 'none') {
+          _refreshDiagnostics();
+        }
+      });
+
       // Update timestamp every second using connection state
       setInterval(function () {
         var state = window.RFTraceViewer.getConnectionState
