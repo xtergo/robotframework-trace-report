@@ -545,6 +545,107 @@
       retryCountdown.className = 'retry-countdown';
       statusCluster.appendChild(retryCountdown);
 
+      // Diagnostics Panel — dropdown child of Status Cluster
+      var diagPanel = document.createElement('div');
+      diagPanel.className = 'diagnostics-panel';
+      diagPanel.setAttribute('role', 'dialog');
+      diagPanel.setAttribute('aria-label', 'Connection diagnostics');
+      diagPanel.style.display = 'none';
+
+      // Helper to format a ms-timestamp for display
+      function _formatDiagTimestamp(ts) {
+        if (!ts) return 'N/A';
+        var d = new Date(ts);
+        var hh = String(d.getHours()).padStart(2, '0');
+        var mm = String(d.getMinutes()).padStart(2, '0');
+        var ss = String(d.getSeconds()).padStart(2, '0');
+        return hh + ':' + mm + ':' + ss;
+      }
+
+      var diagRows = [
+        { label: 'Data Source', key: 'dataSource', el: null },
+        { label: 'Backend', key: 'backendType', el: null },
+        { label: 'Last Success', key: 'lastSuccessTs', el: null, format: _formatDiagTimestamp },
+        { label: 'Retry Count', key: 'retryCount', el: null },
+        { label: 'Last Error', key: 'lastError', el: null, fallback: 'None' }
+      ];
+
+      for (var di = 0; di < diagRows.length; di++) {
+        var row = document.createElement('div');
+        row.className = 'diagnostics-row';
+        var lbl = document.createElement('span');
+        lbl.className = 'diagnostics-label';
+        lbl.textContent = diagRows[di].label;
+        var val = document.createElement('span');
+        val.className = 'diagnostics-value';
+        val.textContent = '—';
+        diagRows[di].el = val;
+        row.appendChild(lbl);
+        row.appendChild(val);
+        diagPanel.appendChild(row);
+      }
+
+      statusCluster.appendChild(diagPanel);
+
+      // Populate diagnostics values from current connection state
+      function _refreshDiagnostics() {
+        var state = window.RFTraceViewer.getConnectionState
+          ? window.RFTraceViewer.getConnectionState()
+          : null;
+        for (var ri = 0; ri < diagRows.length; ri++) {
+          var cfg = diagRows[ri];
+          var raw = state ? state[cfg.key] : null;
+          if (cfg.format) {
+            cfg.el.textContent = cfg.format(raw);
+          } else if (raw !== undefined && raw !== null && raw !== '') {
+            cfg.el.textContent = String(raw);
+          } else {
+            cfg.el.textContent = cfg.fallback || '—';
+          }
+        }
+      }
+
+      // Toggle diagnostics panel on Status Cluster click
+      function _toggleDiagPanel(e) {
+        // Don't toggle if click was inside the panel itself
+        if (diagPanel.contains(e.target)) return;
+        var isOpen = diagPanel.style.display !== 'none';
+        if (isOpen) {
+          diagPanel.style.display = 'none';
+          statusCluster.setAttribute('aria-expanded', 'false');
+        } else {
+          _refreshDiagnostics();
+          diagPanel.style.display = '';
+          statusCluster.setAttribute('aria-expanded', 'true');
+        }
+      }
+
+      statusCluster.addEventListener('click', _toggleDiagPanel);
+      statusCluster.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          _toggleDiagPanel(e);
+        }
+      });
+
+      // Close on click outside
+      document.addEventListener('click', function (e) {
+        if (diagPanel.style.display === 'none') return;
+        if (!statusCluster.contains(e.target)) {
+          diagPanel.style.display = 'none';
+          statusCluster.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      // Close on Escape key
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && diagPanel.style.display !== 'none') {
+          diagPanel.style.display = 'none';
+          statusCluster.setAttribute('aria-expanded', 'false');
+          statusCluster.focus();
+        }
+      });
+
       header.appendChild(statusCluster);
 
       // Color map for status dot

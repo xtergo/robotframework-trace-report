@@ -79,7 +79,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - _Requirements: 11.1, 12.4_
 
 - [ ] 4. Implement Diagnostics Panel in app.js
-  - [ ] 4.1 Build Diagnostics Panel dropdown
+  - [x] 4.1 Build Diagnostics Panel dropdown
     - Create `<div class="diagnostics-panel" role="dialog" aria-label="Connection diagnostics">` as child of Status Cluster
     - Rows: Data Source, Backend, Last Success (formatted timestamp), Retry Count, Last Error (or "None")
     - Toggle open/close on Status Cluster click, update `aria-expanded`
