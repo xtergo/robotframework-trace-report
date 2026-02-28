@@ -27,7 +27,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Emit `diagnostics-updated` event after each poll cycle with current state snapshot
     - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9_
 
-  - [ ] 1.3 Implement Pause/Resume logic replacing `snapshotMode` toggle
+  - [x] 1.3 Implement Pause/Resume logic replacing `snapshotMode` toggle
     - Replace `_setLiveMode()` with `_setPaused(paused)` that calls `_setStatus('Paused')` or `_setStatus('Live')` and starts/stops polling accordingly
     - Remove the old Live/Snapshot toggle track creation from `_createStatusBar()`
     - _Requirements: 3.3, 3.7, 5.4, 5.5_

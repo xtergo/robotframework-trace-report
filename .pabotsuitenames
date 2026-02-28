@@ -1,7 +1,7 @@
-datasources:ecad5cacbd403b9a26c3303ce179fd67420632c6
+datasources:de9de6385bdb7e1788df45a8a72b89af18de1692
 commandlineoptions:4423614c2b57fbd737bfcbb26443b39f4c55982b
 suitesfrom:no-suites-from-option
-file:b7cef80e36f85eb89fc9489791ea5256e7ee9ef3
+file:abdc069651137dea715529b83782a8183d6eb1df
 --suite Suites.Gantt Performance
 --suite Suites.Dark Mode Canvas Pixel
 --suite Suites.Dark Mode Timeline
@@ -17,3 +17,5 @@ file:b7cef80e36f85eb89fc9489791ea5256e7ee9ef3
 --suite Suites.Verify Dark Default
 --suite Suites.Verify Latest Report
 --suite Suites.Sticky Tree Controls
+--suite Suites.Tree Indent Debug
+--suite Suites.Tree Indent Slider

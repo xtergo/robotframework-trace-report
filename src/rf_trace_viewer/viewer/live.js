@@ -88,7 +88,7 @@
   // SigNoz-specific state
   var lastSeenNs = 0;            // SigNoz: highest (start_time_ns + duration_ns) seen
   var backoffMs = POLL_MS;       // SigNoz: current backoff interval (for 429 handling)
-  var snapshotMode = false;      // true = paused polling (snapshot), false = live
+  var _paused = false;           // true = polling paused, false = live
   var _lastFilterSpanCount = 0;  // track span count to re-init filter only when data changes
   var _timelineInitialized = false;  // track whether timeline has been initialized with real data
 
@@ -172,6 +172,7 @@
           retryCountdownSec: _connectionState.retryCountdownSec
         };
       };
+      window.RFTraceViewer.setPaused = _setPaused;
       window.RFTraceViewer.on('app-ready', _onAppReady);
       // Listen for background fetch merge events from app.js (SigNoz paged loading)
       window.RFTraceViewer.on('spans-merge', function (data) {
@@ -230,6 +231,20 @@
     }
   }
 
+  function _setPaused(paused) {
+    _paused = paused;
+    if (paused) {
+      _setStatus('Paused');
+      _stopPolling();
+      _stopTick();
+    } else {
+      _setStatus('Live');
+      _startPolling();
+      _startTick();
+      _poll();
+    }
+  }
+
   /** Pause when tab is hidden, resume when visible. */
   function _listenVisibility() {
     document.addEventListener('visibilitychange', function () {
@@ -237,7 +252,7 @@
         _stopPolling();
         _stopTick();
       } else {
-        if (!snapshotMode) {
+        if (!_paused) {
           _startPolling();
           _startTick();
           _poll(); // immediate catch-up
@@ -1297,7 +1312,7 @@
     }
 
     // Immediate re-poll
-    if (!snapshotMode) {
+    if (!_paused) {
       _poll();
     }
   }
@@ -1309,75 +1324,20 @@
       if (!header) return;
 
       if (provider === 'signoz') {
-        // Service filter dropdown
         _createServiceFilter(header);
-
-        var toggle = document.createElement('label');
-        toggle.className = 'live-toggle';
-
-        var track = document.createElement('div');
-        track.className = 'live-toggle-track on';
-        track.setAttribute('role', 'switch');
-        track.setAttribute('aria-checked', 'true');
-        track.setAttribute('tabindex', '0');
-
-        var thumb = document.createElement('div');
-        thumb.className = 'live-toggle-thumb';
-        track.appendChild(thumb);
-
-        var lbl = document.createElement('span');
-        lbl.className = 'live-toggle-label';
-        lbl.textContent = 'Live';
-
-        // Inline status text next to toggle (replaces the old status bar pill)
-        statusBarEl = document.createElement('span');
-        statusBarEl.className = 'live-toggle-status';
-        statusBarEl.textContent = '';
-
-        function _setLiveMode(live) {
-          snapshotMode = !live;
-          track.classList.toggle('on', live);
-          track.setAttribute('aria-checked', live ? 'true' : 'false');
-          lbl.textContent = live ? 'Live' : 'Snapshot';
-          if (live) {
-            _startPolling();
-            _startTick();
-            _poll();
-          } else {
-            _stopPolling();
-            _stopTick();
-            statusBarEl.textContent = '';
-          }
-        }
-
-        track.addEventListener('click', function () {
-          _setLiveMode(snapshotMode);
-        });
-        track.addEventListener('keydown', function (e) {
-          if (e.key === ' ' || e.key === 'Enter') {
-            e.preventDefault();
-            _setLiveMode(snapshotMode);
-          }
-        });
-
-        toggle.appendChild(track);
-        toggle.appendChild(lbl);
-        toggle.appendChild(statusBarEl);
-        header.appendChild(toggle);
-      } else {
-        // Non-signoz: simple status text in header
-        statusBarEl = document.createElement('span');
-        statusBarEl.className = 'live-toggle-status';
-        statusBarEl.textContent = '';
-        header.appendChild(statusBarEl);
       }
+
+      statusBarEl = document.createElement('span');
+      statusBarEl.className = 'live-toggle-status';
+      statusBarEl.textContent = '';
+      header.appendChild(statusBarEl);
 
       _updateStatusText();
     }
 
   function _updateStatusText() {
       if (!statusBarEl) return;
-      if (snapshotMode) {
+      if (_paused) {
         statusBarEl.textContent = '';
         return;
       }

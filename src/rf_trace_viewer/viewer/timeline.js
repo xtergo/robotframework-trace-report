@@ -180,23 +180,17 @@
     zoomPct.textContent = '100%';
     zoomBar.appendChild(zoomPct);
 
-    var zoomReset = document.createElement('button');
-    zoomReset.className = 'timeline-zoom-btn timeline-zoom-reset';
-    zoomReset.textContent = 'Reset';
-    zoomReset.setAttribute('aria-label', 'Reset zoom');
-    zoomBar.appendChild(zoomReset);
+    var zoomFullRange = document.createElement('button');
+    zoomFullRange.className = 'timeline-zoom-btn timeline-zoom-fullrange';
+    zoomFullRange.textContent = 'Full Range';
+    zoomFullRange.setAttribute('aria-label', 'Show full time range');
+    zoomBar.appendChild(zoomFullRange);
 
-    var zoomLatest = document.createElement('button');
-    zoomLatest.className = 'timeline-zoom-btn timeline-zoom-latest';
-    zoomLatest.textContent = 'Latest';
-    zoomLatest.setAttribute('aria-label', 'Zoom to most recent test run');
-    zoomBar.appendChild(zoomLatest);
-
-    var zoomFitAll = document.createElement('button');
-    zoomFitAll.className = 'timeline-zoom-btn timeline-zoom-fitall';
-    zoomFitAll.textContent = 'Fit All';
-    zoomFitAll.setAttribute('aria-label', 'Fit all spans in view');
-    zoomBar.appendChild(zoomFitAll);
+    var zoomLocateRecent = document.createElement('button');
+    zoomLocateRecent.className = 'timeline-zoom-btn timeline-zoom-locate-recent';
+    zoomLocateRecent.textContent = 'Locate Recent';
+    zoomLocateRecent.setAttribute('aria-label', 'Zoom to most recent test run');
+    zoomBar.appendChild(zoomLocateRecent);
 
     // Time markers toggle
     var markerToggle = document.createElement('label');
@@ -278,7 +272,7 @@
       _applyZoom();
     });
 
-    zoomReset.addEventListener('click', function () {
+    zoomFullRange.addEventListener('click', function () {
       timelineState.zoom = 1.0;
       timelineState.viewStart = timelineState.minTime;
       timelineState.viewEnd = timelineState.maxTime;
@@ -286,16 +280,8 @@
       _applyZoom();
     });
 
-    zoomLatest.addEventListener('click', function () {
+    zoomLocateRecent.addEventListener('click', function () {
       _autoZoomToRecentCluster();
-      syncSlider();
-      _applyZoom();
-    });
-
-    zoomFitAll.addEventListener('click', function () {
-      timelineState.zoom = 1.0;
-      timelineState.viewStart = timelineState.minTime;
-      timelineState.viewEnd = timelineState.maxTime;
       syncSlider();
       _applyZoom();
     });
@@ -1220,11 +1206,22 @@
       ctx.textAlign = 'center';
 
       var firstTick = Math.ceil(timelineState.viewStart / interval) * interval;
+      var MIN_LABEL_GAP = 8; // minimum pixels between labels
+      var lastLabelRight = -Infinity;
 
       for (var t = firstTick; t <= timelineState.viewEnd; t += interval) {
         var x = _timeToScreenX(t);
         if (x >= timelineState.leftMargin + 20 && x <= width - timelineState.rightMargin - 20) {
-          ctx.fillText(_formatTime(t), x, height - 10);
+          var label = _formatTime(t);
+          var labelW = ctx.measureText(label).width;
+          var labelLeft = x - labelW / 2;
+
+          // Skip this label if it would overlap the previous one
+          if (labelLeft < lastLabelRight + MIN_LABEL_GAP) continue;
+
+          ctx.fillStyle = textColor;
+          ctx.fillText(label, x, height - 10);
+          lastLabelRight = x + labelW / 2;
 
           ctx.strokeStyle = borderColor;
           ctx.beginPath();
@@ -1592,10 +1589,17 @@
       ctx.font = '9px sans-serif';
       ctx.fillStyle = labelColor;
       ctx.textAlign = 'center';
+      var lastGridLabelRight = -Infinity;
+      var GRID_LABEL_GAP = 6;
       for (var t2 = firstTick; t2 <= viewEnd; t2 += interval) {
         var x2 = _timeToScreenX(t2);
         if (x2 >= timelineState.leftMargin + 20 && x2 <= width - timelineState.rightMargin - 20) {
-          ctx.fillText(_formatGridLabel(t2, interval), x2, height - 4);
+          var glabel = _formatGridLabel(t2, interval);
+          var glabelW = ctx.measureText(glabel).width;
+          var glabelLeft = x2 - glabelW / 2;
+          if (glabelLeft < lastGridLabelRight + GRID_LABEL_GAP) continue;
+          ctx.fillText(glabel, x2, height - 4);
+          lastGridLabelRight = x2 + glabelW / 2;
         }
       }
 

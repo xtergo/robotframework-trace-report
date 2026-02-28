@@ -1,6 +1,9 @@
 # Dockerfile for test environment with all dependencies pre-installed
 FROM python:3.11-slim
 
+# Install make
+RUN apt-get update && apt-get install -y --no-install-recommends make && rm -rf /var/lib/apt/lists/*
+
 # Install test dependencies
 RUN pip install --no-cache-dir \
     pytest \
