@@ -75,3 +75,11 @@ tests/integration/signoz/*.html
 
 # Browser validation test results
 tests/integration/signoz/browser-results/
+
+# Third-party repo clones (reference only, not part of this project)
+signoz-repo/
+
+# Generated artifacts (should not be committed)
+playwright-log.txt
+coverage_summary.md
+rf-trace-report-optimization-notes.md
