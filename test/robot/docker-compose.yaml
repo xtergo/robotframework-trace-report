@@ -1,0 +1,22 @@
+# Docker Compose for Robot Framework integration tests.
+# Invoked by test/kind/itest.sh with:
+#   docker compose -f test/robot/docker-compose.yaml \
+#       --env-file test/kind/.env up --build --abort-on-container-exit
+#
+# Validates: Requirements 15.1–15.7
+services:
+  robot-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TRACE_REPORT_BASE_URL=${TRACE_REPORT_BASE_URL:-http://host.docker.internal:8077}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./results:/results
+    command: >
+      robot
+      --outputdir /results
+      --loglevel INFO
+      tests/
