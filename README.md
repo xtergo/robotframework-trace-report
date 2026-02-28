@@ -1,139 +1,94 @@
 # Robot Framework Trace Report
 
-Standalone HTML report generator and live trace viewer for Robot Framework test execution, powered by OpenTelemetry trace data.
+Interactive HTML report generator and live trace viewer for Robot Framework, powered by OpenTelemetry.
 
-## What is this?
+`rf-trace-report` turns OTLP trace files from [robotframework-tracer](https://github.com/tridentsx/robotframework-tracer) into rich, self-contained HTML reports with timeline visualization, live updates, and parallel execution clarity — no `rebot --merge` required.
 
-`robotframework-trace-report` reads OTLP trace files produced by [robotframework-tracer](https://github.com/tridentsx/robotframework-tracer) and generates interactive HTML reports with timeline visualization. It can also run in live mode, updating the view in real-time as tests execute.
-
-Unlike Robot Framework's built-in `report.html` and `log.html`, the trace viewer provides:
-
-- **Timeline/Gantt visualization** — see parallel test execution as it actually happened
-- **Live updates during execution** — watch tests appear and complete in real-time
-- **Parallel execution clarity** — each pabot worker shown on its own timeline lane
-- **Zero-merge reports** — concatenate trace files from multiple runs, no `rebot --merge` needed
-- **Smaller artifacts** — OTLP JSON with gzip compression, lightweight HTML viewer
-
-## How it works
+## Data Flow
 
 ```
 Robot Framework + robotframework-tracer
-    │
-    ▼
-OTLP JSON trace file (.json / .json.gz)
-    │
-    ▼
-robotframework-trace-report
-    │
-    ├── Static mode:  rf-trace-report traces.json -o report.html
-    │                 (self-contained HTML, open in any browser)
-    │
-    └── Live mode:    rf-trace-report traces.json --live
-                      (local HTTP server, auto-refreshes every 5s)
+        │
+        ▼
+  OTLP trace file (.json / .json.gz)
+        │
+        ▼
+  rf-trace-report ──► Static HTML report
+        │               or
+        └────────────► Live server (auto-refresh)
 ```
 
-The trace file is standard OTLP NDJSON — one `ExportTraceServiceRequest` per line. Each line is self-contained. The viewer parses all lines, reconstructs the span tree from trace IDs and parent-child relationships, and renders the result.
-
 ## Installation
+
+Requires **Python 3.10+**.
 
 ```bash
 pip install robotframework-trace-report
 ```
 
-## Usage
-
-### Generate a static HTML report
+## Quick Start
 
 ```bash
-# From a single trace file
+# Generate a static report
 rf-trace-report traces.json -o report.html
 
-# From a gzip-compressed trace file
-rf-trace-report traces.json.gz -o report.html
-
-# Merge multiple runs (just concatenation — order doesn't matter)
-cat run1.json run2.json | rf-trace-report - -o merged-report.html
-```
-
-### Live mode (real-time updates during execution)
-
-```bash
-# Start the viewer — opens browser automatically
+# Live mode — auto-refreshing browser view
 rf-trace-report traces.json --live
 
-# Custom port
-rf-trace-report traces.json --live --port 8080
+# OTLP receiver mode — ingest traces directly, no file needed
+rf-trace-report --receiver --live
 ```
 
-In live mode, the viewer polls the trace file every 5 seconds and updates the display. Signal spans from `robotframework-tracer` provide immediate visibility when tests start, even before they complete.
+## Features
 
-### View the report
+- **Timeline / Gantt view** — parallel execution lanes per pabot worker, zoom, pan, time-range selection
+- **Tree view** — hierarchical suite → test → keyword navigation with inline logs
+- **Statistics** — pass/fail/skip counts, duration summaries, tag grouping
+- **Search & filter** — text search, status/tag/duration/time-range filters
+- **Live mode** — real-time updates during test execution
+- **Dark mode** — system-aware theme toggle
+- **Deep links** — shareable URLs that restore exact viewer state
+- **SigNoz integration** — query traces from SigNoz backend via provider abstraction
+- **Compact serialization** — `--compact-html`, `--gzip-embed`, `--max-keyword-depth`, `--exclude-passing-keywords`, `--max-spans`
+- **Docker Compose stacks** — pre-built stacks for local dev and full SigNoz observability
 
-Open the generated `report.html` in any browser. No server needed for static reports.
+## Deployment Scenarios
 
-## Report Features
+| Scenario | Description | Guide |
+|----------|-------------|-------|
+| **Local static** | Generate a self-contained HTML file from a trace file | [Architecture Guide](docs/architecture.md) |
+| **Local live** | File-watching server with auto-refresh | [Architecture Guide](docs/architecture.md) |
+| **OTLP receiver** | Ingest OTLP traces directly, optionally forward upstream | [Architecture Guide](docs/architecture.md) |
+| **SigNoz provider** | Query traces from a SigNoz backend | [Architecture Guide](docs/architecture.md) |
+| **Docker Compose** | Pre-built stacks for RF+tracer or SigNoz+OTel setups | [Architecture Guide](docs/architecture.md) |
 
-### Timeline View
-- Gantt-style timeline showing all spans with actual start/end times
-- Parallel execution lanes for pabot workers
-- Zoom and pan controls
-- Color-coded by status (pass/fail/skip)
-- Seconds grid overlay with adaptive interval spacing
-- Click-and-drag time range selection for filtering
-
-### Tree View
-- Hierarchical suite → test → keyword navigation
-- Expandable/collapsible nodes
-- Inline log messages and keyword arguments
-- Documentation strings for suites, tests, and keywords
-
-### Statistics Panel
-- Pass/fail/skip counts and percentages
-- Duration summaries per suite
-- Tag-based grouping and filtering
-
-### Search and Filter
-- Filter by status, tag, suite, or keyword name
-- Time-range selection on timeline
-- Text search across span names and attributes
-
-### Deep Links
-- URL hash updates as you navigate, select spans, and apply filters
-- Share links that restore exact viewer state (tab, span, filters)
-- Copy Link button for easy sharing
-
-## Input Format
-
-The viewer reads OTLP NDJSON files as produced by `robotframework-tracer` with `RF_TRACER_OUTPUT_FILE=auto`. Each line is a JSON object following the [OTLP JSON encoding](https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding).
-
-The viewer understands Robot Framework-specific span attributes (`rf.suite.*`, `rf.test.*`, `rf.keyword.*`) for rich rendering, but can display any OTLP trace data.
+See the [User Guide](docs/user-guide.md) for step-by-step setup instructions for each scenario.
 
 ## Comparison with RF Core Reports
 
 | Feature | RF report.html | Trace Viewer |
 |---------|---------------|--------------|
 | Live updates during execution | ❌ | ✅ |
-| Timeline/Gantt visualization | ❌ | ✅ |
+| Timeline / Gantt visualization | ❌ | ✅ |
 | Parallel execution view | ❌ (flat merge) | ✅ (per-worker lanes) |
 | Offline static HTML | ✅ | ✅ |
 | Log messages inline | ✅ | ✅ |
 | Statistics summary | ✅ | ✅ |
-| Merge multiple runs | `rebot --merge` (data loss risk) | `cat` (lossless) |
-| Cross-run overlay | ❌ | ✅ |
-| No dependencies | ✅ (built into RF) | Requires trace file |
+| Merge multiple runs | `rebot --merge` | `cat` (lossless) |
+| Deep links | ❌ | ✅ |
+| Dark mode | ❌ | ✅ |
+| Compact serialization | N/A | ✅ |
 
-## Requirements
+## Documentation
 
-- **For Users:** Python 3.10+, a modern browser
-- **For Development:** Docker + (optional) Kiro
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup. **TL;DR:** Only Docker required.
-
-```bash
-# Run browser tests
-cd tests/browser
-docker compose up --build
-```
+| Document | Description |
+|----------|-------------|
+| [Architecture Guide](docs/architecture.md) | System design, data pipeline, deployment scenario diagrams |
+| [User Guide](docs/user-guide.md) | CLI reference, viewer features, deployment walkthroughs |
+| [SigNoz Integration](docs/signoz-integration.md) | SigNoz setup, authentication, environment variables |
+| [Contributing](CONTRIBUTING.md) | Development workflow, Docker-only testing, code style |
+| [Testing](docs/testing.md) | Test types, Makefile targets, Docker test image |
+| [CHANGELOG](CHANGELOG.md) | Release history |
 
 ## Related Projects
 
@@ -146,5 +101,4 @@ Apache License 2.0
 
 ## Status
 
-**Current Version:** v0.1.0-dev
-**Status:** Early development — architecture defined, implementation in progress
+**Version:** 0.1.0 · **Development Status:** Pre-Alpha

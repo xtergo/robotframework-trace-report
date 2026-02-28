@@ -77,7 +77,7 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - **Validates: Requirements 4.1, 4.3, 4.5, 8.1**
 
 - [ ] 5. Create SigNoz Integration Guide
-  - [ ] 5.1 Create `docs/signoz-integration.md` with dedicated SigNoz documentation
+  - [x] 5.1 Create `docs/signoz-integration.md` with dedicated SigNoz documentation
     - Explain SigNoz integration architecture (RF → tracer → OTel Collector → ClickHouse → SigNoz API → report viewer)
     - Document installation options (SigNoz Cloud, self-hosted Docker Compose) with links to official docs
     - Document authentication setup: API key generation, JWT token format, dual-header approach, `--signoz-jwt-secret`
@@ -97,8 +97,8 @@ Incremental restructuring and rewriting of the project's documentation set. All 
 - [ ] 6. Checkpoint - Verify new docs
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Rewrite README.md
-  - [ ] 7.1 Rewrite `README.md` as compact landing page
+- [x] 7. Rewrite README.md
+  - [x] 7.1 Rewrite `README.md` as compact landing page
     - Open with one-line project description and 2-3 sentence summary
     - Include data flow diagram (ASCII art or Mermaid: RF → tracer → trace file → report viewer)
     - Include "Installation" section with `pip install` and prerequisites (Python 3.10+)
