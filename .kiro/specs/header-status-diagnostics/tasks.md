@@ -42,7 +42,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - **Property 2: Reason chip correctness** — for any error condition, the reason chip matches the mapping table (network error → `SigNoz unreachable`, HTTP 502+clickhouse → `ClickHouse timeout`, etc.), and successful polls always clear the reason chip
     - **Validates: Requirements 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9**
 
-- [ ] 2. Checkpoint - Verify state model
+- [x] 2. Checkpoint - Verify state model
   - Ensure all tests pass via `make test-properties`, ask the user if questions arise.
 
 - [ ] 3. Refactor header DOM in app.js

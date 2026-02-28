@@ -63,6 +63,16 @@ This applies when:
 - A feature branch is ready for merge
 - Any change touches core data models, parser, or generator
 
+## Checkpoint Tasks in Specs
+
+When executing a "Checkpoint" or "Verify" task in a spec (e.g., "Checkpoint - Verify state model", "Final checkpoint - Ensure all tests pass"), always run the full test suite — not the light dev profile:
+
+```bash
+make test-full    # Required for checkpoint tasks
+```
+
+A checkpoint exists to confirm everything works end-to-end before moving on. Running only `make test-unit` (dev profile, 5 examples) is not sufficient. The full suite with `ci` profile (`max_examples=200`) must pass.
+
 ## Handling Test Failures
 
 All tests must pass before committing. No exceptions.
