@@ -1,0 +1,15 @@
+# kind cluster configuration for trace-report integration tests.
+# Creates a single-node cluster suitable for local dev and CI.
+#
+# Usage:
+#   kind create cluster --config cluster.yaml --name trace-report-test
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    # Expose port 8077 on the host so port-forward isn't strictly required,
+    # but we use port-forward in itest-up.sh for reliability.
+    extraPortMappings:
+      - containerPort: 30077
+        hostPort: 8077
+        protocol: TCP

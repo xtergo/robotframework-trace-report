@@ -88,3 +88,6 @@ rf-trace-report-optimization-notes.md
 diverse-suite-baseline.html
 large-trace-baseline.html
 large-trace-gzip.html
+
+# Kind integration test artifacts
+test/kind/.port-forward.pid
