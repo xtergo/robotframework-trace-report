@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
 from rf_trace_viewer.generator import (
@@ -51,6 +51,7 @@ from rf_trace_viewer.tree import build_tree
 class TestStaticHTMLGeneration:
     """Test end-to-end static HTML generation with fixture data."""
 
+    @pytest.mark.slow
     def test_generate_report_from_simple_trace(self):
         """Generate complete HTML report from simple_trace.json fixture."""
         # Parse the fixture file
@@ -103,6 +104,7 @@ class TestStaticHTMLGeneration:
         assert "<script>" in html
         assert "</script>" in html
 
+    @pytest.mark.slow
     def test_generate_report_with_all_viewer_assets(self):
         """Verify all viewer assets (JS and CSS) are embedded."""
         # Parse the fixture file
@@ -127,6 +129,7 @@ class TestStaticHTMLGeneration:
         # Check that CSS content is in the HTML (look for common CSS patterns)
         assert "style" in html.lower()
 
+    @pytest.mark.slow
     def test_generate_report_produces_valid_json_embedding(self):
         """Verify embedded JSON is valid and complete."""
         fixture_path = Path(__file__).parent.parent / "fixtures" / "simple_trace.json"
@@ -657,7 +660,6 @@ class TestProperty27CompactSerializationRoundTrip:
     """
 
     @given(model=rf_run_model())
-    @settings(max_examples=50)
     def test_compact_round_trip_preserves_data(self, model: RFRunModel):
         """Feature: rf-html-report-replacement, Property 27: Compact serialization round-trip
 
@@ -687,7 +689,6 @@ class TestProperty27CompactSerializationRoundTrip:
         assert decoded == compact_serialized
 
     @given(model=rf_run_model())
-    @settings(max_examples=50)
     def test_compact_round_trip_no_data_loss(self, model: RFRunModel):
         """Feature: rf-html-report-replacement, Property 27: Compact serialization round-trip
 
@@ -709,7 +710,6 @@ class TestProperty27CompactSerializationRoundTrip:
             assert len(tests_in_data) == len(tests_in_model)
 
     @given(model=rf_run_model())
-    @settings(max_examples=50)
     def test_compact_key_map_is_reverse_of_key_map_constant(self, model: RFRunModel):
         """Feature: rf-html-report-replacement, Property 27: Compact serialization round-trip
 
@@ -738,7 +738,6 @@ class TestProperty28GzipEmbedRoundTrip:
     """
 
     @given(payload=st.text(min_size=1, max_size=500))
-    @settings(max_examples=100)
     def test_gzip_base64_round_trip(self, payload: str):
         """Feature: rf-html-report-replacement, Property 28: Gzip embed round-trip
 
@@ -758,7 +757,6 @@ class TestProperty28GzipEmbedRoundTrip:
         assert decoded_bytes == original_bytes
 
     @given(model=rf_run_model())
-    @settings(max_examples=50)
     def test_gzip_embed_of_json_round_trip(self, model: RFRunModel):
         """Feature: rf-html-report-replacement, Property 28: Gzip embed round-trip
 
@@ -779,7 +777,6 @@ class TestProperty28GzipEmbedRoundTrip:
         assert json.loads(decoded_bytes.decode("utf-8")) == json.loads(json_str)
 
     @given(payload=st.binary(min_size=1, max_size=1000))
-    @settings(max_examples=100)
     def test_gzip_base64_round_trip_arbitrary_bytes(self, payload: bytes):
         """Feature: rf-html-report-replacement, Property 28: Gzip embed round-trip
 
@@ -876,7 +873,6 @@ class TestProperty29SpanTruncationCorrectness:
     """
 
     @given(model=rf_run_model(), max_spans=st.integers(min_value=1, max_value=20))
-    @settings(max_examples=50)
     def test_truncation_produces_at_most_n_spans(self, model: RFRunModel, max_spans: int):
         """Feature: rf-html-report-replacement, Property 29: Span truncation correctness
 
@@ -889,7 +885,6 @@ class TestProperty29SpanTruncationCorrectness:
     @given(
         model=rf_run_model_with_mixed_statuses(), max_spans=st.integers(min_value=1, max_value=5)
     )
-    @settings(max_examples=50)
     def test_fail_spans_prioritized_over_pass(self, model: RFRunModel, max_spans: int):
         """Feature: rf-html-report-replacement, Property 29: Span truncation correctness
 
@@ -914,7 +909,6 @@ class TestProperty29SpanTruncationCorrectness:
             )
 
     @given(model=rf_run_model())
-    @settings(max_examples=50)
     def test_no_truncation_when_limit_exceeds_total(self, model: RFRunModel):
         """Feature: rf-html-report-replacement, Property 29: Span truncation correctness
 
@@ -1016,6 +1010,7 @@ class TestCompactSerializationUnit:
         )
         assert len(html_compact) < len(html_default)
 
+    @pytest.mark.slow
     def test_gzip_embed_produces_valid_payload(self):
         """--gzip-embed embeds a valid gzip+base64 payload."""
         html = generate_report(self._load_model(self.SIMPLE_TRACE), ReportOptions(gzip_embed=True))
@@ -1027,6 +1022,7 @@ class TestCompactSerializationUnit:
         decompressed = gzip.decompress(base64.b64decode(b64_payload)).decode("utf-8")
         assert isinstance(json.loads(decompressed), dict)
 
+    @pytest.mark.slow
     def test_gzip_embed_decompresses_to_same_data_as_default(self):
         """--gzip-embed decompressed data equals the non-gzip embedded data."""
         html_gz = generate_report(

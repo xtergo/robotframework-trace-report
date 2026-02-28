@@ -241,6 +241,7 @@ class TestCLIJournalArguments:
                 base_url=None,
                 lookback=None,
                 max_spans=500000,
+                service_name=None,
             )
 
     def test_custom_journal_path(self, monkeypatch):
@@ -274,6 +275,7 @@ class TestCLIJournalArguments:
                 base_url=None,
                 lookback=None,
                 max_spans=500000,
+                service_name=None,
             )
 
     def test_no_journal_flag(self, monkeypatch):
@@ -307,6 +309,7 @@ class TestCLIJournalArguments:
                 base_url=None,
                 lookback=None,
                 max_spans=500000,
+                service_name=None,
             )
 
     def test_no_journal_overrides_custom_path(self, monkeypatch):
@@ -347,4 +350,5 @@ class TestCLIJournalArguments:
                 base_url=None,
                 lookback=None,
                 max_spans=500000,
+                service_name=None,
             )

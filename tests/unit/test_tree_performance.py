@@ -49,6 +49,7 @@ def model(built_trees):
     return interpret_tree(built_trees)
 
 
+@pytest.mark.slow
 class TestLargeTracePipeline:
     """End-to-end performance tests with the 500K+ span trace fixture."""
 

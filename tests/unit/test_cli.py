@@ -166,6 +166,7 @@ class TestArgumentParsing:
                 base_url=None,
                 lookback=None,
                 max_spans=500000,
+                service_name=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -210,6 +211,7 @@ class TestArgumentParsing:
                 base_url=None,
                 lookback=None,
                 max_spans=500000,
+                service_name=None,
             )
 
     def test_no_open_argument(self, monkeypatch):
@@ -598,6 +600,7 @@ class TestServeSubcommand:
                 base_url=None,
                 lookback=None,
                 max_spans=500000,
+                service_name=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 

@@ -15,7 +15,7 @@ from urllib.parse import quote, unquote
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from hypothesis import given, settings, assume
+from hypothesis import given, assume
 from hypothesis import strategies as st
 
 # ---------------------------------------------------------------------------
@@ -419,7 +419,6 @@ def _states_equivalent(original, decoded):
 
 
 @given(viewer_state_strategy())
-@settings(max_examples=200)
 def test_property_23_deep_link_round_trip(state):
     """Property 23: Deep link round-trip.
 
@@ -448,7 +447,6 @@ def test_property_23_deep_link_round_trip(state):
 
 
 @given(viewer_state_strategy())
-@settings(max_examples=100)
 def test_encode_omits_defaults(state):
     """Verify that encoding omits default values to keep URLs short.
 

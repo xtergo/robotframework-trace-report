@@ -5,7 +5,7 @@ This module contains property-based tests using Hypothesis to validate
 the correctness of the span tree builder across a wide range of inputs.
 """
 
-from hypothesis import given, settings, HealthCheck
+from hypothesis import given
 from hypothesis import strategies as st
 
 from rf_trace_viewer.parser import RawSpan
@@ -102,7 +102,6 @@ def convert_otlp_spans_to_raw_spans(otlp_spans: list[dict]) -> list[RawSpan]:
 
 
 @given(span_tree(max_depth=4, max_children=4))
-@settings(max_examples=20, suppress_health_check=[HealthCheck.too_slow])
 def test_property_tree_reconstruction_round_trip(otlp_spans: list[dict]):
     """
     Property 5: Tree reconstruction round-trip
@@ -226,7 +225,6 @@ def test_property_tree_reconstruction_round_trip(otlp_spans: list[dict]):
         unique_by=lambda s: s.span_id,  # Ensure unique span_ids
     )
 )
-@settings(max_examples=15)
 def test_property_all_roots_preserved(spans: list[RawSpan]):
     """
     Verify that when all spans are roots (no parent_span_id), they are all
@@ -250,7 +248,6 @@ def test_property_all_roots_preserved(spans: list[RawSpan]):
 
 
 @given(trace_id=hex_id(length=32), num_spans=st.integers(min_value=2, max_value=10))
-@settings(max_examples=15)
 def test_property_linear_chain_preserved(trace_id: str, num_spans: int):
     """
     Verify that a linear chain of spans (each span is the parent of the next)
@@ -305,7 +302,6 @@ def test_property_linear_chain_preserved(trace_id: str, num_spans: int):
 
 
 @given(trace_id=hex_id(length=32), num_children=st.integers(min_value=1, max_value=10))
-@settings(max_examples=15)
 def test_property_single_parent_multiple_children(trace_id: str, num_children: int):
     """
     Verify that a single parent with multiple children is correctly reconstructed.
@@ -382,7 +378,6 @@ def test_property_single_parent_multiple_children(trace_id: str, num_children: i
 
 
 @given(span_tree(max_depth=4, max_children=4))
-@settings(max_examples=20, suppress_health_check=[HealthCheck.too_slow])
 def test_property_root_span_identification(otlp_spans: list[dict]):
     """
     Property 6: Root span identification
@@ -439,7 +434,6 @@ def test_property_root_span_identification(otlp_spans: list[dict]):
     num_regular_spans=st.integers(min_value=1, max_value=10),
     num_orphans=st.integers(min_value=1, max_value=3),
 )
-@settings(max_examples=15)
 def test_property_orphan_spans_become_roots(
     trace_id: str, num_regular_spans: int, num_orphans: int
 ):
@@ -513,7 +507,6 @@ def test_property_orphan_spans_become_roots(
 
 
 @given(span_tree(max_depth=2, max_children=3))
-@settings(max_examples=15, suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large])
 def test_property_child_sort_order_invariant(otlp_spans: list[dict]):
     """
     Property 7: Child sort order invariant
@@ -573,7 +566,6 @@ def test_property_child_sort_order_invariant(otlp_spans: list[dict]):
 
 
 @given(trace_id=hex_id(length=32), num_children=st.integers(min_value=2, max_value=10))
-@settings(max_examples=15)
 def test_property_children_sorted_after_shuffle(trace_id: str, num_children: int):
     """
     Verify that children are sorted by start_time even when input spans
@@ -659,7 +651,6 @@ def test_property_children_sorted_after_shuffle(trace_id: str, num_children: int
     num_traces=st.integers(min_value=1, max_value=5),
     spans_per_trace=st.integers(min_value=1, max_value=10),
 )
-@settings(max_examples=25)
 def test_property_trace_grouping_correctness(num_traces: int, spans_per_trace: int):
     """
     Property 8: Trace grouping correctness
@@ -748,7 +739,6 @@ def test_property_trace_grouping_correctness(num_traces: int, spans_per_trace: i
 
 
 @given(num_traces=st.integers(min_value=2, max_value=5))
-@settings(max_examples=15)
 def test_property_no_cross_trace_contamination(num_traces: int):
     """
     Verify that spans from different traces never appear in the same tree group.

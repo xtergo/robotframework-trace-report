@@ -151,12 +151,14 @@ class SigNozAuth:
         On "self-registration disabled" or "user exists", returns False.
         """
         url = f"{self._endpoint}/api/v1/register"
-        payload = json.dumps({
-            "email": _DEFAULT_EMAIL,
-            "name": _DEFAULT_NAME,
-            "orgName": _DEFAULT_ORG,
-            "password": _DEFAULT_PASSWORD,
-        }).encode()
+        payload = json.dumps(
+            {
+                "email": _DEFAULT_EMAIL,
+                "name": _DEFAULT_NAME,
+                "orgName": _DEFAULT_ORG,
+                "password": _DEFAULT_PASSWORD,
+            }
+        ).encode()
 
         req = Request(url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
@@ -173,7 +175,9 @@ class SigNozAuth:
                 self._org_id = data.get("orgId", "")
                 if self._user_id and self._org_id:
                     self._email = _DEFAULT_EMAIL
-                    print(f"[signoz-auth] Registered service user: {self._user_id}", file=sys.stderr)
+                    print(
+                        f"[signoz-auth] Registered service user: {self._user_id}", file=sys.stderr
+                    )
                     return True
                 # Some versions return nested data
                 user_data = data.get("data", {})
@@ -182,7 +186,9 @@ class SigNozAuth:
                     self._org_id = user_data.get("orgId", "")
                 if self._user_id and self._org_id:
                     self._email = _DEFAULT_EMAIL
-                    print(f"[signoz-auth] Registered service user: {self._user_id}", file=sys.stderr)
+                    print(
+                        f"[signoz-auth] Registered service user: {self._user_id}", file=sys.stderr
+                    )
                     return True
                 return False
         except HTTPError as e:
@@ -196,7 +202,9 @@ class SigNozAuth:
                 # Both are expected — not an error
                 pass
             else:
-                print(f"[signoz-auth] Registration failed ({e.code}): {body[:200]}", file=sys.stderr)
+                print(
+                    f"[signoz-auth] Registration failed ({e.code}): {body[:200]}", file=sys.stderr
+                )
             return False
         except (URLError, OSError, ValueError) as exc:
             print(f"[signoz-auth] Registration request failed: {exc}", file=sys.stderr)
@@ -228,6 +236,7 @@ class SigNozAuth:
 # JWT helpers (stdlib only, no third-party dependencies)
 # ------------------------------------------------------------------
 
+
 def _b64url_encode(data: bytes) -> str:
     """Base64url-encode without padding."""
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
@@ -253,7 +262,9 @@ def _decode_jwt_claims(token: str) -> dict | None:
 def _sign_jwt(claims: dict, secret: str) -> str:
     """Create an HS256-signed JWT from claims and secret."""
     # Use compact JSON (no spaces) — standard JWT encoding that SigNoz expects.
-    header = _b64url_encode(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    header = _b64url_encode(
+        json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode()
+    )
     payload = _b64url_encode(json.dumps(claims, separators=(",", ":")).encode())
     sig = hmac.new(secret.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
     return f"{header}.{payload}.{_b64url_encode(sig)}"

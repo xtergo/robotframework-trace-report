@@ -14,11 +14,28 @@ Skip slow tests (default):  make test-unit  (uses --skip-slow)
 """
 
 import json
+import os
 import time
 from typing import Any
 
 import pytest
 from hypothesis import strategies as st
+from hypothesis import settings as hypothesis_settings, HealthCheck
+
+# Hypothesis profiles: "dev" runs fewer examples for fast feedback,
+# "ci" runs full iterations for thorough coverage.
+hypothesis_settings.register_profile(
+    "dev",
+    max_examples=5,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
+)
+hypothesis_settings.register_profile(
+    "ci",
+    max_examples=200,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
+)
+# Default to "dev" — override with HYPOTHESIS_PROFILE=ci
+hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
 
 
 def pytest_addoption(parser):

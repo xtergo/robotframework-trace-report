@@ -6,7 +6,7 @@ the correctness of the NDJSON parser across a wide range of inputs.
 """
 
 import json
-from hypothesis import given, settings, HealthCheck
+from hypothesis import given
 from hypothesis import strategies as st
 
 from src.rf_trace_viewer.parser import parse_line, flatten_attributes, normalize_id
@@ -23,7 +23,6 @@ from tests.conftest import (
 
 
 @given(ndjson_line())
-@settings(max_examples=50)
 def test_property_parser_output_correctness(ndjson_input: str):
     """
     Property 1: Parser output correctness
@@ -232,7 +231,6 @@ def test_property_single_span_parsing(span: dict):
 
 
 @given(st.lists(ndjson_line(), min_size=1, max_size=10))
-@settings(max_examples=15, suppress_health_check=[HealthCheck.too_slow])
 def test_property_gzip_parsing_transparency(ndjson_lines: list[str]):
     """
     Property 2: Gzip parsing transparency
@@ -328,7 +326,6 @@ def test_property_gzip_parsing_transparency(ndjson_lines: list[str]):
     ),
     positions=st.data(),
 )
-@settings(max_examples=15, suppress_health_check=[HealthCheck.too_slow])
 def test_property_malformed_line_resilience(
     valid_lines: list[str], malformed_lines: list[str], positions: st.DataObject
 ):
@@ -425,7 +422,6 @@ def test_property_malformed_line_resilience(
 
 
 @given(st.lists(ndjson_line(), min_size=2, max_size=10))
-@settings(max_examples=15, suppress_health_check=[HealthCheck.too_slow])
 def test_property_incremental_parsing_equivalence(ndjson_lines: list[str]):
     """
     Property 4: Incremental parsing equivalence

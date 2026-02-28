@@ -10,7 +10,8 @@ import re
 from html.parser import HTMLParser
 from typing import Any
 
-from hypothesis import given, settings, HealthCheck
+import pytest
+from hypothesis import given
 from hypothesis import strategies as st
 
 from src.rf_trace_viewer.generator import (
@@ -382,8 +383,8 @@ def extract_html_data(html: str) -> tuple[dict[str, Any] | None, str | None, lis
 # ============================================================================
 
 
+@pytest.mark.slow
 @given(rf_run_model())
-@settings(max_examples=10)
 def test_property_html_data_embedding_roundtrip(model: RFRunModel):
     """
     Property 13: HTML data embedding round-trip
@@ -454,8 +455,8 @@ def test_property_html_data_embedding_roundtrip(model: RFRunModel):
 # ============================================================================
 
 
+@pytest.mark.slow
 @given(rf_run_model(), report_options())
-@settings(max_examples=10)
 def test_property_title_embedding_correctness(model: RFRunModel, options: ReportOptions):
     """
     Property 14: Title embedding correctness
@@ -487,8 +488,8 @@ def test_property_title_embedding_correctness(model: RFRunModel, options: Report
     ), f"Title mismatch: HTML has '{html_title}', expected '{expected_title}'"
 
 
+@pytest.mark.slow
 @given(rf_run_model())
-@settings(max_examples=10)
 def test_property_title_defaults_to_model_title(model: RFRunModel):
     """
     Verify that when no title option is provided, the model title is used.
@@ -509,11 +510,11 @@ def test_property_title_defaults_to_model_title(model: RFRunModel):
     ), f"Title should default to model title: '{html_title}' != '{expected_title}'"
 
 
+@pytest.mark.slow
 @given(
     rf_run_model(),
     st.text(min_size=1, max_size=50, alphabet=st.characters(min_codepoint=33, max_codepoint=126)),
 )
-@settings(max_examples=10)
 def test_property_explicit_title_overrides_model(model: RFRunModel, explicit_title: str):
     """
     Verify that an explicit title option overrides the model title.
@@ -536,8 +537,8 @@ def test_property_explicit_title_overrides_model(model: RFRunModel, explicit_tit
 # ============================================================================
 
 
+@pytest.mark.slow
 @given(rf_run_model())
-@settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
 def test_property_html_contains_css_and_js(model: RFRunModel):
     """
     Property 26: Theme and branding embedding (partial)
@@ -578,8 +579,8 @@ def test_property_html_contains_css_and_js(model: RFRunModel):
     assert 'href="http' not in html, "Found external stylesheet reference"
 
 
+@pytest.mark.slow
 @given(rf_run_model())
-@settings(max_examples=5)
 def test_property_html_is_valid_structure(model: RFRunModel):
     """
     Verify that generated HTML has valid structure that can be parsed.
@@ -603,8 +604,8 @@ def test_property_html_is_valid_structure(model: RFRunModel):
 # ============================================================================
 
 
+@pytest.mark.slow
 @given(rf_run_model())
-@settings(max_examples=5, suppress_health_check=[HealthCheck.too_slow])
 def test_property_html_escaping(model: RFRunModel):
     """
     Verify that special HTML characters in the title are properly escaped.

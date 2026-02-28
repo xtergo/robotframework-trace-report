@@ -247,7 +247,6 @@ class SigNozProvider(TraceProvider):
         except OSError as e:
             raise ProviderError(f"Connection to SigNoz failed at {url}: {e}") from e
 
-
     # ------------------------------------------------------------------
     # Query builders
     # ------------------------------------------------------------------
@@ -512,13 +511,3 @@ class SigNozProvider(TraceProvider):
                         )
                     )
         return executions
-
-
-
-
-
-
-
-
-
-

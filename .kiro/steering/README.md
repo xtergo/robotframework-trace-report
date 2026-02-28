@@ -7,13 +7,34 @@ This directory contains steering files that provide context and instructions to 
 ### docker-testing-strategy.md
 **Inclusion:** Auto (always active)
 
-Enforces the Docker-only testing strategy for this project. Ensures that:
-- All tests run in Docker containers
-- No raw Python commands are executed on the host
-- Consistent environment across all development machines
-- Proper test commands are used (Makefile or Docker directly)
+Enforces the Docker-only development environment. Covers:
+- Never run raw Python on the host
+- Always use the pre-built test image or Makefile targets
+- Direct Docker commands when needed
+- Keeping containers up to date with latest code
 
-This steering file is critical for maintaining the project's "Docker + Kiro only" philosophy.
+### test-strategy.md
+**Inclusion:** Auto (always active)
+
+Test strategy and Hypothesis profile configuration. Covers:
+- Speed target: `make test-unit` must complete in <30 seconds
+- Hypothesis dev/ci profiles and when each is used
+- Rules for writing property tests (no hardcoded @settings)
+- Test markers and command quick reference
+
+This steering file ensures fast development feedback while maintaining thorough CI coverage.
+
+### contribution-guidelines.md
+**Inclusion:** Auto (always active)
+
+Contribution guidelines for the project. Covers:
+- Black formatting enforcement via pre-commit hook (runs in Docker)
+- Linting with Ruff
+- Commit checklist
+- JavaScript file conventions
+- Architecture constraints
+
+This steering file ensures consistent code quality across all contributions.
 
 ### implementation-guide.md
 **Inclusion:** Manual (reference with `#implementation-guide` in chat)

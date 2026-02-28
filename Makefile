@@ -8,7 +8,7 @@
 #   dev-test:        6 GB  (quick run, no coverage)
 #   dev-test-file:   3 GB  (single file, may include slow tests)
 
-.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties format lint check clean
+.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties test-full format lint check clean
 
 help: ## Show this help message
 	@echo "robotframework-trace-report - Docker-based development commands"
@@ -20,20 +20,25 @@ help: ## Show this help message
 
 test: test-unit ## Run all tests (unit, skipping slow large-fixture tests)
 
-test-unit: ## Run Python unit tests with coverage (skips slow/large-fixture tests)
-	@echo "Running unit tests in Docker..."
+test-unit: ## Run Python unit tests with coverage (skips slow/large-fixture tests, light PBT)
+	@echo "Running unit tests in Docker (light PBT)..."
 	@docker run --rm --memory=6g --memory-swap=6g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
-		PYTHONPATH=src pytest tests/unit/ $(ARGS) --skip-slow --cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n 2"
+		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest tests/unit/ $(ARGS) --skip-slow --cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n 2"
 
 test-slow: ## Run slow tests that use large_trace.json (requires ~4 GB RAM)
 	@echo "Running slow (large-fixture) tests in Docker..."
 	@docker run --rm --memory=4g --memory-swap=4g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
 		PYTHONPATH=src pytest tests/unit/ -v -m slow -n auto"
 
-test-properties: ## Run property-based tests only
-	@echo "Running property-based tests in Docker..."
+test-properties: ## Run property-based tests with full iterations
+	@echo "Running property-based tests in Docker (full iterations)..."
 	@docker run --rm --memory=4g --memory-swap=4g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
-		PYTHONPATH=src pytest tests/unit/test_*_properties.py -v -n auto"
+		PYTHONPATH=src HYPOTHESIS_PROFILE=ci pytest tests/unit/test_*_properties.py -v -n auto"
+
+test-full: ## Run all unit tests with full PBT iterations (CI mode)
+	@echo "Running full test suite in Docker (full PBT)..."
+	@docker run --rm --memory=6g --memory-swap=6g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
+		PYTHONPATH=src HYPOTHESIS_PROFILE=ci pytest tests/unit/ $(ARGS) --skip-slow --cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n 2"
 
 test-browser: ## Run browser tests with Robot Framework
 	@echo "Running browser tests in Docker..."
@@ -75,18 +80,18 @@ clean: ## Clean up generated files
 	@echo "Clean complete"
 
 # Development helpers
-dev-test: ## Quick test run (unit tests only, no coverage, parallel)
+dev-test: ## Quick test run (unit tests only, no coverage, parallel, light PBT)
 	@echo "Running quick unit tests in Docker..."
 	@docker run --rm --memory=6g --memory-swap=6g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
-		PYTHONPATH=src pytest tests/unit/ --skip-slow -v -n 2"
+		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest tests/unit/ --skip-slow -v -n 2"
 
 dev-test-file: ## Run specific test file (usage: make dev-test-file FILE=tests/unit/test_generator.py)
 	@echo "Running $(FILE) in Docker..."
 	@docker run --rm --memory=3g --memory-swap=3g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
-		PYTHONPATH=src pytest $(FILE) --skip-slow -v"
+		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest $(FILE) --skip-slow -v"
 
 # CI targets
-ci-test: check test-unit ## Run all CI checks (format, lint, unit tests)
+ci-test: check test-full ## Run all CI checks (format, lint, full unit tests)
 
 # Docker image management
 docker-build-test: ## Build the test Docker image with all dependencies
