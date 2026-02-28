@@ -149,6 +149,21 @@
     }
   }
 
+  function _updateTelemetry(newSpanCount) {
+    var now = Date.now();
+    _connectionState.spanWindow.push({ ts: now, count: newSpanCount });
+    // Prune entries older than 10s
+    while (_connectionState.spanWindow.length > 0 &&
+           now - _connectionState.spanWindow[0].ts > 10000) {
+      _connectionState.spanWindow.shift();
+    }
+    var total = 0;
+    for (var i = 0; i < _connectionState.spanWindow.length; i++) {
+      total += _connectionState.spanWindow[i].count;
+    }
+    _connectionState.spansPerSec = total / 10;
+  }
+
   /* ── 1. Provide empty model for app.js ─────────────────────────── */
 
   window.__RF_TRACE_DATA__ = _emptyModel();
@@ -328,9 +343,11 @@
             _connectionState.lastSuccessTs = Date.now();
             _connectionState.lastError = '';
             _connectionState.retryCount = 0;
+            _updateTelemetry(newSpans);
             lastUpdateTs = Date.now();
             _rebuildAndRender();
           } else {
+            _updateTelemetry(0);
             _connectionState.zeroSpanCount++;
             _connectionState.lastSuccessTs = Date.now();
             _connectionState.lastError = '';
@@ -341,6 +358,7 @@
           }
         } else {
           // Empty response counts as zero new spans
+          _updateTelemetry(0);
           _connectionState.zeroSpanCount++;
           _connectionState.lastSuccessTs = Date.now();
           _connectionState.lastError = '';
@@ -432,6 +450,7 @@
       .then(function (data) {
         if (!data || !data.spans) {
           // Successful response but no spans key — treat as zero spans
+          _updateTelemetry(0);
           _connectionState.zeroSpanCount++;
           _connectionState.lastSuccessTs = Date.now();
           _connectionState.lastError = '';
@@ -449,10 +468,12 @@
             _connectionState.lastSuccessTs = Date.now();
             _connectionState.lastError = '';
             _connectionState.retryCount = 0;
+            _updateTelemetry(added);
             lastUpdateTs = Date.now();
             _rebuildAndRender();
           } else {
             // All spans were duplicates — treat as zero new spans
+            _updateTelemetry(0);
             _connectionState.zeroSpanCount++;
             _connectionState.lastSuccessTs = Date.now();
             _connectionState.lastError = '';
@@ -463,6 +484,7 @@
           }
         } else {
           // Empty spans array
+          _updateTelemetry(0);
           _connectionState.zeroSpanCount++;
           _connectionState.lastSuccessTs = Date.now();
           _connectionState.lastError = '';

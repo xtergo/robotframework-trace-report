@@ -86,13 +86,13 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Close on click outside (document click listener) and Escape key
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
 
-  - [ ] 4.2 Wire Diagnostics Panel to live updates
+  - [x] 4.2 Wire Diagnostics Panel to live updates
     - Listen to `diagnostics-updated` event from live.js
     - Update panel values in-place when panel is open (no close/reopen needed)
     - _Requirements: 7.9_
 
 - [ ] 5. Implement telemetry indicator and retry countdown in live.js
-  - [ ] 5.1 Add telemetry calculation with sliding window
+  - [x] 5.1 Add telemetry calculation with sliding window
     - Implement `_updateTelemetry(newSpanCount)` using `spanWindow` ring buffer (10-second window)
     - Calculate `spansPerSec = total / 10`
     - Call after each successful poll
