@@ -6,19 +6,19 @@ Incremental restructuring and rewriting of the project's documentation set. All 
 
 ## Tasks
 
-- [ ] 1. Root-level cleanup and file structure setup
-  - [ ] 1.1 Delete clutter files from project root
+- [x] 1. Root-level cleanup and file structure setup
+  - [x] 1.1 Delete clutter files from project root
     - Delete: `SESSION_SUMMARY.md`, `SESSION_FINAL_SUMMARY.md`, `VERIFICATION_SUMMARY.md`, `rf-trace-report-optimization-notes.md`, `rf-trace-report-optimization-notes2.md`, `req35-baseline-plan.md`, `coverage_summary.md`, `benchmark-results.txt`, `verify_timeline_ui.py`, `playwright-log.txt`, `trace-report-k8s-architecture-decisions.md`
     - Before deleting `rf-trace-report-optimization-notes.md` and `benchmark-req35.sh`, scan for content worth preserving in `docs/analysis/`
     - Relocate `benchmark-req35.sh` to `docs/analysis/` if it contains useful benchmark methodology
     - _Requirements: 1.4, 9.1, 9.2, 9.5_
 
-  - [ ] 1.2 Handle HTML test artifacts and empty directories
+  - [x] 1.2 Handle HTML test artifacts and empty directories
     - Add `diverse-suite-baseline.html`, `large-trace-baseline.html`, `large-trace-gzip.html` to `.gitignore` (or delete if already tracked)
     - Remove empty `docs/sessions/` directory
     - _Requirements: 9.3, 9.4_
 
-  - [ ] 1.3 Rename docs files to lowercase convention
+  - [x] 1.3 Rename docs files to lowercase convention
     - Rename `docs/TESTING.md` → `docs/testing.md`
     - Rename `docs/DOCKER_TESTING.md` → `docs/docker-testing.md`
     - Update any existing references to the old filenames across the project
@@ -34,8 +34,8 @@ Incremental restructuring and rewriting of the project's documentation set. All 
 - [ ] 2. Checkpoint - Verify cleanup
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 3. Create Architecture Guide
-  - [ ] 3.1 Create `docs/architecture.md` with full system design
+- [x] 3. Create Architecture Guide
+  - [x] 3.1 Create `docs/architecture.md` with full system design
     - Migrate content from root `ARCHITECTURE.md` and expand with: data pipeline description (OTLP NDJSON → parser → span tree builder → RF attribute interpreter → report generator → HTML), component diagram
     - Document each Python component (parser, tree builder, rf_model, generator, server, cli, config, providers) with responsibilities and input/output
     - Document JS viewer architecture: all viewer files (app.js, tree.js, timeline.js, stats.js, search.js, keyword-stats.js, flow-table.js, deep-link.js, live.js, theme.js, style.css), concatenation into HTML by generator, event bus
@@ -46,7 +46,7 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - Include current project file structure
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
 
-  - [ ] 3.2 Delete root `ARCHITECTURE.md` after migration
+  - [x] 3.2 Delete root `ARCHITECTURE.md` after migration
     - Remove `ARCHITECTURE.md` from project root (content now in `docs/architecture.md`)
     - Update any references to `ARCHITECTURE.md` across the project to point to `docs/architecture.md`
     - _Requirements: 1.3_
