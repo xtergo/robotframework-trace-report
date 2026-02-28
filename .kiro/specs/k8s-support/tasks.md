@@ -188,15 +188,15 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
 - [x] 6. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Harden Dockerfile and create Kustomize base manifests
-  - [ ] 7.1 Update `Dockerfile` for K8s-hardened production image
+- [x] 7. Harden Dockerfile and create Kustomize base manifests
+  - [x] 7.1 Update `Dockerfile` for K8s-hardened production image
     - Use multi-stage build with `python:3.11-slim`
     - Create non-root user with UID 10001
     - Exclude dev dependencies, build tools, pip cache from final image
     - Ensure compatibility with `readOnlyRootFilesystem: true` (no runtime filesystem writes)
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-  - [ ] 7.2 Create Kustomize base manifests in `deploy/kustomize/base/`
+  - [x] 7.2 Create Kustomize base manifests in `deploy/kustomize/base/`
     - Create `kustomization.yaml` referencing all base resources
     - Create `deployment.yaml` with security context (`runAsNonRoot: true`, `runAsUser: 10001`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `seccompProfile: RuntimeDefault`, `capabilities.drop: ["ALL"]`), startup/readiness/liveness probes, and dev resource profile
     - Create `service.yaml` exposing the HTTP port
@@ -205,7 +205,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Add comments explaining prod memory limit sizing relative to `max_spans` (≈1KB per span)
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
 
-  - [ ] 7.3 Create production overlay in `deploy/kustomize/overlays/prod/`
+  - [x] 7.3 Create production overlay in `deploy/kustomize/overlays/prod/`
     - Create `kustomization.yaml` with patches
     - Set `replicas: 2`, `terminationGracePeriodSeconds: 45`, `revisionHistoryLimit: 3`
     - Create `pdb.yaml` with `minAvailable: 1`
@@ -217,7 +217,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Apply prod resource profile (CPU 100m/500m, memory 128Mi/512Mi)
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 20.17, 20.18_
 
-  - [ ] 7.4 Create development overlay in `deploy/kustomize/overlays/dev/`
+  - [x] 7.4 Create development overlay in `deploy/kustomize/overlays/dev/`
     - Create `kustomization.yaml` with patches
     - Set `replicas: 1`, no PDB
     - Include test `BASE_FILTER_CONFIG` with at least one excluded-by-default and one hard-blocked service
@@ -240,7 +240,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert every dev resource field (CPU request, CPU limit, memory request, memory limit) is strictly less than the corresponding prod value
     - **Validates: Requirements 10.4**
 
-- [ ] 8. Checkpoint
+- [x] 8. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 9. Create kind test infrastructure and Robot Framework integration tests
