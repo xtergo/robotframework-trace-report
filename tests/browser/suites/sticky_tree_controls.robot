@@ -192,7 +192,7 @@ Theme Compatibility
     ...    Dark theme: controls bg (${controls_bg_dark}) should match panel bg (${panel_bg_dark})
 
     # Toggle to light theme
-    Click    .theme-toggle
+    Click    .theme-toggle-icon
     Sleep    0.5s
 
     # Get backgrounds in light theme

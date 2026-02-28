@@ -66,7 +66,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Only render when `window.__RF_TRACE_LIVE__` is truthy
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-  - [ ] 3.4 Replace full-text dark mode toggle with icon-only button
+  - [x] 3.4 Replace full-text dark mode toggle with icon-only button
     - Replace the `<button class="theme-toggle">` with `<button class="theme-toggle-icon">` using `☀` (sun) for dark mode and `☾` (moon) for light mode
     - Set `aria-label` to "Switch to light theme" or "Switch to dark theme" based on current theme
     - Remove text label entirely

@@ -70,10 +70,11 @@
       var mql = window.matchMedia('(prefers-color-scheme: dark)');
       var handler = function (e) {
         _applyTheme(e.matches ? 'dark' : 'light');
-        // Update toggle button text if it exists
-        var btn = document.querySelector('.theme-toggle');
+        // Update toggle button icon if it exists
+        var btn = document.querySelector('.theme-toggle-icon');
         if (btn) {
-          btn.textContent = currentTheme === 'dark' ? '\u2600 Light' : '\u263e Dark';
+          btn.textContent = currentTheme === 'dark' ? '\u2600' : '\u263e';
+          btn.setAttribute('aria-label', currentTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
         }
       };
       // addEventListener is preferred but addListener has wider support

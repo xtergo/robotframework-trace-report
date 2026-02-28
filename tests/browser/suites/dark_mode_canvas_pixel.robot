@@ -22,7 +22,7 @@ Canvas Pixel Should Be Dark After Theme Toggle
     Log    Light mode pixel at (5,5): ${light_pixel}
 
     # Toggle dark
-    Click    .theme-toggle
+    Click    .theme-toggle-icon
     Sleep    1s
 
     # Read pixel at (5,5) in dark mode — should be dark

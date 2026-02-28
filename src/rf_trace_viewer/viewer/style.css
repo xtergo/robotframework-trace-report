@@ -354,23 +354,23 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 }
 
 /* ── Theme toggle button ── */
-.rf-trace-viewer .theme-toggle {
+.rf-trace-viewer .theme-toggle-icon {
   background: none;
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   cursor: pointer;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 1;
   order: 99;
-  margin-left: auto;
 }
 
-.rf-trace-viewer .theme-toggle:hover {
+.rf-trace-viewer .theme-toggle-icon:hover {
   background: var(--hover-bg);
 }
 
-.rf-trace-viewer .theme-toggle:focus-visible {
+.rf-trace-viewer .theme-toggle-icon:focus-visible {
   outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }

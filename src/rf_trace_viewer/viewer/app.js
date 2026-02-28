@@ -631,9 +631,9 @@
     }
 
     var toggleBtn = document.createElement('button');
-    toggleBtn.className = 'theme-toggle';
-    toggleBtn.textContent = theme === 'dark' ? '\u2600 Light' : '\u263e Dark';
-    toggleBtn.setAttribute('aria-label', 'Toggle theme');
+    toggleBtn.className = 'theme-toggle-icon';
+    toggleBtn.textContent = theme === 'dark' ? '\u2600' : '\u263e';
+    toggleBtn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
     toggleBtn.addEventListener('click', function () {
       var newTheme;
       if (typeof window.toggleTheme === 'function') {
@@ -643,7 +643,8 @@
         newTheme = isDark ? 'light' : 'dark';
         _applyTheme(root, newTheme);
       }
-      toggleBtn.textContent = newTheme === 'dark' ? '\u2600 Light' : '\u263e Dark';
+      toggleBtn.textContent = newTheme === 'dark' ? '\u2600' : '\u263e';
+      toggleBtn.setAttribute('aria-label', newTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
     });
     header.appendChild(toggleBtn);
     root.appendChild(header);

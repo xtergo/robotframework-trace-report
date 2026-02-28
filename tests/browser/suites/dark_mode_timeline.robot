@@ -31,7 +31,7 @@ Debug CSS Variable Resolution
     Log    Trimmed bg-primary: ${trimmed_bg}
 
     # Now toggle dark
-    Click    .theme-toggle
+    Click    .theme-toggle-icon
     Sleep    0.5s
 
     # Get class after toggle
@@ -69,7 +69,7 @@ Body Background Should Be Dark In Dark Mode
     New Page    file://${REPORT_PATH}
     Wait For Load State    networkidle
 
-    Click    .theme-toggle
+    Click    .theme-toggle-icon
     Sleep    0.3s
 
     ${body_bg}=    Evaluate JavaScript    .timeline-section
