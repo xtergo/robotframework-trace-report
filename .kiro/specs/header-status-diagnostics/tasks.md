@@ -99,7 +99,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Emit updated value in `diagnostics-updated` event
     - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-  - [ ] 5.2 Add retry countdown timer
+  - [x] 5.2 Add retry countdown timer
     - Start a 1-second `setInterval` when status is `Disconnected` or `Delayed` that decrements `retryCountdownSec`
     - Clear/hide when status returns to `Live` or when a poll begins
     - Emit `status-changed` on each tick so the UI countdown updates
@@ -109,8 +109,8 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - **Property 3: Telemetry sliding window correctness** — for any sequence of (timestamp, spanCount) entries within a 10-second window, `spansPerSec` equals the sum of counts divided by 10, and entries older than 10 seconds are pruned
     - **Validates: Requirements 9.2, 9.3**
 
-- [ ] 6. Update theme.js for icon-only toggle
-  - [ ] 6.1 Update OS-preference change handler to target `.theme-toggle-icon`
+- [x] 6. Update theme.js for icon-only toggle
+  - [x] 6.1 Update OS-preference change handler to target `.theme-toggle-icon`
     - Change the `querySelector` from `.theme-toggle` to `.theme-toggle-icon`
     - Update icon character (`☀`/`☾`) and `aria-label` on OS preference change
     - Preserve `window.toggleTheme` and `window.getTheme` public APIs unchanged
