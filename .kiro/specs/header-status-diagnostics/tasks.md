@@ -117,7 +117,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - _Requirements: 6.1, 6.2, 12.5_
 
 - [ ] 7. Add CSS styles to style.css
-  - [ ] 7.1 Add Status Cluster, Diagnostics Panel, and control styles
+  - [x] 7.1 Add Status Cluster, Diagnostics Panel, and control styles
     - Add CSS custom properties for status colors: `--status-live`, `--status-paused`, `--status-delayed`, `--status-disconnected`, `--status-unauthorized` with light and dark theme values per the design color table
     - Style `.status-cluster`: inline-flex, cursor pointer, gap between children
     - Style `.status-dot`: small circle with `background-color` driven by status CSS variable
@@ -130,17 +130,17 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Style `.telemetry-indicator` and `.retry-countdown`: inline, subtle text
     - _Requirements: 2.4, 2.5, 2.6, 2.7, 2.8, 11.5_
 
-  - [ ] 7.2 Add responsive layout styles
+  - [x] 7.2 Add responsive layout styles
     - Viewer header: `display: flex`, `align-items: center`, `flex-wrap: wrap`
     - At 768px+ viewport: single-row, no wrapping
     - Below 768px: title + Status Cluster on first line, controls wrap to second line
     - _Requirements: 11.1, 11.2, 11.3, 11.4_
 
-- [ ] 8. Checkpoint - Verify full header rendering
+- [x] 8. Checkpoint - Verify full header rendering
   - Ensure all tests pass via `make test-unit` and `make test-properties`, ask the user if questions arise.
 
 - [ ] 9. Backward compatibility verification
-  - [ ] 9.1 Verify static mode renders correctly without live controls
+  - [x] 9.1 Verify static mode renders correctly without live controls
     - Ensure that when `window.__RF_TRACE_LIVE__` is falsy, the header renders only: Logo Slot (if configured), title, flex spacer, Dark Mode Icon
     - No Status Cluster, Pause/Resume, or Diagnostics Panel in static mode
     - Verify `app-ready` event still emits after header construction
