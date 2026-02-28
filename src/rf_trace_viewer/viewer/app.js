@@ -497,6 +497,15 @@
     var header = document.createElement('header');
     header.className = 'viewer-header';
 
+    // Logo Slot — render only when configured via window.__RF_LOGO_URL__
+    if (window.__RF_LOGO_URL__) {
+      var logo = document.createElement('img');
+      logo.className = 'header-logo';
+      logo.src = window.__RF_LOGO_URL__;
+      logo.alt = window.__RF_LOGO_ALT__ || '';
+      header.appendChild(logo);
+    }
+
     var title = document.createElement('h1');
     title.textContent = data.title || 'RF Trace Report';
     header.appendChild(title);

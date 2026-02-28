@@ -929,7 +929,7 @@
     if (minStart === Infinity) minStart = 0;
 
     return {
-      title: serviceName || 'RF Trace Report (Live)',
+      title: serviceName || 'RF Trace Report',
       run_id: runId,
       rf_version: rfVersion,
       start_time: minStart,
@@ -1068,7 +1068,7 @@
   /** Return a minimal empty model so app.js can build the DOM. */
   function _emptyModel() {
     return {
-      title: 'RF Trace Report (Live)',
+      title: 'RF Trace Report',
       run_id: '',
       rf_version: '',
       start_time: 0,
