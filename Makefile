@@ -8,7 +8,7 @@
 #   dev-test:        6 GB  (quick run, no coverage)
 #   dev-test-file:   3 GB  (single file, may include slow tests)
 
-.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties test-full format lint check clean itest-up itest-run itest-down itest
+.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties test-full format lint check clean itest-up itest-run itest-down itest verify-oci verify-flux verify-all
 
 help: ## Show this help message
 	@echo "robotframework-trace-report - Docker-based development commands"
@@ -122,3 +122,17 @@ itest-down: ## Tear down kind cluster and clean up
 
 itest: ## Run full integration test cycle (up → test → down, keeps cluster on failure)
 	@bash test/kind/itest.sh
+
+# OCI & Flux verification targets
+IMAGE_TAG ?= latest
+GIT_REF ?= main
+
+verify-oci: ## Verify a published GHCR image via direct kubectl deploy in kind
+	@IMAGE_TAG=$(IMAGE_TAG) bash test/kind/verify-oci.sh
+
+verify-flux: ## Verify Flux GitOps reconciliation in kind
+	@GIT_REF=$(GIT_REF) bash test/kind/verify-flux.sh
+
+verify-all: ## Run OCI and Flux verifications sequentially
+	@$(MAKE) verify-oci
+	@$(MAKE) verify-flux

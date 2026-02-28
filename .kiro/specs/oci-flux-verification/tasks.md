@@ -67,8 +67,8 @@ Implement two Docker-based verification workflows (direct kubectl deploy and Flu
 - [x] 5. Checkpoint — Review both shell scripts for correctness
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Add Makefile targets
-  - [ ] 6.1 Add `verify-oci`, `verify-flux`, and `verify-all` targets to the Makefile
+- [x] 6. Add Makefile targets
+  - [x] 6.1 Add `verify-oci`, `verify-flux`, and `verify-all` targets to the Makefile
     - `verify-oci`: runs `test/kind/verify-oci.sh` with `IMAGE_TAG` variable (default: `latest`)
     - `verify-flux`: runs `test/kind/verify-flux.sh` with `GIT_REF` variable (default: `main`)
     - `verify-all`: runs both sequentially, stopping on first failure
