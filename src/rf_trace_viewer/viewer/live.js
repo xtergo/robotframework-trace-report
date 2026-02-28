@@ -80,6 +80,7 @@
   var seenSpanIds = {};         // browser-side dedup for SigNoz spans
   var pollTimer = null;         // setInterval id
   var tickTimer = null;         // 1-second status bar tick
+  var _retryCountdownTimer = null; // 1-second countdown to next retry
   var lastUpdateTs = 0;         // Date.now() of last successful data fetch
   var statusBarEl = null;       // live status bar DOM element
   var appReady = false;         // true after 'app-ready' fires
@@ -120,9 +121,18 @@
       _connectionState.reasonChip = '';
       _connectionState.zeroSpanCount = 0;
       _connectionState.retryCount = 0;
-      _connectionState.retryCountdownSec = 0;
+      _stopRetryCountdown();
     } else if (reason !== undefined) {
       _connectionState.reasonChip = reason;
+    }
+    // Start countdown when entering Disconnected or Delayed
+    if ((newStatus === 'Disconnected' || newStatus === 'Delayed') &&
+        prev !== newStatus) {
+      _startRetryCountdown();
+    }
+    // Stop countdown when leaving Disconnected/Delayed for non-retry states
+    if (newStatus !== 'Disconnected' && newStatus !== 'Delayed') {
+      _stopRetryCountdown();
     }
     if (prev !== newStatus || reason) {
       if (window.RFTraceViewer && window.RFTraceViewer.emit) {
@@ -162,6 +172,35 @@
       total += _connectionState.spanWindow[i].count;
     }
     _connectionState.spansPerSec = total / 10;
+  }
+
+  function _startRetryCountdown() {
+    _stopRetryCountdown();
+    // Calculate seconds until next poll based on current interval
+    var intervalSec = Math.round((backoffMs || POLL_MS) / 1000);
+    _connectionState.retryCountdownSec = intervalSec;
+    _retryCountdownTimer = setInterval(function () {
+      if (_connectionState.retryCountdownSec > 0) {
+        _connectionState.retryCountdownSec--;
+        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+          window.RFTraceViewer.emit('status-changed', {
+            primaryStatus: _connectionState.primaryStatus,
+            reasonChip: _connectionState.reasonChip,
+            previous: _connectionState.primaryStatus
+          });
+        }
+      } else {
+        _stopRetryCountdown();
+      }
+    }, 1000);
+  }
+
+  function _stopRetryCountdown() {
+    if (_retryCountdownTimer) {
+      clearInterval(_retryCountdownTimer);
+      _retryCountdownTimer = null;
+    }
+    _connectionState.retryCountdownSec = 0;
   }
 
   /* ── 1. Provide empty model for app.js ─────────────────────────── */
@@ -280,6 +319,7 @@
 
   function _poll() {
     if (polling) return;
+    _connectionState.retryCountdownSec = 0;
     if (provider === 'signoz') {
       _pollSigNoz();
     } else {
@@ -380,6 +420,11 @@
       .finally(function () {
         _emitDiagnostics();
         polling = false;
+        // Restart countdown if still in a retry-worthy state
+        if (_connectionState.primaryStatus === 'Disconnected' ||
+            _connectionState.primaryStatus === 'Delayed') {
+          _startRetryCountdown();
+        }
       });
   }
 
@@ -510,6 +555,11 @@
       .finally(function () {
         _emitDiagnostics();
         polling = false;
+        // Restart countdown if still in a retry-worthy state
+        if (_connectionState.primaryStatus === 'Disconnected' ||
+            _connectionState.primaryStatus === 'Delayed') {
+          _startRetryCountdown();
+        }
       });
   }
 
