@@ -39,6 +39,13 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   --status-not-run: #7e57c2;
   --status-not-run-bg: #ede7f6;
 
+  /* Connection status colors */
+  --status-live: #2e7d32;
+  --status-paused: #757575;
+  --status-delayed: #f9a825;
+  --status-disconnected: #c62828;
+  --status-unauthorized: #c62828;
+
   /* Overall indicator */
   --overall-pass-bg: #c8e6c9;
   --overall-fail-bg: #ffcdd2;
@@ -78,6 +85,13 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   --status-skip-bg: #3a351b;
   --status-not-run: #b39ddb;
   --status-not-run-bg: #2a2035;
+
+  /* Connection status colors */
+  --status-live: #66bb6a;
+  --status-paused: #9e9e9e;
+  --status-delayed: #ffca28;
+  --status-disconnected: #ef5350;
+  --status-unauthorized: #ef5350;
 
   --overall-pass-bg: #1b5e20;
   --overall-fail-bg: #b71c1c;
@@ -2143,4 +2157,176 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer.theme-dark .loading-progress-bar.complete::before {
   border-color: var(--status-pass);
   border-top-color: var(--status-pass);
+}
+
+/* ── Header Status Cluster ── */
+.rf-trace-viewer .status-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  position: relative;
+  user-select: none;
+}
+
+.rf-trace-viewer .status-cluster:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .status-cluster:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.rf-trace-viewer .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: var(--status-live);
+}
+
+.rf-trace-viewer .status-dot.live { background-color: var(--status-live); }
+.rf-trace-viewer .status-dot.paused { background-color: var(--status-paused); }
+.rf-trace-viewer .status-dot.delayed { background-color: var(--status-delayed); }
+.rf-trace-viewer .status-dot.disconnected { background-color: var(--status-disconnected); }
+.rf-trace-viewer .status-dot.unauthorized { background-color: var(--status-unauthorized); }
+
+.rf-trace-viewer .status-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .status-timestamp {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Reason Chip ── */
+.rf-trace-viewer .reason-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .reason-chip:empty {
+  display: none;
+}
+
+/* ── Diagnostics Panel ── */
+.rf-trace-viewer .diagnostics-panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 240px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.rf-trace-viewer .diagnostics-panel.open {
+  display: block;
+}
+
+.rf-trace-viewer .diagnostics-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  gap: 12px;
+}
+
+.rf-trace-viewer .diagnostics-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .diagnostics-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .diagnostics-value {
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-word;
+}
+
+/* ── Pause/Resume Button ── */
+.rf-trace-viewer .pause-resume-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.rf-trace-viewer .pause-resume-btn:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .pause-resume-btn:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.rf-trace-viewer .pause-resume-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* ── Header Logo ── */
+.rf-trace-viewer .header-logo {
+  max-height: 32px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ── Header Spacer ── */
+.rf-trace-viewer .header-spacer {
+  flex: 1;
+}
+
+/* ── Telemetry Indicator & Retry Countdown ── */
+.rf-trace-viewer .telemetry-indicator {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .retry-countdown {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .telemetry-indicator:empty,
+.rf-trace-viewer .retry-countdown:empty {
+  display: none;
 }
