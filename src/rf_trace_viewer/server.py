@@ -16,14 +16,14 @@ from urllib.error import URLError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
+from rf_trace_viewer.config import BaseFilterConfig
+from rf_trace_viewer.error_codes import error_response
 from rf_trace_viewer.generator import (
     ReportOptions,
     _escape_html,
     embed_viewer_assets,
     generate_report,
 )
-from rf_trace_viewer.config import BaseFilterConfig
-from rf_trace_viewer.error_codes import error_response
 from rf_trace_viewer.logging_config import StructuredLogger
 from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
@@ -92,7 +92,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 with inflight_lock:
                     self.server._inflight_count -= 1
 
-    def _do_GET(self) -> None:
+    def _do_GET(self) -> None:  # noqa: N802
         request_id = self._get_or_generate_request_id()
         parsed = urlparse(self.path)
         path = parsed.path
@@ -232,7 +232,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 with inflight_lock:
                     self.server._inflight_count -= 1
 
-    def _do_POST(self) -> None:
+    def _do_POST(self) -> None:  # noqa: N802
         request_id = self._get_or_generate_request_id()
         parsed = urlparse(self.path)
         path = parsed.path

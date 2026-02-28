@@ -62,7 +62,7 @@ class HealthRouter:
             return 200, {"status": "ok"}
         except urllib.error.URLError as exc:
             return 503, {"status": "unavailable", "error": f"ClickHouse unreachable: {exc.reason}"}
-        except socket.timeout:
+        except TimeoutError:
             return 503, {"status": "unavailable", "error": "ClickHouse ping timed out"}
         except OSError as exc:
             return 503, {"status": "unavailable", "error": f"ClickHouse unreachable: {exc}"}
@@ -102,7 +102,7 @@ def _classify_error(exc: Exception) -> tuple[str, str]:
     Returns one of the values in :data:`_ERROR_TYPES` and a
     human-readable message.
     """
-    if isinstance(exc, socket.timeout):
+    if isinstance(exc, TimeoutError):
         return "TIMEOUT", "Connection timed out"
 
     if isinstance(exc, urllib.error.HTTPError):
@@ -123,7 +123,7 @@ def _classify_error(exc: Exception) -> tuple[str, str]:
             return "TLS_ERROR", f"TLS error: {reason}"
         if isinstance(reason, ConnectionRefusedError):
             return "CONNECTION_REFUSED", "Connection refused"
-        if isinstance(reason, socket.timeout):
+        if isinstance(reason, TimeoutError):
             return "TIMEOUT", "Connection timed out"
         if isinstance(reason, OSError) and reason.errno == 111:
             return "CONNECTION_REFUSED", "Connection refused"

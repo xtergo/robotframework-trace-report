@@ -291,8 +291,8 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
 - [x] 11. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Write K8s documentation and verify backward compatibility
-  - [ ] 12.1 Create K8s deployment documentation in `docs/`
+- [x] 12. Write K8s documentation and verify backward compatibility
+  - [x] 12.1 Create K8s deployment documentation in `docs/`
     - Write installation guide: prerequisites (kind or real cluster, kubectl, kustomize), deployment steps, secret creation
     - Write configuration reference: all environment variables, defaults, valid ranges
     - Write troubleshooting section: missing secrets (fail-fast), ClickHouse unreachable (readiness failure), SigNoz auth errors
@@ -303,7 +303,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Link from project README
     - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 20.8, 20.11, 20.12, 20.13, 20.14, 20.15_
 
-  - [ ] 12.2 Verify backward compatibility
+  - [x] 12.2 Verify backward compatibility
     - Ensure `pip install` package does not include K8s manifests or K8s-specific dependencies
     - Verify existing CLI commands (`rf-trace-report static`, `rf-trace-report serve`) retain current behavior
     - Verify `LOG_FORMAT` defaults to text mode (no change in default behavior)
@@ -316,7 +316,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert behavior and output are identical to pre-K8s-support version when no K8s env vars are set
     - **Validates: Requirements 19.3**
 
-- [ ] 13. Final checkpoint
+- [x] 13. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
