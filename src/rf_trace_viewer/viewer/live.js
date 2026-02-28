@@ -97,6 +97,44 @@
   var _spanCapReached = false;
   var _spanCapBannerEl = null;
 
+  /* ── Connection state model ────────────────────────────────────── */
+
+  var _connectionState = {
+    primaryStatus: 'Live',
+    reasonChip: '',
+    lastSuccessTs: 0,
+    retryCount: 0,
+    lastError: '',
+    zeroSpanCount: 0,
+    dataSource: (provider === 'signoz') ? 'SigNoz' : 'JSON file',
+    backendType: (provider === 'signoz') ? 'ClickHouse' : 'Local file',
+    spansPerSec: 0,
+    spanWindow: [],
+    retryCountdownSec: 0
+  };
+
+  function _setStatus(newStatus, reason) {
+    var prev = _connectionState.primaryStatus;
+    _connectionState.primaryStatus = newStatus;
+    if (newStatus === 'Live') {
+      _connectionState.reasonChip = '';
+      _connectionState.zeroSpanCount = 0;
+      _connectionState.retryCount = 0;
+      _connectionState.retryCountdownSec = 0;
+    } else if (reason !== undefined) {
+      _connectionState.reasonChip = reason;
+    }
+    if (prev !== newStatus || reason) {
+      if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+        window.RFTraceViewer.emit('status-changed', {
+          primaryStatus: newStatus,
+          reasonChip: _connectionState.reasonChip,
+          previous: prev
+        });
+      }
+    }
+  }
+
   /* ── 1. Provide empty model for app.js ─────────────────────────── */
 
   window.__RF_TRACE_DATA__ = _emptyModel();
@@ -107,6 +145,19 @@
   document.addEventListener('DOMContentLoaded', function () {
     // app.js emits 'app-ready' after DOM is built
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
+      window.RFTraceViewer.getConnectionState = function () {
+        return {
+          primaryStatus: _connectionState.primaryStatus,
+          reasonChip: _connectionState.reasonChip,
+          lastSuccessTs: _connectionState.lastSuccessTs,
+          retryCount: _connectionState.retryCount,
+          lastError: _connectionState.lastError,
+          dataSource: _connectionState.dataSource,
+          backendType: _connectionState.backendType,
+          spansPerSec: _connectionState.spansPerSec,
+          retryCountdownSec: _connectionState.retryCountdownSec
+        };
+      };
       window.RFTraceViewer.on('app-ready', _onAppReady);
       // Listen for background fetch merge events from app.js (SigNoz paged loading)
       window.RFTraceViewer.on('spans-merge', function (data) {
@@ -1059,7 +1110,9 @@
 
   function _getActiveServiceFilter() {
     var active = Object.keys(_activeServices);
-    if (active.length === 0) return '';
+    // No services checked → send a sentinel that matches nothing
+    // so the server returns zero spans (true filter behavior)
+    if (active.length === 0) return '__none__';
     if (active.length === 1) return active[0];
     // Multiple services: pass comma-separated (server-side will need to handle)
     // For now, send the first one — server only supports single service filter
@@ -1067,19 +1120,22 @@
   }
 
   function _updateServiceBtnLabel() {
-    if (!_serviceDropdownEl) return;
-    var btn = _serviceDropdownEl.querySelector('.service-filter-btn');
-    if (!btn) return;
-    var active = Object.keys(_activeServices);
-    var total = Object.keys(_knownServices).length;
-    if (active.length === 0) {
-      btn.textContent = 'Services (all)';
-    } else if (active.length === 1) {
-      btn.textContent = 'Service: ' + active[0];
-    } else {
-      btn.textContent = 'Services (' + active.length + '/' + total + ')';
+      if (!_serviceDropdownEl) return;
+      var btn = _serviceDropdownEl.querySelector('.service-filter-btn');
+      if (!btn) return;
+      var active = Object.keys(_activeServices);
+      var total = Object.keys(_knownServices).length;
+      if (active.length === 0) {
+        btn.textContent = 'Services';
+        btn.classList.remove('has-filter');
+      } else if (active.length === 1) {
+        btn.textContent = active[0];
+        btn.classList.add('has-filter');
+      } else {
+        btn.textContent = active.length + '/' + total + ' services';
+        btn.classList.add('has-filter');
+      }
     }
-  }
 
   function _resetAndRepoll() {
     // Reset state and re-fetch from scratch with new service filter
@@ -1105,75 +1161,98 @@
   /* ── 9. Status bar ─────────────────────────────────────────────── */
 
   function _createStatusBar() {
-    var header = document.querySelector('.viewer-header');
-    if (!header) return;
-    statusBarEl = document.createElement('span');
-    statusBarEl.className = 'live-status-bar';
-    statusBarEl.textContent = 'Live \u2014 connecting\u2026';
-    header.appendChild(statusBarEl);
+      var header = document.querySelector('.viewer-header');
+      if (!header) return;
 
-    if (provider === 'signoz') {
-      // Service filter dropdown
-      _createServiceFilter(header);
+      if (provider === 'signoz') {
+        // Service filter dropdown
+        _createServiceFilter(header);
 
-      var toggleContainer = document.createElement('span');
-      toggleContainer.className = 'snapshot-toggle';
+        var toggle = document.createElement('label');
+        toggle.className = 'live-toggle';
 
-      var liveBtn = document.createElement('button');
-      liveBtn.className = 'snapshot-toggle-btn snapshot-toggle-live active';
-      liveBtn.textContent = 'Live';
-      liveBtn.setAttribute('aria-pressed', 'true');
+        var track = document.createElement('div');
+        track.className = 'live-toggle-track on';
+        track.setAttribute('role', 'switch');
+        track.setAttribute('aria-checked', 'true');
+        track.setAttribute('tabindex', '0');
 
-      var snapBtn = document.createElement('button');
-      snapBtn.className = 'snapshot-toggle-btn snapshot-toggle-snap';
-      snapBtn.textContent = 'Snapshot';
-      snapBtn.setAttribute('aria-pressed', 'false');
+        var thumb = document.createElement('div');
+        thumb.className = 'live-toggle-thumb';
+        track.appendChild(thumb);
 
-      liveBtn.addEventListener('click', function () {
-        if (!snapshotMode) return;
-        snapshotMode = false;
-        liveBtn.classList.add('active');
-        liveBtn.setAttribute('aria-pressed', 'true');
-        snapBtn.classList.remove('active');
-        snapBtn.setAttribute('aria-pressed', 'false');
-        _startPolling();
-        _startTick();
-        _poll();
-      });
+        var lbl = document.createElement('span');
+        lbl.className = 'live-toggle-label';
+        lbl.textContent = 'Live';
 
-      snapBtn.addEventListener('click', function () {
-        if (snapshotMode) return;
-        snapshotMode = true;
-        snapBtn.classList.add('active');
-        snapBtn.setAttribute('aria-pressed', 'true');
-        liveBtn.classList.remove('active');
-        liveBtn.setAttribute('aria-pressed', 'false');
-        _stopPolling();
-        _stopTick();
-        if (statusBarEl) statusBarEl.textContent = 'Snapshot mode';
-      });
+        // Inline status text next to toggle (replaces the old status bar pill)
+        statusBarEl = document.createElement('span');
+        statusBarEl.className = 'live-toggle-status';
+        statusBarEl.textContent = '';
 
-      toggleContainer.appendChild(liveBtn);
-      toggleContainer.appendChild(snapBtn);
-      header.appendChild(toggleContainer);
+        function _setLiveMode(live) {
+          snapshotMode = !live;
+          track.classList.toggle('on', live);
+          track.setAttribute('aria-checked', live ? 'true' : 'false');
+          lbl.textContent = live ? 'Live' : 'Snapshot';
+          if (live) {
+            _startPolling();
+            _startTick();
+            _poll();
+          } else {
+            _stopPolling();
+            _stopTick();
+            statusBarEl.textContent = '';
+          }
+        }
+
+        track.addEventListener('click', function () {
+          _setLiveMode(snapshotMode);
+        });
+        track.addEventListener('keydown', function (e) {
+          if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            _setLiveMode(snapshotMode);
+          }
+        });
+
+        toggle.appendChild(track);
+        toggle.appendChild(lbl);
+        toggle.appendChild(statusBarEl);
+        header.appendChild(toggle);
+      } else {
+        // Non-signoz: simple status text in header
+        statusBarEl = document.createElement('span');
+        statusBarEl.className = 'live-toggle-status';
+        statusBarEl.textContent = '';
+        header.appendChild(statusBarEl);
+      }
+
+      _updateStatusText();
     }
-
-    _updateStatusText();
-  }
 
   function _updateStatusText() {
-    if (!statusBarEl) return;
-    if (snapshotMode) {
-      statusBarEl.textContent = 'Snapshot mode';
-      return;
+      if (!statusBarEl) return;
+      if (snapshotMode) {
+        statusBarEl.textContent = '';
+        return;
+      }
+      if (!lastUpdateTs) {
+        statusBarEl.textContent = 'connecting\u2026';
+        return;
+      }
+      var elapsed = Date.now() - lastUpdateTs;
+      var secs = Math.round(elapsed / 1000);
+      var text;
+      if (secs < 60) {
+        text = secs + 's ago';
+      } else if (secs < 3600) {
+        text = Math.floor(secs / 60) + 'min ago';
+      } else {
+        text = Math.floor(secs / 3600) + 'h ago';
+      }
+      statusBarEl.textContent = text;
     }
-    if (!lastUpdateTs) {
-      statusBarEl.textContent = 'Live \u2014 connecting\u2026';
-      return;
-    }
-    var ago = Math.round((Date.now() - lastUpdateTs) / 1000);
-    statusBarEl.textContent = 'Live \u2014 last updated ' + ago + 's ago';
-  }
 
   /* ── 9. SigNoz helpers ─────────────────────────────────────────── */
 
@@ -1183,20 +1262,21 @@
   }
 
   function _showNotification(msg) {
-    if (!statusBarEl) return;
-    var note = statusBarEl.parentNode.querySelector('.live-notification');
-    if (!note) {
-      note = document.createElement('span');
-      note.className = 'live-notification';
-      statusBarEl.parentNode.appendChild(note);
+      var header = document.querySelector('.viewer-header');
+      if (!header) return;
+      var note = header.querySelector('.live-notification');
+      if (!note) {
+        note = document.createElement('span');
+        note.className = 'live-notification';
+        header.appendChild(note);
+      }
+      note.textContent = msg;
+      // Auto-clear after 10 seconds
+      clearTimeout(note._clearTimer);
+      note._clearTimer = setTimeout(function () {
+        note.textContent = '';
+      }, 10000);
     }
-    note.textContent = msg;
-    // Auto-clear after 10 seconds
-    clearTimeout(note._clearTimer);
-    note._clearTimer = setTimeout(function () {
-      note.textContent = '';
-    }, 10000);
-  }
 
   /* ── Auth error banner ─────────────────────────────────────────── */
 
@@ -1206,7 +1286,7 @@
     // Stop polling — no point retrying with bad auth
     _stopPolling();
     _stopTick();
-    if (statusBarEl) statusBarEl.textContent = 'Live \u2014 authentication error';
+    if (statusBarEl) statusBarEl.textContent = 'auth error';
 
     if (_authErrorBannerEl) {
       // Update existing banner message
