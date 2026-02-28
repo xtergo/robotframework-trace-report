@@ -26,7 +26,7 @@ make test-browser
 
 That's it! No Python environment setup, no npm, no Playwright installation needed.
 
-**📖 For detailed testing documentation, see [docs/DOCKER_TESTING.md](docs/DOCKER_TESTING.md)**
+**📖 For detailed testing documentation, see [docs/docker-testing.md](docs/docker-testing.md)**
 
 ## Development Workflow
 
@@ -158,7 +158,7 @@ The project has three agent hooks that automatically run when you save files:
 2. **Unit Tests with Coverage** - Runs pytest with 50% coverage requirement
 3. **Browser Regression Tests** - Runs Robot Framework UI tests in Docker
 
-See [docs/TESTING.md](docs/TESTING.md) for complete testing documentation.
+See [docs/testing.md](docs/testing.md) for complete testing documentation.
 
 ### Browser Tests (Primary Validation)
 
@@ -195,7 +195,7 @@ PYTHONPATH=src python3 -m pytest tests/unit/ -v --cov=src/rf_trace_viewer
 - Terminal output shows pass/fail
 - Coverage report: `htmlcov/index.html`
 
-For detailed testing documentation, see [docs/TESTING.md](docs/TESTING.md).
+For detailed testing documentation, see [docs/testing.md](docs/testing.md).
 
 ## Common Tasks
 

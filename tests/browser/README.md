@@ -123,4 +123,4 @@ The Docker image includes:
 
 ## Documentation
 
-See [docs/TESTING.md](../../docs/TESTING.md) for complete testing guide.
+See [docs/testing.md](../../docs/testing.md) for complete testing guide.
