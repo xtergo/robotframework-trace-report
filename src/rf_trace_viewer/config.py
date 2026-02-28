@@ -5,9 +5,23 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+import sys
+from dataclasses import dataclass, field
 
 from rf_trace_viewer.exceptions import ConfigurationError
+
+
+@dataclass
+class BaseFilterConfig:
+    """Server-side service filtering configuration.
+
+    Services in *excluded_by_default* are omitted from query results
+    unless the client explicitly includes them.  Services in
+    *hard_blocked* can never be queried.
+    """
+
+    excluded_by_default: list[str] = field(default_factory=list)
+    hard_blocked: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -49,6 +63,28 @@ class AppConfig:
     base_url: str | None = None
     lookback: str | None = None  # e.g. "10m", "1h", "30s" — only fetch recent spans in live mode
 
+    # K8s deployment settings
+    log_format: str = "text"  # "text" | "json"
+    status_poll_interval: int = 30  # seconds (5-120)
+    health_check_timeout: int = 2  # seconds
+    clickhouse_host: str | None = None
+    clickhouse_port: int = 8123
+    max_concurrent_queries: int | None = None
+    base_filter_config: str | None = None  # JSON string or file path
+    rate_limit_per_ip: int | None = None  # requests per minute per IP
+
+    # Parsed base filter (populated by load_base_filter)
+    _base_filter: BaseFilterConfig = field(default_factory=BaseFilterConfig)
+
+    @property
+    def base_filter(self) -> BaseFilterConfig:
+        """Return the parsed base filter configuration."""
+        return self._base_filter
+
+    @base_filter.setter
+    def base_filter(self, value: BaseFilterConfig) -> None:
+        self._base_filter = value
+
 
 @dataclass
 class SigNozConfig:
@@ -69,7 +105,17 @@ class SigNozConfig:
 
 
 # Fields that hold int values (for env var coercion)
-_INT_FIELDS = {"port", "poll_interval", "max_spans_per_page", "max_spans"}
+_INT_FIELDS = {
+    "port",
+    "poll_interval",
+    "max_spans_per_page",
+    "max_spans",
+    "status_poll_interval",
+    "health_check_timeout",
+    "clickhouse_port",
+    "max_concurrent_queries",
+    "rate_limit_per_ip",
+}
 # Fields that hold float values
 _FLOAT_FIELDS = {"overlap_window_seconds"}
 # Fields that hold bool values
@@ -137,6 +183,57 @@ def _load_config_file(path: str) -> dict:
     return flat
 
 
+def load_base_filter(config_value: str | None) -> BaseFilterConfig:
+    """Parse ``BASE_FILTER_CONFIG`` into a :class:`BaseFilterConfig`.
+
+    *config_value* may be:
+    - ``None`` → empty filter (no exclusions)
+    - A JSON string (starts with ``{``)
+    - A file path pointing to a JSON file
+
+    Expected JSON shape::
+
+        {
+            "excluded_by_default": ["svc-a", "svc-b"],
+            "hard_blocked": ["svc-x"]
+        }
+
+    Raises :class:`ConfigurationError` on parse failure.
+    """
+    if not config_value:
+        return BaseFilterConfig()
+
+    raw_json: str
+    if config_value.lstrip().startswith("{"):
+        raw_json = config_value
+    else:
+        # Treat as file path
+        if not os.path.exists(config_value):
+            raise ConfigurationError(f"BASE_FILTER_CONFIG file not found: {config_value}")
+        try:
+            with open(config_value) as f:
+                raw_json = f.read()
+        except OSError as exc:
+            raise ConfigurationError(
+                f"Cannot read BASE_FILTER_CONFIG file {config_value}: {exc}"
+            ) from exc
+
+    try:
+        data = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise ConfigurationError(f"Cannot parse BASE_FILTER_CONFIG as JSON: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise ConfigurationError(
+            "BASE_FILTER_CONFIG must be a JSON object, " f"got {type(data).__name__}"
+        )
+
+    return BaseFilterConfig(
+        excluded_by_default=list(data.get("excluded_by_default", [])),
+        hard_blocked=list(data.get("hard_blocked", [])),
+    )
+
+
 def _validate(config: AppConfig) -> None:
     """Validate the merged configuration, raising ConfigurationError on problems."""
     if config.provider == "signoz" and not config.signoz_endpoint:
@@ -148,6 +245,42 @@ def _validate(config: AppConfig) -> None:
         raise ConfigurationError(
             f"--poll-interval must be between 1 and 30, got {config.poll_interval}"
         )
+    # K8s status poll interval validation
+    if not 5 <= config.status_poll_interval <= 120:
+        raise ConfigurationError(
+            f"STATUS_POLL_INTERVAL must be between 5 and 120, " f"got {config.status_poll_interval}"
+        )
+
+
+def validate_k8s_startup(config: AppConfig) -> None:
+    """Fail-fast validation for K8s deployment mode.
+
+    Called at server startup when ``clickhouse_host`` is configured.
+    Exits with code 1 and a log message when required secrets are
+    missing or configuration is invalid.
+
+    This function does NOT raise — it prints to stderr and calls
+    ``sys.exit(1)`` directly so the pod fails visibly.
+    """
+    if not config.clickhouse_host:
+        return  # Not in K8s mode — skip K8s-specific checks
+
+    errors: list[str] = []
+
+    # Required: SigNoz API key or JWT secret for authentication
+    if not config.signoz_api_key and not config.signoz_jwt_secret:
+        errors.append("K8s mode requires SIGNOZ_API_KEY or SIGNOZ_JWT_SECRET")
+
+    # Validate base filter if configured
+    try:
+        config.base_filter = load_base_filter(config.base_filter_config)
+    except ConfigurationError as exc:
+        errors.append(str(exc))
+
+    if errors:
+        for msg in errors:
+            print(f"FATAL: {msg}", file=sys.stderr)
+        sys.exit(1)
 
 
 def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
@@ -168,6 +301,15 @@ def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
         "EXECUTION_ATTRIBUTE": "execution_attribute",
         "POLL_INTERVAL": "poll_interval",
         "MAX_SPANS_PER_PAGE": "max_spans_per_page",
+        # K8s environment variables
+        "LOG_FORMAT": "log_format",
+        "STATUS_POLL_INTERVAL": "status_poll_interval",
+        "HEALTH_CHECK_TIMEOUT": "health_check_timeout",
+        "CLICKHOUSE_HOST": "clickhouse_host",
+        "CLICKHOUSE_PORT": "clickhouse_port",
+        "MAX_CONCURRENT_QUERIES": "max_concurrent_queries",
+        "BASE_FILTER_CONFIG": "base_filter_config",
+        "RATE_LIMIT_PER_IP": "rate_limit_per_ip",
     }
     for env_key, attr in env_map.items():
         val = os.environ.get(env_key)
