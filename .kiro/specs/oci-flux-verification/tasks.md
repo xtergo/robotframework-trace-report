@@ -76,15 +76,15 @@ Implement two Docker-based verification workflows (direct kubectl deploy and Flu
     - Add `## ` help comments consistent with existing targets
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 7. Create verification documentation
-  - [ ] 7.1 Create `docs/oci-verification.md`
+- [x] 7. Create verification documentation
+  - [x] 7.1 Create `docs/oci-verification.md`
     - Document purpose of each verification workflow (direct deploy and Flux GitOps)
     - Document all configurable parameters (`IMAGE_TAG`, `GIT_REF`, `ROLLOUT_TIMEOUT`, `FLUX_CTRL_TIMEOUT`, `FLUX_RECON_TIMEOUT`) with default values
     - Include example commands: verify specific release (`make verify-oci IMAGE_TAG=0.1.0`), verify latest, run Flux flow, run both
     - Document prerequisites: Docker installed, internet access for GHCR and Flux CLI images, sufficient resources for kind cluster
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 8. Final checkpoint — Ensure all tests pass and scripts are executable
+- [x] 8. Final checkpoint — Ensure all tests pass and scripts are executable
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
