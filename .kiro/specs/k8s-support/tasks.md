@@ -131,8 +131,8 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert `error_type` when present is one of the defined set
     - **Validates: Requirements 3.2, 3.3**
 
-- [ ] 5. Integrate new modules into server.py
-  - [ ] 5.1 Add request ID middleware to `server.py`
+- [x] 5. Integrate new modules into server.py
+  - [x] 5.1 Add request ID middleware to `server.py`
     - Implement `_get_or_generate_request_id()` in request handler: propagate `X-Request-Id` from request or generate UUID
     - Add `X-Request-Id` header to all responses
     - Pass request_id to structured logger for all request logs
@@ -144,7 +144,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert response always includes `X-Request-Id`; if request had one, response matches; if not, response is a valid UUID
     - **Validates: Requirements 3.4, 4.3, 4.4**
 
-  - [ ] 5.3 Add API versioning and routing table to `server.py`
+  - [x] 5.3 Add API versioning and routing table to `server.py`
     - Add `/api/v1/` prefix routing for new endpoints: `/api/v1/status`, `/api/v1/spans`, `/api/v1/services`
     - Preserve existing unversioned endpoints (`/api/spans`, `/traces.json`, `/v1/traces`) for backward compatibility
     - Wire health endpoints (`/health/live`, `/health/ready`, `/health/drain`) to `HealthRouter`
@@ -152,7 +152,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Implement `_send_json_response()` helper with `X-Request-Id` header
     - _Requirements: 4.1, 4.2, 12.3_
 
-  - [ ] 5.4 Implement service discovery endpoint (`/api/v1/services`)
+  - [x] 5.4 Implement service discovery endpoint (`/api/v1/services`)
     - Query SigNoz for top services and span counts
     - Apply `BaseFilterConfig` to annotate `excluded_by_default` and `hard_blocked` fields
     - Enforce hard block: never return spans for hard-blocked services in any query
@@ -167,7 +167,7 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert excluded-by-default services are omitted unless explicitly included
     - **Validates: Requirements 11.3, 13.1, 13.2, 13.3**
 
-  - [ ] 5.6 Implement query concurrency limiting in `server.py`
+  - [x] 5.6 Implement query concurrency limiting in `server.py`
     - Use a `threading.Semaphore` initialized to `MAX_CONCURRENT_QUERIES`
     - Return HTTP 503 with `error_code: "RATE_LIMITED"` when semaphore cannot be acquired
     - _Requirements: 11.4_
@@ -178,14 +178,14 @@ Incrementally add Kubernetes deployment support to trace-report as a separate di
     - Assert the (N+1)th request receives 503 with `RATE_LIMITED` error code
     - **Validates: Requirements 11.4**
 
-  - [ ] 5.8 Implement graceful shutdown in `server.py`
+  - [x] 5.8 Implement graceful shutdown in `server.py`
     - Install SIGTERM handler that sets drain flag, stops accepting new connections
     - Track in-flight requests with a threading counter (increment on start, decrement on end)
     - Wait for in-flight requests up to `terminationGracePeriodSeconds` (default 30s)
     - Log structured drain summary (requests drained, duration) then exit 0
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 6. Checkpoint
+- [x] 6. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 7. Harden Dockerfile and create Kustomize base manifests
