@@ -55,8 +55,8 @@ Implement two Docker-based verification workflows (direct kubectl deploy and Flu
     - Handle Docker image unavailability with named error message and exit 1
     - _Requirements: 1.1, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 4. Implement `verify-flux.sh` — Flux GitOps reconciliation verification
-  - [ ] 4.1 Create `test/kind/verify-flux.sh` shell script
+- [x] 4. Implement `verify-flux.sh` — Flux GitOps reconciliation verification
+  - [x] 4.1 Create `test/kind/verify-flux.sh` shell script
     - Add shebang, `set -euo pipefail`, and script-level variables (`GIT_REF`, `FLUX_CTRL_TIMEOUT`, `FLUX_RECON_TIMEOUT`, `CLUSTER_NAME=flux-verify`)
     - Implement colored output helpers, `run_kubectl()`, and `run_flux()` Docker wrapper using `ghcr.io/fluxcd/flux-cli:latest` with `--network host` and kubeconfig mount
     - Implement `cleanup` trap handler and `dump_diagnostics` (including Flux-specific: Kustomization status, GitRepository status, Flux controller logs)
@@ -64,7 +64,7 @@ Implement two Docker-based verification workflows (direct kubectl deploy and Flu
     - Handle Docker image unavailability with named error message and exit 1
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 5. Checkpoint — Review both shell scripts for correctness
+- [x] 5. Checkpoint — Review both shell scripts for correctness
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 6. Add Makefile targets
