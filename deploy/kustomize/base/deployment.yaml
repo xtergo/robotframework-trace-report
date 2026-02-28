@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trace-report
+  labels:
+    app.kubernetes.io/name: trace-report
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trace-report
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trace-report
+        app.kubernetes.io/component: server
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: trace-report
+          image: ghcr.io/xtergo/robotframework-trace-report:latest
+          ports:
+            - name: http
+              containerPort: 8077
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: trace-report-config
+            - secretRef:
+                name: trace-report-secrets
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - "ALL"
+          # Dev resource profile (base default)
+          # Prod memory limit of 512Mi accommodates the default max_spans of 500K
+          # at approximately 1KB per span. If you increase max_spans, increase the
+          # memory limit proportionally (e.g. 1M spans → 1Gi).
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 3

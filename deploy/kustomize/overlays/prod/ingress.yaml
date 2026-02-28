@@ -1,0 +1,33 @@
+# Optional: Ingress for external access to UI and API.
+# Uncomment in kustomization.yaml to enable.
+# Does NOT expose /health/* or diagnostics endpoints.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trace-report
+  labels:
+    app.kubernetes.io/name: trace-report
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: trace-report.example.com
+      http:
+        paths:
+          # UI
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: trace-report
+                port:
+                  number: 8077
+          # Versioned API
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: trace-report
+                port:
+                  number: 8077

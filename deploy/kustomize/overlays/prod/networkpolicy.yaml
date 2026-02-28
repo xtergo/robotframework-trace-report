@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trace-report
+  labels:
+    app.kubernetes.io/name: trace-report
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trace-report
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ingress controller only
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - port: 8077
+          protocol: TCP
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow traffic to ClickHouse
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clickhouse
+      ports:
+        - port: 8123
+          protocol: TCP
+        - port: 9000
+          protocol: TCP
+    # Allow traffic to SigNoz
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: signoz
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 8080
+          protocol: TCP

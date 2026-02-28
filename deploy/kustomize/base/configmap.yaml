@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trace-report-config
+  labels:
+    app.kubernetes.io/name: trace-report
+data:
+  # Logging format: "json" for structured K8s logging, "text" for human-readable
+  LOG_FORMAT: "json"
+  # Status poller interval in seconds (range: 5-120)
+  STATUS_POLL_INTERVAL: "30"
+  # ClickHouse health check timeout in seconds
+  HEALTH_CHECK_TIMEOUT: "2"
+  # ClickHouse connection
+  CLICKHOUSE_HOST: "clickhouse"
+  CLICKHOUSE_PORT: "8123"
+  # Maximum spans per page for SigNoz queries
+  MAX_SPANS_PER_PAGE: "10000"
+  # Maximum total spans (affects memory usage: ~1KB per span)
+  MAX_SPANS: "500000"
+  # Execution attribute for SigNoz trace correlation
+  EXECUTION_ATTRIBUTE: "essvt.execution_id"
+  # Server port
+  PORT: "8077"
+  # Poll interval for live mode (seconds, 1-30)
+  POLL_INTERVAL: "5"
