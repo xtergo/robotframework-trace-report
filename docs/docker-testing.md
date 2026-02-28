@@ -1,262 +1,132 @@
 # Docker-Based Testing Guide
 
-This project uses a **Docker-only** testing strategy to ensure consistency across all development environments.
-
-## Philosophy
-
-**No local Python installation required.** All tests run in Docker containers with pinned dependencies, ensuring:
-
-- ✅ Identical results on all machines
-- ✅ No "works on my machine" issues
-- ✅ Same environment in development and CI
-- ✅ Zero setup time for new contributors
+This project uses a **Docker-only** testing strategy. No local Python installation required.
 
 ## Quick Start
 
 ```bash
-# See all available commands
-make help
+# Build the test image (first time, or after Dockerfile.test changes)
+make docker-build-test
 
-# Run all property-based tests
-make test-properties
-
-# Run all unit tests with coverage
+# Run unit tests
 make test-unit
 
-# Run browser tests
-make test-browser
+# Run property-based tests
+make test-properties
 
-# Format and check code
+# Format and lint
 make format
 make check
 ```
 
-## Available Make Targets
+## Philosophy
+
+All tests run inside Docker containers using a pre-built image (`rf-trace-test:latest`) with pinned dependencies. This ensures:
+
+- Identical results on every machine
+- Same environment in development and CI
+- Zero setup beyond Docker itself
+- No pip, no venv, no PATH issues
+
+## Pre-Built Test Image
+
+The image is built from `Dockerfile.test` on a `python:3.11-slim` base with pytest, pytest-cov, pytest-xdist, hypothesis, black, and ruff pre-installed.
+
+```bash
+# Build (or rebuild) the image
+make docker-build-test
+```
+
+Rebuild whenever `Dockerfile.test` changes. The Makefile targets all reference `rf-trace-test:latest`.
+
+## Makefile Targets
+
+Use `make help` to see all targets. Key ones:
 
 | Command | Description |
 |---------|-------------|
-| `make test` | Run all tests (unit + browser) |
-| `make test-unit` | Run Python unit tests with coverage |
-| `make test-properties` | Run property-based tests only (Hypothesis) |
-| `make test-browser` | Run browser tests with Robot Framework |
+| `make test-unit` | Unit tests with coverage (light PBT, skips slow tests) |
+| `make test-properties` | Property-based tests with full Hypothesis iterations |
+| `make test-slow` | Slow tests using large fixture files |
+| `make test-full` | Full suite with full PBT iterations (CI mode) |
+| `make test-browser` | Browser tests (Robot Framework + Playwright) |
+| `make test-integration-signoz` | SigNoz end-to-end integration tests |
 | `make format` | Format code with Black |
 | `make lint` | Lint code with Ruff |
-| `make check` | Check formatting and linting (CI-style) |
-| `make report` | Generate HTML report from test fixture |
-| `make clean` | Clean up generated files |
+| `make check` | Check formatting + linting (CI-style) |
 | `make dev-test` | Quick test run (no coverage) |
-| `make dev-test-file FILE=<name>` | Run specific test file |
-| `make ci-test` | Run all CI checks |
+| `make dev-test-file FILE=<path>` | Run a specific test file |
+| `make ci-test` | All CI checks (format, lint, full tests) |
+| `make clean` | Remove generated files and caches |
 
-## Test Types
+## Direct Docker Commands
 
-### 1. Property-Based Tests (Hypothesis)
-
-Located in `tests/unit/test_*_properties.py`
-
-These tests use [Hypothesis](https://hypothesis.readthedocs.io/) to generate hundreds of test cases automatically, validating universal properties across a wide range of inputs.
-
-**Run them:**
-```bash
-make test-properties
-```
-
-**What they test:**
-- Parser correctness across all valid OTLP inputs
-- Tree building with arbitrary span hierarchies
-- RF attribute interpretation with all span types
-- Statistics computation with various test outcomes
-- Filter logic with all combinations
-
-**Example output:**
-```
-tests/unit/test_rf_model_properties.py::TestProperty9_SpanClassification::test_suite_span_classified_as_suite PASSED
-tests/unit/test_rf_model_properties.py::TestProperty10_FieldExtraction::test_suite_fields_extracted_correctly PASSED
-...
-======================== 46 passed in 87.26s =========================
-```
-
-### 2. Unit Tests
-
-Located in `tests/unit/test_*.py` (non-properties files)
-
-Traditional unit tests with specific examples and edge cases.
-
-**Run them:**
-```bash
-make test-unit
-```
-
-**What they test:**
-- Parser with fixture files
-- Tree builder with known structures
-- RF model with real trace data
-- CLI argument parsing
-
-### 3. Browser Tests
-
-Located in `tests/browser/suites/`
-
-End-to-end tests using Robot Framework and Playwright to validate the generated HTML in a real browser.
-
-**Run them:**
-```bash
-make test-browser
-```
-
-**What they test:**
-- HTML report generation
-- JavaScript viewer functionality
-- Timeline rendering
-- Console error detection
-
-## Docker Commands (Manual)
-
-If you prefer to run Docker commands directly instead of using Make:
-
-### Unit Tests
+When the Makefile targets don't cover your use case, run `rf-trace-test:latest` directly:
 
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest pytest-cov hypothesis &&
-  PYTHONPATH=src pytest tests/unit/ -v --cov=src/rf_trace_viewer
-"
+# Run a specific test file
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest \
+    bash -c "PYTHONPATH=src pytest tests/unit/test_tree.py -v"
+
+# Run tests matching a keyword
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest \
+    bash -c "PYTHONPATH=src pytest tests/unit/ -k 'test_parse' -v"
+
+# Format code
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest \
+    bash -c "black src/ tests/"
+
+# Lint code
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest \
+    bash -c "ruff check src/"
 ```
 
-### Property Tests Only
+> Always use `rf-trace-test:latest` — never `python:3.11-slim` with runtime `pip install`.
+
+## Keeping Containers Up to Date
 
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest hypothesis &&
-  PYTHONPATH=src pytest tests/unit/test_*_properties.py -v -o addopts=''
-"
+# Rebuild after changing Dockerfile.test or adding dependencies
+make docker-build-test
+
+# Pull latest base image
+make docker-pull
+
+# Clean up dangling images
+make docker-clean
 ```
 
-### Specific Test File
-
-```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest hypothesis &&
-  PYTHONPATH=src pytest tests/unit/test_rf_model_properties.py -v -o addopts=''
-"
-```
-
-### Browser Tests
-
-```bash
-cd tests/browser
-docker compose up --build
-```
-
-### Format Code
-
-```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q black &&
-  black src/ tests/
-"
-```
-
-### Lint Code
-
-```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q ruff &&
-  ruff check src/
-"
-```
-
-## Why Docker-Only?
-
-### Problems with Traditional Setup
-
-❌ "Works on my machine" syndrome  
-❌ Python version mismatches  
-❌ Dependency conflicts  
-❌ Virtual environment management  
-❌ Different results in CI vs local  
-❌ Time-consuming setup for new contributors  
-
-### Benefits of Docker-Only
-
-✅ **Consistency** - Same Python version, same dependencies, same results  
-✅ **Simplicity** - No pip, no venv, no PATH issues  
-✅ **Speed** - New contributors productive in minutes  
-✅ **CI/CD alignment** - Local tests match CI exactly  
-✅ **Isolation** - No pollution of host system  
+If tests fail with import errors after pulling new code, rebuild the test image first.
 
 ## Troubleshooting
 
-### "Docker not found"
+All troubleshooting commands use the pre-built image.
 
-Install Docker: https://docs.docker.com/get-docker/
+**Docker not found** — Install Docker: https://docs.docker.com/get-docker/
 
-### "Permission denied" on Linux
-
-Add your user to the docker group:
+**Permission denied (Linux):**
 ```bash
 sudo usermod -aG docker $USER
 newgrp docker
 ```
 
-### Tests are slow
+**Module not found errors** — Ensure the image is up to date (`make docker-build-test`). The Makefile sets `PYTHONPATH=src` automatically.
 
-First run downloads the Docker image (~200MB). Subsequent runs are fast because:
-- Docker images are cached
-- pip packages are cached in the container
+**Slow first run** — The first `make docker-build-test` downloads the base image (~150 MB). Subsequent builds use the Docker cache.
 
-### "Module not found" errors
-
-Ensure `PYTHONPATH=src` is set in the Docker command. The Makefile handles this automatically.
-
-### Property tests take a long time
-
-This is normal. Hypothesis generates many test cases (default: 100 examples per test). You can reduce this for faster feedback:
-
+**Interactive debugging:**
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest hypothesis &&
-  PYTHONPATH=src pytest tests/unit/test_*_properties.py -v -o addopts='' --hypothesis-profile=dev
-"
+docker run --rm -it -v $(pwd):/workspace -w /workspace rf-trace-test:latest bash
 ```
 
-Add to `pyproject.toml`:
-```toml
-[tool.pytest.ini_options]
-hypothesis_profiles = ["default", "dev"]
+## Why Docker-Only?
 
-[tool.hypothesis]
-profiles.dev.max_examples = 10
-```
+| Without Docker | With Docker |
+|----------------|-------------|
+| Python version mismatches | Pinned Python 3.11 |
+| Dependency conflicts | Isolated container |
+| "Works on my machine" | Same image everywhere |
+| Manual venv management | Zero setup |
+| CI/local drift | Identical environments |
 
-## CI Integration
-
-The same Docker commands run in GitHub Actions. See `.github/workflows/test.yml`.
-
-Example CI workflow:
-```yaml
-- name: Run unit tests
-  run: make test-unit
-
-- name: Run property tests
-  run: make test-properties
-
-- name: Check code quality
-  run: make check
-```
-
-## Best Practices
-
-1. **Always use Make or Docker** - Never run `python`, `pip`, or `pytest` directly
-2. **Run property tests** - They catch edge cases unit tests miss
-3. **Check coverage** - Aim for >80% on new code
-4. **Format before commit** - Run `make format` before pushing
-5. **Test in Docker** - If it passes in Docker, it passes in CI
-
-## Summary
-
-This project's testing strategy is simple:
-
-**Docker + Make = Consistent, Reliable Tests**
-
-No Python installation needed. No dependency management. Just Docker and you're ready to contribute.
+For detailed information on test types, Hypothesis profiles, and test markers, see [docs/testing.md](testing.md).

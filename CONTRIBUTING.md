@@ -1,239 +1,227 @@
 # Contributing to robotframework-trace-report
 
+## Prerequisites
+
+You need **Docker** installed. That's it.
+
+Optionally, install **Kiro** for AI-assisted development with agent hooks that auto-run
+tests and formatting checks on file save.
+
+No local Python, npm, or Playwright installation required. Everything runs in Docker.
+
 ## Quick Start
 
 ```bash
-# See all available commands
-make help
-
-# Run unit tests
-make test-unit
-
-# Format and check code
-make format
-make check
-
-# Run browser tests
-make test-browser
+make help               # See all available commands
+make docker-build-test  # Build the test Docker image (first time)
+make test-unit          # Run unit tests with coverage
+make format             # Format code with Black
+make check              # Check formatting and linting (CI-style)
 ```
-
-## Prerequisites
-
-**Only 2 things required:**
-
-1. **Docker** - For running tests and verification
-2. **Kiro** - For AI-assisted development
-
-That's it! No Python environment setup, no npm, no Playwright installation needed.
-
-**📖 For detailed testing documentation, see [docs/docker-testing.md](docs/docker-testing.md)**
 
 ## Development Workflow
 
-### 1. Make Code Changes
+1. **Make changes** — edit Python or JavaScript files
+2. **Run tests** — `make test-unit` (fast feedback) or `make test-full` (thorough)
+3. **Check quality** — `make check` (formatting + linting)
+4. **Commit** — a pre-commit hook runs `black --check` in Docker on staged `.py` files
 
-Edit Python or JavaScript files as needed.
+If the pre-commit hook blocks your commit, run `make format` and re-commit.
 
-### 2. Run Tests
+## Docker-Only Testing
 
-**Using Makefile (recommended):**
+All tests run inside the pre-built `rf-trace-test:latest` Docker image. No raw `pytest`
+or `python` commands on the host.
+
+For the full rationale and troubleshooting, see [docs/docker-testing.md](docs/docker-testing.md).
+
+### Make Targets
+
+| Command | Description | Memory |
+|---------|-------------|--------|
+| `make test` | All tests (unit, skipping slow) | — |
+| `make test-unit` | Unit tests with coverage (dev Hypothesis profile) | 6 GB |
+| `make test-slow` | Large fixture tests only | 4 GB |
+| `make test-properties` | Property tests with full iterations (ci profile) | 4 GB |
+| `make test-full` | Full suite with full PBT (ci profile) | 6 GB |
+| `make test-browser` | Browser tests (Robot Framework + Playwright) | — |
+| `make test-integration-signoz` | SigNoz end-to-end integration test | — |
+| `make format` | Format code with Black | — |
+| `make lint` | Lint with Ruff | — |
+| `make check` | Check formatting + linting (CI-style) | — |
+| `make dev-test` | Quick test run (no coverage) | 6 GB |
+| `make dev-test-file FILE=<path>` | Run a specific test file | 3 GB |
+| `make ci-test` | Full CI checks (format + lint + full tests) | — |
+| `make docker-build-test` | Build the test Docker image | — |
+| `make clean` | Clean generated files | — |
+
+## Testing Strategy
+
+### Unit Tests
+
+Located in `tests/unit/`. Test Python logic: parser, tree builder, RF model, generator,
+CLI, config, server, providers.
 
 ```bash
-# Run all unit tests with coverage
 make test-unit
+```
 
-# Run property-based tests only
-make test-properties
+### Property-Based Tests (Hypothesis)
 
-# Run browser tests
+Files matching `tests/unit/test_*_properties.py`. Hypothesis generates hundreds of inputs
+to validate universal properties (parser correctness, tree invariants, statistics
+computation, filter logic, deep-link round-tripping).
+
+Two profiles configured in `tests/conftest.py`:
+
+- **dev** (`max_examples=5`) — used by `make test-unit` for fast feedback
+- **ci** (`max_examples=200`) — used by `make test-properties` and `make test-full`
+
+```bash
+make test-properties    # Full iterations (ci profile)
+make test-unit          # Light iterations (dev profile)
+```
+
+### Browser Tests (Robot Framework + Playwright)
+
+Located in `tests/browser/`. End-to-end tests that open generated HTML in a headless
+browser and validate UI components, console errors, and rendering.
+
+```bash
 make test-browser
-
-# Run specific test file
-make dev-test-file FILE=test_rf_model_properties.py
 ```
 
-**Using Docker directly:**
+Results land in `tests/browser/results/` (gitignored).
+
+### Integration Tests (SigNoz Stack)
+
+Located in `tests/integration/signoz/`. Spins up a full SigNoz stack via Docker Compose
+and runs end-to-end trace ingestion and retrieval tests.
 
 ```bash
-# Browser tests (validates HTML rendering)
-cd tests/browser
-docker compose up --build
-
-# Unit tests (Python only)
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q pytest pytest-cov hypothesis &&
-  PYTHONPATH=src pytest tests/unit/ -v --cov=src/rf_trace_viewer
-"
+make test-integration-signoz
 ```
-
-### 3. Check Code Quality
-
-**Using Makefile (recommended):**
-
-```bash
-# Format code
-make format
-
-# Lint code
-make lint
-
-# Check formatting and linting (CI-style)
-make check
-```
-
-**Using Docker directly:**
-
-```bash
-# Format and lint
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  pip install -q black ruff &&
-  black src/ tests/ &&
-  ruff check src/
-"
-```
-
-### 4. Generate Test Report
-
-**Using Makefile (recommended):**
-
-```bash
-make report
-```
-
-**Using Docker directly:**
-
-```bash
-docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "
-  PYTHONPATH=src python3 -m rf_trace_viewer.cli tests/fixtures/pabot_trace.json -o report.html
-"
-```
-
-### 5. See All Available Commands
-
-```bash
-make help
-```
-
-## Why Docker-Only?
-
-- **Consistent environment** - Same results for everyone
-- **No dependency hell** - No Python venv, npm, or system packages
-- **Easy onboarding** - New contributors start immediately
-- **CI/CD ready** - Same Docker images in development and CI
 
 ## Project Structure
 
 ```
-robotframework-trace-report/
-├── src/rf_trace_viewer/          # Python backend
-│   ├── cli.py                    # CLI entry point
-│   ├── parser.py                 # NDJSON parser
-│   ├── tree.py                   # Span tree builder
-│   ├── rf_model.py               # RF attribute interpreter
-│   ├── generator.py              # HTML generator
-│   └── viewer/                   # JavaScript/CSS assets
-│       ├── app.js                # Main application
-│       ├── tree.js               # Tree view
-│       ├── timeline.js           # Timeline view
-│       ├── stats.js              # Statistics panel
-│       └── style.css             # Styles
-├── tests/
-│   ├── unit/                     # Python unit tests
-│   ├── fixtures/                 # Test trace files
-│   └── browser/                  # Browser tests (Docker-based)
-│       ├── Dockerfile            # Test environment
-│       ├── docker-compose.yml    # Easy test runner
-│       └── suites/               # Robot Framework test suites
-└── .kiro/specs/                  # Kiro spec files
-
+src/rf_trace_viewer/
+├── __init__.py
+├── cli.py                    # CLI entry point
+├── config.py                 # Configuration loading
+├── exceptions.py             # Custom exceptions
+├── generator.py              # HTML report generator
+├── parser.py                 # NDJSON trace parser
+├── rf_model.py               # RF attribute interpreter
+├── robot_semantics.py        # Robot Framework semantic helpers
+├── server.py                 # Live server (HTTP + WebSocket)
+├── tree.py                   # Span tree builder
+├── providers/
+│   ├── __init__.py
+│   ├── base.py               # TraceProvider interface
+│   ├── json_provider.py      # JSON file provider
+│   ├── signoz_auth.py        # SigNoz authentication
+│   └── signoz_provider.py    # SigNoz API provider
+└── viewer/
+    ├── app.js                # Main application entry
+    ├── tree.js               # Tree view component
+    ├── timeline.js           # Timeline / Gantt view
+    ├── stats.js              # Statistics panel
+    ├── search.js             # Search and filter
+    ├── keyword-stats.js      # Keyword statistics
+    ├── flow-table.js         # Execution flow table
+    ├── deep-link.js          # Deep link state encoding
+    ├── live.js               # Live mode polling
+    ├── theme.js              # Theme toggle (dark/light)
+    └── style.css             # Viewer styles
 ```
 
-## Testing Strategy
+```
+tests/
+├── conftest.py               # Hypothesis strategies and profiles
+├── unit/                     # Unit + property-based tests
+├── browser/                  # Browser tests (RF + Playwright)
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── suites/               # .robot test suites
+│   └── results/              # Test output (gitignored)
+├── fixtures/                 # Test trace files
+└── integration/
+    └── signoz/               # SigNoz end-to-end integration tests
+```
 
-### Automated Testing (Agent Hooks)
+## Code Style
 
-The project has three agent hooks that automatically run when you save files:
+| Language | Tool | Config |
+|----------|------|--------|
+| Python | Black | line-length 100, target py310–py313 |
+| Python | Ruff | line-length 100, target py310 |
+| JavaScript | — | Vanilla ES2020+, no build step, no framework |
+| CSS | — | CSS3 with custom properties |
 
-1. **Python Format Check** - Validates Black formatting and Ruff linting
-2. **Unit Tests with Coverage** - Runs pytest with 50% coverage requirement
-3. **Browser Regression Tests** - Runs Robot Framework UI tests in Docker
+Formatting and linting are enforced in CI and by the pre-commit hook.
 
-See [docs/testing.md](docs/testing.md) for complete testing documentation.
-
-### Browser Tests (Primary Validation)
-
-Located in `tests/browser/`, these tests:
-- Open generated HTML in a real browser (headless)
-- Capture console errors and logs automatically
-- Validate UI components are visible and functional
-- Run in Docker - no local setup needed
-
-**Run them:**
 ```bash
-cd tests/browser
-docker compose up --build
+make format   # Auto-format Python with Black
+make lint     # Lint Python with Ruff
+make check    # Check both (CI-style, no auto-fix)
 ```
 
-**Results:** 
-- Main report: `tests/browser/results/report.html` (open in browser)
-- Detailed log: `tests/browser/results/log.html` (includes console output)
+## Adding a New JS Viewer File
 
-### Unit Tests (Python Logic)
+The generator concatenates JS files into the HTML report. The order is defined by the
+`_JS_FILES` tuple in `src/rf_trace_viewer/generator.py`:
 
-Located in `tests/unit/`, these test:
-- Parser logic
-- Tree building
-- RF attribute interpretation
-- Statistics calculations (with property-based tests)
-
-**Run them:**
-```bash
-PYTHONPATH=src python3 -m pytest tests/unit/ -v --cov=src/rf_trace_viewer
+```python
+_JS_FILES = (
+    "stats.js",
+    "tree.js",
+    "timeline.js",
+    "keyword-stats.js",
+    "search.js",
+    "deep-link.js",
+    "theme.js",
+    "flow-table.js",
+    "live.js",
+    "app.js",
+)
 ```
 
-**Results:**
-- Terminal output shows pass/fail
-- Coverage report: `htmlcov/index.html`
+To add a new viewer file:
 
-For detailed testing documentation, see [docs/testing.md](docs/testing.md).
+1. Create the file in `src/rf_trace_viewer/viewer/`
+2. Add its filename to `_JS_FILES` in `generator.py` (order matters — dependencies first, `app.js` last)
+3. Add tests as needed in `tests/unit/` and `tests/browser/suites/`
 
 ## Common Tasks
 
-### Add a New Feature
+### Add a Feature
 
-1. Update spec in `.kiro/specs/rf-html-report-replacement/`
-2. Implement in `src/rf_trace_viewer/`
-3. Add tests in `tests/unit/` or `tests/browser/suites/`
-4. Run browser tests to verify
+1. Implement in `src/rf_trace_viewer/`
+2. Add tests in `tests/unit/` or `tests/browser/suites/`
+3. Run `make test-unit` and `make test-browser`
+4. Run `make check`
 5. Commit
 
 ### Fix a Bug
 
 1. Add a failing test that reproduces the bug
 2. Fix the code
-3. Verify test passes
+3. Verify with `make test-unit`
 4. Commit
 
 ### Update Dependencies
 
-Dependencies are managed in:
-- `pyproject.toml` - Python package dependencies
-- `tests/browser/Dockerfile` - Test environment dependencies
+Dependencies are declared in `pyproject.toml`. The test Docker image pins them.
+After changing dependencies, rebuild:
 
-Update and rebuild Docker images:
 ```bash
-cd tests/browser
-docker compose build --no-cache
+make docker-build-test
 ```
 
-## Code Style
+## Further Reading
 
-- **Python**: Black (line length 100) + Ruff
-- **JavaScript**: Vanilla ES2020+, no build step
-- **CSS**: CSS3 with custom properties
-
-All enforced via Docker-based checks.
-
-## Questions?
-
-Open an issue or ask in discussions. Remember: if you have Docker and Kiro, you're ready to contribute!
+- [Docker Testing Guide](docs/docker-testing.md) — full Docker philosophy and troubleshooting
+- [Testing Documentation](docs/testing.md) — detailed test infrastructure docs
+- [Architecture Guide](docs/architecture.md) — system design and data pipeline
+- [User Guide](docs/user-guide.md) — CLI options and deployment scenarios

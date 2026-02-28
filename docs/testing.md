@@ -1,276 +1,289 @@
 # Testing Guide
 
-This document describes the testing strategy, how to run tests, and how to interpret results.
+This document covers the test infrastructure, how to run tests, and how to write new ones.
+All test execution happens inside Docker containers — never run raw Python or pytest on the host.
 
-## Overview
+## Docker Test Environment
 
-The project uses a two-tier testing strategy:
+Every test command uses a pre-built Docker image that contains all test dependencies.
 
-1. **Unit Tests** - Fast, focused tests for Python logic (pytest)
-2. **Browser Tests** - End-to-end tests for UI functionality (Robot Framework + Playwright)
+**Build the image (one-time setup, or after dependency changes):**
 
-## Automated Testing (Agent Hooks)
-
-Three agent hooks automatically run tests when you save files:
-
-### 1. Python Format Check
-- **Triggers on**: Any `.py` file save in `src/` or `tests/`
-- **Runs**: `python3 -m black --check --line-length 100 src/ tests/ && python3 -m ruff check src/`
-- **Purpose**: Ensures code follows Black formatting (line length 100) and passes Ruff linting
-- **Fix issues**: Run `python3 -m black src/ tests/` to auto-format
-
-### 2. Unit Tests with Coverage
-- **Triggers on**: Any `.py` file save in `src/` or `tests/`
-- **Runs**: `PYTHONPATH=src python3 -m pytest tests/unit/ -v --cov=src/rf_trace_viewer --cov-report=term-missing --cov-fail-under=50`
-- **Purpose**: Validates Python logic and maintains minimum 50% code coverage
-- **Results**: Terminal output shows pass/fail and coverage report
-- **Coverage report**: `htmlcov/index.html` (detailed HTML report)
-
-### 3. Browser Regression Tests
-- **Triggers on**: Any `.js`, `.css`, or `.py` file save in `src/rf_trace_viewer/`
-- **Runs**: `cd tests/browser && docker compose run --rm browser-tests`
-- **Purpose**: Validates UI functionality in real browser
-- **Results**: See "Browser Test Results" section below
-
-## Manual Testing
-
-### Unit Tests
-
-**Run all unit tests:**
 ```bash
-PYTHONPATH=src python3 -m pytest tests/unit/ -v
+make docker-build-test
 ```
 
-**Run with coverage:**
+This builds `rf-trace-test:latest` from `Dockerfile.test`, which includes pytest, pytest-cov,
+pytest-xdist, Hypothesis, Black, and Ruff. The Makefile targets mount your working directory
+into the container so tests always run against your latest code.
+
+If you need to run a Docker command directly (rare), use the pre-built image:
+
 ```bash
-PYTHONPATH=src python3 -m pytest tests/unit/ -v --cov=src/rf_trace_viewer --cov-report=html
+docker run --rm -v $(pwd):/workspace -w /workspace rf-trace-test:latest \
+    bash -c "PYTHONPATH=src pytest tests/unit/test_tree.py -v"
 ```
 
-**Run specific test file:**
+## Test Types
+
+The project has four categories of tests:
+
+1. **Unit tests** — Fast, focused tests for Python logic
+2. **Property-based tests** — Hypothesis-driven invariant checks
+3. **Browser tests** — End-to-end UI tests with Robot Framework + Playwright
+4. **Integration tests** — SigNoz end-to-end pipeline tests
+
+## Makefile Targets
+
+All test execution goes through `make`. Each target sets appropriate memory limits
+and Hypothesis profiles automatically.
+
+| Command | What it does | Memory | Hypothesis Profile |
+|---------|-------------|--------|--------------------|
+| `make test` | All unit tests, skipping slow | — | — |
+| `make test-unit` | Unit tests with coverage, skips slow | 6 GB | dev |
+| `make test-slow` | Large fixture tests only (`-m slow`) | 4 GB | — |
+| `make test-properties` | Property tests with full iterations | 4 GB | ci |
+| `make test-full` | Full suite with full PBT iterations | 6 GB | ci |
+| `make test-browser` | Browser tests (RF + Playwright) | — | — |
+| `make test-integration-signoz` | SigNoz end-to-end integration | — | — |
+| `make dev-test` | Quick run (no coverage, parallel) | 6 GB | dev |
+| `make dev-test-file FILE=<path>` | Run a specific test file | 3 GB | dev |
+| `make ci-test` | Full CI checks (format + lint + tests) | — | ci |
+
+### Everyday development
+
+Run the fast unit tests with coverage:
+
 ```bash
-PYTHONPATH=src python3 -m pytest tests/unit/test_tree.py -v
+make test-unit
 ```
 
-**Run specific test:**
+This skips slow tests (large fixture tests) and uses the `dev` Hypothesis profile
+(5 examples per property test). Target: completes in under 30 seconds.
+
+### Running a single test file
+
 ```bash
-PYTHONPATH=src python3 -m pytest tests/unit/test_tree.py::TestBuildTree::test_basic_tree -v
+make dev-test-file FILE=tests/unit/test_tree.py
 ```
 
-**Results:**
-- Terminal output shows pass/fail for each test
-- Coverage HTML report: `htmlcov/index.html`
-- Coverage summary: Terminal output at end
+### Running slow / large-fixture tests
 
-### Browser Tests
+Tests marked `@pytest.mark.slow` use `large_trace.json` and need more memory.
+They are skipped by default. Run them explicitly:
 
-**Run all browser tests:**
 ```bash
-cd tests/browser
-docker compose run --rm browser-tests
+make test-slow
 ```
 
-**Run specific test suite:**
+### Running property tests with full iterations
+
+During development, property tests run with 5 examples (fast feedback).
+For thorough coverage, run with the CI profile (200 examples):
+
 ```bash
-cd tests/browser
-docker compose run --rm browser-tests robot --outputdir /workspace/tests/browser/results /workspace/tests/browser/suites/timeline_ux.robot
+make test-properties
 ```
 
-**Run specific test case:**
+### Full CI suite locally
+
 ```bash
-cd tests/browser
-docker compose run --rm browser-tests robot --outputdir /workspace/tests/browser/results --test "Timeline Should Render Without Errors" /workspace/tests/browser/suites/
+make ci-test
 ```
 
-**Results location:**
-- **Main report**: `tests/browser/results/report.html` (open in browser)
-- **Detailed log**: `tests/browser/results/log.html` (includes console output, screenshots)
-- **XML output**: `tests/browser/results/output.xml` (for CI/CD)
+This runs formatting checks, linting, and the full test suite with CI-level
+Hypothesis iterations.
 
-**Interpreting results:**
-- Green = PASS
-- Red = FAIL
-- Yellow = SKIP
-- Click test name in report.html to see detailed log
-- Console errors are captured in log.html under each test
+### Browser tests
 
-## Test Structure
-
-### Unit Tests (`tests/unit/`)
-
-```
-tests/unit/
-├── __init__.py
-├── test_parser.py                    # NDJSON parsing tests
-├── test_tree.py                      # Span tree building tests
-├── test_rf_model.py                  # RF attribute interpretation tests
-├── test_statistics_properties.py     # Property-based tests for statistics
-└── test_keyword_statistics_properties.py  # Property-based tests for keyword stats
-```
-
-**What they test:**
-- Parser: NDJSON parsing, error handling, malformed data
-- Tree: Span hierarchy building, parent-child relationships
-- RF Model: Attribute extraction, status mapping, time calculations
-- Statistics: Aggregate calculations, correctness properties
-- Keyword Statistics: Count, min/max/avg calculations
-
-**Property-Based Tests:**
-- Use Hypothesis library to generate random test data
-- Test invariants that should always hold (e.g., min ≤ avg ≤ max)
-- More thorough than example-based tests
-
-### Browser Tests (`tests/browser/suites/`)
-
-```
-tests/browser/suites/
-├── report_rendering.robot           # Basic rendering and console error checks
-├── timeline_ux.robot                # Timeline UX features (pan, zoom, selection)
-├── test_no_overlap.robot            # Gantt chart lane assignment validation
-├── test_selection_simple.robot      # Tree-timeline selection synchronization
-└── verify_latest_report.robot       # Smoke test for report_latest.html
-```
-
-**What they test:**
-- Report rendering without errors
-- Timeline pan/zoom/selection behavior
-- Gantt chart visual layout (no overlapping spans)
-- Tree view ↔ timeline synchronization
-- Tab switching between views
-- Console error detection
-
-**Test fixtures:**
-- `tests/fixtures/diverse_trace_full.json` - Complex trace with multiple tests
-- `tests/fixtures/pabot_trace.json` - Parallel execution trace
-- Generated reports: `report_latest.html`, `report_test.html`, etc.
-
-## Coverage Goals
-
-### Current Coverage
-- **Overall**: ~59%
-- **tree.py**: 100% (fully tested)
-- **parser.py**: 76%
-- **rf_model.py**: 70%
-- **cli.py**: 0% (CLI interface, tested via browser tests)
-- **generator.py**: 0% (HTML generation, tested via browser tests)
-
-### Coverage Strategy
-- **High coverage**: Core logic (parser, tree, rf_model)
-- **Lower coverage**: CLI and generator (validated by browser tests)
-- **Minimum threshold**: 50% (enforced by agent hook)
-
-### View Coverage Report
 ```bash
-PYTHONPATH=src python3 -m pytest tests/unit/ --cov=src/rf_trace_viewer --cov-report=html
-open htmlcov/index.html  # or xdg-open on Linux
+make test-browser
 ```
 
-## Adding New Tests
+Browser tests use a separate Docker Compose setup in `tests/browser/` with
+Robot Framework and Playwright. Results are written to `tests/browser/results/`.
 
-### Adding a Unit Test
+### SigNoz integration tests
 
-1. Create or edit test file in `tests/unit/`
-2. Follow pytest conventions:
-   ```python
-   def test_my_feature():
-       # Arrange
-       input_data = ...
-       
-       # Act
-       result = my_function(input_data)
-       
-       # Assert
-       assert result == expected
-   ```
-3. Run: `PYTHONPATH=src python3 -m pytest tests/unit/test_myfile.py -v`
-
-### Adding a Browser Test
-
-1. Create or edit `.robot` file in `tests/browser/suites/`
-2. Follow Robot Framework syntax:
-   ```robot
-   *** Test Cases ***
-   My Test Case
-       [Documentation]    What this test validates
-       New Page    file://${REPORT_PATH}
-       Wait For Load State    networkidle
-       # Add test steps
-       Get Text    .timeline-section    contains    Expected Text
-   ```
-3. Run: `cd tests/browser && docker compose run --rm browser-tests`
-4. Check results in `tests/browser/results/report.html`
-
-## Debugging Failed Tests
-
-### Unit Test Failures
-
-1. **Read the assertion error** - Shows expected vs actual
-2. **Run with verbose output**: `pytest -vv`
-3. **Run single test**: `pytest tests/unit/test_file.py::test_name -vv`
-4. **Add print statements** or use `pytest --pdb` for debugger
-
-### Browser Test Failures
-
-1. **Open log.html** - Shows detailed execution log
-2. **Check console output** - Captured in log under each test
-3. **Look for screenshots** - Automatically captured on failure
-4. **Run with visible browser**:
-   ```bash
-   # Edit docker-compose.yml: change headless=True to headless=False
-   # Add display forwarding if needed
-   ```
-5. **Check generated HTML** - Open `report_latest.html` manually
-
-### Common Issues
-
-**"Module not found" in unit tests:**
-- Solution: Add `PYTHONPATH=src` before pytest command
-
-**Browser tests timeout:**
-- Check if Docker is running
-- Increase timeout in test: `Wait For Load State    networkidle    timeout=30s`
-
-**Coverage too low:**
-- Add more unit tests for uncovered code
-- Check `htmlcov/index.html` to see what's missing
-
-## CI/CD Integration
-
-The same Docker-based tests run in CI:
-
-```yaml
-# Example GitHub Actions workflow
-- name: Run unit tests
-  run: |
-    PYTHONPATH=src python3 -m pytest tests/unit/ --cov=src/rf_trace_viewer --cov-fail-under=50
-
-- name: Run browser tests
-  run: |
-    cd tests/browser
-    docker compose run --rm browser-tests
+```bash
+make test-integration-signoz
 ```
 
-Results are stored as artifacts and can be downloaded from CI runs.
+Runs the end-to-end SigNoz integration test from `tests/integration/signoz/`.
 
-## Test Maintenance
+## Memory Limits
 
-### When to Update Tests
+Docker memory limits prevent runaway tests from consuming host resources:
 
-- **Breaking changes**: Update affected tests immediately
-- **New features**: Add tests before or during implementation
-- **Bug fixes**: Add regression test that reproduces the bug
-- **Refactoring**: Tests should still pass (if not, tests need updating)
+| Target | Memory Limit | Why |
+|--------|-------------|-----|
+| `test-unit` | 6 GB | Parallel workers + coverage overhead |
+| `test-slow` | 4 GB | Large fixture parsing |
+| `test-properties` | 4 GB | Hypothesis can be memory-hungry |
+| `dev-test` | 6 GB | Parallel workers |
+| `dev-test-file` | 3 GB | Single file, lower overhead |
 
-### Test Hygiene
+If a test is killed unexpectedly, it may be hitting the memory limit. Check
+`docker stats` during the run.
 
-- Keep tests fast (unit tests < 1s each, browser tests < 30s each)
-- One assertion per test (or closely related assertions)
-- Clear test names that describe what's being tested
-- Use fixtures for common setup
-- Clean up generated files (already in .gitignore)
+## Hypothesis Profiles
 
-## Questions?
+Property-based tests use [Hypothesis](https://hypothesis.readthedocs.io/) with
+two profiles, registered in `tests/conftest.py`:
 
-- **Test failing unexpectedly?** Check `tests/browser/results/log.html` for details
-- **Need to add new test?** Follow examples in existing test files
-- **Coverage questions?** See `htmlcov/index.html` for line-by-line coverage
-- **CI/CD issues?** Same commands work locally and in CI
+| Profile | `max_examples` | Health checks suppressed | Used by |
+|---------|---------------|------------------------|---------|
+| `dev` | 5 | `too_slow`, `data_too_large` | `make test-unit`, `make dev-test`, `make dev-test-file` |
+| `ci` | 200 | `too_slow`, `data_too_large` | `make test-properties`, `make test-full`, `make ci-test` |
+
+The default profile is `dev`. Makefile targets set `HYPOTHESIS_PROFILE` automatically —
+you should never need to set it manually. Property test files must not use hardcoded
+`@settings(max_examples=...)` decorators; they should rely on the profile system.
+
+## Test Markers
+
+| Marker | Purpose | Default behavior |
+|--------|---------|-----------------|
+| `@pytest.mark.slow` | Tests using large fixtures (`large_trace.json`) | Skipped via `--skip-slow` flag |
+
+Slow tests run only with `make test-slow`. All other targets skip them.
+
+## Code Quality Checks
+
+Formatting and linting also run inside Docker:
+
+```bash
+make check     # Black --check + Ruff (read-only)
+make format    # Auto-format with Black
+make lint      # Ruff linting
+```
+
+## Agent Hooks
+
+Kiro agent hooks can automatically run tests when you save files. Hooks are
+configured as JSON files in `.kiro/hooks/`.
+
+No hooks are currently configured, but here are useful patterns you can set up:
+
+- **Auto-run unit tests on `.py` file saves** in `src/` or `tests/` — trigger `make test-unit`
+- **Auto-check formatting** on `.py` file saves — trigger `make check`
+
+Hooks trigger the Kiro agent to run the specified command whenever matching files
+are saved, giving you immediate feedback without switching to a terminal.
+
+## Test File Structure
+
+```
+tests/
+├── conftest.py                                # Hypothesis strategies and profiles
+├── unit/
+│   ├── test_parser.py                         # NDJSON parsing
+│   ├── test_parser_properties.py              # Parser property tests
+│   ├── test_tree.py                           # Span tree building
+│   ├── test_tree_properties.py                # Tree property tests
+│   ├── test_tree_indent.py                    # Tree indentation
+│   ├── test_tree_performance.py               # Tree performance
+│   ├── test_rf_model.py                       # RF attribute interpretation
+│   ├── test_rf_model_properties.py            # RF model property tests
+│   ├── test_generator.py                      # HTML generator
+│   ├── test_generator_properties.py           # Generator property tests
+│   ├── test_statistics_properties.py          # Statistics computation
+│   ├── test_keyword_statistics_properties.py  # Keyword stats
+│   ├── test_filter_properties.py              # Filter logic
+│   ├── test_deep_link_properties.py           # Deep link round-tripping
+│   ├── test_cli.py                            # CLI argument parsing
+│   ├── test_config.py                         # Configuration
+│   ├── test_robot_semantics.py                # Robot semantics
+│   ├── test_json_provider.py                  # JSON provider
+│   ├── test_signoz_provider.py                # SigNoz provider
+│   ├── test_trace_provider.py                 # Trace provider interface
+│   ├── test_server_forward.py                 # Server forwarding
+│   ├── test_server_journal.py                 # Server journal
+│   ├── test_server_receiver.py                # Server receiver
+│   ├── test_server_signoz.py                  # Server SigNoz
+│   └── test_static_mode_header.py             # Static mode header
+├── browser/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── suites/                                # .robot test suites
+│   └── results/                               # Test output (gitignored)
+├── fixtures/                                  # Test trace files
+└── integration/
+    └── signoz/                                # SigNoz end-to-end tests
+        ├── docker-compose.yml
+        ├── run_integration.sh
+        └── ...
+```
+
+## Adding Tests
+
+### Unit test
+
+Create or edit a file in `tests/unit/`. Follow standard pytest conventions:
+
+```python
+def test_my_feature():
+    result = my_function(input_data)
+    assert result == expected
+```
+
+Run it:
+
+```bash
+make dev-test-file FILE=tests/unit/test_myfile.py
+```
+
+### Property test
+
+Property tests go in `tests/unit/test_*_properties.py` files. Use strategies
+from `tests/conftest.py` and rely on the Hypothesis profile system:
+
+```python
+from hypothesis import given
+from tests.conftest import otlp_span
+
+@given(span=otlp_span())
+def test_span_invariant(span):
+    result = process(span)
+    assert result.duration >= 0
+```
+
+Do not add `@settings(max_examples=...)` — the profile handles iteration counts.
+
+### Browser test
+
+Create a `.robot` file in `tests/browser/suites/` and run:
+
+```bash
+make test-browser
+```
+
+Results appear in `tests/browser/results/report.html`.
+
+## Debugging Failures
+
+**Read the output** — Makefile targets run with `-v` so test names and assertion
+details are visible.
+
+**Run a single file** to isolate the failure:
+
+```bash
+make dev-test-file FILE=tests/unit/test_tree.py
+```
+
+**Browser test failures** — open `tests/browser/results/log.html` for detailed
+execution logs, console output, and failure screenshots.
+
+**Memory issues** — if tests are killed without error messages, the container
+may be hitting its memory limit. Try running the specific file with
+`make dev-test-file` (3 GB limit) or check `docker stats`.
+
+## Cleanup
+
+```bash
+make clean
+```
+
+Removes `htmlcov/`, `.coverage`, `.pytest_cache/`, `test-reports/`, browser
+results, and `__pycache__` directories.

@@ -117,8 +117,8 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - **Property 6: README links to all docs** — for any doc file in {docs/architecture.md, docs/user-guide.md, docs/signoz-integration.md, docs/testing.md, docs/docker-testing.md, CONTRIBUTING.md, CHANGELOG.md}, the README contains a relative link to it
     - **Validates: Requirements 2.5, 2.7, 11.1**
 
-- [ ] 8. Rewrite CONTRIBUTING.md and testing docs
-  - [ ] 8.1 Rewrite `CONTRIBUTING.md` with current workflow
+- [x] 8. Rewrite CONTRIBUTING.md and testing docs
+  - [x] 8.1 Rewrite `CONTRIBUTING.md` with current workflow
     - Document prerequisites: Docker and (optionally) Kiro
     - Include "Quick Start" with essential commands: `make help`, `make docker-build-test`, `make test-unit`, `make format`, `make check`
     - Document development workflow: make changes → run tests → check quality → commit
@@ -130,7 +130,7 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - Remove stale references to raw `python3 -m pytest` commands or outdated workflows
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9_
 
-  - [ ] 8.2 Rewrite `docs/testing.md` with current test infrastructure
+  - [x] 8.2 Rewrite `docs/testing.md` with current test infrastructure
     - Document all test types with correct Makefile targets
     - Document pre-built `rf-trace-test:latest` image and `make docker-build-test`
     - Document memory limits for different test targets
@@ -138,7 +138,7 @@ Incremental restructuring and rewriting of the project's documentation set. All 
     - Document agent hooks for auto-running tests on file save
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.7_
 
-  - [ ] 8.3 Update `docs/docker-testing.md` to reference pre-built image
+  - [x] 8.3 Update `docs/docker-testing.md` to reference pre-built image
     - Replace any `python:3.11-slim` + `pip install` examples with pre-built `rf-trace-test:latest` approach
     - Ensure Makefile-first approach is documented
     - _Requirements: 7.5, 7.6_
