@@ -67,3 +67,22 @@ JS viewer files live in `src/rf_trace_viewer/viewer/`. These are vanilla JS IIFE
 
 - No new JS files without updating the asset embedding pipeline in `generator.py` and `server.py`
 - All Docker, no host Python — see the docker-testing-strategy steering doc for details
+
+## Auto-Commit After Spec Tasks
+
+When executing spec tasks (from a `tasks.md` plan), Kiro must automatically commit after each completed task. Do not ask the user to commit — do it yourself.
+
+After marking a task as completed:
+
+1. Stage all files changed by the task: `git add <changed files>`
+2. Commit with a conventional commit message summarizing the task, e.g.:
+   ```
+   feat(header): add CSS for status cluster and diagnostics panel
+
+   - Brief bullet points of what changed
+   - Task X.Y of <spec-name> spec
+   ```
+3. Use `feat` for new functionality, `fix` for bug fixes, `refactor` for restructuring, `test` for test-only changes
+4. Keep the commit scoped to the task — don't bundle unrelated changes
+
+This applies to both single task execution and "run all tasks" mode. Each task gets its own commit.

@@ -146,7 +146,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Verify `app-ready` event still emits after header construction
     - _Requirements: 12.1, 12.4_
 
-  - [ ] 9.2 Verify service filter and provider compatibility
+  - [x] 9.2 Verify service filter and provider compatibility
     - Ensure `_createServiceFilter()` still attaches to the header for SigNoz provider
     - Ensure both `json` and `signoz` provider types work with the new status model
     - Verify `window.toggleTheme` and `window.getTheme` still function correctly
@@ -156,7 +156,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - **Property 4: Static mode exclusion** — for any combination of `window.__RF_TRACE_LIVE__` being falsy and any report data, the header DOM never contains elements with classes `status-cluster`, `pause-resume-btn`, or `diagnostics-panel`
     - **Validates: Requirements 12.4**
 
-- [ ] 10. Final checkpoint - Ensure all tests pass
+- [x] 10. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass via `make test-unit` and `make test-properties`, ask the user if questions arise.
 
 ## Notes
