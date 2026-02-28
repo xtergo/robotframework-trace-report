@@ -46,19 +46,19 @@ Incremental implementation of the redesigned header with unified Status Cluster,
   - Ensure all tests pass via `make test-properties`, ask the user if questions arise.
 
 - [ ] 3. Refactor header DOM in app.js
-  - [ ] 3.1 Remove "(Live)" suffix from title and add Logo Slot
+  - [x] 3.1 Remove "(Live)" suffix from title and add Logo Slot
     - In `_initApp()`, set `title.textContent = data.title || 'RF Trace Report'` (already correct, just verify no "(Live)" is appended elsewhere)
     - Before the title element, conditionally render an `<img class="header-logo">` if `window.__RF_LOGO_URL__` is set, with `alt` from `window.__RF_LOGO_ALT__ || ''`
     - _Requirements: 1.1, 1.2, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 3.2 Build Status Cluster element (live mode only)
+  - [x] 3.2 Build Status Cluster element (live mode only)
     - Create `<div class="status-cluster">` with `role="button"`, `tabindex="0"`, `aria-expanded="false"`, `aria-label="Connection status. Click for diagnostics."`
     - Inside: status dot `<span class="status-dot">`, status label `<span class="status-label">`, reason chip `<span class="reason-chip">` (hidden when empty), timestamp `<span class="status-timestamp">`, telemetry indicator `<span class="telemetry-indicator">`, retry countdown `<span class="retry-countdown">`
     - Only render when `window.__RF_TRACE_LIVE__` is truthy
     - Listen to `status-changed` event to update dot color, label text, reason chip visibility/text, timestamp
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9_
 
-  - [ ] 3.3 Build Pause/Resume button (live mode only)
+  - [x] 3.3 Build Pause/Resume button (live mode only)
     - Create `<button class="pause-resume-btn">` with pause icon and "Pause" label
     - On click: call `_setPaused()` on the Live_Module (via `eventBus.emit('toggle-pause')` or direct call)
     - Listen to `status-changed` to toggle between pause icon/"Pause" and play icon/"Resume"

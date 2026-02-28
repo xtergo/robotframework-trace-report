@@ -510,6 +510,126 @@
     title.textContent = data.title || 'RF Trace Report';
     header.appendChild(title);
 
+    // Status Cluster — live mode only
+    if (window.__RF_TRACE_LIVE__) {
+      var statusCluster = document.createElement('div');
+      statusCluster.className = 'status-cluster';
+      statusCluster.setAttribute('role', 'button');
+      statusCluster.setAttribute('tabindex', '0');
+      statusCluster.setAttribute('aria-expanded', 'false');
+      statusCluster.setAttribute('aria-label', 'Connection status. Click for diagnostics.');
+
+      var statusDot = document.createElement('span');
+      statusDot.className = 'status-dot';
+      statusCluster.appendChild(statusDot);
+
+      var statusLabel = document.createElement('span');
+      statusLabel.className = 'status-label';
+      statusLabel.textContent = 'Live';
+      statusCluster.appendChild(statusLabel);
+
+      var reasonChip = document.createElement('span');
+      reasonChip.className = 'reason-chip';
+      reasonChip.style.display = 'none';
+      statusCluster.appendChild(reasonChip);
+
+      var statusTimestamp = document.createElement('span');
+      statusTimestamp.className = 'status-timestamp';
+      statusCluster.appendChild(statusTimestamp);
+
+      var telemetryIndicator = document.createElement('span');
+      telemetryIndicator.className = 'telemetry-indicator';
+      statusCluster.appendChild(telemetryIndicator);
+
+      var retryCountdown = document.createElement('span');
+      retryCountdown.className = 'retry-countdown';
+      statusCluster.appendChild(retryCountdown);
+
+      header.appendChild(statusCluster);
+
+      // Color map for status dot
+      var _statusColorMap = {
+        'Live': 'var(--status-live)',
+        'Paused': 'var(--status-paused)',
+        'Delayed': 'var(--status-delayed)',
+        'Disconnected': 'var(--status-disconnected)',
+        'Unauthorized': 'var(--status-unauthorized)'
+      };
+
+      // Listen to status-changed events to update the cluster
+      eventBus.on('status-changed', function (evt) {
+        if (!evt) return;
+
+        // Update dot color
+        statusDot.style.backgroundColor = _statusColorMap[evt.primaryStatus] || 'var(--status-disconnected)';
+
+        // Update label text
+        statusLabel.textContent = evt.primaryStatus;
+
+        // Update reason chip visibility and text
+        if (evt.reasonChip) {
+          reasonChip.textContent = evt.reasonChip;
+          reasonChip.style.display = '';
+        } else {
+          reasonChip.textContent = '';
+          reasonChip.style.display = 'none';
+        }
+      });
+
+      // Update timestamp every second using connection state
+      setInterval(function () {
+        var state = window.RFTraceViewer.getConnectionState
+          ? window.RFTraceViewer.getConnectionState()
+          : null;
+        if (!state || !state.lastSuccessTs) {
+          statusTimestamp.textContent = '';
+          return;
+        }
+        var elapsed = Date.now() - state.lastSuccessTs;
+        var secs = Math.round(elapsed / 1000);
+        if (secs < 60) {
+          statusTimestamp.textContent = secs + 's ago';
+        } else if (secs < 3600) {
+          statusTimestamp.textContent = Math.floor(secs / 60) + 'min ago';
+        } else {
+          statusTimestamp.textContent = Math.floor(secs / 3600) + 'h ago';
+        }
+      }, 1000);
+    }
+
+    // Pause/Resume button — live mode only
+    if (window.__RF_TRACE_LIVE__) {
+      var pauseBtn = document.createElement('button');
+      pauseBtn.className = 'pause-resume-btn';
+      pauseBtn.setAttribute('aria-label', 'Pause live polling');
+      pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9646;&#9646;</span> Pause';
+
+      pauseBtn.addEventListener('click', function () {
+        if (typeof window.RFTraceViewer !== 'undefined' &&
+            typeof window.RFTraceViewer.setPaused === 'function') {
+          var state = window.RFTraceViewer.getConnectionState
+            ? window.RFTraceViewer.getConnectionState()
+            : null;
+          var isPaused = state && state.primaryStatus === 'Paused';
+          window.RFTraceViewer.setPaused(!isPaused);
+        }
+      });
+
+      // Update button icon/label when status changes
+      eventBus.on('status-changed', function (evt) {
+        if (!evt) return;
+        if (evt.primaryStatus === 'Paused') {
+          pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9654;</span> Resume';
+          pauseBtn.setAttribute('aria-label', 'Resume live polling');
+        } else {
+          pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9646;&#9646;</span> Pause';
+          pauseBtn.setAttribute('aria-label', 'Pause live polling');
+        }
+      });
+
+      header.appendChild(pauseBtn);
+    }
+
     var toggleBtn = document.createElement('button');
     toggleBtn.className = 'theme-toggle';
     toggleBtn.textContent = theme === 'dark' ? '\u2600 Light' : '\u263e Dark';
