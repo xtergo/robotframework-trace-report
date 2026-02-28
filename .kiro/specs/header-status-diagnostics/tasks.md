@@ -73,7 +73,7 @@ Incremental implementation of the redesigned header with unified Status Cluster,
     - Render in both live and static modes
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-  - [ ] 3.5 Enforce header layout order with flex spacer
+  - [x] 3.5 Enforce header layout order with flex spacer
     - Arrange elements: Logo Slot → Title → Status Cluster → flex spacer `<div class="header-spacer">` → Pause/Resume → Dark Mode Icon
     - In static (non-live) mode: Logo Slot → Title → flex spacer → Dark Mode Icon (no Status Cluster, no Pause/Resume)
     - _Requirements: 11.1, 12.4_

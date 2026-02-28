@@ -597,6 +597,11 @@
       }, 1000);
     }
 
+    // Flex spacer pushes controls to the right
+    var headerSpacer = document.createElement('div');
+    headerSpacer.className = 'header-spacer';
+    header.appendChild(headerSpacer);
+
     // Pause/Resume button — live mode only
     if (window.__RF_TRACE_LIVE__) {
       var pauseBtn = document.createElement('button');
