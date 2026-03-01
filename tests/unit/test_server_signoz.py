@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 from http.server import HTTPServer
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 from rf_trace_viewer.providers.base import (
     ProviderError,
@@ -13,6 +13,7 @@ from rf_trace_viewer.providers.base import (
     TraceSpan,
     TraceViewModel,
 )
+from rf_trace_viewer.providers.signoz_provider import SigNozProvider
 from rf_trace_viewer.server import _LiveRequestHandler
 
 # ---------------------------------------------------------------------------
@@ -436,3 +437,177 @@ class TestViewerHtmlLookbackAndMaxSpans:
 
         html = handler.wfile.data.decode("utf-8")
         assert "__RF_TRACE_MAX_SPANS__" not in html
+
+
+# ---------------------------------------------------------------------------
+# Helpers — /api/metrics
+# ---------------------------------------------------------------------------
+
+
+def _get_api_metrics(server, window=30):
+    """Simulate a GET /api/metrics?window=N request and return the handler."""
+    handler = _LiveRequestHandler.__new__(_LiveRequestHandler)
+    handler.server = server
+    handler.path = f"/api/metrics?window={window}"
+    handler.wfile = _FakeWfile()
+    handler.send_response = MagicMock()
+    handler.send_header = MagicMock()
+    handler.end_headers = MagicMock()
+    handler._metrics_response_bytes = 0
+    handler._serve_metrics(request_id="test-req", query={"window": [str(window)]})
+    return handler
+
+
+# ---------------------------------------------------------------------------
+# 10. /api/metrics returns expanded snapshot with rf fields
+# ---------------------------------------------------------------------------
+
+
+def _make_full_rf_snapshot():
+    """Return a snapshot dict with all fields including rf and rf_series."""
+    return {
+        "timestamp": 1700000000,
+        "window_minutes": 30,
+        "http": {
+            "request_count": 138000,
+            "p95_latency_ms": 12.5,
+            "p99_latency_ms": 45.2,
+            "error_rate_pct": 0.3,
+            "inflight": None,
+        },
+        "deps": {
+            "request_count": None,
+            "p95_latency_ms": None,
+            "timeout_count": None,
+        },
+        "series": {
+            "p95_latency_ms": [{"t": 1700000000, "v": 12.5}],
+            "error_rate_pct": [],
+            "dep_p95_latency_ms": [],
+        },
+        "rf": {
+            "summary": {
+                "tests_total": 42,
+                "tests_passed": 40,
+                "tests_failed": 2,
+                "pass_rate_pct": 95.2,
+                "p50_duration_ms": 150.0,
+                "p95_duration_ms": 890.0,
+                "keywords_executed": 312,
+            },
+            "suites": {
+                "LoginSuite": {
+                    "tests_total": 20,
+                    "tests_passed": 19,
+                    "tests_failed": 1,
+                    "pass_rate_pct": 95.0,
+                    "p50_duration_ms": 120.0,
+                    "p95_duration_ms": 750.0,
+                    "keywords_executed": 156,
+                },
+            },
+        },
+        "rf_series": {
+            "p50_duration_ms": [{"t": 1700000000, "v": 150.0}],
+            "p95_duration_ms": [{"t": 1700000000, "v": 890.0}],
+        },
+    }
+
+
+def _make_null_rf_snapshot():
+    """Return a snapshot dict where rf is null and rf_series is empty."""
+    return {
+        "timestamp": 1700000000,
+        "window_minutes": 30,
+        "http": {
+            "request_count": 100,
+            "p95_latency_ms": 10.0,
+            "p99_latency_ms": 40.0,
+            "error_rate_pct": 0.0,
+            "inflight": None,
+        },
+        "deps": {
+            "request_count": None,
+            "p95_latency_ms": None,
+            "timeout_count": None,
+        },
+        "series": {
+            "p95_latency_ms": [],
+            "error_rate_pct": [],
+            "dep_p95_latency_ms": [],
+        },
+        "rf": None,
+        "rf_series": {},
+    }
+
+
+class TestApiMetricsRfFields:
+    """GET /api/metrics returns expanded snapshot with rf and rf_series fields.
+
+    Requirements: 5.3, 7.1, 7.2, 7.3, 7.4
+    """
+
+    @patch("rf_trace_viewer.server.SigNozMetricsQuery")
+    def test_metrics_returns_all_fields_with_rf_data(self, mock_query_cls):
+        """Snapshot with RF data includes all expected top-level keys."""
+        snapshot = _make_full_rf_snapshot()
+        mock_query_cls.return_value.fetch_metrics.return_value = snapshot
+
+        provider = create_autospec(SigNozProvider, instance=True)
+        server = _create_server_with_provider(provider=provider)
+
+        handler = _get_api_metrics(server)
+
+        handler.send_response.assert_called_with(200)
+        body = json.loads(handler.wfile.data.decode("utf-8"))
+
+        # Verify all top-level keys present (Req 7.1, 7.2, 7.4)
+        for key in ("timestamp", "window_minutes", "http", "deps", "series", "rf", "rf_series"):
+            assert key in body, f"Missing top-level key: {key}"
+
+        # Verify rf section structure (Req 7.2)
+        assert body["rf"] is not None
+        assert "summary" in body["rf"]
+        assert "suites" in body["rf"]
+
+        # Verify rf.summary has all 7 fields
+        summary = body["rf"]["summary"]
+        for field in (
+            "tests_total",
+            "tests_passed",
+            "tests_failed",
+            "pass_rate_pct",
+            "p50_duration_ms",
+            "p95_duration_ms",
+            "keywords_executed",
+        ):
+            assert field in summary, f"Missing summary field: {field}"
+
+        # Verify rf_series has duration keys (Req 7.4)
+        assert "p50_duration_ms" in body["rf_series"]
+        assert "p95_duration_ms" in body["rf_series"]
+
+    @patch("rf_trace_viewer.server.SigNozMetricsQuery")
+    def test_metrics_returns_null_rf_when_no_data(self, mock_query_cls):
+        """When no RF data, rf is null and rf_series is empty dict (Req 7.3)."""
+        snapshot = _make_null_rf_snapshot()
+        mock_query_cls.return_value.fetch_metrics.return_value = snapshot
+
+        provider = create_autospec(SigNozProvider, instance=True)
+        server = _create_server_with_provider(provider=provider)
+
+        handler = _get_api_metrics(server)
+
+        handler.send_response.assert_called_with(200)
+        body = json.loads(handler.wfile.data.decode("utf-8"))
+
+        # All top-level keys still present (Req 7.1)
+        for key in ("timestamp", "window_minutes", "http", "deps", "series", "rf", "rf_series"):
+            assert key in body, f"Missing top-level key: {key}"
+
+        # rf is null, rf_series is empty (Req 7.3)
+        assert body["rf"] is None
+        assert body["rf_series"] == {}
+
+        # Pipeline metrics still present (Req 7.1)
+        assert body["http"]["request_count"] == 100
