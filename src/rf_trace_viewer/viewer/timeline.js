@@ -2301,9 +2301,11 @@
    * Updates the timeline to show only filtered spans.
    */
   function _handleFilterChanged(event) {
-    console.log('[Timeline] Filter changed:', event);
-    
     var filteredSpans = event.filteredSpans || [];
+    var totalFlat = timelineState.flatSpans ? timelineState.flatSpans.length : 0;
+    console.log('[Timeline] Filter changed: filteredSpans=' + filteredSpans.length +
+      ', timelineFlatSpans=' + totalFlat +
+      ', timeRange=' + (event.filterState ? event.filterState.timeRangeStart + '/' + event.filterState.timeRangeEnd : 'n/a'));
     
     // Reset layout mode to baseline on any filter change (Req 6.1, 6.2)
     timelineState.layoutMode = 'baseline';

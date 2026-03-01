@@ -73,7 +73,19 @@
     resultCounts.visible = allSpans.length;
 
     console.log('[search] initSearch: suites=' + (data.suites ? data.suites.length : 0) +
-      ', extractedSpans=' + allSpans.length);
+      ', extractedSpans=' + allSpans.length +
+      ', timeRange=' + filterState.timeRangeStart + '/' + filterState.timeRangeEnd);
+
+    // In live mode, clear stale time range filter on re-init.
+    // The time range filter was designed for user-selected ranges, not for
+    // persisting across data updates. Stale values cause 0-visible-span bugs.
+    if (window.__RF_TRACE_LIVE__) {
+      if (filterState.timeRangeStart !== null || filterState.timeRangeEnd !== null) {
+        console.log('[search] initSearch: clearing stale timeRange filter');
+      }
+      filterState.timeRangeStart = null;
+      filterState.timeRangeEnd = null;
+    }
 
     // Extract available filter options
     _extractFilterOptions(allSpans);
@@ -89,6 +101,8 @@
     if (!_timeRangeListenerRegistered && window.RFTraceViewer && window.RFTraceViewer.on) {
       _timeRangeListenerRegistered = true;
       window.RFTraceViewer.on('time-range-selected', function (data) {
+        console.warn('[search] time-range-selected received! start=' + data.start + ', end=' + data.end);
+        console.trace('[search] time-range-selected caller');
         filterState.timeRangeStart = data.start;
         filterState.timeRangeEnd = data.end;
         _applyFilters();
@@ -799,12 +813,15 @@
    */
   function _applyFilters() {
     var filteredSpans = [];
+    // Diagnostic counters: track how many spans each filter rejects
+    var _rej = { text: 0, testStatus: 0, kwStatus: 0, kwScope: 0, tag: 0, suite: 0, kwType: 0, durMin: 0, durMax: 0, timeRange: 0 };
 
     for (var i = 0; i < allSpans.length; i++) {
       var span = allSpans[i];
 
       // Text search filter
       if (filterState.text && !_matchesTextSearch(span, filterState.text)) {
+        _rej.text++;
         continue;
       }
 
@@ -814,12 +831,14 @@
       if (span.type === 'suite' || span.type === 'test') {
         if (filterState.testStatuses.length > 0 &&
             filterState.testStatuses.indexOf(span.status) === -1) {
+          _rej.testStatus++;
           continue;
         }
       } else if (span.type === 'keyword') {
         // Keyword must pass kwStatuses
         if (filterState.kwStatuses.length > 0 &&
             filterState.kwStatuses.indexOf(span.status) === -1) {
+          _rej.kwStatus++;
           continue;
         }
         // Parent test must pass testStatuses (only when scoped to test context)
@@ -827,6 +846,7 @@
           var testAncestor = _findTestAncestor(span.id);
           if (testAncestor &&
               filterState.testStatuses.indexOf(testAncestor.status) === -1) {
+            _rej.kwScope++;
             continue;
           }
         }
@@ -842,27 +862,32 @@
           }
         }
         if (!hasMatchingTag) {
+          _rej.tag++;
           continue;
         }
       }
 
       // Suite filter (if suites specified, span must be in one of them)
       if (filterState.suites.length > 0 && filterState.suites.indexOf(span.suite) === -1) {
+        _rej.suite++;
         continue;
       }
 
       // Keyword type filter (only applies to keywords)
       if (filterState.keywordTypes.length > 0 && span.type === 'keyword') {
         if (filterState.keywordTypes.indexOf(span.kwType) === -1) {
+          _rej.kwType++;
           continue;
         }
       }
 
       // Duration range filter
       if (filterState.durationMin !== null && span.elapsed < filterState.durationMin) {
+        _rej.durMin++;
         continue;
       }
       if (filterState.durationMax !== null && span.elapsed > filterState.durationMax) {
+        _rej.durMax++;
         continue;
       }
 
@@ -872,6 +897,7 @@
         var end = Math.max(filterState.timeRangeStart, filterState.timeRangeEnd);
         // Check if span overlaps with time range
         if (span.endTime < start || span.startTime > end) {
+          _rej.timeRange++;
           continue;
         }
       }
@@ -882,7 +908,24 @@
 
     // Update result counts
     resultCounts.visible = filteredSpans.length;
-    console.log('[search] _applyFilters: ' + filteredSpans.length + ' of ' + allSpans.length + ' visible');
+    console.log('[search] _applyFilters: ' + filteredSpans.length + ' of ' + allSpans.length + ' visible, rejected:', JSON.stringify(_rej));
+    // When all spans are rejected, log full filter state and stack trace for debugging
+    if (filteredSpans.length === 0 && allSpans.length > 0) {
+      console.warn('[search] ALL SPANS REJECTED! filterState:', JSON.stringify({
+        text: filterState.text,
+        testStatuses: filterState.testStatuses,
+        kwStatuses: filterState.kwStatuses,
+        tags: filterState.tags,
+        suites: filterState.suites,
+        keywordTypes: filterState.keywordTypes,
+        durationMin: filterState.durationMin,
+        durationMax: filterState.durationMax,
+        timeRangeStart: filterState.timeRangeStart,
+        timeRangeEnd: filterState.timeRangeEnd,
+        scopeToTestContext: filterState.scopeToTestContext
+      }));
+      console.trace('[search] _applyFilters caller stack');
+    }
     _updateResultCountDisplay();
     _updateTimeRangeDisplay();
     _updateFilterSummaryBar();
@@ -1394,6 +1437,7 @@
    * Public API: Set filter state programmatically.
    */
   window.setFilterState = function (newState) {
+    console.log('[search] setFilterState called with:', JSON.stringify(newState));
     if (newState.text !== undefined) filterState.text = newState.text;
     if (newState.testStatuses !== undefined) filterState.testStatuses = newState.testStatuses;
     if (newState.kwStatuses !== undefined) filterState.kwStatuses = newState.kwStatuses;

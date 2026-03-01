@@ -232,6 +232,7 @@
     if (!hash || hash === '#') return;
 
     var state = _decodeHash(hash);
+    console.log('[deep-link] _restoreFromHash: hash=' + hash + ', filterState=', JSON.stringify(state.filterState));
     _suppressHashUpdate = true;
 
     try {
