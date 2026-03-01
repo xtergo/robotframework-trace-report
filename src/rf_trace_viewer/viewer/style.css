@@ -2354,3 +2354,153 @@ html[data-theme="dark"], html[data-theme="dark"] body {
     margin-left: auto;
   }
 }
+
+/* ── Service Health Tab ──────────────────────────────────────────── */
+
+/* Theme custom properties for Service Health */
+.rf-trace-viewer {
+  --sh-card-bg: var(--bg-secondary);
+  --sh-card-border: var(--border-color);
+  --sh-value-color: var(--text-primary);
+  --sh-label-color: var(--text-secondary);
+  --sh-sparkline-stroke: #2563eb;
+  --sh-warning-bg: #fff8e1;
+  --sh-warning-color: #f57f17;
+  --sh-warning-border: #ffe082;
+  --sh-critical-bg: #ffebee;
+  --sh-critical-color: #c62828;
+  --sh-critical-border: #ef9a9a;
+  --sh-banner-bg: #fff3e0;
+  --sh-banner-color: #e65100;
+  --sh-banner-border: #ffcc80;
+}
+
+.rf-trace-viewer.theme-dark {
+  --sh-card-bg: var(--bg-secondary);
+  --sh-card-border: var(--border-color);
+  --sh-value-color: var(--text-primary);
+  --sh-label-color: var(--text-secondary);
+  --sh-sparkline-stroke: #60a5fa;
+  --sh-warning-bg: #3a351b;
+  --sh-warning-color: #ffca28;
+  --sh-warning-border: #5c5320;
+  --sh-critical-bg: #3a1b1b;
+  --sh-critical-color: #ef5350;
+  --sh-critical-border: #5c2020;
+  --sh-banner-bg: #331a00;
+  --sh-banner-color: #ffb74d;
+  --sh-banner-border: #5c3a10;
+}
+
+/* Warning banner */
+.rf-trace-viewer .sh-warning {
+  padding: 8px 12px;
+  margin: 12px 16px 0;
+  background: var(--sh-banner-bg);
+  color: var(--sh-banner-color);
+  border: 1px solid var(--sh-banner-border);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* Cards container */
+.rf-trace-viewer .sh-cards {
+  padding: 16px;
+}
+
+/* Section */
+.rf-trace-viewer .sh-section {
+  margin-bottom: 20px;
+}
+
+.rf-trace-viewer .sh-section:last-child {
+  margin-bottom: 0;
+}
+
+.rf-trace-viewer .sh-section-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+/* Card grid */
+.rf-trace-viewer .sh-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+/* Individual card */
+.rf-trace-viewer .sh-card {
+  background: var(--sh-card-bg);
+  border: 1px solid var(--sh-card-border);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.rf-trace-viewer .sh-card-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sh-label-color);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.rf-trace-viewer .sh-card-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--sh-value-color);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* Sparkline container */
+.rf-trace-viewer .sh-card-sparkline {
+  margin-top: 4px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+/* Sparkline SVG */
+.rf-trace-viewer .sh-sparkline-svg {
+  display: block;
+}
+
+.rf-trace-viewer .sh-sparkline-line {
+  stroke: var(--sh-sparkline-stroke);
+}
+
+/* Sparkline "No data" placeholder */
+.rf-trace-viewer .sh-sparkline-nodata {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Warning threshold (error rate > 5%) */
+.rf-trace-viewer .sh-card.sh-card-warning {
+  border-color: var(--sh-warning-border);
+  background: var(--sh-warning-bg);
+}
+
+.rf-trace-viewer .sh-card.sh-card-warning .sh-card-value {
+  color: var(--sh-warning-color);
+}
+
+/* Critical threshold (error rate > 25%) */
+.rf-trace-viewer .sh-card.sh-card-critical {
+  border-color: var(--sh-critical-border);
+  background: var(--sh-critical-bg);
+}
+
+.rf-trace-viewer .sh-card.sh-card-critical .sh-card-value {
+  color: var(--sh-critical-color);
+}

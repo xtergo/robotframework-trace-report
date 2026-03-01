@@ -119,8 +119,8 @@ Add a "Service Health" tab to the rf-trace-viewer that queries OpenTelemetry met
     - When fewer than 2 data points, display "No data" text placeholder instead of SVG
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 6. Implement theme support and CSS styles
-  - [ ] 6.1 Add Service Health tab styles to `src/rf_trace_viewer/viewer/style.css`
+- [x] 6. Implement theme support and CSS styles
+  - [x] 6.1 Add Service Health tab styles to `src/rf_trace_viewer/viewer/style.css`
     - Add metric card layout styles (grid/flexbox for card arrangement)
     - Add sparkline SVG styles
     - Add warning (amber) and critical (red) threshold styles for error rate card
