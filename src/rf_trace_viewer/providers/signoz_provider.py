@@ -173,8 +173,15 @@ class SigNozProvider(TraceProvider):
 
         If service_name is provided, only spans from that service.name are returned.
         """
-        overlap_ns = int(self._config.overlap_window_seconds * 1_000_000_000)
-        query_start_ns = max(0, since_ns - overlap_ns)
+        # On incremental polls (since_ns > 0) skip the overlap window so the
+        # query starts right at the watermark.  With "ORDER BY timestamp ASC"
+        # and a LIMIT, subtracting overlap caused old already-seen spans to
+        # fill the result before any new spans were reached.
+        if since_ns > 0:
+            query_start_ns = since_ns
+        else:
+            overlap_ns = int(self._config.overlap_window_seconds * 1_000_000_000)
+            query_start_ns = max(0, since_ns - overlap_ns)
 
         # Build filters — service.name filter if provided by end user
         # None = use config default, empty string = no filter (all services)
