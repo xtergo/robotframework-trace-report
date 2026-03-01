@@ -283,27 +283,11 @@
     autoCompactToggle.appendChild(autoCompactCb);
     autoCompactToggle.appendChild(document.createTextNode('Auto-compact'));
 
-    // Fit All button — zooms to visible span bounds
-    var fitAllBtn = document.createElement('button');
-    fitAllBtn.className = 'timeline-zoom-btn timeline-fitall-btn';
-    fitAllBtn.textContent = 'Fit All';
-    fitAllBtn.setAttribute('aria-label', 'Fit All');
-    fitAllBtn.addEventListener('click', function () {
-      _fitAll();
-    });
-    fitAllBtn.addEventListener('keydown', function (e) {
-      if (e.keyCode === 13 || e.keyCode === 32) {
-        e.preventDefault();
-        _fitAll();
-      }
-    });
-
     // ── Assemble zoom bar with grouped sections ──
     // Group 1: Navigation buttons
     var navGroup = document.createElement('div');
     navGroup.className = 'zoom-bar-group';
     navGroup.appendChild(zoomFullRange);
-    navGroup.appendChild(fitAllBtn);
     navGroup.appendChild(zoomLocateRecent);
     zoomBar.appendChild(navGroup);
 
@@ -388,7 +372,7 @@
     });
 
     zoomLocateRecent.addEventListener('click', function () {
-      _autoZoomToRecentCluster();
+      _locateRecent();
       syncSlider();
       _applyZoom();
     });
@@ -2522,8 +2506,14 @@
     var savedViewEnd = timelineState.viewEnd;
     var savedPanY = timelineState.panY;
     var savedSelected = timelineState.selectedSpan;
+    var savedMaxTime = timelineState.maxTime;
     var wasUserZoomed = savedZoom > 1.01 || savedZoom < 0.99;
     var hadSpansBefore = timelineState.flatSpans.length > 0;
+
+    // Detect if user's viewEnd was tracking the data edge (tail-follow mode).
+    // Allow 2-second tolerance for rounding.
+    var wasTailFollowing = hadSpansBefore &&
+      Math.abs(savedViewEnd - savedMaxTime) < 2;
 
     // Re-process spans with new data
     try {
@@ -2542,16 +2532,32 @@
       _resizeHeaderCanvas(timelineState.headerCanvas);
     }
 
-    // Restore zoom/pan if user had zoomed in, otherwise fit all data
-    if (wasUserZoomed) {
-      timelineState.zoom = savedZoom;
-      timelineState.viewStart = savedViewStart;
-      timelineState.viewEnd = savedViewEnd;
-    } else if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
+    if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
       // First data load: auto-zoom to the most recent cluster of spans
       // to make short spans visible (they'd be invisible at full range)
       _autoZoomToRecentCluster();
+    } else if (wasUserZoomed) {
+      // User had zoomed — restore their view window
+      timelineState.zoom = savedZoom;
+      timelineState.viewStart = savedViewStart;
+      timelineState.viewEnd = savedViewEnd;
+
+      // If they were tail-following (viewEnd == maxTime), extend to new maxTime
+      // so new spans slide into view automatically
+      if (wasTailFollowing && timelineState.maxTime > savedMaxTime) {
+        var extension = timelineState.maxTime - savedMaxTime;
+        timelineState.viewEnd += extension;
+        // Recompute zoom to match the new view range
+        var totalRange = timelineState.maxTime - timelineState.minTime;
+        var viewRange = timelineState.viewEnd - timelineState.viewStart;
+        if (totalRange > 0 && viewRange > 0) {
+          timelineState.zoom = totalRange / viewRange;
+        }
+      }
+    } else {
+      // Not zoomed — show full range (viewStart/viewEnd already set by _processSpans)
     }
+
     timelineState.panY = savedPanY;
     timelineState.selectedSpan = savedSelected;
 
@@ -2655,31 +2661,19 @@
   }
 
   /**
-   * Auto-zoom to the most recent cluster of spans.
-   * Finds the latest test run and zooms to show it with some padding.
-   * This makes short spans (e.g. 20ms) visible instead of being sub-pixel
-   * when the total time range spans many minutes across multiple runs.
+   * Locate Recent (button): zoom to the most recent cluster of spans.
+   * Uses all span types for cluster detection and enforces a minimum
+   * view width so short spans are always visible.
    */
-  function _autoZoomToRecentCluster() {
+  function _locateRecent() {
     var spans = timelineState.flatSpans;
     if (spans.length === 0) return;
 
-    var totalRange = timelineState.maxTime - timelineState.minTime;
-
-    // For short traces (< 5 minutes), show everything — no auto-zoom needed
-    if (totalRange < 300) return;
-
-    // Cluster detection: find the most recent group of spans that are
-    // temporally close together. Use a gap-based approach: if there's a
-    // gap > 30s between spans, that's a cluster boundary.
-    // Collect unique test/suite end times, sorted descending
+    // Collect end times from ALL span types
     var endTimes = [];
     for (var i = 0; i < spans.length; i++) {
-      if (spans[i].type === 'test' || spans[i].type === 'suite') {
-        endTimes.push(spans[i].endTime);
-      }
+      endTimes.push(spans[i].endTime);
     }
-    if (endTimes.length === 0) return;
     endTimes.sort(function (a, b) { return b - a; }); // descending
 
     // Walk backwards from the latest end time, expanding the cluster
@@ -2692,7 +2686,7 @@
       clusterStart = endTimes[j];
     }
 
-    // Now find the actual earliest start time of spans in this cluster
+    // Find the actual earliest start time of spans in this cluster
     var actualStart = clusterEnd;
     for (var k = 0; k < spans.length; k++) {
       if (spans[k].endTime >= clusterStart && spans[k].startTime < actualStart) {
@@ -2700,9 +2694,18 @@
       }
     }
 
-    // Add 15% padding on each side
     var clusterRange = clusterEnd - actualStart;
-    if (clusterRange <= 0) clusterRange = 60; // fallback: 1 minute
+
+    // Enforce minimum view width of 30 seconds so short spans are visible
+    var MIN_VIEW_SECONDS = 30;
+    if (clusterRange < MIN_VIEW_SECONDS) {
+      var center = (actualStart + clusterEnd) / 2;
+      actualStart = center - MIN_VIEW_SECONDS / 2;
+      clusterEnd = center + MIN_VIEW_SECONDS / 2;
+      clusterRange = MIN_VIEW_SECONDS;
+    }
+
+    // Add 15% padding on each side
     var padding = clusterRange * 0.15;
     var viewStart = actualStart - padding;
     var viewEnd = clusterEnd + padding;
@@ -2717,16 +2720,29 @@
       }
     }
 
-    // Only auto-zoom if it would actually zoom in meaningfully (> 1.5x)
+    var totalRange = timelineState.maxTime - timelineState.minTime;
     var viewRange = viewEnd - viewStart;
-    if (totalRange > 0 && viewRange < totalRange * 0.67) {
-      timelineState.viewStart = viewStart;
-      timelineState.viewEnd = viewEnd;
-      timelineState.zoom = totalRange / viewRange;
-      console.log('[Timeline] Auto-zoomed to recent cluster: ' +
-        Math.round(clusterRange) + 's cluster, ' +
-        Math.round(viewRange) + 's view (zoom ' + timelineState.zoom.toFixed(1) + 'x)');
-    }
+    timelineState.viewStart = viewStart;
+    timelineState.viewEnd = viewEnd;
+    timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
+    console.log('[Timeline] Locate Recent: ' +
+      Math.round(clusterRange) + 's cluster, ' +
+      Math.round(viewRange) + 's view (zoom ' + timelineState.zoom.toFixed(1) + 'x)');
+  }
+
+  /**
+   * Auto-zoom to the most recent cluster on first data load.
+   * For short traces (< 5 min) shows everything; otherwise delegates to _locateRecent.
+   */
+  function _autoZoomToRecentCluster() {
+    var spans = timelineState.flatSpans;
+    if (spans.length === 0) return;
+
+    var totalRange = timelineState.maxTime - timelineState.minTime;
+    // For short traces (< 5 minutes), show everything — no auto-zoom needed
+    if (totalRange < 300) return;
+
+    _locateRecent();
   }
 
 })();

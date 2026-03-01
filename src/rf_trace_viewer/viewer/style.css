@@ -249,8 +249,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 .rf-trace-viewer .timeline-zoom-btn.timeline-zoom-fullrange,
 .rf-trace-viewer .timeline-zoom-btn.timeline-zoom-locate-recent,
-.rf-trace-viewer .timeline-zoom-btn.timeline-compact-btn,
-.rf-trace-viewer .timeline-zoom-btn.timeline-fitall-btn {
+.rf-trace-viewer .timeline-zoom-btn.timeline-compact-btn {
   width: auto;
   height: 26px;
   padding: 0 10px;
