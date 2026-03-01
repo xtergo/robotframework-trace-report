@@ -79,14 +79,14 @@ Add an optional OpenTelemetry metrics subsystem to `robotframework-trace-report`
     - Test enabled=true creates instruments, enabled=false is no-op, SDK init failure logs error and server starts without metrics, bucket boundaries are correctly configured, no CPU/memory instruments created
     - _Requirements: 2.1, 2.2, 3.5, 7.7, 12.3_
 
-- [ ] 6. Checkpoint — Ensure all tests pass
+- [x] 6. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Implement recording functions
-  - [ ] 7.1 Implement `record_request_start(route: str) -> None` — normalize route, increment `http.server.inflight` UpDownCounter. Wrap in try/except, return silently on error. No-op when `_enabled` is False
+- [x] 7. Implement recording functions
+  - [x] 7.1 Implement `record_request_start(route: str) -> None` — normalize route, increment `http.server.inflight` UpDownCounter. Wrap in try/except, return silently on error. No-op when `_enabled` is False
     - _Requirements: 3.3_
 
-  - [ ] 7.2 Implement `record_request_end(route, method, status_code, duration_ms, response_bytes) -> None` — normalize route, compute status_class, apply attribute allowlist filter, record `http.server.requests` counter (+1), `http.server.duration` histogram, `http.response.size` histogram, decrement `http.server.inflight`. Ensure only allowed attribute keys (`route`, `method`, `status_class`) are attached. Wrap in try/except
+  - [x] 7.2 Implement `record_request_end(route, method, status_code, duration_ms, response_bytes) -> None` — normalize route, compute status_class, apply attribute allowlist filter, record `http.server.requests` counter (+1), `http.server.duration` histogram, `http.response.size` histogram, decrement `http.server.inflight`. Ensure only allowed attribute keys (`route`, `method`, `status_class`) are attached. Wrap in try/except
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 6.1, 6.2_
 
   - [ ]* 7.3 Write property test for HTTP request recording correctness
@@ -97,17 +97,17 @@ Add an optional OpenTelemetry metrics subsystem to `robotframework-trace-report`
     - **Property 4: Inflight request tracking invariant**
     - **Validates: Requirements 3.3**
 
-  - [ ] 7.5 Implement `record_dep_call(dep, operation, status_code, duration_ms, req_bytes, resp_bytes) -> None` — compute status_class, apply attribute allowlist filter, record `dep.requests` counter, `dep.duration` histogram, `dep.payload.in_bytes` histogram, `dep.payload.out_bytes` histogram. Ensure only allowed attribute keys (`dep`, `operation`, `status_class`). Wrap in try/except
+  - [x] 7.5 Implement `record_dep_call(dep, operation, status_code, duration_ms, req_bytes, resp_bytes) -> None` — compute status_class, apply attribute allowlist filter, record `dep.requests` counter, `dep.duration` histogram, `dep.payload.in_bytes` histogram, `dep.payload.out_bytes` histogram. Ensure only allowed attribute keys (`dep`, `operation`, `status_class`). Wrap in try/except
     - _Requirements: 4.1, 4.2, 4.4, 4.5, 4.6, 4.7, 6.1, 6.2_
 
-  - [ ] 7.6 Implement `record_dep_timeout(dep: str, operation: str) -> None` — increment `dep.timeouts` counter. Wrap in try/except
+  - [x] 7.6 Implement `record_dep_timeout(dep: str, operation: str) -> None` — increment `dep.timeouts` counter. Wrap in try/except
     - _Requirements: 4.3_
 
   - [ ]* 7.7 Write property test for dependency call recording correctness
     - **Property 5: Dependency call recording correctness**
     - **Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5**
 
-  - [ ] 7.8 Implement `record_items_returned(route: str, operation: str, count: int) -> None` — record `items.returned` histogram. Wrap in try/except
+  - [x] 7.8 Implement `record_items_returned(route: str, operation: str, count: int) -> None` — record `items.returned` histogram. Wrap in try/except
     - _Requirements: 5.1_
 
   - [ ]* 7.9 Write property test for items returned recording correctness

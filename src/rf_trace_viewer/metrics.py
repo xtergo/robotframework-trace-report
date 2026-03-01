@@ -43,6 +43,7 @@ class MetricsConfig:
 
 _enabled: bool = False
 _meter_provider: MeterProvider | None = None
+_config: MetricsConfig | None = None
 
 # -- Instruments (populated by init_metrics) ----------------------------------
 _http_requests: Counter | None = None
@@ -315,7 +316,7 @@ def init_metrics() -> None:
     On any failure the error is logged and ``_enabled`` stays ``False`` so
     that all recording functions remain zero-cost no-ops.
     """
-    global _enabled, _meter_provider
+    global _enabled, _meter_provider, _config
     global _http_requests, _http_duration, _http_inflight, _http_response_size
     global _dep_requests, _dep_duration, _dep_timeouts
     global _dep_payload_in, _dep_payload_out, _items_returned
@@ -324,6 +325,9 @@ def init_metrics() -> None:
         cfg = _load_config()
         if not cfg.enabled:
             return
+
+        # Store config so recording functions can access attr_allowlist
+        _config = cfg
 
         # -- lazy imports (only when metrics are enabled) ---------------------
         from rf_trace_viewer import __version__
@@ -495,8 +499,14 @@ def shutdown_metrics() -> None:
 
 
 def record_request_start(route: str) -> None:
-    """Increment inflight request gauge. No-op stub."""
-    pass
+    """Increment inflight request gauge. No-op when disabled."""
+    if not _enabled:
+        return
+    try:
+        normalized = normalize_route(route)
+        _http_inflight.add(1, {"route": normalized})
+    except Exception:
+        return
 
 
 def record_request_end(
@@ -506,8 +516,26 @@ def record_request_end(
     duration_ms: float,
     response_bytes: int,
 ) -> None:
-    """Record HTTP request metrics. No-op stub."""
-    pass
+    """Record HTTP request metrics. No-op when disabled."""
+    if not _enabled:
+        return
+    try:
+        normalized = normalize_route(route)
+        sc = status_class(status_code)
+        attrs = filter_attributes(
+            {"route": normalized, "method": method, "status_class": sc},
+            _config.attr_allowlist if _config else None,
+        )
+        _http_requests.add(1, attrs)
+        _http_duration.record(duration_ms, attrs)
+        route_attrs = filter_attributes(
+            {"route": normalized},
+            _config.attr_allowlist if _config else None,
+        )
+        _http_response_size.record(response_bytes, route_attrs)
+        _http_inflight.add(-1, {"route": normalized})
+    except Exception:
+        return
 
 
 def record_dep_call(
@@ -518,15 +546,51 @@ def record_dep_call(
     req_bytes: int,
     resp_bytes: int,
 ) -> None:
-    """Record dependency call metrics. No-op stub."""
-    pass
+    """Record dependency call metrics. No-op when disabled."""
+    if not _enabled:
+        return
+    try:
+        sc = status_class(status_code)
+        attrs = filter_attributes(
+            {"dep": dep, "operation": operation, "status_class": sc},
+            _config.attr_allowlist if _config else None,
+        )
+        _dep_requests.add(1, attrs)
+        _dep_duration.record(duration_ms, attrs)
+        dep_op_attrs = filter_attributes(
+            {"dep": dep, "operation": operation},
+            _config.attr_allowlist if _config else None,
+        )
+        _dep_payload_in.record(resp_bytes, dep_op_attrs)
+        _dep_payload_out.record(req_bytes, dep_op_attrs)
+    except Exception:
+        return
 
 
 def record_dep_timeout(dep: str, operation: str) -> None:
-    """Increment dependency timeout counter. No-op stub."""
-    pass
+    """Increment dependency timeout counter. No-op when disabled."""
+    if not _enabled:
+        return
+    try:
+        attrs = filter_attributes(
+            {"dep": dep, "operation": operation},
+            _config.attr_allowlist if _config else None,
+        )
+        _dep_timeouts.add(1, attrs)
+    except Exception:
+        return
 
 
 def record_items_returned(route: str, operation: str, count: int) -> None:
-    """Record items returned histogram. No-op stub."""
-    pass
+    """Record items returned histogram. No-op when disabled."""
+    if not _enabled:
+        return
+    try:
+        normalized = normalize_route(route)
+        attrs = filter_attributes(
+            {"route": normalized, "operation": operation},
+            _config.attr_allowlist if _config else None,
+        )
+        _items_returned.record(count, attrs)
+    except Exception:
+        return
