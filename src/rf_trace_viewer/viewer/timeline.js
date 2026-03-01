@@ -1319,6 +1319,9 @@
     ctx.fillStyle = _css('--bg-primary', '#ffffff');
     ctx.fillRect(0, 0, width, height);
 
+    // Grey overlay for unloaded time region (live mode only)
+    _renderGreyOverlay(ctx, width, height);
+
     // Render worker lanes
     _renderWorkerLanes(ctx, width, height);
 
@@ -1373,6 +1376,9 @@
       ctx.moveTo(0, height);
       ctx.lineTo(width, height);
       ctx.stroke();
+
+      // Grey overlay for unloaded time region on header (live mode only)
+      _renderGreyOverlay(ctx, width, height);
 
       // Adaptive tick interval — same logic as the grid
       var timeRange = timelineState.viewEnd - timelineState.viewStart;
@@ -1867,6 +1873,19 @@
     ctx.lineWidth = 2;
     ctx.strokeRect(left, 0, right - left, height);
   }
+
+  function _renderGreyOverlay(ctx, width, height) {
+    if (!window.__RF_TRACE_LIVE__) return;
+    if (timelineState.activeWindowStart === null) return;
+
+    var markerX = _timeToScreenX(timelineState.activeWindowStart);
+    if (markerX <= timelineState.leftMargin) return;
+    if (markerX > width) markerX = width;
+
+    ctx.fillStyle = 'rgba(128, 128, 128, 0.3)';
+    ctx.fillRect(timelineState.leftMargin, 0, markerX - timelineState.leftMargin, height);
+  }
+
 
   /**
    * Render the Load Start Marker — vertical line, drag handle, and label.
