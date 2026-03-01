@@ -240,10 +240,24 @@
         timelineState.layoutMode = 'compact';
         compactBtn.textContent = 'Reset layout';
         compactBtn.setAttribute('aria-label', 'Reset layout');
+        // Save original lanes and apply compact packing
+        _compactLanes(timelineState.workers);
       } else {
         timelineState.layoutMode = 'baseline';
         compactBtn.textContent = 'Compact visible spans';
         compactBtn.setAttribute('aria-label', 'Compact visible spans');
+        // Restore original lane assignments
+        _restoreOriginalLanes();
+      }
+      // Recalculate canvas height after lane changes
+      var canvas = timelineState.canvas;
+      if (canvas) {
+        var requiredHeight = _calculateRequiredHeight();
+        canvas.style.height = requiredHeight + 'px';
+        _resizeCanvas(canvas);
+        if (timelineState.headerCanvas) {
+          _resizeHeaderCanvas(timelineState.headerCanvas);
+        }
       }
       if (window.RFTraceViewer && window.RFTraceViewer.emit) {
         window.RFTraceViewer.emit('layout-mode-changed', { mode: timelineState.layoutMode });
@@ -2074,6 +2088,88 @@
   function _emitSpanSelected(span) {
     if (window.RFTraceViewer && window.RFTraceViewer.emit) {
       window.RFTraceViewer.emit('navigate-to-span', { spanId: span.id, source: 'timeline' });
+    }
+  }
+
+  /**
+   * Compact lane packing algorithm — greedy first-fit with parent awareness.
+   * Packs spans vertically to reduce whitespace while keeping children near parents.
+   * Only called when layoutMode === 'compact'.
+   */
+  function _compactLanes(workers) {
+    // Save original lanes if not already saved
+    if (!timelineState._originalLanes) {
+      timelineState._originalLanes = {};
+      for (var i = 0; i < timelineState.flatSpans.length; i++) {
+        var s = timelineState.flatSpans[i];
+        timelineState._originalLanes[s.id] = s.lane;
+      }
+    }
+
+    var workerIds = Object.keys(workers);
+    for (var w = 0; w < workerIds.length; w++) {
+      var spans = workers[workerIds[w]];
+      // Sort by start time for greedy first-fit
+      spans.sort(function (a, b) { return a.startTime - b.startTime; });
+      var laneEnds = []; // tracks end-time of each lane
+
+      for (var i = 0; i < spans.length; i++) {
+        var span = spans[i];
+        var placed = false;
+
+        // Parent-aware placement: if span has a parent with a lane assigned,
+        // try the parent's lane first, then nearby lanes, before falling back
+        // to the general first-fit scan.
+        if (span.parent && span.parent.lane !== undefined) {
+          var parentLane = span.parent.lane;
+          // Try parent's lane
+          if (parentLane < laneEnds.length && span.startTime >= laneEnds[parentLane]) {
+            span.lane = parentLane;
+            laneEnds[parentLane] = span.endTime;
+            placed = true;
+          }
+          if (!placed) {
+            // Try lanes adjacent to parent (parent+1, parent-1, parent+2, ...)
+            for (var offset = 1; offset <= laneEnds.length; offset++) {
+              var candidates = [parentLane + offset, parentLane - offset];
+              for (var ci = 0; ci < candidates.length; ci++) {
+                var tryLane = candidates[ci];
+                if (tryLane < 0) continue;
+                if (tryLane < laneEnds.length && span.startTime >= laneEnds[tryLane]) {
+                  span.lane = tryLane;
+                  laneEnds[tryLane] = span.endTime;
+                  placed = true;
+                  break;
+                }
+                // Allow allocating one new lane right after existing lanes
+                if (tryLane === laneEnds.length) {
+                  span.lane = tryLane;
+                  laneEnds.push(span.endTime);
+                  placed = true;
+                  break;
+                }
+              }
+              if (placed) break;
+            }
+          }
+        }
+
+        // General first-fit fallback
+        if (!placed) {
+          for (var lane = 0; lane < laneEnds.length; lane++) {
+            if (span.startTime >= laneEnds[lane]) {
+              span.lane = lane;
+              laneEnds[lane] = span.endTime;
+              placed = true;
+              break;
+            }
+          }
+        }
+        if (!placed) {
+          span.lane = laneEnds.length;
+          laneEnds.push(span.endTime);
+        }
+      }
     }
   }
 
