@@ -1,0 +1,28 @@
+# Custom Logo ConfigMap
+#
+# This ConfigMap supplies a custom SVG logo to the RF Trace Viewer header.
+# Uncomment the resource below and replace the placeholder SVG with your
+# own logo content.
+#
+# Alternatively, create the ConfigMap directly from a file:
+#
+#   kubectl create configmap trace-report-logo \
+#     --from-file=logo.svg=path/to/your/logo.svg
+#
+# Then uncomment the volume, volumeMount, and LOGO_PATH env var blocks
+# in deployment.yaml to mount it into the container.
+#
+# ---
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: trace-report-logo
+#   labels:
+#     app.kubernetes.io/name: trace-report
+#     app.kubernetes.io/component: server
+# data:
+#   logo.svg: |
+#     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40">
+#       <text x="10" y="28" font-family="sans-serif" font-size="20"
+#             fill="currentColor">Your Logo</text>
+#     </svg>

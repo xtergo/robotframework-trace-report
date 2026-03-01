@@ -118,18 +118,18 @@ Changes touch `config.py`, `cli.py`, `server.py`, `generator.py`, `app.js`, Kust
     - Test backward compatibility when no logo config is present
     - _Requirements: 7.3, 8.1, 8.2_
 
-- [ ] 8. Add Kustomize logo configuration examples
-  - [ ] 8.1 Add commented-out logo ConfigMap and volume mount to `deploy/kustomize/base/deployment.yaml`
+- [x] 8. Add Kustomize logo configuration examples
+  - [x] 8.1 Add commented-out logo ConfigMap and volume mount to `deploy/kustomize/base/deployment.yaml`
     - Add commented-out `volume` referencing `trace-report-logo` ConfigMap
     - Add commented-out `volumeMount` at `/etc/trace-report/logo/`
     - Add commented-out `LOGO_PATH` env var pointing to the mounted file
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-  - [ ] 8.2 Create commented-out `deploy/kustomize/base/logo-configmap.yaml` example
+  - [x] 8.2 Create commented-out `deploy/kustomize/base/logo-configmap.yaml` example
     - Show how to create the ConfigMap from a custom SVG file
     - _Requirements: 5.1_
 
-- [ ] 9. Final checkpoint — All tests pass
+- [x] 9. Final checkpoint — All tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

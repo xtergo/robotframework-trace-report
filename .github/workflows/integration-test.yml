@@ -34,9 +34,9 @@ jobs:
           CONTEXT="kind-trace-report-test"
           # Verify non-root user
           POD=$(kubectl get pods --context "$CONTEXT" -l app.kubernetes.io/name=trace-report -o jsonpath='{.items[0].metadata.name}')
-          UID=$(kubectl exec --context "$CONTEXT" "$POD" -- id -u 2>/dev/null || echo "unknown")
-          echo "Container UID: $UID"
-          if [ "$UID" != "10001" ] && [ "$UID" != "unknown" ]; then
+          CONTAINER_UID=$(kubectl exec --context "$CONTEXT" "$POD" -- id -u 2>/dev/null || echo "unknown")
+          echo "Container UID: $CONTAINER_UID"
+          if [ "$CONTAINER_UID" != "10001" ] && [ "$CONTAINER_UID" != "unknown" ]; then
             echo "::error::Container is not running as non-root (UID 10001)"
             exit 1
           fi

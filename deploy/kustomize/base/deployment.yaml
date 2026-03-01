@@ -29,6 +29,10 @@ spec:
                 name: trace-report-config
             - secretRef:
                 name: trace-report-secrets
+          # Uncomment to set a custom logo path from the mounted ConfigMap
+          # env:
+          #   - name: LOGO_PATH
+          #     value: /etc/trace-report/logo/logo.svg
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
@@ -71,3 +75,13 @@ spec:
             periodSeconds: 15
             failureThreshold: 3
             timeoutSeconds: 3
+          # Uncomment to mount the custom logo ConfigMap into the container
+          # volumeMounts:
+          #   - name: logo
+          #     mountPath: /etc/trace-report/logo/
+          #     readOnly: true
+      # Uncomment to define the logo volume from a ConfigMap
+      # volumes:
+      #   - name: logo
+      #     configMap:
+      #       name: trace-report-logo
