@@ -89,7 +89,7 @@ class TestLiveOnlyElementsGuarded:
         fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
 
-        match = re.search(r"['\"]pause-resume-btn['\"]", fn)
+        match = re.search(r"['\"][^'\"]*pause-resume-btn[^'\"]*['\"]", fn)
         assert match is not None, "pause-resume-btn class not found in _initApp"
         assert _is_inside_live_guard(
             fn, match.start(), blocks
