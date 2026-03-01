@@ -6,7 +6,13 @@ inclusion: auto
 
 ## Critical Rule: ALWAYS Use Docker
 
-**NEVER run raw Python commands directly on the host system.** This project uses a Docker-only workflow. No Python installation, no pip, no virtual environments on the host.
+**NEVER install or run tools directly on the host system.** This project uses a Docker-only workflow. The host should only have Docker and Kiro — nothing else.
+
+This applies to ALL tooling, not just Python:
+- No Python, pip, or virtual environments on the host
+- No installing CLI tools (kind, kubectl, helm, etc.) on the host
+- No `curl | install` or `apt install` for project tooling
+- If a tool is needed, run it via a Docker container (e.g. `docker run bitnami/kubectl:latest`)
 
 ## Critical Rule: Use the Pre-Built Test Image
 
@@ -34,6 +40,13 @@ docker run --rm -v $(pwd):/workspace -w /workspace python:3.11-slim bash -c "pip
 
 # DON'T use virtual environments
 python -m venv venv
+
+# DON'T install infrastructure tools on the host
+curl -Lo /tmp/kind https://kind.sigs.k8s.io/...
+apt install kubectl
+
+# DO use containerized tools instead
+docker run --rm bitnami/kubectl:latest get pods
 ```
 
 ## Direct Docker Commands (When Makefile Isn't Enough)
