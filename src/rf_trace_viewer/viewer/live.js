@@ -477,7 +477,13 @@
     backendType: (provider === 'signoz') ? 'ClickHouse' : 'Local file',
     spansPerSec: 0,
     spanWindow: [],
-    retryCountdownSec: 0
+    retryCountdownSec: 0,
+    // Process resource metrics (populated by /api/v1/resources polling)
+    rssMb: null,
+    rssLimitMb: null,
+    rssPct: null,
+    cpuPct: null,
+    cpuLimitMc: null
   };
 
   // After this many consecutive poll failures, escalate to Disconnected
@@ -607,7 +613,12 @@
           dataSource: _connectionState.dataSource,
           backendType: _connectionState.backendType,
           spansPerSec: _connectionState.spansPerSec,
-          retryCountdownSec: _connectionState.retryCountdownSec
+          retryCountdownSec: _connectionState.retryCountdownSec,
+          rssMb: _connectionState.rssMb,
+          rssLimitMb: _connectionState.rssLimitMb,
+          rssPct: _connectionState.rssPct,
+          cpuPct: _connectionState.cpuPct,
+          cpuLimitMc: _connectionState.cpuLimitMc
         };
       };
       window.RFTraceViewer.setPaused = _setPaused;
@@ -657,6 +668,31 @@
 
   /* ── 3. Polling lifecycle ──────────────────────────────────────── */
 
+  /* ── Resource metrics polling (CPU/RAM from /api/v1/resources) ── */
+
+  var _resourceTimer = null;
+  var RESOURCE_POLL_MS = 10000; // 10 seconds
+
+  function _startResourcePolling() {
+    _pollResources(); // immediate first fetch
+    _resourceTimer = setInterval(_pollResources, RESOURCE_POLL_MS);
+  }
+
+  function _pollResources() {
+    fetch('/api/v1/resources')
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        _connectionState.rssMb = data.rss_mb;
+        _connectionState.rssLimitMb = data.rss_limit_mb;
+        _connectionState.rssPct = data.rss_pct;
+        _connectionState.cpuPct = data.cpu_pct;
+        _connectionState.cpuLimitMc = data.cpu_limit_mc;
+        _emitDiagnostics();
+      })
+      .catch(function () { /* silent — resource metrics are best-effort */ });
+  }
+
   function _onAppReady() {
     appReady = true;
     _createStatusBar();
@@ -669,6 +705,7 @@
         Math.round(_lookbackNs / 1e9) + 's (since_ns=' + lastSeenNs + ')');
     }
     _startPolling();
+    _startResourcePolling();
     _listenVisibility();
     // Do an immediate first poll
     _poll();

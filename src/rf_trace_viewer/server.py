@@ -38,6 +38,7 @@ from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
 from rf_trace_viewer.providers.signoz_metrics import SigNozMetricsQuery
 from rf_trace_viewer.providers.signoz_provider import SigNozProvider
+from rf_trace_viewer.resources import get_resource_snapshot
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 
@@ -192,6 +193,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/metrics":
             self._serve_metrics(request_id, query)
+            return
+
+        if path == "/api/v1/resources":
+            snapshot = get_resource_snapshot()
+            self._send_json_response(200, snapshot, request_id)
             return
 
         self.send_error(404)

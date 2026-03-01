@@ -577,7 +577,12 @@
         { label: 'Backend', key: 'backendType', el: null },
         { label: 'Last Success', key: 'lastSuccessTs', el: null, format: _formatDiagTimestamp },
         { label: 'Retry Count', key: 'retryCount', el: null },
-        { label: 'Last Error', key: 'lastError', el: null, fallback: 'None' }
+        { label: 'Last Error', key: 'lastError', el: null, fallback: 'None' },
+        { label: 'Memory (RSS)', key: 'rssMb', el: null, format: function (v) { return v != null ? v + ' MB' : '—'; } },
+        { label: 'Memory Limit', key: 'rssLimitMb', el: null, format: function (v) { return v != null ? v + ' MB' : 'unlimited'; } },
+        { label: 'Memory %', key: 'rssPct', el: null, format: function (v) { return v != null ? v + '%' : '—'; }, bar: true },
+        { label: 'CPU %', key: 'cpuPct', el: null, format: function (v) { return v != null ? v + '%' : '—'; } },
+        { label: 'CPU Limit', key: 'cpuLimitMc', el: null, format: function (v) { return v != null ? v + 'm' : 'unlimited'; } }
       ];
 
       for (var di = 0; di < diagRows.length; di++) {
@@ -611,6 +616,18 @@
             cfg.el.textContent = String(raw);
           } else {
             cfg.el.textContent = cfg.fallback || '—';
+          }
+          // Mini bar for memory percentage
+          if (cfg.bar && raw != null) {
+            var barEl = cfg.el.querySelector('.diag-bar');
+            if (!barEl) {
+              barEl = document.createElement('span');
+              barEl.className = 'diag-bar';
+              cfg.el.appendChild(barEl);
+            }
+            var pct = Math.min(100, Math.max(0, raw));
+            barEl.style.width = pct + '%';
+            barEl.className = 'diag-bar' + (pct > 85 ? ' diag-bar-danger' : pct > 65 ? ' diag-bar-warn' : '');
           }
         }
       }
