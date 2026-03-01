@@ -649,13 +649,47 @@
         }
       });
 
+      // ── Separator + Pause/Resume button inside cluster ──
+      var clusterSep = document.createElement('span');
+      clusterSep.className = 'cluster-separator';
+      statusCluster.appendChild(clusterSep);
+
+      var pauseBtn = document.createElement('button');
+      pauseBtn.className = 'pause-resume-btn cluster-pause-btn';
+      pauseBtn.setAttribute('aria-label', 'Pause live polling — stops fetching new data from the backend');
+      pauseBtn.title = 'Pauses data collection from the backend. The UI stays interactive but no new spans are fetched.';
+      pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9646;&#9646;</span> Pause';
+
+      pauseBtn.addEventListener('click', function (e) {
+        e.stopPropagation(); // Don't trigger diagnostics panel
+        if (typeof window.RFTraceViewer !== 'undefined' &&
+            typeof window.RFTraceViewer.setPaused === 'function') {
+          var state = window.RFTraceViewer.getConnectionState
+            ? window.RFTraceViewer.getConnectionState()
+            : null;
+          var isPaused = state && state.primaryStatus === 'Paused';
+          window.RFTraceViewer.setPaused(!isPaused);
+        }
+      });
+
+      statusCluster.appendChild(pauseBtn);
+
+      // ── Paused banner (thin bar below header) ──
+      var pausedBanner = document.createElement('div');
+      pausedBanner.className = 'paused-banner';
+      pausedBanner.style.display = 'none';
+      var pausedBannerText = document.createElement('span');
+      pausedBannerText.className = 'paused-banner-text';
+      pausedBanner.appendChild(pausedBannerText);
+      var _pausedSinceTs = 0;
+
       header.appendChild(statusCluster);
 
       // Color map for status dot
       var _statusColorMap = {
         'Live': 'var(--status-live)',
         'Paused': 'var(--status-paused)',
-        'Delayed': 'var(--status-delayed)',
+        'Retrying': 'var(--status-delayed)',
         'Disconnected': 'var(--status-disconnected)',
         'Unauthorized': 'var(--status-unauthorized)'
       };
@@ -678,6 +712,31 @@
           reasonChip.textContent = '';
           reasonChip.style.display = 'none';
         }
+
+        // Update pause/resume button
+        var isPaused = evt.primaryStatus === 'Paused';
+        if (isPaused) {
+          pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9654;</span> Resume';
+          pauseBtn.setAttribute('aria-label', 'Resume live polling — resumes fetching new data');
+          pauseBtn.title = 'Resumes data collection from the backend.';
+          pauseBtn.classList.add('resume-state');
+          statusCluster.classList.add('is-paused');
+          _pausedSinceTs = Date.now();
+          pausedBanner.style.display = '';
+        } else {
+          pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9646;&#9646;</span> Pause';
+          pauseBtn.setAttribute('aria-label', 'Pause live polling — stops fetching new data from the backend');
+          pauseBtn.title = 'Pauses data collection from the backend. The UI stays interactive but no new spans are fetched.';
+          pauseBtn.classList.remove('resume-state');
+          statusCluster.classList.remove('is-paused');
+          _pausedSinceTs = 0;
+          pausedBanner.style.display = 'none';
+        }
+
+        // Micro-interaction: brief scale pulse on status change
+        statusDot.classList.remove('pulse');
+        void statusDot.offsetWidth; // force reflow
+        statusDot.classList.add('pulse');
       });
 
       // Listen to diagnostics-updated events to refresh panel in-place
@@ -687,23 +746,28 @@
         }
       });
 
-      // Update timestamp every second using connection state
+      // Update timestamp every second
       setInterval(function () {
         var state = window.RFTraceViewer.getConnectionState
           ? window.RFTraceViewer.getConnectionState()
           : null;
-        if (!state || !state.lastSuccessTs) {
+        if (!state) {
           statusTimestamp.textContent = '';
           return;
         }
-        var elapsed = Date.now() - state.lastSuccessTs;
-        var secs = Math.round(elapsed / 1000);
-        if (secs < 60) {
-          statusTimestamp.textContent = secs + 's ago';
-        } else if (secs < 3600) {
-          statusTimestamp.textContent = Math.floor(secs / 60) + 'min ago';
+        if ((state.primaryStatus === 'Disconnected' || state.primaryStatus === 'Retrying') && state.retryCountdownSec > 0) {
+          statusTimestamp.textContent = 'retry ' + state.retryCountdownSec + 's';
         } else {
-          statusTimestamp.textContent = Math.floor(secs / 3600) + 'h ago';
+          statusTimestamp.textContent = '';
+        }
+        // Update paused banner elapsed time
+        if (_pausedSinceTs > 0) {
+          var elapsed = Math.floor((Date.now() - _pausedSinceTs) / 1000);
+          var parts = [];
+          if (elapsed >= 3600) parts.push(Math.floor(elapsed / 3600) + 'h');
+          if (elapsed >= 60) parts.push(Math.floor((elapsed % 3600) / 60) + 'm');
+          parts.push((elapsed % 60) + 's');
+          pausedBannerText.textContent = 'Paused \u2014 last update ' + parts.join(' ') + ' ago';
         }
       }, 1000);
     }
@@ -712,39 +776,6 @@
     var headerSpacer = document.createElement('div');
     headerSpacer.className = 'header-spacer';
     header.appendChild(headerSpacer);
-
-    // Pause/Resume button — live mode only
-    if (window.__RF_TRACE_LIVE__) {
-      var pauseBtn = document.createElement('button');
-      pauseBtn.className = 'pause-resume-btn';
-      pauseBtn.setAttribute('aria-label', 'Pause live polling');
-      pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9646;&#9646;</span> Pause';
-
-      pauseBtn.addEventListener('click', function () {
-        if (typeof window.RFTraceViewer !== 'undefined' &&
-            typeof window.RFTraceViewer.setPaused === 'function') {
-          var state = window.RFTraceViewer.getConnectionState
-            ? window.RFTraceViewer.getConnectionState()
-            : null;
-          var isPaused = state && state.primaryStatus === 'Paused';
-          window.RFTraceViewer.setPaused(!isPaused);
-        }
-      });
-
-      // Update button icon/label when status changes
-      eventBus.on('status-changed', function (evt) {
-        if (!evt) return;
-        if (evt.primaryStatus === 'Paused') {
-          pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9654;</span> Resume';
-          pauseBtn.setAttribute('aria-label', 'Resume live polling');
-        } else {
-          pauseBtn.innerHTML = '<span class="pause-resume-icon">&#9646;&#9646;</span> Pause';
-          pauseBtn.setAttribute('aria-label', 'Pause live polling');
-        }
-      });
-
-      header.appendChild(pauseBtn);
-    }
 
     var toggleBtn = document.createElement('button');
     toggleBtn.className = 'theme-toggle-icon';
@@ -764,6 +795,11 @@
     });
     header.appendChild(toggleBtn);
     root.appendChild(header);
+
+    // Paused banner — sits between header and tab nav
+    if (typeof pausedBanner !== 'undefined' && pausedBanner) {
+      root.appendChild(pausedBanner);
+    }
 
     // Tab navigation
     var tabNav = document.createElement('nav');

@@ -17,7 +17,7 @@
   /* ── configuration ─────────────────────────────────────────────── */
 
   var pollInterval = Math.max(1, Math.min(30,
-    Number(window.__RF_TRACE_POLL_INTERVAL__) || 5));
+    Number(window.__RF_TRACE_POLL_INTERVAL__) || 7));
   var POLL_MS = pollInterval * 1000;
 
   // Lookback: only fetch spans from the last N seconds on first poll.
@@ -328,10 +328,7 @@
   var allSpans = [];            // flat list of all parsed spans
   var seenSpanIds = {};         // browser-side dedup for SigNoz spans
   var pollTimer = null;         // setInterval id
-  var tickTimer = null;         // 1-second status bar tick
   var _retryCountdownTimer = null; // 1-second countdown to next retry
-  var lastUpdateTs = 0;         // Date.now() of last successful data fetch
-  var statusBarEl = null;       // live status bar DOM element
   var appReady = false;         // true after 'app-ready' fires
   var polling = false;          // guard against overlapping fetches
 
@@ -476,7 +473,6 @@
     lastSuccessTs: 0,
     retryCount: 0,
     lastError: '',
-    zeroSpanCount: 0,
     dataSource: (provider === 'signoz') ? 'SigNoz' : 'JSON file',
     backendType: (provider === 'signoz') ? 'ClickHouse' : 'Local file',
     spansPerSec: 0,
@@ -484,24 +480,42 @@
     retryCountdownSec: 0
   };
 
+  // After this many consecutive poll failures, escalate to Disconnected
+  var DISCONNECT_THRESHOLD = 3;
+
+  /**
+   * Called on every poll failure. Increments retryCount and picks status:
+   *   1-2 failures -> Retrying (yellow)
+   *   3+  failures -> Disconnected (red)
+   */
+  function _onPollError(reason) {
+    _connectionState.retryCount++;
+    _connectionState.lastError = reason || 'Unknown error';
+    if (_connectionState.retryCount >= DISCONNECT_THRESHOLD) {
+      _setStatus('Disconnected', reason);
+    } else {
+      _setStatus('Retrying', reason);
+    }
+  }
+
   function _setStatus(newStatus, reason) {
     var prev = _connectionState.primaryStatus;
     _connectionState.primaryStatus = newStatus;
     if (newStatus === 'Live') {
       _connectionState.reasonChip = '';
-      _connectionState.zeroSpanCount = 0;
       _connectionState.retryCount = 0;
+      _connectionState.lastError = '';
+      _stopRetryCountdown();
+    } else if (newStatus === 'Retrying') {
+      if (reason !== undefined) _connectionState.reasonChip = reason;
       _stopRetryCountdown();
     } else if (reason !== undefined) {
       _connectionState.reasonChip = reason;
     }
-    // Start countdown when entering Disconnected or Delayed
-    if ((newStatus === 'Disconnected' || newStatus === 'Delayed') &&
-        prev !== newStatus) {
+    if (newStatus === 'Disconnected' && prev !== newStatus) {
       _startRetryCountdown();
     }
-    // Stop countdown when leaving Disconnected/Delayed for non-retry states
-    if (newStatus !== 'Disconnected' && newStatus !== 'Delayed') {
+    if (newStatus !== 'Disconnected') {
       _stopRetryCountdown();
     }
     if (prev !== newStatus || reason) {
@@ -645,7 +659,6 @@
 
   function _onAppReady() {
     appReady = true;
-    lastUpdateTs = Date.now();
     _createStatusBar();
 
     // Apply lookback: set initial watermark so first poll only fetches recent spans
@@ -656,7 +669,6 @@
         Math.round(_lookbackNs / 1e9) + 's (since_ns=' + lastSeenNs + ')');
     }
     _startPolling();
-    _startTick();
     _listenVisibility();
     // Do an immediate first poll
     _poll();
@@ -674,28 +686,14 @@
     }
   }
 
-  function _startTick() {
-    if (tickTimer) return;
-    tickTimer = setInterval(_updateStatusText, 1000);
-  }
-
-  function _stopTick() {
-    if (tickTimer) {
-      clearInterval(tickTimer);
-      tickTimer = null;
-    }
-  }
-
   function _setPaused(paused) {
     _paused = paused;
     if (paused) {
       _setStatus('Paused');
       _stopPolling();
-      _stopTick();
     } else {
       _setStatus('Live');
       _startPolling();
-      _startTick();
       _poll();
     }
   }
@@ -705,11 +703,9 @@
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden') {
         _stopPolling();
-        _stopTick();
       } else {
         if (!_paused) {
           _startPolling();
-          _startTick();
           _poll(); // immediate catch-up
         }
       }
@@ -742,26 +738,20 @@
             throw new Error('HTTP 401');
           }
           if (res.status === 429) {
-            _setStatus('Disconnected', 'Rate limited');
-            _connectionState.retryCount++;
-            _connectionState.lastError = 'HTTP 429';
+            _onPollError('Rate limited');
             throw new Error('HTTP 429');
           }
           if (res.status === 502) {
             return res.text().then(function (body) {
               if (body && body.toLowerCase().indexOf('clickhouse') !== -1) {
-                _setStatus('Disconnected', 'ClickHouse timeout');
+                _onPollError('ClickHouse timeout');
               } else {
-                _setStatus('Disconnected', 'Unknown');
+                _onPollError('HTTP 502');
               }
-              _connectionState.retryCount++;
-              _connectionState.lastError = 'HTTP 502';
               throw new Error('HTTP 502');
             });
           }
-          _setStatus('Disconnected', 'Unknown');
-          _connectionState.retryCount++;
-          _connectionState.lastError = 'HTTP ' + res.status;
+          _onPollError('HTTP ' + res.status);
           throw new Error('HTTP ' + res.status);
         }
         var newOffset = res.headers.get('X-File-Offset');
@@ -769,52 +759,32 @@
         return res.text();
       })
       .then(function (text) {
+        // Any successful HTTP response = backend is alive → Live
+        _setStatus('Live');
+        _connectionState.lastSuccessTs = Date.now();
+        _connectionState.lastError = '';
+        _connectionState.retryCount = 0;
+
         if (text && text.length > 0) {
           try {
             _ingestNdjson(text);
           } catch (e) {
-            _setStatus('Disconnected', 'Decode error');
-            _connectionState.retryCount++;
-            _connectionState.lastError = e.message || 'JSON parse failure';
+            _onPollError(e.message || 'JSON parse failure');
             return;
           }
           var newSpans = allSpans.length - spansBefore;
+          _updateTelemetry(newSpans);
           if (newSpans > 0) {
-            _setStatus('Live');
-            _connectionState.lastSuccessTs = Date.now();
-            _connectionState.lastError = '';
-            _connectionState.retryCount = 0;
-            _updateTelemetry(newSpans);
-            lastUpdateTs = Date.now();
             _rebuildAndRender();
-          } else {
-            _updateTelemetry(0);
-            _connectionState.zeroSpanCount++;
-            _connectionState.lastSuccessTs = Date.now();
-            _connectionState.lastError = '';
-            _connectionState.reasonChip = '';
-            if (_connectionState.zeroSpanCount >= 3) {
-              _setStatus('Delayed');
-            }
           }
         } else {
-          // Empty response counts as zero new spans
           _updateTelemetry(0);
-          _connectionState.zeroSpanCount++;
-          _connectionState.lastSuccessTs = Date.now();
-          _connectionState.lastError = '';
-          _connectionState.reasonChip = '';
-          if (_connectionState.zeroSpanCount >= 3) {
-            _setStatus('Delayed');
-          }
         }
       })
       .catch(function (err) {
         // Network-level fetch rejection (no HTTP response at all)
         if (!_connectionState.lastError) {
-          _setStatus('Disconnected', 'SigNoz unreachable');
-          _connectionState.retryCount++;
-          _connectionState.lastError = err.message || 'Network error';
+          _onPollError(err.message || 'Network error');
         }
         console.warn('[live] poll error:', err.message);
       })
@@ -822,8 +792,7 @@
         _emitDiagnostics();
         polling = false;
         // Restart countdown if still in a retry-worthy state
-        if (_connectionState.primaryStatus === 'Disconnected' ||
-            _connectionState.primaryStatus === 'Delayed') {
+        if (_connectionState.primaryStatus === 'Disconnected' || _connectionState.primaryStatus === 'Retrying') {
           _startRetryCountdown();
         }
       });
@@ -841,9 +810,7 @@
       .then(function (res) {
         if (res.status === 429) {
           // Rate limited — exponential backoff
-          _setStatus('Disconnected', 'Rate limited');
-          _connectionState.retryCount++;
-          _connectionState.lastError = 'HTTP 429 rate limited';
+          _onPollError('Rate limited');
           return res.json().then(function (body) {
             _showNotification('Rate limited by SigNoz. Backing off\u2026');
             backoffMs = Math.min(backoffMs * 2, 30000);
@@ -867,20 +834,15 @@
         if (res.status === 502) {
           return res.text().then(function (body) {
             if (body && body.toLowerCase().indexOf('clickhouse') !== -1) {
-              _setStatus('Disconnected', 'ClickHouse timeout');
-              _connectionState.lastError = 'HTTP 502 ClickHouse timeout';
+              _onPollError('ClickHouse timeout');
             } else {
-              _setStatus('Disconnected', 'Unknown');
-              _connectionState.lastError = 'HTTP 502';
+              _onPollError('HTTP 502');
             }
-            _connectionState.retryCount++;
             throw new Error('HTTP 502');
           });
         }
         if (!res.ok) {
-          _setStatus('Disconnected', 'Unknown');
-          _connectionState.retryCount++;
-          _connectionState.lastError = 'HTTP ' + res.status;
+          _onPollError('HTTP ' + res.status);
           return res.json().then(function (body) {
             throw new Error(body.message || 'HTTP ' + res.status);
           }).catch(function (e) {
@@ -894,50 +856,25 @@
         return res.json();
       })
       .then(function (data) {
+        // Any successful HTTP response = backend is alive → Live
+        _setStatus('Live');
+        _connectionState.lastSuccessTs = Date.now();
+        _connectionState.lastError = '';
+        _connectionState.retryCount = 0;
+
         if (!data || !data.spans) {
-          // Successful response but no spans key — treat as zero spans
           _updateTelemetry(0);
-          _connectionState.zeroSpanCount++;
-          _connectionState.lastSuccessTs = Date.now();
-          _connectionState.lastError = '';
-          _connectionState.reasonChip = '';
-          if (_connectionState.zeroSpanCount >= 3) {
-            _setStatus('Delayed');
-          }
           return;
         }
         var spans = data.spans;
         if (spans.length > 0) {
           var added = _ingestSigNozSpans(spans);
+          _updateTelemetry(added);
           if (added > 0) {
-            _setStatus('Live');
-            _connectionState.lastSuccessTs = Date.now();
-            _connectionState.lastError = '';
-            _connectionState.retryCount = 0;
-            _updateTelemetry(added);
-            lastUpdateTs = Date.now();
             _rebuildAndRender();
-          } else {
-            // All spans were duplicates — treat as zero new spans
-            _updateTelemetry(0);
-            _connectionState.zeroSpanCount++;
-            _connectionState.lastSuccessTs = Date.now();
-            _connectionState.lastError = '';
-            _connectionState.reasonChip = '';
-            if (_connectionState.zeroSpanCount >= 3) {
-              _setStatus('Delayed');
-            }
           }
         } else {
-          // Empty spans array
           _updateTelemetry(0);
-          _connectionState.zeroSpanCount++;
-          _connectionState.lastSuccessTs = Date.now();
-          _connectionState.lastError = '';
-          _connectionState.reasonChip = '';
-          if (_connectionState.zeroSpanCount >= 3) {
-            _setStatus('Delayed');
-          }
         }
       })
       .catch(function (err) {
@@ -946,9 +883,7 @@
         if (err.message === 'HTTP 502') return; // already handled above
         // Network-level fetch rejection (no HTTP response at all)
         if (_connectionState.primaryStatus !== 'Disconnected' || !_connectionState.lastError) {
-          _setStatus('Disconnected', 'SigNoz unreachable');
-          _connectionState.retryCount++;
-          _connectionState.lastError = err.message || 'Network error';
+          _onPollError(err.message || 'Network error');
         }
         console.warn('[live] SigNoz poll error:', err.message);
         _showNotification('SigNoz error: partial data may be shown');
@@ -957,8 +892,7 @@
         _emitDiagnostics();
         polling = false;
         // Restart countdown if still in a retry-worthy state
-        if (_connectionState.primaryStatus === 'Disconnected' ||
-            _connectionState.primaryStatus === 'Delayed') {
+        if (_connectionState.primaryStatus === 'Disconnected' || _connectionState.primaryStatus === 'Retrying') {
           _startRetryCountdown();
         }
       });
@@ -1866,36 +1800,6 @@
       if (provider === 'signoz') {
         _createServiceFilter(header);
       }
-
-      statusBarEl = document.createElement('span');
-      statusBarEl.className = 'live-toggle-status';
-      statusBarEl.textContent = '';
-      header.appendChild(statusBarEl);
-
-      _updateStatusText();
-    }
-
-  function _updateStatusText() {
-      if (!statusBarEl) return;
-      if (_paused) {
-        statusBarEl.textContent = '';
-        return;
-      }
-      if (!lastUpdateTs) {
-        statusBarEl.textContent = 'connecting\u2026';
-        return;
-      }
-      var elapsed = Date.now() - lastUpdateTs;
-      var secs = Math.round(elapsed / 1000);
-      var text;
-      if (secs < 60) {
-        text = secs + 's ago';
-      } else if (secs < 3600) {
-        text = Math.floor(secs / 60) + 'min ago';
-      } else {
-        text = Math.floor(secs / 3600) + 'h ago';
-      }
-      statusBarEl.textContent = text;
     }
 
   /* ── 9. SigNoz helpers ─────────────────────────────────────────── */
@@ -1929,8 +1833,6 @@
   function _showAuthError(msg) {
     // Stop polling — no point retrying with bad auth
     _stopPolling();
-    _stopTick();
-    if (statusBarEl) statusBarEl.textContent = 'auth error';
 
     if (_authErrorBannerEl) {
       // Update existing banner message
@@ -1961,7 +1863,6 @@
     retryBtn.addEventListener('click', function () {
       _clearAuthError();
       _startPolling();
-      _startTick();
       _poll();
     });
     _authErrorBannerEl.appendChild(retryBtn);

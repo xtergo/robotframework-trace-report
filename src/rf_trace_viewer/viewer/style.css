@@ -2106,9 +2106,10 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .service-filter-dropdown {
   position: absolute;
   top: 100%;
-  left: 0;
+  right: 0;
   margin-top: 4px;
   min-width: 180px;
+  max-width: 280px;
   max-height: 240px;
   overflow-y: auto;
   background: var(--bg-primary);
@@ -2130,7 +2131,8 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-size: 12px;
   color: var(--text-primary);
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-all;
 }
 
 .rf-trace-viewer .service-filter-item:hover {
@@ -2268,25 +2270,39 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   word-break: break-word;
 }
 
-/* ── Pause/Resume Button ── */
+/* ── Cluster Separator ── */
+.rf-trace-viewer .cluster-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--border-color);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── Pause/Resume Button (inside status cluster) ── */
 .rf-trace-viewer .pause-resume-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 8px;
   cursor: pointer;
-  color: var(--text-primary);
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
 }
 
 .rf-trace-viewer .pause-resume-btn:hover {
   background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .pause-resume-btn:active {
+  transform: scale(0.96);
 }
 
 .rf-trace-viewer .pause-resume-btn:focus-visible {
@@ -2294,9 +2310,63 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline-offset: 2px;
 }
 
+/* Resume state — more prominent to encourage re-enabling */
+.rf-trace-viewer .pause-resume-btn.resume-state {
+  background: var(--status-live);
+  color: #fff;
+  border-color: var(--status-live);
+  font-weight: 600;
+}
+
+.rf-trace-viewer .pause-resume-btn.resume-state:hover {
+  filter: brightness(1.15);
+  color: #fff;
+}
+
 .rf-trace-viewer .pause-resume-icon {
   font-size: 10px;
   line-height: 1;
+}
+
+/* ── Paused state on status cluster ── */
+.rf-trace-viewer .status-cluster.is-paused {
+  background: color-mix(in srgb, var(--status-paused) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-paused) 25%, transparent);
+}
+
+/* ── Status dot pulse micro-interaction ── */
+@keyframes statusPulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.6); }
+  100% { transform: scale(1); }
+}
+
+.rf-trace-viewer .status-dot.pulse {
+  animation: statusPulse 0.35s ease-out;
+}
+
+/* ── Paused Banner ── */
+.rf-trace-viewer .paused-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 3px 12px;
+  background: color-mix(in srgb, var(--status-paused) 12%, var(--bg-secondary));
+  border-bottom: 1px solid color-mix(in srgb, var(--status-paused) 25%, var(--border-color));
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  animation: bannerSlideIn 0.2s ease-out;
+}
+
+@keyframes bannerSlideIn {
+  from { opacity: 0; max-height: 0; padding: 0 12px; }
+  to   { opacity: 1; max-height: 30px; padding: 3px 12px; }
+}
+
+.rf-trace-viewer .paused-banner-text {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Header Logo ── */
@@ -2371,8 +2441,8 @@ html[data-theme="dark"], html[data-theme="dark"] body {
     flex-grow: 0;
   }
 
-  .rf-trace-viewer .pause-resume-btn {
-    margin-left: auto;
+  .rf-trace-viewer .status-cluster {
+    flex-wrap: wrap;
   }
 }
 
