@@ -74,19 +74,19 @@ Changes touch `config.py`, `cli.py`, `server.py`, `generator.py`, `app.js`, Kust
 - [x] 4. Checkpoint — Server logo support complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Implement logo embedding in static reports (`generator.py`)
-  - [ ] 5.1 Add `logo_path` field to `ReportOptions` in `src/rf_trace_viewer/generator.py`
+- [x] 5. Implement logo embedding in static reports (`generator.py`)
+  - [x] 5.1 Add `logo_path` field to `ReportOptions` in `src/rf_trace_viewer/generator.py`
     - `logo_path: str | None = None`
     - _Requirements: 3.2_
 
-  - [ ] 5.2 Implement logo resolution and embedding in `generate_report()`
+  - [x] 5.2 Implement logo resolution and embedding in `generate_report()`
     - If `logo_path` set, validate with `validate_svg`; on failure, print error and `sys.exit(1)`
     - If `logo_path` not set, use default logo from `_VIEWER_DIR / "default-logo.svg"`
     - Read SVG, base64-encode to `data:image/svg+xml;base64,...` URI
     - Inject `window.__RF_LOGO_URL__ = "<data URI>"` into the HTML script block
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [ ] 5.3 Wire `logo_path` from CLI config to `ReportOptions` in the static report command
+  - [x] 5.3 Wire `logo_path` from CLI config to `ReportOptions` in the static report command
     - Pass `config.logo_path` through to `ReportOptions` when building the report
     - _Requirements: 4.1, 4.2_
 
@@ -102,11 +102,11 @@ Changes touch `config.py`, `cli.py`, `server.py`, `generator.py`, `app.js`, Kust
     - Test in `tests/unit/test_logo.py`
     - Generate non-existent paths and non-SVG content; verify generator validation returns failure
 
-- [ ] 6. Checkpoint — Static report logo support complete
+- [x] 6. Checkpoint — Static report logo support complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Update App Module (`app.js`) for logo display
-  - [ ] 7.1 Update Logo_Slot rendering in `_initApp` in `src/rf_trace_viewer/viewer/app.js`
+- [x] 7. Update App Module (`app.js`) for logo display
+  - [x] 7.1 Update Logo_Slot rendering in `_initApp` in `src/rf_trace_viewer/viewer/app.js`
     - When `window.__RF_LOGO_URL__` is set, render `<img>` in Logo_Slot
     - Set `alt` to `window.__RF_LOGO_ALT__` if defined, otherwise `"Logo"`
     - Apply CSS: `max-height` equal to header height, `object-fit: contain` for aspect ratio

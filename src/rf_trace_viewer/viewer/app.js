@@ -502,7 +502,9 @@
       var logo = document.createElement('img');
       logo.className = 'header-logo';
       logo.src = window.__RF_LOGO_URL__;
-      logo.alt = window.__RF_LOGO_ALT__ || '';
+      logo.alt = window.__RF_LOGO_ALT__ || 'Logo';
+      logo.style.maxHeight = '32px';
+      logo.style.objectFit = 'contain';
       header.appendChild(logo);
     }
 
