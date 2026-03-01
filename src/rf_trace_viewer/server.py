@@ -27,6 +27,8 @@ from rf_trace_viewer.generator import (
 from rf_trace_viewer.logging_config import StructuredLogger
 from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
+from rf_trace_viewer.providers.signoz_metrics import SigNozMetricsQuery
+from rf_trace_viewer.providers.signoz_provider import SigNozProvider
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 from rf_trace_viewer.metrics import (
@@ -150,7 +152,13 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         # --- Rate-limited API endpoints ---
-        if path in ("/api/v1/status", "/api/v1/spans", "/api/v1/services", "/api/spans"):
+        if path in (
+            "/api/v1/status",
+            "/api/v1/spans",
+            "/api/v1/services",
+            "/api/spans",
+            "/api/metrics",
+        ):
             if self._check_rate_limit(request_id):
                 return
 
@@ -173,7 +181,32 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._serve_services(request_id)
             return
 
+        if path == "/api/metrics":
+            self._serve_metrics(request_id, query)
+            return
+
         self.send_error(404)
+
+    def _serve_metrics(self, request_id: str, query: dict) -> None:
+        """Serve aggregated metrics from SigNoz."""
+        provider = getattr(self.server, "provider", None)
+        if not isinstance(provider, SigNozProvider):
+            self._send_json_response(
+                404,
+                {"error": "Metrics not available: SigNoz provider not configured"},
+                request_id,
+            )
+            return
+
+        window = int(query.get("window", ["5"])[0])
+        window = max(1, min(60, window))
+
+        metrics_query = SigNozMetricsQuery(provider)
+        try:
+            snapshot = metrics_query.fetch_metrics(window_minutes=window)
+            self._send_json_response(200, snapshot, request_id)
+        except Exception as exc:
+            self._send_json_response(502, {"error": f"SigNoz query failed: {exc}"}, request_id)
 
     def _serve_viewer(self, request_id: str = "") -> None:
         """Serve the HTML viewer page with live mode flag (no embedded data)."""
