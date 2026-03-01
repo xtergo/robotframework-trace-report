@@ -98,6 +98,18 @@
   var _spanCapReached = false;
   var _spanCapBannerEl = null;
 
+  /* ── Load Window state ─────────────────────────────────────────── */
+
+  var _loadWindowState = {
+    activeWindowStart: 0,       // epoch seconds
+    executionStartTime: 0,      // epoch seconds (from first span data)
+    maxLookback: 21600,         // 6 hours in seconds
+    stepSize: 900,              // 15 minutes per delta fetch step
+    isFetching: false,
+    totalCachedSpans: 0,
+    maxCachedSpans: 50000
+  };
+
   /* ── Connection state model ────────────────────────────────────── */
 
   var _connectionState = {
@@ -227,6 +239,16 @@
         };
       };
       window.RFTraceViewer.setPaused = _setPaused;
+      window.RFTraceViewer.getActiveWindowStart = function () {
+        return _loadWindowState.activeWindowStart;
+      };
+      window.RFTraceViewer.setActiveWindowStart = function (newStart) {
+        var est = _loadWindowState.executionStartTime;
+        var min = est - _loadWindowState.maxLookback;
+        var clamped = Math.max(min, Math.min(est, newStart));
+        _loadWindowState.activeWindowStart = clamped;
+        _loadWindowState.totalCachedSpans = allSpans.length;
+      };
       window.RFTraceViewer.on('app-ready', _onAppReady);
       // Listen for background fetch merge events from app.js (SigNoz paged loading)
       window.RFTraceViewer.on('spans-merge', function (data) {
@@ -1184,6 +1206,9 @@
     if (timelineSection) {
       if (!_timelineInitialized && suiteCount > 0 && typeof window.initTimeline === 'function') {
         console.log('[live] First timeline init with ' + suiteCount + ' suites');
+        _loadWindowState.executionStartTime = model.start_time / 1e9;
+        _loadWindowState.activeWindowStart = _loadWindowState.executionStartTime - _loadWindowState.stepSize;
+        _loadWindowState.totalCachedSpans = allSpans.length;
         window.initTimeline(timelineSection, model);
         _timelineInitialized = true;
       } else if (_timelineInitialized && typeof window.updateTimelineData === 'function') {
