@@ -118,42 +118,42 @@ Add an optional OpenTelemetry metrics subsystem to `robotframework-trace-report`
     - **Property 9: Recorded attributes are restricted to the allowed set**
     - **Validates: Requirements 6.1, 6.2**
 
-- [ ] 8. Checkpoint — Ensure all tests pass
+- [x] 8. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Implement diagnostics logging and error handling
-  - [ ] 9.1 Add diagnostics logging to `init_metrics` and the export path — when `TRACE_REPORT_OTEL_DIAGNOSTICS=true`, log exporter health info (successful exports, failed exports, dropped data points); when false, log only warnings/errors. Implement log level configuration from `TRACE_REPORT_LOG_LEVEL`
+- [x] 9. Implement diagnostics logging and error handling
+  - [x] 9.1 Add diagnostics logging to `init_metrics` and the export path — when `TRACE_REPORT_OTEL_DIAGNOSTICS=true`, log exporter health info (successful exports, failed exports, dropped data points); when false, log only warnings/errors. Implement log level configuration from `TRACE_REPORT_LOG_LEVEL`
     - _Requirements: 10.1, 10.2, 10.3, 7.2, 7.3_
 
   - [ ]* 9.2 Write unit tests for diagnostics logging
     - Test diagnostics=true logs export health, diagnostics=false logs only warnings/errors, exporter failure logs warning
     - _Requirements: 10.2, 10.3, 7.3_
 
-- [ ] 10. Wire metrics into server and provider layers
-  - [ ] 10.1 Modify `src/rf_trace_viewer/server.py` — call `init_metrics()` during `LiveServer.start` and `shutdown_metrics()` during `LiveServer.stop`. In `_LiveRequestHandler.do_GET`/`do_POST`, call `record_request_start` at entry and `record_request_end` at exit with route, method, status code, duration, and response size
+- [x] 10. Wire metrics into server and provider layers
+  - [x] 10.1 Modify `src/rf_trace_viewer/server.py` — call `init_metrics()` during `LiveServer.start` and `shutdown_metrics()` during `LiveServer.stop`. In `_LiveRequestHandler.do_GET`/`do_POST`, call `record_request_start` at entry and `record_request_end` at exit with route, method, status code, duration, and response size
     - _Requirements: 2.1, 3.1, 3.2, 3.3, 3.4, 7.1_
 
-  - [ ] 10.2 Modify `src/rf_trace_viewer/server.py` — in `_serve_signoz_spans` and `_serve_services` handlers, call `record_items_returned` with the count of items in the response
+  - [x] 10.2 Modify `src/rf_trace_viewer/server.py` — in `_serve_signoz_spans` and `_serve_services` handlers, call `record_items_returned` with the count of items in the response
     - _Requirements: 5.1, 5.2, 5.3_
 
-  - [ ] 10.3 Modify `src/rf_trace_viewer/providers/signoz_provider.py` — in `_do_request` (or equivalent), call `record_dep_call` with dep name, operation, status code, duration, request/response payload sizes. Call `record_dep_timeout` on timeout exceptions
+  - [x] 10.3 Modify `src/rf_trace_viewer/providers/signoz_provider.py` — in `_do_request` (or equivalent), call `record_dep_call` with dep name, operation, status code, duration, request/response payload sizes. Call `record_dep_timeout` on timeout exceptions
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
   - [ ]* 10.4 Write unit tests for server integration
     - Test that recording functions are called with correct arguments during request handling, test that metrics init/shutdown are called during server lifecycle
     - _Requirements: 2.1, 3.1, 5.1_
 
-- [ ] 11. Checkpoint — Ensure all tests pass
+- [x] 11. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Create documentation
-  - [ ] 12.1 Create `docs/metrics.md` — metric catalog listing every metric name, type, unit, and attributes; all configuration environment variables with defaults and descriptions; example Kubernetes Deployment snippet with OTel env vars; example dashboard queries for p95/p99 latency per route, dependency p99 latency, error rate, payload size distribution, items returned distribution, and correlation with CPU/memory/restarts
+- [x] 12. Create documentation
+  - [x] 12.1 Create `docs/metrics.md` — metric catalog listing every metric name, type, unit, and attributes; all configuration environment variables with defaults and descriptions; example Kubernetes Deployment snippet with OTel env vars; example dashboard queries for p95/p99 latency per route, dependency p99 latency, error rate, payload size distribution, items returned distribution, and correlation with CPU/memory/restarts
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
-  - [ ] 12.2 Add a link to `docs/metrics.md` from the project `README.md`
+  - [x] 12.2 Add a link to `docs/metrics.md` from the project `README.md`
     - _Requirements: 13.5_
 
-- [ ] 13. Final checkpoint — Ensure all tests pass
+- [x] 13. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

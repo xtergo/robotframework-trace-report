@@ -91,6 +91,7 @@ See the [User Guide](docs/user-guide.md) for step-by-step setup instructions for
 | [Testing](docs/testing.md) | Test types, Makefile targets, Docker test image |
 | [Docker Testing](docs/docker-testing.md) | Docker-only testing philosophy and setup |
 | [Kubernetes Deployment](docs/kubernetes.md) | K8s deployment guide, configuration reference, troubleshooting |
+| [Metrics](docs/metrics.md) | OpenTelemetry metrics catalog, configuration, and dashboard queries |
 | [CHANGELOG](CHANGELOG.md) | Release history |
 
 ## Related Projects

@@ -128,12 +128,12 @@ Add a "Service Health" tab to the rf-trace-viewer that queries OpenTelemetry met
     - Listen to `theme-changed` events to ensure colors update without page reload
     - _Requirements: 10.1, 10.2, 9.1, 9.2, 9.3_
 
-- [ ] 7. Wire everything together
-  - [ ] 7.1 Register `service-health.js` in the JS load order
+- [x] 7. Wire everything together
+  - [x] 7.1 Register `service-health.js` in the JS load order
     - Add `"service-health.js"` to the `_JS_FILES` tuple in `generator.py`, before `"app.js"`
     - _Requirements: 1.1_
 
-  - [ ] 7.2 Verify `window.__RF_PROVIDER` is set in `_serve_viewer`
+  - [x] 7.2 Verify `window.__RF_PROVIDER` is set in `_serve_viewer`
     - Confirm `server.py` already sets `window.__RF_PROVIDER = "signoz"` for SigNoz providers (it does — no code change needed, just verify)
     - _Requirements: 1.1, 1.2_
 
@@ -142,7 +142,7 @@ Add a "Service Health" tab to the rf-trace-viewer that queries OpenTelemetry met
     - Test that the JS file is included in the viewer HTML output
     - _Requirements: 2.1, 1.1_
 
-- [ ] 8. Final checkpoint — Ensure all tests pass
+- [x] 8. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

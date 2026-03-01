@@ -26,6 +26,7 @@ _JS_FILES = (
     "theme.js",
     "flow-table.js",
     "live.js",
+    "service-health.js",
     "app.js",
 )
 _CSS_FILES = ("style.css",)
