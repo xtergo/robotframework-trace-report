@@ -714,6 +714,10 @@ class LiveServer:
         # Install SIGTERM handler for graceful shutdown
         self._install_signal_handlers()
 
+        # Start background status poller (K8s health checks)
+        if self.status_poller is not None:
+            self.status_poller.start()
+
         # Initialize OpenTelemetry metrics (no-op if disabled)
         init_metrics()
 
@@ -797,6 +801,9 @@ class LiveServer:
                     print(f"Shutdown: drained in {drain_duration:.1f}s, " f"{remaining} in-flight")
 
             self._httpd.server_close()
+            # Stop background status poller
+            if self.status_poller is not None:
+                self.status_poller.stop()
             shutdown_metrics()
             # Generate report from buffered spans in receiver mode
             if self.receiver_mode:
