@@ -342,7 +342,9 @@
       var newHalfRange = (totalRange / newZoom) / 2;
       timelineState.viewStart = Math.max(timelineState.minTime, viewMid - newHalfRange);
       timelineState.viewEnd = Math.min(timelineState.maxTime, viewMid + newHalfRange);
-      timelineState.zoom = newZoom;
+      // Recompute zoom from actual clamped range
+      var actualRange = timelineState.viewEnd - timelineState.viewStart;
+      timelineState.zoom = (totalRange > 0 && actualRange > 0) ? totalRange / actualRange : 1;
     }
 
     zoomSlider.addEventListener('input', function () {
@@ -1046,8 +1048,10 @@
       var factor = e.deltaY > 0 ? 0.9 : 1.1;
       var newZoom = timelineState.zoom * factor;
       newZoom = Math.max(0.1, Math.min(newZoom, 10000));
-      var totalRange = timelineState.maxTime - timelineState.minTime;
-      var newRange = totalRange / newZoom;
+      // Compute new view range from current view, not totalRange.
+      // Using totalRange caused the view to jump when totalRange >> viewRange.
+      var currentRange = timelineState.viewEnd - timelineState.viewStart;
+      var newRange = currentRange / factor;
       // Keep mouse position anchored
       var canvasWidth = canvas.width / (window.devicePixelRatio || 1);
       var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
@@ -1063,7 +1067,16 @@
         timelineState.viewEnd = timelineState.maxTime;
         timelineState.viewStart = timelineState.viewEnd - newRange;
       }
-      timelineState.zoom = newZoom;
+      // Recompute zoom from actual view range
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var actualRange = timelineState.viewEnd - timelineState.viewStart;
+      timelineState.zoom = (totalRange > 0 && actualRange > 0) ? totalRange / actualRange : 1;
+      console.log('[Timeline] Wheel zoom: viewStart=' + timelineState.viewStart.toFixed(3) +
+        ', viewEnd=' + timelineState.viewEnd.toFixed(3) +
+        ', range=' + actualRange.toFixed(3) + 's' +
+        ', zoom=' + timelineState.zoom.toFixed(1) + 'x' +
+        ', mouseTime=' + mouseTime.toFixed(3) +
+        ', factor=' + factor);
       if (timelineState._syncSlider) timelineState._syncSlider();
       _applyZoom();
     }, { passive: false });
@@ -1291,13 +1304,16 @@
         e.preventDefault();
         var distance = _getTouchDistance(e.touches);
         var delta = distance / lastTouchDistance;
-        timelineState.zoom *= delta;
-        timelineState.zoom = Math.max(0.1, Math.min(timelineState.zoom, 10000));
-        var totalRange = timelineState.maxTime - timelineState.minTime;
+        // Scale current view range by inverse of pinch delta
+        var currentRange = timelineState.viewEnd - timelineState.viewStart;
+        var newRange = currentRange / delta;
         var viewMid = (timelineState.viewStart + timelineState.viewEnd) / 2;
-        var newHalfRange = (totalRange / timelineState.zoom) / 2;
-        timelineState.viewStart = Math.max(timelineState.minTime, viewMid - newHalfRange);
-        timelineState.viewEnd = Math.min(timelineState.maxTime, viewMid + newHalfRange);
+        timelineState.viewStart = Math.max(timelineState.minTime, viewMid - newRange / 2);
+        timelineState.viewEnd = Math.min(timelineState.maxTime, viewMid + newRange / 2);
+        // Recompute zoom from actual range
+        var totalRange = timelineState.maxTime - timelineState.minTime;
+        var actualRange = timelineState.viewEnd - timelineState.viewStart;
+        timelineState.zoom = (totalRange > 0 && actualRange > 0) ? totalRange / actualRange : 1;
         lastTouchDistance = distance;
         if (timelineState._syncSlider) timelineState._syncSlider();
         _applyZoom();
@@ -1545,6 +1561,9 @@
     var canvasWidth = timelineState.canvas.width / (window.devicePixelRatio || 1);
     var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
     
+    // Debug counters
+    var _dbgTotal = 0, _dbgXCulled = 0, _dbgYCulled = 0, _dbgSubpx = 0, _dbgRendered = 0;
+
     // Only show worker labels if there are multiple workers
     var showWorkerLabels = workers.length > 1 || (workers.length === 1 && workers[0] !== 'default');
 
@@ -1595,10 +1614,11 @@
         // Y-axis culling: skip spans outside visible canvas height
         var lane = span.lane !== undefined ? span.lane : span.depth;
         var spanY = yOffset + lane * timelineState.rowHeight;
-        if (spanY + timelineState.rowHeight < 0 || spanY > height) continue;
+        if (spanY + timelineState.rowHeight < 0 || spanY > height) { _dbgYCulled++; continue; }
 
         // X-axis culling: skip spans outside current time view
-        if (span.endTime < timelineState.viewStart || span.startTime > timelineState.viewEnd) continue;
+        if (span.endTime < timelineState.viewStart || span.startTime > timelineState.viewEnd) { _dbgXCulled++; continue; }
+        _dbgTotal++;
 
         // Compute pixel width for this span
         var spanDuration = span.endTime - span.startTime;
@@ -1607,6 +1627,7 @@
           : 2;
 
         if (pixelWidth < 2) {
+          _dbgSubpx++;
           // Sub-pixel: bucket into aggregation map
           var screenX = _timeToScreenX(span.startTime);
           var pixelCol = Math.floor(screenX);
@@ -1622,6 +1643,7 @@
             }
           }
         } else {
+          _dbgRendered++;
           // Normal rendering for spans wide enough to see
           _renderSpan(ctx, span, yOffset);
         }
@@ -1645,6 +1667,16 @@
       ctx.moveTo(0, yOffset);
       ctx.lineTo(width, yOffset);
       ctx.stroke();
+    }
+
+    // Debug: log render stats (throttled to avoid spam)
+    if (!timelineState._lastRenderLog || Date.now() - timelineState._lastRenderLog > 500) {
+      console.log('[Timeline] Render: visible=' + _dbgTotal +
+        ' (rendered=' + _dbgRendered + ', subpx=' + _dbgSubpx + ')' +
+        ', culled: x=' + _dbgXCulled + ' y=' + _dbgYCulled +
+        ', viewRange=' + viewRange.toFixed(2) + 's' +
+        ', timelineWidth=' + timelineWidth + 'px');
+      timelineState._lastRenderLog = Date.now();
     }
   }
 
