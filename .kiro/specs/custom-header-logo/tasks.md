@@ -45,18 +45,18 @@ Changes touch `config.py`, `cli.py`, `server.py`, `generator.py`, `app.js`, Kust
     - Test in `tests/unit/test_logo.py`
     - Generate 3 distinct strings for CLI, config file, env var; verify precedence: CLI > config > env
 
-- [-] 3. Implement logo serving in live mode (`server.py`)
-  - [-] 3.1 Add logo resolution at startup in `LiveServer.__init__`
+- [x] 3. Implement logo serving in live mode (`server.py`)
+  - [x] 3.1 Add logo resolution at startup in `LiveServer.__init__`
     - Accept `logo_path` from config; call `validate_svg` if set
     - On validation failure, log warning and fall back to default logo
     - Store resolved path as `self.logo_path`
     - _Requirements: 6.1, 6.2, 6.3_
 
-  - [ ] 3.2 Add `GET /logo.svg` endpoint in `_do_GET`
+  - [x] 3.2 Add `GET /logo.svg` endpoint in `_do_GET`
     - Serve the file at `self.server.logo_path` with `Content-Type: image/svg+xml`
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [ ] 3.3 Inject `window.__RF_LOGO_URL__ = "/logo.svg"` in `_serve_viewer`
+  - [x] 3.3 Inject `window.__RF_LOGO_URL__ = "/logo.svg"` in `_serve_viewer`
     - Add to the script block in the served HTML page
     - _Requirements: 2.4_
 
@@ -71,7 +71,7 @@ Changes touch `config.py`, `cli.py`, `server.py`, `generator.py`, `app.js`, Kust
     - Test `_serve_viewer` HTML includes `window.__RF_LOGO_URL__`
     - _Requirements: 2.1, 2.3, 2.4_
 
-- [ ] 4. Checkpoint — Server logo support complete
+- [x] 4. Checkpoint — Server logo support complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 5. Implement logo embedding in static reports (`generator.py`)

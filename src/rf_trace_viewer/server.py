@@ -270,6 +270,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             f"{lookback_js}"
             f"{max_spans_js}"
             f"{svc_name_js}"
+            'window.__RF_LOGO_URL__ = "/logo.svg";\n'
             "</script>\n"
             "<script>\n"
             f"{js_content}\n"
