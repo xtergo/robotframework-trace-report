@@ -385,6 +385,7 @@ def _run_live_server(args: argparse.Namespace) -> int:
         rate_limiter=rate_limiter,
         base_filter=config.base_filter,
         query_semaphore=query_semaphore,
+        logo_path=config.logo_path,
     )
     server.start(open_browser=not config.no_open)
     return 0

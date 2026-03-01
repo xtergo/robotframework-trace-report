@@ -12,11 +12,12 @@ import time
 import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
-from rf_trace_viewer.config import BaseFilterConfig
+from rf_trace_viewer.config import BaseFilterConfig, validate_svg
 from rf_trace_viewer.error_codes import error_response
 from rf_trace_viewer.generator import (
     ReportOptions,
@@ -38,6 +39,8 @@ from rf_trace_viewer.providers.signoz_metrics import SigNozMetricsQuery
 from rf_trace_viewer.providers.signoz_provider import SigNozProvider
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
+
+_DEFAULT_LOGO = str(Path(__file__).parent / "viewer" / "default-logo.svg")
 
 
 class _LiveRequestHandler(BaseHTTPRequestHandler):
@@ -653,6 +656,7 @@ class LiveServer:
         base_filter: BaseFilterConfig | None = None,
         query_semaphore: threading.Semaphore | None = None,
         termination_grace_period: int = 30,
+        logo_path: str | None = None,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -676,6 +680,19 @@ class LiveServer:
         self.base_filter = base_filter or BaseFilterConfig()
         self.query_semaphore = query_semaphore
         self.termination_grace_period = termination_grace_period
+
+        # Resolve logo: validate custom path, fall back to default on failure
+        self._logo_warning: str | None = None
+        if logo_path:
+            valid, reason = validate_svg(logo_path)
+            if valid:
+                self.logo_path = logo_path
+            else:
+                self._logo_warning = f"Custom logo invalid ({reason}); using default logo"
+                self.logo_path = _DEFAULT_LOGO
+        else:
+            self.logo_path = _DEFAULT_LOGO
+
         self._httpd: HTTPServer | None = None
 
     def start(self, open_browser: bool = True) -> None:
@@ -706,6 +723,13 @@ class LiveServer:
         # Structured logger for request logging (JSON when LOG_FORMAT=json)
         log_format = os.environ.get("LOG_FORMAT", "text")
         self._httpd._logger = StructuredLogger(log_format)  # type: ignore[attr-defined]
+
+        # Log deferred logo validation warning (if any)
+        if self._logo_warning:
+            self._httpd._logger.log("WARNING", self._logo_warning)  # type: ignore[attr-defined]
+
+        # Attach resolved logo path so the handler can serve it
+        self._httpd.logo_path = self.logo_path  # type: ignore[attr-defined]
 
         # In-flight request tracking for graceful shutdown
         self._httpd._inflight_count = 0  # type: ignore[attr-defined]

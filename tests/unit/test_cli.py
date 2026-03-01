@@ -172,6 +172,7 @@ class TestArgumentParsing:
                 rate_limiter=None,
                 base_filter=ANY,
                 query_semaphore=None,
+                logo_path=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -222,6 +223,7 @@ class TestArgumentParsing:
                 rate_limiter=None,
                 base_filter=ANY,
                 query_semaphore=None,
+                logo_path=None,
             )
 
     def test_no_open_argument(self, monkeypatch):
@@ -616,6 +618,7 @@ class TestServeSubcommand:
                 rate_limiter=None,
                 base_filter=ANY,
                 query_semaphore=None,
+                logo_path=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 

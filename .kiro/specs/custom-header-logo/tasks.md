@@ -45,8 +45,8 @@ Changes touch `config.py`, `cli.py`, `server.py`, `generator.py`, `app.js`, Kust
     - Test in `tests/unit/test_logo.py`
     - Generate 3 distinct strings for CLI, config file, env var; verify precedence: CLI > config > env
 
-- [ ] 3. Implement logo serving in live mode (`server.py`)
-  - [ ] 3.1 Add logo resolution at startup in `LiveServer.__init__`
+- [-] 3. Implement logo serving in live mode (`server.py`)
+  - [-] 3.1 Add logo resolution at startup in `LiveServer.__init__`
     - Accept `logo_path` from config; call `validate_svg` if set
     - On validation failure, log warning and fall back to default logo
     - Store resolved path as `self.logo_path`
