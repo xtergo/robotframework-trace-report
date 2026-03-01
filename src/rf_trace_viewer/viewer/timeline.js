@@ -1242,17 +1242,14 @@
         var totalRange = timelineState.maxTime - timelineState.minTime;
         var selectedRange = endTime - startTime;
 
-        // Only act if the selection is meaningful (more than 0.1% of current view)
+        // Only act if the selection is meaningful (more than 5% of current view)
         var viewRange = timelineState.viewEnd - timelineState.viewStart;
-        if (selectedRange > viewRange * 0.001) {
-          // Set viewport to the selected range
+        if (selectedRange > viewRange * 0.05) {
+          // Set viewport to the selected range (zoom only, no filter)
           timelineState.viewStart = startTime;
           timelineState.viewEnd = endTime;
           timelineState.zoom = totalRange / selectedRange;
           if (timelineState._syncSlider) timelineState._syncSlider();
-
-          // Emit time range filter event
-          _emitTimeRangeSelected(startTime, endTime);
         }
 
         // Clear selection
