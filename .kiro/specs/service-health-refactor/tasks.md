@@ -19,15 +19,15 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
     - Test in `tests/unit/test_signoz_rf_metrics.py`
     - Generate random `group_by` lists; verify the payload's `builderQueries.A.groupBy` array contains the specified keys
 
-- [ ] 2. Implement cumulative counter and histogram query methods
-  - [ ] 2.1 Add `_query_cumulative_counter` method to `SigNozMetricsQuery`
+- [x] 2. Implement cumulative counter and histogram query methods
+  - [x] 2.1 Add `_query_cumulative_counter` method to `SigNozMetricsQuery`
     - Reuse `_build_query_payload` with `temporality="Cumulative"`, `attr_type="Sum"`
     - Accept `group_by` parameter and pass through to `_build_query_payload`
     - Parse response into dict keyed by group label tuple (or `("__all__",)` for ungrouped)
     - Each value is a list of `{t, v}` points extracted via `_extract_series`
     - _Requirements: 1.1_
 
-  - [ ] 2.2 Add `_query_cumulative_histogram_quantile` method to `SigNozMetricsQuery`
+  - [x] 2.2 Add `_query_cumulative_histogram_quantile` method to `SigNozMetricsQuery`
     - Support `p50` and `p95` quantiles via `hist_quantile_50` / `hist_quantile_95` operators
     - Use `temporality="Cumulative"`, `attr_type="Histogram"`
     - Accept `group_by` parameter and pass through

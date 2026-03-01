@@ -290,6 +290,102 @@ class SigNozMetricsQuery:
         response = self._execute_query(payload, metric_name)
         return self._extract_series(response)
 
+    @staticmethod
+    def _extract_grouped_series(
+        response: dict, group_by: list[str]
+    ) -> dict[tuple[str, ...], list[dict]]:
+        """Extract per-group time series from a SigNoz query_range response.
+
+        Returns a dict keyed by tuples of label values (in ``group_by``
+        order).  Each value is a sorted list of ``{"t": epoch_s, "v": float}``
+        dicts.
+        """
+        groups: dict[tuple[str, ...], dict[int, float]] = {}
+        try:
+            for result in response.get("data", {}).get("result", []):
+                metric = result.get("metric", {})
+                key = tuple(str(metric.get(k, "")) for k in group_by)
+                agg = groups.setdefault(key, {})
+                for series in result.get("series", []):
+                    for val in series.get("values", []):
+                        ts = val.get("timestamp", 0)
+                        epoch_s = ts // 1000 if ts > 1e12 else ts
+                        bucket = int(epoch_s)
+                        agg[bucket] = agg.get(bucket, 0.0) + float(val.get("value", 0))
+        except (TypeError, ValueError, AttributeError):
+            pass
+        return {k: [{"t": t, "v": v} for t, v in sorted(agg.items())] for k, agg in groups.items()}
+
+    def _query_cumulative_counter(
+        self,
+        metric_name: str,
+        filters: list[dict],
+        start_s: int,
+        end_s: int,
+        step: int,
+        group_by: list[str] | None = None,
+    ) -> dict[tuple[str, ...], list[dict]]:
+        """Query a Cumulative counter metric, returning series grouped by labels.
+
+        Returns dict keyed by group label tuple (or ``("__all__",)`` for
+        ungrouped).  Each value is a list of ``{t, v}`` points.
+        """
+        payload = self._build_query_payload(
+            metric_name,
+            "rate",
+            filters,
+            start_s,
+            end_s,
+            step,
+            attr_type="Sum",
+            is_monotonic=True,
+            temporality="Cumulative",
+            group_by=group_by,
+        )
+        response = self._execute_query(payload, metric_name)
+        if group_by:
+            return self._extract_grouped_series(response, group_by)
+        return {("__all__",): self._extract_series(response)}
+
+    def _query_cumulative_histogram_quantile(
+        self,
+        metric_name: str,
+        quantile: str,
+        filters: list[dict],
+        start_s: int,
+        end_s: int,
+        step: int,
+        group_by: list[str] | None = None,
+    ) -> dict[tuple[str, ...], list[dict]]:
+        """Query a Cumulative histogram for p50/p95, grouped by labels.
+
+        Uses ``hist_quantile_50`` / ``hist_quantile_95`` aggregate operators.
+        Returns dict keyed by group label tuple (or ``("__all__",)`` for
+        ungrouped).
+        """
+        hist_op_map = {
+            "p50": "hist_quantile_50",
+            "p95": "hist_quantile_95",
+            "p99": "hist_quantile_99",
+        }
+        operator = hist_op_map.get(quantile, quantile)
+        payload = self._build_query_payload(
+            metric_name,
+            operator,
+            filters,
+            start_s,
+            end_s,
+            step,
+            attr_type="Histogram",
+            is_monotonic=False,
+            temporality="Cumulative",
+            group_by=group_by,
+        )
+        response = self._execute_query(payload, metric_name)
+        if group_by:
+            return self._extract_grouped_series(response, group_by)
+        return {("__all__",): self._extract_series(response)}
+
     # -- Public API -------------------------------------------------------
 
     def fetch_metrics(self, window_minutes: int = 30) -> dict:
