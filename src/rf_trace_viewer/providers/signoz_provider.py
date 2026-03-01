@@ -25,6 +25,7 @@ from .base import (
     TraceViewModel,
 )
 from .signoz_auth import SigNozAuth
+from rf_trace_viewer.metrics import record_dep_call, record_dep_timeout
 
 # SigNoz status code mapping: 0=UNSET, 1=OK, 2=ERROR
 _STATUS_MAP = {"0": "UNSET", "1": "OK", "2": "ERROR"}
@@ -227,14 +228,25 @@ class SigNozProvider(TraceProvider):
         """Execute a single authenticated HTTP POST to SigNoz API."""
         url = self._config.endpoint.rstrip("/") + path
         data = json.dumps(payload).encode("utf-8")
+        req_bytes = len(data)
         req = Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
         for key, val in self._auth.get_headers().items():
             req.add_header(key, val)
+        # Derive a short operation name from the API path
+        operation = path.strip("/").replace("/", "_") or "unknown"
+        start = time.monotonic()
         try:
             with urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read())  # type: ignore[no-any-return]
+                resp_data = resp.read()
+                duration_ms = (time.monotonic() - start) * 1000
+                record_dep_call(
+                    "signoz", operation, resp.status, duration_ms, req_bytes, len(resp_data)
+                )
+                return json.loads(resp_data)  # type: ignore[no-any-return]
         except HTTPError as e:
+            duration_ms = (time.monotonic() - start) * 1000
+            record_dep_call("signoz", operation, e.code, duration_ms, req_bytes, 0)
             if e.code == 401:
                 raise AuthenticationError(
                     f"SigNoz authentication failed (401) at {url}. " "Check your API key."
@@ -243,8 +255,10 @@ class SigNozProvider(TraceProvider):
                 raise RateLimitError(f"SigNoz rate limit hit (429) at {url}.") from e
             raise ProviderError(f"SigNoz API error ({e.code}) at {url}: {e.reason}") from e
         except URLError as e:
+            record_dep_timeout("signoz", operation)
             raise ProviderError(f"Cannot reach SigNoz at {url}: {e.reason}") from e
         except OSError as e:
+            record_dep_timeout("signoz", operation)
             raise ProviderError(f"Connection to SigNoz failed at {url}: {e}") from e
 
     # ------------------------------------------------------------------

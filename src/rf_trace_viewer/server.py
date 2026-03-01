@@ -29,10 +29,25 @@ from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
+from rf_trace_viewer.metrics import (
+    init_metrics,
+    record_items_returned,
+    record_request_end,
+    record_request_start,
+    shutdown_metrics,
+)
 
 
 class _LiveRequestHandler(BaseHTTPRequestHandler):
     """HTTP request handler for live trace viewing."""
+
+    _metrics_status_code: int = 200
+    _metrics_response_bytes: int = 0
+
+    def send_response(self, code: int, message: str | None = None) -> None:
+        """Override to capture status code for metrics."""
+        self._metrics_status_code = code
+        super().send_response(code, message)
 
     def _get_or_generate_request_id(self) -> str:
         """Return X-Request-Id from request headers, or generate a UUID."""
@@ -60,6 +75,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self._send_request_id_header(request_id)
         self.end_headers()
         self.wfile.write(payload)
+        self._metrics_response_bytes += len(payload)
 
     def _check_rate_limit(self, request_id: str) -> bool:
         """Check per-IP rate limit. Returns True if request is blocked (429 sent)."""
@@ -81,6 +97,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self) -> None:
+        route = urlparse(self.path).path
+        record_request_start(route)
+        self._metrics_status_code = 200
+        self._metrics_response_bytes = 0
+        start = time.monotonic()
         inflight_lock = getattr(self.server, "_inflight_lock", None)
         if inflight_lock is not None:
             with inflight_lock:
@@ -91,6 +112,10 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             if inflight_lock is not None:
                 with inflight_lock:
                     self.server._inflight_count -= 1
+            duration_ms = (time.monotonic() - start) * 1000
+            record_request_end(
+                route, "GET", self._metrics_status_code, duration_ms, self._metrics_response_bytes
+            )
 
     def _do_GET(self) -> None:  # noqa: N802
         request_id = self._get_or_generate_request_id()
@@ -219,8 +244,14 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self._send_request_id_header(request_id)
         self.end_headers()
         self.wfile.write(body)
+        self._metrics_response_bytes += len(body)
 
     def do_POST(self) -> None:
+        route = urlparse(self.path).path
+        record_request_start(route)
+        self._metrics_status_code = 200
+        self._metrics_response_bytes = 0
+        start = time.monotonic()
         inflight_lock = getattr(self.server, "_inflight_lock", None)
         if inflight_lock is not None:
             with inflight_lock:
@@ -231,6 +262,10 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             if inflight_lock is not None:
                 with inflight_lock:
                     self.server._inflight_count -= 1
+            duration_ms = (time.monotonic() - start) * 1000
+            record_request_end(
+                route, "POST", self._metrics_status_code, duration_ms, self._metrics_response_bytes
+            )
 
     def _do_POST(self) -> None:  # noqa: N802
         request_id = self._get_or_generate_request_id()
@@ -293,6 +328,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                             }
                         )
 
+            record_items_returned("/api/v1/services", "query_services", len(services))
             self._send_json_response(200, services, request_id)
         except Exception as exc:
             status, body = error_response("INTERNAL_ERROR", str(exc), request_id, status=500)
@@ -359,6 +395,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 "orphan_count": orphan_count,
                 "total_count": len(view_model.spans),
             }
+            record_items_returned("/api/v1/spans", "query_spans", len(view_model.spans))
             body = json.dumps(result).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -366,6 +403,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
+            self._metrics_response_bytes += len(body)
 
         except AuthenticationError as exc:
             body = json.dumps({"error": "auth_error", "message": str(exc)}).encode("utf-8")
@@ -375,6 +413,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
+            self._metrics_response_bytes += len(body)
 
         except RateLimitError:
             body = json.dumps({"error": "rate_limit", "retry_after": 30}).encode("utf-8")
@@ -384,6 +423,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
+            self._metrics_response_bytes += len(body)
 
         except ProviderError as exc:
             body = json.dumps({"error": "provider_error", "message": str(exc)}).encode("utf-8")
@@ -393,6 +433,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
+            self._metrics_response_bytes += len(body)
 
         finally:
             if semaphore is not None:
@@ -435,6 +476,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self._send_request_id_header(request_id)
         self.end_headers()
         self.wfile.write(response)
+        self._metrics_response_bytes += len(response)
 
     def _serve_traces(self, offset: int = 0, request_id: str = "") -> None:
         """Serve trace data from file or in-memory buffer."""
@@ -471,6 +513,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_request_id_header(request_id)
             self.end_headers()
             self.wfile.write(body)
+            self._metrics_response_bytes += len(body)
 
         except FileNotFoundError:
             # File doesn't exist yet (test hasn't started writing) — return empty
@@ -512,6 +555,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         self._send_request_id_header(request_id)
         self.end_headers()
         self.wfile.write(body)
+        self._metrics_response_bytes += len(body)
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         """Log requests via StructuredLogger when available, else suppress."""
@@ -637,6 +681,9 @@ class LiveServer:
         # Install SIGTERM handler for graceful shutdown
         self._install_signal_handlers()
 
+        # Initialize OpenTelemetry metrics (no-op if disabled)
+        init_metrics()
+
         url = f"http://localhost:{self.port}/"
         print(f"Live server started at {url}")
         if self.receiver_mode:
@@ -717,6 +764,7 @@ class LiveServer:
                     print(f"Shutdown: drained in {drain_duration:.1f}s, " f"{remaining} in-flight")
 
             self._httpd.server_close()
+            shutdown_metrics()
             # Generate report from buffered spans in receiver mode
             if self.receiver_mode:
                 self._generate_shutdown_report()
