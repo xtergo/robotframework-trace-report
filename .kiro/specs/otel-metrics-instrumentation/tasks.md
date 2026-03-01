@@ -6,12 +6,12 @@ Add an optional OpenTelemetry metrics subsystem to `robotframework-trace-report`
 
 ## Tasks
 
-- [ ] 1. Add OTel SDK dependencies and create metrics module skeleton
-  - [ ] 1.1 Add `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-grpc`, and `opentelemetry-exporter-otlp-proto-http` to `pyproject.toml` optional dependencies under a new `[metrics]` extra, and add `opentelemetry-test-utils` (or `opentelemetry-sdk` test utilities like `InMemoryMetricReader`) to the `[dev]` extra
+- [-] 1. Add OTel SDK dependencies and create metrics module skeleton
+  - [x] 1.1 Add `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-grpc`, and `opentelemetry-exporter-otlp-proto-http` to `pyproject.toml` optional dependencies under a new `[metrics]` extra, and add `opentelemetry-test-utils` (or `opentelemetry-sdk` test utilities like `InMemoryMetricReader`) to the `[dev]` extra
     - _Requirements: 2.1, 2.4_
-  - [ ] 1.2 Create `src/rf_trace_viewer/metrics.py` with the `MetricsConfig` frozen dataclass, module-level `_enabled` flag (default `False`), and stub no-op public functions: `init_metrics`, `shutdown_metrics`, `record_request_start`, `record_request_end`, `record_dep_call`, `record_dep_timeout`, `record_items_returned`
+  - [x] 1.2 Create `src/rf_trace_viewer/metrics.py` with the `MetricsConfig` frozen dataclass, module-level `_enabled` flag (default `False`), and stub no-op public functions: `init_metrics`, `shutdown_metrics`, `record_request_start`, `record_request_end`, `record_dep_call`, `record_dep_timeout`, `record_items_returned`
     - _Requirements: 2.2, 7.7_
-  - [ ] 1.3 Create empty test files `tests/unit/test_metrics.py` and `tests/unit/test_metrics_properties.py` with basic imports
+  - [x] 1.3 Create empty test files `tests/unit/test_metrics.py` and `tests/unit/test_metrics_properties.py` with basic imports
     - _Requirements: (testing infrastructure)_
   - [ ] 1.4 Rebuild the Docker test image to include the new OTel dependencies: `make docker-build-test`
     - _Requirements: (build infrastructure)_
