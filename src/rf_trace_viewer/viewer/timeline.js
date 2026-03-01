@@ -55,7 +55,9 @@
     isDraggingMarker: false,
     _markerDragDebounceTimer: null,
     _markerDragOldStart: null,
-    layoutMode: 'baseline'
+    layoutMode: 'baseline',
+    autoCompactAfterFilter: false,
+    _compactBtn: null
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -272,6 +274,22 @@
       }
     });
     zoomBar.appendChild(compactBtn);
+    timelineState._compactBtn = compactBtn;
+
+    // Auto-compact after filtering toggle (default OFF)
+    var autoCompactToggle = document.createElement('label');
+    autoCompactToggle.className = 'timeline-autocompact-toggle';
+    autoCompactToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
+    var autoCompactCb = document.createElement('input');
+    autoCompactCb.type = 'checkbox';
+    autoCompactCb.checked = false;
+    autoCompactCb.setAttribute('aria-label', 'Auto-compact after filtering');
+    autoCompactCb.addEventListener('change', function () {
+      timelineState.autoCompactAfterFilter = autoCompactCb.checked;
+    });
+    autoCompactToggle.appendChild(autoCompactCb);
+    autoCompactToggle.appendChild(document.createTextNode('Auto-compact'));
+    zoomBar.appendChild(autoCompactToggle);
 
     headerEl.appendChild(zoomBar);
 
@@ -2234,6 +2252,14 @@
     
     var filteredSpans = event.filteredSpans || [];
     
+    // Reset layout mode to baseline on any filter change (Req 6.1, 6.2)
+    timelineState.layoutMode = 'baseline';
+    if (timelineState._compactBtn) {
+      timelineState._compactBtn.textContent = 'Compact visible spans';
+      timelineState._compactBtn.setAttribute('aria-label', 'Compact visible spans');
+    }
+    _restoreOriginalLanes();
+    
     // Store original workers if not already stored
     if (!timelineState.allWorkers) {
       timelineState.allWorkers = {};
@@ -2297,6 +2323,16 @@
 
       // Reassign lanes so filtered spans pack tightly without gaps
       _reassignFilteredLanes(filteredWorkers);
+    }
+    
+    // If auto-compact is enabled, re-apply compact layout after filter (Req 6.3)
+    if (timelineState.autoCompactAfterFilter) {
+      timelineState.layoutMode = 'compact';
+      _compactLanes(timelineState.workers);
+      if (timelineState._compactBtn) {
+        timelineState._compactBtn.textContent = 'Reset layout';
+        timelineState._compactBtn.setAttribute('aria-label', 'Reset layout');
+      }
     }
     
     // Recalculate canvas height based on filtered content
