@@ -50,7 +50,8 @@
     bottomMargin: 20,
     showTimeMarkers: false,
     showSecondsGrid: true,
-    activeWindowStart: null
+    activeWindowStart: null,
+    isFetchingOlderSpans: false
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -391,7 +392,7 @@
       window.RFTraceViewer.on('active-window-start', function (data) {
         if (data && data.activeWindowStart !== undefined) {
           timelineState.activeWindowStart = data.activeWindowStart;
-          // Re-render to update marker/overlay position (will be implemented in task 3)
+          _render();
         }
       });
     }
@@ -1251,6 +1252,9 @@
       _renderSelection(ctx, height);
     }
 
+    // Render Load Start Marker vertical line on main canvas (live mode only)
+    _renderLoadStartMarker(ctx, width, height, false);
+
     // Render the sticky header on its own canvas
     _renderHeader();
   }
@@ -1328,6 +1332,9 @@
           ctx.stroke();
         }
       }
+
+      // Render Load Start Marker handle + label on header canvas (live mode only)
+      _renderLoadStartMarker(ctx, width, height, true);
     }
 
 
@@ -1769,6 +1776,93 @@
     ctx.strokeStyle = '#43a047';
     ctx.lineWidth = 2;
     ctx.strokeRect(left, 0, right - left, height);
+  }
+
+  /**
+   * Render the Load Start Marker — vertical line, drag handle, and label.
+   * Drawn on both the main canvas (vertical line) and header canvas (handle + label).
+   * Only active in live mode when activeWindowStart is set.
+   *
+   * @param {CanvasRenderingContext2D} ctx - Canvas context to draw on
+   * @param {number} width - Canvas width in CSS pixels
+   * @param {number} height - Canvas height in CSS pixels
+   * @param {boolean} isHeader - True when rendering on the header canvas
+   */
+  function _renderLoadStartMarker(ctx, width, height, isHeader) {
+    if (!window.__RF_TRACE_LIVE__) return;
+    if (timelineState.activeWindowStart === null) return;
+
+    var x = _timeToScreenX(timelineState.activeWindowStart);
+    // Skip if marker is off-screen
+    if (x < timelineState.leftMargin - 10 || x > width) return;
+
+    var markerColor = '#1976d2';
+
+    ctx.save();
+
+    if (isHeader) {
+      // --- Header canvas: drag handle + label ---
+
+      // Drag handle: small downward-pointing triangle
+      var handleY = height - 6;
+      var handleSize = 6;
+      ctx.fillStyle = markerColor;
+      ctx.beginPath();
+      ctx.moveTo(x - handleSize, handleY - handleSize);
+      ctx.lineTo(x + handleSize, handleY - handleSize);
+      ctx.lineTo(x, handleY + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Vertical tick on header
+      ctx.strokeStyle = markerColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, handleY - handleSize);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+
+      // Label
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+
+      var labelText;
+      // Check if at max lookback limit: activeWindowStart <= minTime means we've
+      // reached the earliest available data boundary (6-hour max)
+      if (timelineState.activeWindowStart <= timelineState.minTime) {
+        labelText = 'Maximum limit reached (6 hours)';
+        ctx.fillStyle = '#c62828';
+      } else {
+        // Format to HH:MM only
+        var d = new Date(timelineState.activeWindowStart * 1000);
+        var hh = d.getHours().toString().padStart(2, '0');
+        var mm = d.getMinutes().toString().padStart(2, '0');
+        labelText = 'Loading from: ' + hh + ':' + mm + ' (drag to load older)';
+        ctx.fillStyle = markerColor;
+      }
+
+      var labelX = x + 8;
+      var labelY = handleY - handleSize - 3;
+      // If label would overflow right edge, draw on the left side
+      var labelWidth = ctx.measureText(labelText).width;
+      if (labelX + labelWidth > width - 4) {
+        ctx.textAlign = 'right';
+        labelX = x - 8;
+      }
+      ctx.fillText(labelText, labelX, labelY);
+    } else {
+      // --- Main canvas: vertical dashed line ---
+      ctx.strokeStyle = markerColor;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
   }
 
   /**
