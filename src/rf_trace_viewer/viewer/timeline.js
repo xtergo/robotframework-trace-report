@@ -192,18 +192,15 @@
     zoomFullRange.className = 'timeline-zoom-btn timeline-zoom-fullrange';
     zoomFullRange.textContent = 'Full Range';
     zoomFullRange.setAttribute('aria-label', 'Show full time range');
-    zoomBar.appendChild(zoomFullRange);
 
     var zoomLocateRecent = document.createElement('button');
     zoomLocateRecent.className = 'timeline-zoom-btn timeline-zoom-locate-recent';
     zoomLocateRecent.textContent = 'Locate Recent';
     zoomLocateRecent.setAttribute('aria-label', 'Zoom to most recent test run');
-    zoomBar.appendChild(zoomLocateRecent);
 
     // Time markers toggle
     var markerToggle = document.createElement('label');
-    markerToggle.className = 'timeline-marker-toggle';
-    markerToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
+    markerToggle.className = 'zoom-bar-toggle';
     var markerCb = document.createElement('input');
     markerCb.type = 'checkbox';
     markerCb.checked = false;
@@ -214,12 +211,10 @@
     });
     markerToggle.appendChild(markerCb);
     markerToggle.appendChild(document.createTextNode('Grid lines'));
-    zoomBar.appendChild(markerToggle);
 
     // Time grid toggle (adaptive — always on by default)
     var gridToggle = document.createElement('label');
-    gridToggle.className = 'timeline-grid-toggle';
-    gridToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
+    gridToggle.className = 'zoom-bar-toggle';
     var gridCb = document.createElement('input');
     gridCb.type = 'checkbox';
     gridCb.checked = true;
@@ -230,7 +225,6 @@
     });
     gridToggle.appendChild(gridCb);
     gridToggle.appendChild(document.createTextNode('Grid'));
-    zoomBar.appendChild(gridToggle);
 
     // Compact layout toggle button
     var compactBtn = document.createElement('button');
@@ -278,8 +272,7 @@
 
     // Auto-compact after filtering toggle (default OFF)
     var autoCompactToggle = document.createElement('label');
-    autoCompactToggle.className = 'timeline-autocompact-toggle';
-    autoCompactToggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:12px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;';
+    autoCompactToggle.className = 'zoom-bar-toggle';
     var autoCompactCb = document.createElement('input');
     autoCompactCb.type = 'checkbox';
     autoCompactCb.checked = false;
@@ -289,7 +282,6 @@
     });
     autoCompactToggle.appendChild(autoCompactCb);
     autoCompactToggle.appendChild(document.createTextNode('Auto-compact'));
-    zoomBar.appendChild(autoCompactToggle);
 
     // Fit All button — zooms to visible span bounds
     var fitAllBtn = document.createElement('button');
@@ -305,7 +297,39 @@
         _fitAll();
       }
     });
-    zoomBar.appendChild(fitAllBtn);
+
+    // ── Assemble zoom bar with grouped sections ──
+    // Group 1: Navigation buttons
+    var navGroup = document.createElement('div');
+    navGroup.className = 'zoom-bar-group';
+    navGroup.appendChild(zoomFullRange);
+    navGroup.appendChild(fitAllBtn);
+    navGroup.appendChild(zoomLocateRecent);
+    zoomBar.appendChild(navGroup);
+
+    // Separator
+    var sep1 = document.createElement('span');
+    sep1.className = 'zoom-bar-sep';
+    zoomBar.appendChild(sep1);
+
+    // Group 2: Display toggles
+    var displayGroup = document.createElement('div');
+    displayGroup.className = 'zoom-bar-group';
+    displayGroup.appendChild(markerToggle);
+    displayGroup.appendChild(gridToggle);
+    zoomBar.appendChild(displayGroup);
+
+    // Separator
+    var sep2 = document.createElement('span');
+    sep2.className = 'zoom-bar-sep';
+    zoomBar.appendChild(sep2);
+
+    // Group 3: Layout controls
+    var layoutGroup = document.createElement('div');
+    layoutGroup.className = 'zoom-bar-group';
+    layoutGroup.appendChild(compactBtn);
+    layoutGroup.appendChild(autoCompactToggle);
+    zoomBar.appendChild(layoutGroup);
 
     headerEl.appendChild(zoomBar);
 

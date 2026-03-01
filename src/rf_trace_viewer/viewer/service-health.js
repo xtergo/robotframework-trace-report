@@ -614,12 +614,11 @@
 
       _diagPanelEl.appendChild(content);
 
-      // Insert into the header area (before the tab content)
+      // Insert after the header (not inside it)
       var header = document.querySelector('.rf-trace-viewer .viewer-header');
-      if (header) {
-        header.appendChild(_diagPanelEl);
+      if (header && header.parentNode) {
+        header.parentNode.insertBefore(_diagPanelEl, header.nextSibling);
       } else if (_tabPane) {
-        // Fallback: insert at the top of the tab pane
         _tabPane.insertBefore(_diagPanelEl, _tabPane.firstChild);
       }
     }
