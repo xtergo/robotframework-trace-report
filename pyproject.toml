@@ -49,6 +49,9 @@ Issues = "https://github.com/xtergo/robotframework-trace-report/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+rf_trace_viewer = ["viewer/*.js", "viewer/*.css"]
+
 [tool.black]
 line-length = 100
 target-version = ["py310", "py311", "py312", "py313"]

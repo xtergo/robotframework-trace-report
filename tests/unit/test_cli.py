@@ -4,7 +4,7 @@ import io
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -167,6 +167,11 @@ class TestArgumentParsing:
                 lookback=None,
                 max_spans=500000,
                 service_name=None,
+                health_router=None,
+                status_poller=None,
+                rate_limiter=None,
+                base_filter=ANY,
+                query_semaphore=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -212,6 +217,11 @@ class TestArgumentParsing:
                 lookback=None,
                 max_spans=500000,
                 service_name=None,
+                health_router=None,
+                status_poller=None,
+                rate_limiter=None,
+                base_filter=ANY,
+                query_semaphore=None,
             )
 
     def test_no_open_argument(self, monkeypatch):
@@ -601,6 +611,11 @@ class TestServeSubcommand:
                 lookback=None,
                 max_spans=500000,
                 service_name=None,
+                health_router=None,
+                status_poller=None,
+                rate_limiter=None,
+                base_filter=ANY,
+                query_semaphore=None,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 

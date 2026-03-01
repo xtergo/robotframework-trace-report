@@ -26,7 +26,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 # Default credentials for self-hosted auto-registration
-_DEFAULT_EMAIL = "rf-trace-viewer@internal"
+_DEFAULT_EMAIL = "rf-trace-viewer@internal.local"
 _DEFAULT_PASSWORD = "RfTraceViewer!AutoAuth2024"
 _DEFAULT_ORG = "rf-trace-viewer"
 _DEFAULT_NAME = "RF Trace Viewer"
@@ -121,7 +121,14 @@ class SigNozAuth:
         return time.time() > (self._token_exp - 300)
 
     def _acquire_token(self) -> bool:
-        """Acquire a fresh token via registration or JWT self-signing."""
+        """Acquire a fresh token via the most reliable method available.
+
+        Tries in order:
+        1. Re-sign with known user/org IDs (fastest, no network)
+        2. Register a new user (works on fresh SigNoz instances)
+        3. Login via session API (works when user already exists)
+        4. Probe endpoints with a self-signed token (legacy fallback)
+        """
         # If we already have user/org IDs, just re-sign
         if self._user_id and self._org_id:
             return self._sign_fresh_token()
@@ -130,8 +137,12 @@ class SigNozAuth:
         if self._try_register():
             return self._sign_fresh_token()
 
-        # Registration failed — try to discover user/org IDs from the
-        # existing token or from a health-check style probe
+        # Registration failed (user exists / self-reg disabled).
+        # Login via the v2 session API to get real IDs.
+        if self._try_login():
+            return self._sign_fresh_token()
+
+        # Try to discover user/org IDs from the existing token
         if self._token:
             claims = _decode_jwt_claims(self._token)
             if claims and claims.get("id") and claims.get("orgId"):
@@ -141,7 +152,183 @@ class SigNozAuth:
                     self._email = claims.get("email", "")
                 return self._sign_fresh_token()
 
+        # Last resort: probe SigNoz API endpoints with a self-signed
+        # token containing synthetic IDs.  Works on older SigNoz
+        # versions that don't validate user ID existence.
+        if self._jwt_secret and self._try_probe_ids():
+            return self._sign_fresh_token()
+
         print("[signoz-auth] Cannot acquire token: no user/org IDs available", file=sys.stderr)
+        return False
+
+    def _try_login(self) -> bool:
+        """Login via SigNoz v2 session API to discover real user/org IDs.
+
+        Two-step flow (no auth required for either step):
+        1. ``GET /api/v2/sessions/context?email=...`` → discover org ID
+        2. ``POST /api/v2/sessions/email_password`` → get access token
+           with real user/org IDs embedded in the JWT claims.
+        """
+        email = self._email or _DEFAULT_EMAIL
+
+        # Step 1: Discover org ID via session context (no auth needed)
+        org_id = self._org_id
+        if not org_id:
+            org_id = self._discover_org_id(email)
+        if not org_id:
+            return False
+
+        # Step 2: Login with email + password + orgId
+        url = f"{self._endpoint}/api/v2/sessions/email_password"
+        payload = json.dumps(
+            {
+                "email": email,
+                "password": _DEFAULT_PASSWORD,
+                "orgId": org_id,
+            }
+        ).encode()
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        try:
+            with urlopen(req, timeout=10) as resp:
+                body = resp.read().decode()
+                if body.strip().startswith("<!doctype") or body.strip().startswith("<html"):
+                    return False
+                data = json.loads(body)
+                # Response: {"status":"success","data":{"accessToken":"...","refreshToken":"..."}}
+                token_data = data.get("data", data)
+                access_token = token_data.get("accessToken", "")
+                if not access_token:
+                    return False
+
+                # Decode the access token to extract real user/org IDs
+                claims = _decode_jwt_claims(access_token)
+                if not claims:
+                    return False
+
+                user_id = claims.get("id", "")
+                claimed_org = claims.get("orgId", "")
+                claimed_email = claims.get("email", "")
+
+                if user_id and claimed_org:
+                    self._user_id = user_id
+                    self._org_id = claimed_org
+                    self._email = claimed_email or email
+                    print(
+                        f"[signoz-auth] Logged in via session API: "
+                        f"user={self._user_id} org={self._org_id}",
+                        file=sys.stderr,
+                    )
+                    return True
+                return False
+        except (HTTPError, URLError, OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"[signoz-auth] Session login failed: {exc}", file=sys.stderr)
+            return False
+
+    def _discover_org_id(self, email: str) -> str:
+        """Discover org ID via the unauthenticated session context endpoint.
+
+        ``GET /api/v2/sessions/context?email=<email>`` returns:
+        ``{"status":"success","data":{"exists":true,"orgs":[{"id":"..."}]}}``
+        """
+        import urllib.parse
+
+        url = (
+            f"{self._endpoint}/api/v2/sessions/context"
+            f"?email={urllib.parse.quote(email)}&ref=http://localhost"
+        )
+        req = Request(url)
+        req.add_header("Accept", "application/json")
+
+        try:
+            with urlopen(req, timeout=5) as resp:
+                body = resp.read().decode()
+                if body.strip().startswith("<!doctype") or body.strip().startswith("<html"):
+                    return ""
+                data = json.loads(body)
+                ctx = data.get("data", data)
+                orgs = ctx.get("orgs", [])
+                if orgs and isinstance(orgs, list):
+                    return orgs[0].get("id", "")
+                return ""
+        except (HTTPError, URLError, OSError, ValueError, json.JSONDecodeError):
+            return ""
+
+    def _try_probe_ids(self) -> bool:
+        """Probe SigNoz for user/org IDs using a self-signed probe token.
+
+        Signs a temporary JWT with synthetic IDs and queries several
+        endpoints.  The most reliable is ``/api/v1/user`` which returns
+        ``{"status":"success","data":[{"id":"...","orgId":"...","email":"..."}]}``.
+        Falls back to ``/api/v1/org`` and ``/api/v1/orgs`` for older versions.
+        """
+        import uuid
+
+        probe_user = str(uuid.uuid4())
+        probe_org = str(uuid.uuid4())
+        now = int(time.time())
+        probe_claims = {
+            "id": probe_user,
+            "email": _DEFAULT_EMAIL,
+            "role": "ADMIN",
+            "orgId": probe_org,
+            "iat": now,
+            "exp": now + 300,
+        }
+        probe_token = _sign_jwt(probe_claims, self._jwt_secret or "")
+
+        # /api/v1/user is the most reliable — it returns real user records
+        # even when the JWT contains synthetic IDs (SigNoz only checks
+        # the JWT signature, not the user ID in the claims).
+        # Try it first, then fall back to org-level endpoints.
+        for path in ("/api/v1/user", "/api/v1/org", "/api/v1/orgs", "/api/v1/orgUsers"):
+            url = f"{self._endpoint}{path}"
+            req = Request(url)
+            req.add_header("Authorization", f"Bearer {probe_token}")
+            try:
+                with urlopen(req, timeout=5) as resp:
+                    body = resp.read().decode()
+                    if body.strip().startswith("<!doctype") or body.strip().startswith("<html"):
+                        continue
+                    data = json.loads(body)
+                    # Extract org/user IDs from response
+                    if isinstance(data, list) and len(data) > 0:
+                        item = data[0]
+                    elif isinstance(data, dict) and "data" in data:
+                        item = data["data"]
+                        if isinstance(item, list) and len(item) > 0:
+                            item = item[0]
+                    elif isinstance(data, dict):
+                        item = data
+                    else:
+                        continue
+
+                    org_id = ""
+                    user_id = ""
+                    email = ""
+                    if isinstance(item, dict):
+                        org_id = item.get("orgId", "") or item.get("id", "")
+                        user_id = item.get("userId", "") or item.get("id", "")
+                        email = item.get("email", "")
+
+                    if org_id and not self._org_id:
+                        self._org_id = org_id
+                    if user_id and not self._user_id:
+                        self._user_id = user_id
+                    if email and not self._email:
+                        self._email = email
+
+                    if self._user_id and self._org_id:
+                        print(
+                            f"[signoz-auth] Discovered IDs via {path}: "
+                            f"user={self._user_id} org={self._org_id}",
+                            file=sys.stderr,
+                        )
+                        return True
+            except (HTTPError, URLError, OSError, ValueError, json.JSONDecodeError):
+                continue
+
         return False
 
     def _try_register(self) -> bool:

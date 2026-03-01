@@ -327,6 +327,37 @@ def _run_live_server(args: argparse.Namespace) -> int:
     if config.provider != "json":
         provider = _build_provider(config)
 
+    # Build K8s integration objects when clickhouse_host is configured
+    health_router = None
+    status_poller = None
+    rate_limiter = None
+    query_semaphore = None
+    if config.clickhouse_host:
+        from rf_trace_viewer.health import HealthRouter, StatusPoller
+
+        health_router = HealthRouter(
+            clickhouse_host=config.clickhouse_host,
+            clickhouse_port=config.clickhouse_port,
+            health_check_timeout=config.health_check_timeout,
+        )
+        status_poller = StatusPoller(
+            clickhouse_host=config.clickhouse_host,
+            clickhouse_port=config.clickhouse_port,
+            signoz_endpoint=config.signoz_endpoint,
+            signoz_api_key=config.signoz_api_key,
+            poll_interval=config.status_poll_interval,
+        )
+        if config.rate_limit_per_ip:
+            from rf_trace_viewer.rate_limit import SlidingWindowRateLimiter
+
+            rate_limiter = SlidingWindowRateLimiter(
+                requests_per_minute=config.rate_limit_per_ip,
+            )
+        if config.max_concurrent_queries:
+            import threading
+
+            query_semaphore = threading.Semaphore(config.max_concurrent_queries)
+
     server = LiveServer(
         trace_path=trace_path,
         port=config.port,
@@ -342,6 +373,11 @@ def _run_live_server(args: argparse.Namespace) -> int:
         lookback=config.lookback or getattr(args, "lookback", None),
         max_spans=config.max_spans,
         service_name=config.service_name,
+        health_router=health_router,
+        status_poller=status_poller,
+        rate_limiter=rate_limiter,
+        base_filter=config.base_filter,
+        query_semaphore=query_semaphore,
     )
     server.start(open_browser=not config.no_open)
     return 0
