@@ -908,10 +908,11 @@
 
     // Update result counts
     resultCounts.visible = filteredSpans.length;
-    console.log('[search] _applyFilters: ' + filteredSpans.length + ' of ' + allSpans.length + ' visible, rejected:', JSON.stringify(_rej));
+    console.log('[search] _applyFilters: ' + filteredSpans.length + ' of ' + allSpans.length + ' visible');
     // When all spans are rejected, log full filter state and stack trace for debugging
     if (filteredSpans.length === 0 && allSpans.length > 0) {
-      console.warn('[search] ALL SPANS REJECTED! filterState:', JSON.stringify({
+      console.warn('[search] ALL SPANS REJECTED! rejected:', JSON.stringify(_rej));
+      console.warn('[search] filterState:', JSON.stringify({
         text: filterState.text,
         testStatuses: filterState.testStatuses,
         kwStatuses: filterState.kwStatuses,

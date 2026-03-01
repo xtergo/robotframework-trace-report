@@ -1071,12 +1071,6 @@
       var totalRange = timelineState.maxTime - timelineState.minTime;
       var actualRange = timelineState.viewEnd - timelineState.viewStart;
       timelineState.zoom = (totalRange > 0 && actualRange > 0) ? totalRange / actualRange : 1;
-      console.log('[Timeline] Wheel zoom: viewStart=' + timelineState.viewStart.toFixed(3) +
-        ', viewEnd=' + timelineState.viewEnd.toFixed(3) +
-        ', range=' + actualRange.toFixed(3) + 's' +
-        ', zoom=' + timelineState.zoom.toFixed(1) + 'x' +
-        ', mouseTime=' + mouseTime.toFixed(3) +
-        ', factor=' + factor);
       if (timelineState._syncSlider) timelineState._syncSlider();
       _applyZoom();
     }, { passive: false });
@@ -1416,13 +1410,6 @@
     var canvas = timelineState.canvas;
     var width = canvas.width / (window.devicePixelRatio || 1);
     var height = canvas.height / (window.devicePixelRatio || 1);
-
-    console.log('[Timeline] Rendering:', { 
-      width: width, 
-      height: height, 
-      spanCount: timelineState.flatSpans.length,
-      workerCount: Object.keys(timelineState.workers).length
-    });
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);

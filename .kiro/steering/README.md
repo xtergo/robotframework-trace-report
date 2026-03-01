@@ -57,6 +57,17 @@ Use this when working on feature implementation tasks from the main spec.
 
 Documents the workaround for clearing stuck red "Test Failed" badges on spec tasks. When PBT status gets incorrectly set to failed, this guide explains how to fix it by invoking the spec-task-execution subagent to call updatePBTStatus.
 
+### troubleshooting-guide.md
+**Inclusion:** Manual (reference with `#troubleshooting-guide` in chat)
+
+Developer troubleshooting guide for the live timeline UI. Covers:
+- Console log markers and what they mean
+- Known issues: stale time-range filter, drag-to-zoom filter leak, wheel zoom jumps, live polling misses, Locate Recent bugs, kind image namespace
+- Step-by-step debugging for "spans disappear" regressions
+- Quick deploy cycle reference
+
+Use this when investigating UI bugs, especially spans disappearing after zoom or filter misbehavior. References `docs/troubleshooting.md`.
+
 ## How Steering Files Work
 
 Steering files can have different inclusion modes:
