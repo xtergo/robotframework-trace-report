@@ -34,8 +34,8 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
     - Return dict keyed by group label tuple, same as cumulative counter
     - _Requirements: 1.2_
 
-- [ ] 3. Implement `_build_rf_metrics` and integrate into `fetch_metrics`
-  - [ ] 3.1 Add `_build_rf_metrics` method to `SigNozMetricsQuery`
+- [x] 3. Implement `_build_rf_metrics` and integrate into `fetch_metrics`
+  - [x] 3.1 Add `_build_rf_metrics` method to `SigNozMetricsQuery`
     - Query `rf.tests.total`, `rf.tests.passed`, `rf.tests.failed`, `rf.keywords.executed` via `_query_cumulative_counter` with `group_by=["suite"]`
     - Query `rf.test.duration` p50 and p95 via `_query_cumulative_histogram_quantile` with `group_by=["suite"]`
     - Wrap each query in try/except for `ProviderError`, log warning and set null on failure
@@ -44,7 +44,7 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
     - Return `(rf_dict_or_none, rf_series_dict)` — return `(None, {})` when all RF queries fail
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 6.1, 6.2, 6.3, 6.4_
 
-  - [ ] 3.2 Extend `fetch_metrics` to call `_build_rf_metrics` and include `rf` and `rf_series` in the snapshot
+  - [x] 3.2 Extend `fetch_metrics` to call `_build_rf_metrics` and include `rf` and `rf_series` in the snapshot
     - Call `_build_rf_metrics` after existing pipeline queries
     - Add `rf` and `rf_series` keys to the returned dict
     - When no RF data, set `rf` to `None` and `rf_series` to `{}`

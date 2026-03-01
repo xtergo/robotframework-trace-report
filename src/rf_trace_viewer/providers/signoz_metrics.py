@@ -684,6 +684,9 @@ class SigNozMetricsQuery:
         if total_queries > 0 and successes == 0:
             raise ProviderError("All metric queries failed -- SigNoz may be unreachable")
 
+        # -- RF test execution metrics ----------------------------------
+        rf, rf_series = self._build_rf_metrics(base_filters, start_s, end_s, step)
+
         # -- Assemble snapshot -------------------------------------------
 
         return {
@@ -706,4 +709,6 @@ class SigNozMetricsQuery:
                 "error_rate_pct": error_rate_series,
                 "dep_p95_latency_ms": [],
             },
+            "rf": rf,
+            "rf_series": rf_series,
         }
