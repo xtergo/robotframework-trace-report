@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block commit if staged Python files fail black formatting,
+# ruff lint, or unit tests.
+# Runs inside the rf-trace-test Docker container for consistent environment.
+# Matches the GitHub Actions lint pipeline (src/ + tests/).
+
+set -euo pipefail
+
+# Get list of staged .py files (only added/modified, not deleted)
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [ -z "$STAGED_PY" ]; then
+    exit 0
+fi
+
+echo "=== Pre-commit: black format check ==="
+docker run --rm -v "$(pwd)":/workspace -w /workspace rf-trace-test:latest \
+    black --check $STAGED_PY
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Commit blocked: Python files are not formatted with black."
+    echo "Run 'make format' to fix, then stage and commit again."
+    exit 1
+fi
+
+echo "=== Pre-commit: ruff lint check (src/ + tests/) ==="
+docker run --rm -v "$(pwd)":/workspace -w /workspace rf-trace-test:latest \
+    ruff check src/ tests/
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Commit blocked: ruff lint errors found."
+    echo "Run 'make lint' or 'ruff check src/ tests/ --fix' to auto-fix, then stage and commit again."
+    exit 1
+fi
+
+echo "=== Pre-commit: unit tests (light PBT) ==="
+docker run --rm --memory=6g --memory-swap=6g -v "$(pwd)":/workspace -w /workspace rf-trace-test:latest \
+    bash -c "PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest tests/unit/ --skip-slow -n 3 -q"
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Commit blocked: unit tests failed."
+    echo "Run 'make test-unit' to debug, then fix and commit again."
+    exit 1
+fi
+
+echo "=== Pre-commit: all checks passed ==="
+exit 0

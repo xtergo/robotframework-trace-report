@@ -114,15 +114,15 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
     - Test in `tests/unit/test_service_health_js.py`
     - Generate random non-negative duration values; verify output ends in "ms" when < 1000, "s" when ≥ 1000, and "—" for null/NaN
 
-- [ ] 6. Implement Diagnostics Panel and conditional visibility
-  - [ ] 6.1 Implement collapsible Diagnostics Panel
+- [x] 6. Implement Diagnostics Panel and conditional visibility
+  - [x] 6.1 Implement collapsible Diagnostics Panel
     - Create `_renderDiagnosticsPanel(snapshot)` function
     - Use `<details>/<summary>` element in the header area
     - Move existing pipeline metric cards and sparklines into this panel
     - When collapsed, pipeline cards are hidden; when expanded, same cards/sparklines as current tab
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [ ] 6.2 Implement conditional visibility and tab label switching
+  - [x] 6.2 Implement conditional visibility and tab label switching
     - On each poll cycle, check `snapshot.rf` for non-null data
     - When RF data present: show RF Metrics Section as primary content, move pipeline metrics to Diagnostics Panel, set tab label to "RF Metrics"
     - When RF data absent: show pipeline metrics in primary tab area (current behavior), hide Diagnostics Panel, set tab label to "Service Health"
@@ -135,11 +135,11 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
     - Test in `tests/unit/test_service_health_js.py`
     - Generate random snapshots with/without rf data; verify label is "RF Metrics" iff rf is non-null
 
-- [ ] 7. Checkpoint — Frontend complete
+- [x] 7. Checkpoint — Frontend complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Wire everything together and verify end-to-end
-  - [ ] 8.1 Verify `/api/metrics` route returns expanded snapshot
+  - [x] 8.1 Verify `/api/metrics` route returns expanded snapshot
     - Confirm `server.py` route serializes the new `rf` and `rf_series` fields without changes (already returns `fetch_metrics()` dict as JSON)
     - Add a unit test in `tests/unit/test_server_signoz.py` that mocks `fetch_metrics` to return a snapshot with `rf` data and verifies the HTTP response includes all fields
     - _Requirements: 5.3, 7.1, 7.2, 7.3, 7.4_
@@ -150,7 +150,7 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
     - Test in `tests/unit/test_signoz_rf_metrics.py`
     - _Requirements: 2.5, 7.1, 7.3_
 
-- [ ] 9. Final checkpoint — All tests pass
+- [x] 9. Final checkpoint — All tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

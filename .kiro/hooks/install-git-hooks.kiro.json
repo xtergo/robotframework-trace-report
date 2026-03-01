@@ -1,0 +1,12 @@
+{
+  "name": "Install Git Hooks",
+  "version": "1.0.0",
+  "description": "Install pre-commit hooks from scripts/hooks/ into .git/hooks/. Run this after cloning the repo.",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "make install-hooks"
+  }
+}

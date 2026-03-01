@@ -23,7 +23,7 @@ test: test-unit ## Run all tests (unit, skipping slow large-fixture tests)
 test-unit: ## Run Python unit tests with coverage (skips slow/large-fixture tests, light PBT)
 	@echo "Running unit tests in Docker (light PBT)..."
 	@docker run --rm --memory=6g --memory-swap=6g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
-		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest tests/unit/ $(ARGS) --skip-slow --cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n 2"
+		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest tests/unit/ $(ARGS) --skip-slow --cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n 3"
 
 test-slow: ## Run slow tests that use large_trace.json (requires ~4 GB RAM)
 	@echo "Running slow (large-fixture) tests in Docker..."
@@ -38,7 +38,7 @@ test-properties: ## Run property-based tests with full iterations
 test-full: ## Run all unit tests with full PBT iterations (CI mode)
 	@echo "Running full test suite in Docker (full PBT)..."
 	@docker run --rm --memory=6g --memory-swap=6g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
-		PYTHONPATH=src HYPOTHESIS_PROFILE=ci pytest tests/unit/ $(ARGS) --skip-slow --cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n 2"
+		PYTHONPATH=src HYPOTHESIS_PROFILE=ci pytest tests/unit/ $(ARGS) --skip-slow --cov=src/rf_trace_viewer --cov-report=html --cov-report=term-missing -n 3"
 
 test-browser: ## Run browser tests with Robot Framework
 	@echo "Running browser tests in Docker..."
@@ -83,7 +83,7 @@ clean: ## Clean up generated files
 dev-test: ## Quick test run (unit tests only, no coverage, parallel, light PBT)
 	@echo "Running quick unit tests in Docker..."
 	@docker run --rm --memory=6g --memory-swap=6g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
-		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest tests/unit/ --skip-slow -v -n 2"
+		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest tests/unit/ --skip-slow -v -n 3"
 
 dev-test-file: ## Run specific test file (usage: make dev-test-file FILE=tests/unit/test_generator.py)
 	@echo "Running $(FILE) in Docker..."
@@ -104,6 +104,12 @@ docker-pull: ## Pull latest Python image
 
 docker-clean: ## Remove Docker images and containers
 	@docker system prune -f
+
+install-hooks: ## Install git hooks from scripts/hooks/
+	@echo "Installing git hooks..."
+	@cp scripts/hooks/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "Git hooks installed successfully."
 
 # Kind integration test targets
 itest-up: ## Create kind cluster and deploy services for integration testing
