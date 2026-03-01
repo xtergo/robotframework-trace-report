@@ -499,13 +499,14 @@
 
     // Logo Slot — render only when configured via window.__RF_LOGO_URL__
     if (window.__RF_LOGO_URL__) {
+      var logoPlate = document.createElement('div');
+      logoPlate.className = 'header-logo-plate';
       var logo = document.createElement('img');
       logo.className = 'header-logo';
       logo.src = window.__RF_LOGO_URL__;
       logo.alt = window.__RF_LOGO_ALT__ || 'Logo';
-      logo.style.maxHeight = '32px';
-      logo.style.objectFit = 'contain';
-      header.appendChild(logo);
+      logoPlate.appendChild(logo);
+      header.appendChild(logoPlate);
     }
 
     var title = document.createElement('h1');

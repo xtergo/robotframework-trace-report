@@ -2300,11 +2300,32 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 }
 
 /* ── Header Logo ── */
-.rf-trace-viewer .header-logo {
-  max-height: 32px;
-  width: auto;
-  object-fit: contain;
+.rf-trace-viewer .header-logo-plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  width: 48px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.10);
   flex-shrink: 0;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.rf-trace-viewer .header-logo {
+  max-height: 100%;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.rf-trace-viewer.theme-dark .header-logo-plate {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* ── Header Spacer ── */

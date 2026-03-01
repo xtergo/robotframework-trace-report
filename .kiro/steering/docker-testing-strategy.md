@@ -80,3 +80,62 @@ The `rf-trace-report` container uses a volume mount so Python source changes are
 - **"rf-trace-test:latest not found"** → `make docker-build-test`
 - **"Module not found"** → Ensure `PYTHONPATH=src` is set
 - **"unrecognized arguments: -n"** → Wrong image, use `rf-trace-test:latest`
+
+## Kind Cluster (Integration Test Environment)
+
+A Kind (Kubernetes in Docker) cluster runs inside Docker for integration testing and manual verification. The cluster container is named `trace-report-test-control-plane`.
+
+**Key facts:**
+- `kind` and `kubectl` are NOT installed on the host — they run inside the kind container
+- All kubectl commands go through: `docker exec trace-report-test-control-plane kubectl ...`
+- The cluster is created via `make itest-up` (runs `test/kind/itest-up.sh`)
+- Torn down via `make itest-down`
+- trace-report is accessible at `http://localhost:8077` when port-forward is active
+
+### Deploying a New Image to the Kind Cluster
+
+The deployment uses incrementing tags (`dev`, `dev2`, `dev3`, ...) with `imagePullPolicy: IfNotPresent`. To deploy new code:
+
+1. **Build the image on the host:**
+   ```bash
+   docker build -t trace-report:dev .
+   ```
+
+2. **Tag with next increment** (check current: `docker exec trace-report-test-control-plane kubectl get deployment trace-report -o jsonpath='{.spec.template.spec.containers[0].image}'`):
+   ```bash
+   docker tag trace-report:dev trace-report:devN
+   ```
+
+3. **Load into kind cluster** (no `kind` CLI needed — pipe through containerd):
+   ```bash
+   docker save trace-report:devN | docker exec -i trace-report-test-control-plane ctr --namespace k8s.io images import -
+   ```
+
+4. **Update the deployment:**
+   ```bash
+   docker exec trace-report-test-control-plane kubectl set image deployment/trace-report trace-report=trace-report:devN
+   ```
+
+5. **Wait for rollout:**
+   ```bash
+   docker exec trace-report-test-control-plane kubectl rollout status deployment/trace-report --timeout=60s
+   ```
+
+### Useful Kind Cluster Commands
+
+```bash
+# List pods
+docker exec trace-report-test-control-plane kubectl get pods
+
+# Check which image is deployed
+docker exec trace-report-test-control-plane kubectl get deployment trace-report -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+# View pod logs
+docker exec trace-report-test-control-plane kubectl logs -l app.kubernetes.io/name=trace-report
+
+# List images loaded in kind
+docker exec trace-report-test-control-plane crictl images | grep trace-report
+
+# Check if kind cluster container is running
+docker ps --filter name=trace-report-test-control-plane
+```

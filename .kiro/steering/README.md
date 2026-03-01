@@ -12,6 +12,7 @@ Enforces the Docker-only development environment. Covers:
 - Always use the pre-built `rf-trace-test:latest` image or Makefile targets
 - Direct Docker commands when needed
 - Keeping containers up to date with latest code
+- Kind cluster deployment: building, loading, and rolling out images via `docker exec`
 
 ### test-strategy.md
 **Inclusion:** Auto (always active)
