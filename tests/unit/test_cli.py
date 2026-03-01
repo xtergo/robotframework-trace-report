@@ -125,6 +125,7 @@ class TestArgumentParsing:
                                 max_keyword_depth=None,
                                 exclude_passing_keywords=False,
                                 max_spans=None,
+                                logo_path=None,
                             )
 
     def test_live_mode_argument(self, monkeypatch):

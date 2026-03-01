@@ -215,7 +215,7 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
     return result
 
 
-def _build_report_options(args: argparse.Namespace) -> ReportOptions:
+def _build_report_options(args: argparse.Namespace, logo_path: str | None = None) -> ReportOptions:
     """Build ReportOptions from parsed arguments."""
     return ReportOptions(
         title=args.title,
@@ -224,6 +224,7 @@ def _build_report_options(args: argparse.Namespace) -> ReportOptions:
         max_keyword_depth=args.max_keyword_depth,
         exclude_passing_keywords=args.exclude_passing_keywords,
         max_spans=args.max_spans,
+        logo_path=logo_path,
     )
 
 
@@ -327,7 +328,7 @@ def _run_live_server(args: argparse.Namespace) -> int:
     trace_path = config.input_path or ""
 
     journal_path = None if config.no_journal else config.journal
-    report_options = _build_report_options(args)
+    report_options = _build_report_options(args, logo_path=config.logo_path)
 
     # Build provider for non-json modes
     provider = None
@@ -479,7 +480,7 @@ def main() -> int:
             roots = build_tree(spans)
             model = interpret_tree(roots)
 
-            options = _build_report_options(args)
+            options = _build_report_options(args, logo_path=config.logo_path)
             html = generate_report(model, options)
 
             with open(config.output_path, "w", encoding="utf-8") as f:
@@ -497,7 +498,7 @@ def main() -> int:
             return 0
 
         # Non-json providers use the provider pipeline
-        report_options = _build_report_options(args)
+        report_options = _build_report_options(args, logo_path=config.logo_path)
         return _run_provider_pipeline(config, report_options)
 
     except ConfigurationError as exc:

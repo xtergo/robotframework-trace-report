@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from rf_trace_viewer.config import validate_svg
 from rf_trace_viewer.rf_model import (
     RFRunModel,
 )
@@ -44,6 +45,7 @@ class ReportOptions:
     max_keyword_depth: int | None = None  # if set, truncate keyword children beyond this depth
     exclude_passing_keywords: bool = False  # if True, remove keyword spans with PASS status
     max_spans: int | None = None  # if set, limit total spans to N, prioritising FAIL > SKIP > PASS
+    logo_path: str | None = None  # path to custom SVG logo file (None = use default)
 
 
 def _serialize(obj: Any) -> Any:
@@ -261,6 +263,20 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
     else:
         data_script = f"window.__RF_TRACE_DATA__ = {data_json};\n"
 
+    # Resolve and embed logo as data URI
+    if options.logo_path:
+        valid, reason = validate_svg(options.logo_path)
+        if not valid:
+            print(f"Error: {reason}", file=sys.stderr)
+            sys.exit(1)
+        logo_file = Path(options.logo_path)
+    else:
+        logo_file = _VIEWER_DIR / "default-logo.svg"
+
+    logo_svg = logo_file.read_bytes()
+    logo_b64 = base64.b64encode(logo_svg).decode("ascii")
+    logo_script = f'window.__RF_LOGO_URL__ = "data:image/svg+xml;base64,{logo_b64}";\n'
+
     return (
         "<!DOCTYPE html>\n"
         '<html lang="en">\n'
@@ -276,6 +292,7 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
         '<div class="rf-trace-viewer"></div>\n'
         "<script>\n"
         f"{data_script}"
+        f"{logo_script}"
         "</script>\n"
         "<script>\n"
         f"{js_content}\n"
