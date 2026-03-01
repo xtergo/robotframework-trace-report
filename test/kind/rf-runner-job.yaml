@@ -1,0 +1,28 @@
+# One-shot Job that runs Robot Framework tests with robotframework-tracer.
+# Sends OTLP traces to the OTel Collector in the cluster.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rf-test-runner
+  labels:
+    app.kubernetes.io/name: rf-test-runner
+    app.kubernetes.io/part-of: signoz-test
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rf-test-runner
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rf-runner
+          image: rf-runner:dev
+          imagePullPolicy: Never
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4318/v1/traces"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "essvt.execution_id=kind-test-run-001"
+            - name: OTEL_BSP_SCHEDULE_DELAY
+              value: "1000"

@@ -41,7 +41,7 @@ spec:
     spec:
       containers:
         - name: otel-collector
-          image: signoz/signoz-otel-collector:v0.144.2
+          image: signoz/signoz-otel-collector:v0.144.1
           args: ["--config=/otel/config.yaml"]
           ports:
             - containerPort: 4317

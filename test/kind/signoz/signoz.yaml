@@ -53,6 +53,9 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          volumeMounts:
+            - name: signoz-data
+              mountPath: /var/lib/signoz
           readinessProbe:
             httpGet:
               path: /api/v1/health
@@ -64,6 +67,9 @@ spec:
             httpGet:
               path: /api/v1/health
               port: 8080
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
+      volumes:
+        - name: signoz-data
+          emptyDir: {}

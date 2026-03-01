@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/part-of: signoz-test
 spec:
   clusterIP: None
+  publishNotReadyAddresses: true
   ports:
     - name: http
       port: 8123
@@ -53,18 +54,23 @@ spec:
           volumeMounts:
             - name: clickhouse-config
               mountPath: /etc/clickhouse-server/config.d
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /ping
               port: 8123
-            initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: /ping
               port: 8123
-            initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
       volumes:
