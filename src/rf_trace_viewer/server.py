@@ -148,6 +148,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._serve_viewer(request_id)
             return
 
+        # --- Logo asset (no rate limiting) ---
+        if path == "/logo.svg":
+            self._serve_logo(request_id)
+            return
+
         # --- Backward-compat: /traces.json (no rate limiting) ---
         if path == "/traces.json":
             offset = int(query.get("offset", ["0"])[0])
@@ -276,6 +281,22 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         body = html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._send_request_id_header(request_id)
+        self.end_headers()
+        self.wfile.write(body)
+        self._metrics_response_bytes += len(body)
+
+    def _serve_logo(self, request_id: str) -> None:
+        """Serve the active logo SVG file."""
+        try:
+            with open(self.server.logo_path, "rb") as fh:
+                body = fh.read()
+        except Exception as exc:
+            self.send_error(500, f"Failed to read logo: {exc}")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/svg+xml")
         self.send_header("Content-Length", str(len(body)))
         self._send_request_id_header(request_id)
         self.end_headers()

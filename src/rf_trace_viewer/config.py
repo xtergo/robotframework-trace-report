@@ -261,7 +261,7 @@ def validate_svg(path: str) -> tuple[bool, str]:
     if not os.path.isfile(path):
         return False, f"File not found: {path}"
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             content = fh.read()
     except Exception as exc:  # noqa: BLE001
         return False, f"Cannot read file: {path} ({exc})"
