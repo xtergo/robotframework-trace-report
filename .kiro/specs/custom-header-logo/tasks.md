@@ -18,18 +18,18 @@ Changes touch `config.py`, `cli.py`, `server.py`, `generator.py`, `app.js`, Kust
     - Add `"viewer/*.svg"` to the `rf_trace_viewer` package-data glob
     - _Requirements: 8.4_
 
-- [ ] 2. Implement `logo_path` configuration and SVG validation
-  - [ ] 2.1 Add `logo_path` field to `AppConfig` in `src/rf_trace_viewer/config.py`
+- [x] 2. Implement `logo_path` configuration and SVG validation
+  - [x] 2.1 Add `logo_path` field to `AppConfig` in `src/rf_trace_viewer/config.py`
     - Add `logo_path: str | None = None` to the dataclass
     - Add `LOGO_PATH` to the `env_map` in `load_config()`
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 2.2 Add `validate_svg(path)` function to `src/rf_trace_viewer/config.py`
+  - [x] 2.2 Add `validate_svg(path)` function to `src/rf_trace_viewer/config.py`
     - Returns `tuple[bool, str]` — `(True, "")` on success, `(False, reason)` on failure
     - Check file existence and presence of `<svg` tag in content
     - _Requirements: 6.1_
 
-  - [ ] 2.3 Add `--logo-path` argument to `_add_shared_arguments()` in `src/rf_trace_viewer/cli.py`
+  - [x] 2.3 Add `--logo-path` argument to `_add_shared_arguments()` in `src/rf_trace_viewer/cli.py`
     - Maps to `logo_path` in the CLI dict via existing argparse conversion
     - _Requirements: 4.1, 4.2_
 

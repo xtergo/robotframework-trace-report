@@ -166,6 +166,12 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         help="JWT signing secret for self-hosted SigNoz token auto-refresh "
         "(also readable from SIGNOZ_JWT_SECRET env var)",
     )
+    parser.add_argument(
+        "--logo-path",
+        default=None,
+        metavar="<path>",
+        help="Path to a custom SVG logo file for the viewer header",
+    )
 
 
 def _args_to_cli_dict(args: argparse.Namespace) -> dict:
@@ -199,6 +205,7 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
         "lookback": "lookback",
         "service_name": "service_name",
         "signoz_jwt_secret": "signoz_jwt_secret",
+        "logo_path": "logo_path",
     }
     result = {}
     for arg_name, config_name in mapping.items():

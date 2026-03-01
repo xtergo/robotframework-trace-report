@@ -62,6 +62,7 @@ class AppConfig:
     gzip_embed: bool = False
     base_url: str | None = None
     lookback: str | None = None  # e.g. "10m", "1h", "30s" — only fetch recent spans in live mode
+    logo_path: str | None = None  # path to custom SVG logo file
 
     # K8s deployment settings
     log_format: str = "text"  # "text" | "json"
@@ -252,6 +253,23 @@ def _validate(config: AppConfig) -> None:
         )
 
 
+def validate_svg(path: str) -> tuple[bool, str]:
+    """Check that *path* exists and contains an ``<svg`` tag.
+
+    Returns ``(True, "")`` on success, ``(False, reason)`` on failure.
+    """
+    if not os.path.isfile(path):
+        return False, f"File not found: {path}"
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            content = fh.read()
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Cannot read file: {path} ({exc})"
+    if "<svg" not in content.lower():
+        return False, f"Not a valid SVG: {path} (no <svg tag found)"
+    return True, ""
+
+
 def validate_k8s_startup(config: AppConfig) -> None:
     """Fail-fast validation for K8s deployment mode.
 
@@ -310,6 +328,7 @@ def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
         "MAX_CONCURRENT_QUERIES": "max_concurrent_queries",
         "BASE_FILTER_CONFIG": "base_filter_config",
         "RATE_LIMIT_PER_IP": "rate_limit_per_ip",
+        "LOGO_PATH": "logo_path",
     }
     for env_key, attr in env_map.items():
         val = os.environ.get(env_key)
