@@ -54,7 +54,8 @@
     isFetchingOlderSpans: false,
     isDraggingMarker: false,
     _markerDragDebounceTimer: null,
-    _markerDragOldStart: null
+    _markerDragOldStart: null,
+    layoutMode: 'baseline'
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -228,6 +229,35 @@
     gridToggle.appendChild(gridCb);
     gridToggle.appendChild(document.createTextNode('Grid'));
     zoomBar.appendChild(gridToggle);
+
+    // Compact layout toggle button
+    var compactBtn = document.createElement('button');
+    compactBtn.className = 'timeline-zoom-btn timeline-compact-btn';
+    compactBtn.textContent = 'Compact visible spans';
+    compactBtn.setAttribute('aria-label', 'Compact visible spans');
+    function _toggleLayoutMode() {
+      if (timelineState.layoutMode === 'baseline') {
+        timelineState.layoutMode = 'compact';
+        compactBtn.textContent = 'Reset layout';
+        compactBtn.setAttribute('aria-label', 'Reset layout');
+      } else {
+        timelineState.layoutMode = 'baseline';
+        compactBtn.textContent = 'Compact visible spans';
+        compactBtn.setAttribute('aria-label', 'Compact visible spans');
+      }
+      if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+        window.RFTraceViewer.emit('layout-mode-changed', { mode: timelineState.layoutMode });
+      }
+      _render();
+    }
+    compactBtn.addEventListener('click', _toggleLayoutMode);
+    compactBtn.addEventListener('keydown', function (e) {
+      if (e.keyCode === 13 || e.keyCode === 32) {
+        e.preventDefault();
+        _toggleLayoutMode();
+      }
+    });
+    zoomBar.appendChild(compactBtn);
 
     headerEl.appendChild(zoomBar);
 
