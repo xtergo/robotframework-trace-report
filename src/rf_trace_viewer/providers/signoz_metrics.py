@@ -386,6 +386,192 @@ class SigNozMetricsQuery:
             return self._extract_grouped_series(response, group_by)
         return {("__all__",): self._extract_series(response)}
 
+    # -- RF metric assembly -----------------------------------------------
+
+    def _build_rf_metrics(
+        self,
+        base_filters: list[dict],
+        start_s: int,
+        end_s: int,
+        step: int,
+    ) -> tuple[dict | None, dict]:
+        """Query all RF metrics and assemble the rf section + rf_series.
+
+        Returns ``(rf_dict_or_none, rf_series_dict)``.
+        On total failure of all RF queries, returns ``(None, {})``.
+        """
+        group_by = ["suite"]
+
+        # -- Counter queries ------------------------------------------------
+        rf_total: dict[tuple[str, ...], list[dict]] | None = None
+        rf_passed: dict[tuple[str, ...], list[dict]] | None = None
+        rf_failed: dict[tuple[str, ...], list[dict]] | None = None
+        rf_keywords: dict[tuple[str, ...], list[dict]] | None = None
+
+        counter_queries = [
+            ("rf.tests.total", "rf_total"),
+            ("rf.tests.passed", "rf_passed"),
+            ("rf.tests.failed", "rf_failed"),
+            ("rf.keywords.executed", "rf_keywords"),
+        ]
+        results: dict[str, dict[tuple[str, ...], list[dict]] | None] = {}
+
+        for metric_name, label in counter_queries:
+            try:
+                results[label] = self._query_cumulative_counter(
+                    metric_name, base_filters, start_s, end_s, step, group_by=group_by
+                )
+            except ProviderError as exc:
+                logger.warning("RF metric query failed: %s — %s", metric_name, exc)
+                results[label] = None
+
+        rf_total = results["rf_total"]
+        rf_passed = results["rf_passed"]
+        rf_failed = results["rf_failed"]
+        rf_keywords = results["rf_keywords"]
+
+        # -- Histogram queries ----------------------------------------------
+        rf_p50: dict[tuple[str, ...], list[dict]] | None = None
+        rf_p95: dict[tuple[str, ...], list[dict]] | None = None
+
+        try:
+            rf_p50 = self._query_cumulative_histogram_quantile(
+                "rf.test.duration", "p50", base_filters, start_s, end_s, step, group_by=group_by
+            )
+        except ProviderError as exc:
+            logger.warning("RF metric query failed: rf.test.duration p50 — %s", exc)
+
+        try:
+            rf_p95 = self._query_cumulative_histogram_quantile(
+                "rf.test.duration", "p95", base_filters, start_s, end_s, step, group_by=group_by
+            )
+        except ProviderError as exc:
+            logger.warning("RF metric query failed: rf.test.duration p95 — %s", exc)
+
+        # -- Check for total failure ----------------------------------------
+        all_results = [rf_total, rf_passed, rf_failed, rf_keywords, rf_p50, rf_p95]
+        if all(r is None for r in all_results):
+            return (None, {})
+
+        # -- Collect all suite keys -----------------------------------------
+        suite_keys: set[str] = set()
+        for grouped in all_results:
+            if grouped is not None:
+                for key_tuple in grouped:
+                    if key_tuple != ("__all__",) and key_tuple != ("",):
+                        suite_keys.add(key_tuple[0])
+
+        # -- Helper to get latest value for a suite -------------------------
+        def _suite_latest(
+            grouped: dict[tuple[str, ...], list[dict]] | None,
+            suite: str,
+        ) -> float | None:
+            if grouped is None:
+                return None
+            series = grouped.get((suite,), [])
+            return self._latest_value(series)
+
+        def _compute_pass_rate(passed: float | None, total: float | None) -> float | None:
+            if total is None or passed is None or total == 0:
+                return None
+            return (passed / total) * 100
+
+        # -- Build per-suite dicts ------------------------------------------
+        suites: dict[str, dict] = {}
+        for suite in sorted(suite_keys):
+            s_total = _suite_latest(rf_total, suite)
+            s_passed = _suite_latest(rf_passed, suite)
+            s_failed = _suite_latest(rf_failed, suite)
+            s_p50 = _suite_latest(rf_p50, suite)
+            s_p95 = _suite_latest(rf_p95, suite)
+            s_keywords = _suite_latest(rf_keywords, suite)
+
+            suites[suite] = {
+                "tests_total": s_total,
+                "tests_passed": s_passed,
+                "tests_failed": s_failed,
+                "pass_rate_pct": _compute_pass_rate(s_passed, s_total),
+                "p50_duration_ms": s_p50,
+                "p95_duration_ms": s_p95,
+                "keywords_executed": s_keywords,
+            }
+
+        # -- Compute aggregated summary -------------------------------------
+        def _sum_across_suites(
+            grouped: dict[tuple[str, ...], list[dict]] | None,
+        ) -> float | None:
+            if grouped is None:
+                return None
+            total = 0.0
+            found = False
+            for key_tuple, series in grouped.items():
+                if key_tuple == ("__all__",) or key_tuple == ("",):
+                    continue
+                val = self._latest_value(series)
+                if val is not None:
+                    total += val
+                    found = True
+            return total if found else None
+
+        def _avg_across_suites(
+            grouped: dict[tuple[str, ...], list[dict]] | None,
+        ) -> float | None:
+            """Average the latest values across suites (for percentiles)."""
+            if grouped is None:
+                return None
+            values: list[float] = []
+            for key_tuple, series in grouped.items():
+                if key_tuple == ("__all__",) or key_tuple == ("",):
+                    continue
+                val = self._latest_value(series)
+                if val is not None:
+                    values.append(val)
+            return sum(values) / len(values) if values else None
+
+        sum_total = _sum_across_suites(rf_total)
+        sum_passed = _sum_across_suites(rf_passed)
+        sum_failed = _sum_across_suites(rf_failed)
+        sum_keywords = _sum_across_suites(rf_keywords)
+        avg_p50 = _avg_across_suites(rf_p50)
+        avg_p95 = _avg_across_suites(rf_p95)
+
+        summary = {
+            "tests_total": sum_total,
+            "tests_passed": sum_passed,
+            "tests_failed": sum_failed,
+            "pass_rate_pct": _compute_pass_rate(sum_passed, sum_total),
+            "p50_duration_ms": avg_p50,
+            "p95_duration_ms": avg_p95,
+            "keywords_executed": sum_keywords,
+        }
+
+        rf_dict = {
+            "summary": summary,
+            "suites": suites,
+        }
+
+        # -- Build rf_series for sparklines ---------------------------------
+        def _merge_series(
+            grouped: dict[tuple[str, ...], list[dict]] | None,
+        ) -> list[dict]:
+            """Merge per-suite series by averaging values at each timestamp."""
+            if grouped is None:
+                return []
+            ts_values: dict[int, list[float]] = {}
+            for key_tuple, series in grouped.items():
+                if key_tuple == ("__all__",) or key_tuple == ("",):
+                    continue
+                for pt in series:
+                    ts_values.setdefault(pt["t"], []).append(pt["v"])
+            return [{"t": t, "v": sum(vs) / len(vs)} for t, vs in sorted(ts_values.items())]
+
+        rf_series = {
+            "p50_duration_ms": _merge_series(rf_p50),
+            "p95_duration_ms": _merge_series(rf_p95),
+        }
+
+        return (rf_dict, rf_series)
+
     # -- Public API -------------------------------------------------------
 
     def fetch_metrics(self, window_minutes: int = 30) -> dict:
