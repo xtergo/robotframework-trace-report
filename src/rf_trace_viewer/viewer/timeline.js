@@ -646,8 +646,6 @@
       }
       rootSuites.sort(function(a, b) { return a.startTime - b.startTime; });
 
-      var lane = 0;
-
       // Iteratively collect all keywords into a flat list
       function collectKeywords(kwList, result) {
         var kwStack = kwList.slice();
@@ -662,12 +660,54 @@
         }
       }
 
-      // Iteratively assign lanes using DFS
-      function assignHierarchy(rootNode) {
-        // Stack items are either:
-        // - A node object (suite): assign lane, process children
-        // - {_leaf: node}: just assign lane, no child processing
-        // - {_kws: children}: collect keywords and assign lanes
+      // Count how many lanes a root suite hierarchy needs (without assigning)
+      function countLanesNeeded(rootNode) {
+        var count = 0;
+        var cStack = [rootNode];
+        while (cStack.length > 0) {
+          var cur = cStack.pop();
+          if (cur._countKws) {
+            var allKws = [];
+            collectKeywords(cur._countKws, allKws);
+            if (allKws.length > 0) {
+              // Greedy lane count: simulate _assignLanesForGroup
+              allKws.sort(function(a, b) { return a.startTime - b.startTime; });
+              var simLanes = [];
+              for (var si = 0; si < allKws.length; si++) {
+                var placed = false;
+                for (var sl = 0; sl < simLanes.length; sl++) {
+                  if (allKws[si].startTime >= simLanes[sl]) {
+                    simLanes[sl] = allKws[si].endTime;
+                    placed = true;
+                    break;
+                  }
+                }
+                if (!placed) simLanes.push(allKws[si].endTime);
+              }
+              count += simLanes.length;
+            }
+            continue;
+          }
+          if (cur._countLeaf) { count++; continue; }
+          // Suite node
+          count++;
+          var ch = (cur.children || []).slice();
+          ch.sort(function(a, b) { return a.startTime - b.startTime; });
+          for (var ci = ch.length - 1; ci >= 0; ci--) {
+            var c = ch[ci];
+            if (c.type === 'suite') { cStack.push(c); }
+            else if (c.type === 'test') {
+              cStack.push({_countKws: c.children || []});
+              cStack.push({_countLeaf: true});
+            } else { cStack.push({_countLeaf: true}); }
+          }
+        }
+        return count;
+      }
+
+      // Assign lanes within a hierarchy starting at baseLane
+      function assignHierarchy(rootNode, baseLane) {
+        var lane = baseLane;
         var hStack = [rootNode];
         while (hStack.length > 0) {
           var cur = hStack.pop();
@@ -711,22 +751,69 @@
             }
           }
         }
+        return lane;
       }
 
+      // Lane-reuse strategy: each slot tracks {endTime, laneStart, laneCount}.
+      // A new root suite can reuse a slot if it starts after the slot's endTime
+      // and needs <= laneCount lanes.
+      var slots = [];
+
       for (var s = 0; s < rootSuites.length; s++) {
-        assignHierarchy(rootSuites[s]);
+        var rs = rootSuites[s];
+        var needed = countLanesNeeded(rs);
+
+        // Try to find a reusable slot (finished, big enough)
+        var bestSlot = -1;
+        var bestWaste = Infinity;
+        for (var si = 0; si < slots.length; si++) {
+          if (rs.startTime >= slots[si].endTime && slots[si].laneCount >= needed) {
+            var waste = slots[si].laneCount - needed;
+            if (waste < bestWaste) {
+              bestWaste = waste;
+              bestSlot = si;
+            }
+          }
+        }
+
+        if (bestSlot >= 0) {
+          // Reuse this slot
+          var slot = slots[bestSlot];
+          assignHierarchy(rs, slot.laneStart);
+          slot.endTime = rs.endTime;
+          // If the new suite uses fewer lanes, keep the original laneCount
+          // so future larger suites can still reuse it
+        } else {
+          // Allocate new lanes after all existing slots
+          var maxLane = 0;
+          for (var mi = 0; mi < slots.length; mi++) {
+            var slotEnd = slots[mi].laneStart + slots[mi].laneCount;
+            if (slotEnd > maxLane) maxLane = slotEnd;
+          }
+          var usedLane = assignHierarchy(rs, maxLane);
+          slots.push({
+            endTime: rs.endTime,
+            laneStart: maxLane,
+            laneCount: usedLane - maxLane
+          });
+        }
       }
 
       // Handle any orphan spans not reached by the tree walk
+      var maxUsedLane = 0;
+      for (var oi = 0; oi < slots.length; oi++) {
+        var end = slots[oi].laneStart + slots[oi].laneCount;
+        if (end > maxUsedLane) maxUsedLane = end;
+      }
       for (var i = 0; i < wSpans.length; i++) {
         if (wSpans[i].lane === undefined) {
-          wSpans[i].lane = lane;
-          lane++;
+          wSpans[i].lane = maxUsedLane;
+          maxUsedLane++;
         }
       }
     }
 
-    console.log('[Timeline] Hierarchical lane assignment complete');
+    console.log('[Timeline] Hierarchical lane assignment with reuse complete');
   }
 
   /**
