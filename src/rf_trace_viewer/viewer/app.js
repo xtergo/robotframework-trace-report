@@ -511,6 +511,13 @@
 
     var title = document.createElement('h1');
     title.textContent = data.title || 'RF Trace Report';
+    // Version badge — inside h1 for baseline alignment
+    if (window.__RF_VERSION__) {
+      var vBadge = document.createElement('span');
+      vBadge.className = 'version-badge';
+      vBadge.textContent = ' v' + window.__RF_VERSION__;
+      title.appendChild(vBadge);
+    }
     header.appendChild(title);
 
     // Status Cluster — live mode only

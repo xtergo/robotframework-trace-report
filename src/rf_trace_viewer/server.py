@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from rf_trace_viewer.config import BaseFilterConfig, validate_svg
+from rf_trace_viewer import __git_sha__, __version__
 from rf_trace_viewer.error_codes import error_response
 from rf_trace_viewer.generator import (
     ReportOptions,
@@ -271,6 +272,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             f"{max_spans_js}"
             f"{svc_name_js}"
             'window.__RF_LOGO_URL__ = "/logo.svg";\n'
+            f'window.__RF_VERSION__ = "{_escape_html(__version__)} (sha {_escape_html(__git_sha__[:7])})";\n'
             "</script>\n"
             "<script>\n"
             f"{js_content}\n"

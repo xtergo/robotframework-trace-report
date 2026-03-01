@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from rf_trace_viewer import __git_sha__, __version__
 from rf_trace_viewer.config import validate_svg
 from rf_trace_viewer.rf_model import (
     RFRunModel,
@@ -293,6 +294,7 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
         "<script>\n"
         f"{data_script}"
         f"{logo_script}"
+        f'window.__RF_VERSION__ = "{_escape_html(__version__)} (sha {_escape_html(__git_sha__[:7])})";\n'
         "</script>\n"
         "<script>\n"
         f"{js_content}\n"

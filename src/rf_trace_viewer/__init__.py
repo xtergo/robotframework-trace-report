@@ -1,3 +1,6 @@
 """Robot Framework Trace Viewer — HTML report generator for OpenTelemetry traces."""
 
-__version__ = "0.1.0"
+import os as _os
+
+__version__ = "0.1.1"
+__git_sha__ = _os.environ.get("GIT_SHA", "dev")
