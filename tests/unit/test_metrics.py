@@ -2,12 +2,14 @@
 
 import logging
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from rf_trace_viewer.metrics import (
     MetricsConfig,
+    _DiagnosticsExporter,
+    _configure_log_level,
     _load_config,
     init_metrics,
     shutdown_metrics,
@@ -190,3 +192,187 @@ class TestLoadConfig:
             cfg = _load_config()
         with pytest.raises(AttributeError):
             cfg.enabled = True  # type: ignore[misc]
+
+
+class TestConfigureLogLevel:
+    """Tests for _configure_log_level() -- Req 10.1."""
+
+    def test_info_level(self):
+        """'info' maps to logging.INFO."""
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        _configure_log_level("info")
+        assert test_logger.level == logging.INFO
+
+    def test_debug_level(self):
+        """'debug' maps to logging.DEBUG."""
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        _configure_log_level("debug")
+        assert test_logger.level == logging.DEBUG
+
+    def test_warn_level(self):
+        """'warn' maps to logging.WARNING."""
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        _configure_log_level("warn")
+        assert test_logger.level == logging.WARNING
+
+    def test_case_insensitive(self):
+        """Level string is case-insensitive."""
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        _configure_log_level("DEBUG")
+        assert test_logger.level == logging.DEBUG
+
+    def test_unknown_level_defaults_to_info(self, caplog):
+        """Unknown level falls back to INFO with a warning."""
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        with caplog.at_level(logging.WARNING):
+            _configure_log_level("verbose")
+        assert test_logger.level == logging.INFO
+        assert "Unknown TRACE_REPORT_LOG_LEVEL" in caplog.text
+
+
+class TestDiagnosticsExporter:
+    """Tests for _DiagnosticsExporter -- Reqs 10.2, 10.3, 7.2, 7.3."""
+
+    def _make_metrics_data(self, num_points=3):
+        """Build a minimal mock MetricsData with *num_points* data points."""
+        data_points = [MagicMock() for _ in range(num_points)]
+        metric = MagicMock()
+        metric.data.data_points = data_points
+        scope_metrics = MagicMock()
+        scope_metrics.metrics = [metric]
+        resource_metrics = MagicMock()
+        resource_metrics.scope_metrics = [scope_metrics]
+        metrics_data = MagicMock()
+        metrics_data.resource_metrics = [resource_metrics]
+        return metrics_data
+
+    def test_diagnostics_true_logs_success(self, caplog):
+        """When diagnostics=True, successful exports are logged at INFO."""
+        from opentelemetry.sdk.metrics.export import MetricExportResult
+
+        inner = MagicMock()
+        inner.export.return_value = MetricExportResult.SUCCESS
+        wrapper = _DiagnosticsExporter(inner, diagnostics=True)
+        data = self._make_metrics_data(5)
+
+        with caplog.at_level(logging.INFO):
+            result = wrapper.export(data)
+
+        assert result == MetricExportResult.SUCCESS
+        assert "export succeeded" in caplog.text
+        assert "5 data points exported" in caplog.text
+
+    def test_diagnostics_false_no_success_log(self, caplog):
+        """When diagnostics=False, successful exports are NOT logged."""
+        from opentelemetry.sdk.metrics.export import MetricExportResult
+
+        inner = MagicMock()
+        inner.export.return_value = MetricExportResult.SUCCESS
+        wrapper = _DiagnosticsExporter(inner, diagnostics=False)
+        data = self._make_metrics_data(5)
+
+        with caplog.at_level(logging.INFO):
+            result = wrapper.export(data)
+
+        assert result == MetricExportResult.SUCCESS
+        assert "export succeeded" not in caplog.text
+
+    def test_failure_logged_as_warning_diagnostics_true(self, caplog):
+        """Export failure is logged as WARNING when diagnostics=True."""
+        from opentelemetry.sdk.metrics.export import MetricExportResult
+
+        inner = MagicMock()
+        inner.export.return_value = MetricExportResult.FAILURE
+        wrapper = _DiagnosticsExporter(inner, diagnostics=True)
+        data = self._make_metrics_data(4)
+
+        with caplog.at_level(logging.WARNING):
+            result = wrapper.export(data)
+
+        assert result == MetricExportResult.FAILURE
+        assert "export failed" in caplog.text
+        assert "4 data points" in caplog.text
+
+    def test_failure_logged_as_warning_diagnostics_false(self, caplog):
+        """Export failure is logged as WARNING even when diagnostics=False."""
+        from opentelemetry.sdk.metrics.export import MetricExportResult
+
+        inner = MagicMock()
+        inner.export.return_value = MetricExportResult.FAILURE
+        wrapper = _DiagnosticsExporter(inner, diagnostics=False)
+        data = self._make_metrics_data(2)
+
+        with caplog.at_level(logging.WARNING):
+            result = wrapper.export(data)
+
+        assert result == MetricExportResult.FAILURE
+        assert "export failed" in caplog.text
+
+    def test_exception_logged_with_reason(self, caplog):
+        """When inner exporter raises, the failure reason is logged (Req 7.3)."""
+        from opentelemetry.sdk.metrics.export import MetricExportResult
+
+        inner = MagicMock()
+        inner.export.side_effect = ConnectionError("collector unreachable")
+        wrapper = _DiagnosticsExporter(inner, diagnostics=False)
+        data = self._make_metrics_data(3)
+
+        with caplog.at_level(logging.WARNING):
+            result = wrapper.export(data)
+
+        assert result == MetricExportResult.FAILURE
+        assert "collector unreachable" in caplog.text
+        assert "3 data points" in caplog.text
+
+    def test_shutdown_delegates(self):
+        """shutdown() delegates to the inner exporter."""
+        inner = MagicMock()
+        wrapper = _DiagnosticsExporter(inner)
+        wrapper.shutdown(timeout_millis=5000)
+        inner.shutdown.assert_called_once_with(timeout_millis=5000)
+
+    def test_force_flush_delegates(self):
+        """force_flush() delegates to the inner exporter."""
+        inner = MagicMock()
+        wrapper = _DiagnosticsExporter(inner)
+        wrapper.force_flush(timeout_millis=3000)
+        inner.force_flush.assert_called_once_with(timeout_millis=3000)
+
+    def test_count_data_points_empty(self):
+        """_count_data_points returns 0 for empty metrics data."""
+        data = self._make_metrics_data(0)
+        assert _DiagnosticsExporter._count_data_points(data) == 0
+
+
+class TestInitMetricsLogLevel:
+    """Tests that init_metrics configures log level from env var."""
+
+    def test_init_metrics_sets_log_level_debug(self):
+        """init_metrics configures logger to DEBUG when LOG_LEVEL=debug."""
+        env = {"TRACE_REPORT_LOG_LEVEL": "debug"}
+        with patch.dict(os.environ, env, clear=True):
+            init_metrics()
+
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        assert test_logger.level == logging.DEBUG
+
+    def test_init_metrics_sets_log_level_warn(self):
+        """init_metrics configures logger to WARNING when LOG_LEVEL=warn."""
+        env = {"TRACE_REPORT_LOG_LEVEL": "warn"}
+        with patch.dict(os.environ, env, clear=True):
+            init_metrics()
+
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        assert test_logger.level == logging.WARNING
+
+    def test_init_metrics_sets_log_level_even_when_disabled(self):
+        """Log level is configured even when metrics are disabled."""
+        env = {
+            "TRACE_REPORT_METRICS_ENABLED": "false",
+            "TRACE_REPORT_LOG_LEVEL": "debug",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            init_metrics()
+
+        test_logger = logging.getLogger("rf_trace_viewer.metrics")
+        assert test_logger.level == logging.DEBUG

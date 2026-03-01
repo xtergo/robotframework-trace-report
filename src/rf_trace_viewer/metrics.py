@@ -62,8 +62,7 @@ DURATION_BUCKETS = (1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000,
 SIZE_BUCKETS = (128, 256, 512, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304)
 ITEMS_BUCKETS = (0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000)
 
-# Known static routes from server.py — used by normalize_route to pass
-# through unchanged.
+# Known static routes from server.py
 _KNOWN_ROUTES: frozenset[str] = frozenset(
     {
         "/",
@@ -79,8 +78,7 @@ _KNOWN_ROUTES: frozenset[str] = frozenset(
     }
 )
 
-# Regex matching dynamic path segments: UUIDs, numeric IDs, hex strings
-# (8+ chars).
+# Regex matching dynamic path segments: UUIDs, numeric IDs, hex strings (8+).
 _DYNAMIC_SEGMENT_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     r"|[0-9]+(?:\.[0-9]+)*"
@@ -97,14 +95,11 @@ def normalize_route(path: str) -> str:
     - Returns ``/_other`` for paths not matching any known route pattern.
     - Passes known static routes through unchanged.
     """
-    # Strip query string and fragment.
     clean = urlparse(path).path
 
-    # Fast path: exact match on known routes.
     if clean in _KNOWN_ROUTES:
         return clean
 
-    # Replace dynamic segments with {id}.
     segments = clean.split("/")
     normalized = []
     for seg in segments:
@@ -114,12 +109,9 @@ def normalize_route(path: str) -> str:
             normalized.append(seg)
     result = "/".join(normalized)
 
-    # Check if the normalized path starts with a known route prefix.
-    # e.g. /runs/{id} is valid, but /random/path is not.
     if result != clean and result.startswith("/"):
         return result
 
-    # Unknown path — map to catch-all.
     if clean not in _KNOWN_ROUTES:
         return "/_other"
 
@@ -305,6 +297,96 @@ def _load_config() -> MetricsConfig:
     )
 
 
+# -- Log level mapping --------------------------------------------------------
+_LOG_LEVEL_MAP: dict[str, int] = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warn": logging.WARNING,
+    "warning": logging.WARNING,
+}
+
+
+def _configure_log_level(level_str: str) -> None:
+    """Set the module logger level from a ``TRACE_REPORT_LOG_LEVEL`` value.
+
+    Accepts ``"debug"``, ``"info"``, or ``"warn"`` (case-insensitive).
+    Unrecognised values fall back to ``INFO`` with a warning.
+    """
+    level = _LOG_LEVEL_MAP.get(level_str.lower())
+    if level is None:
+        logger.warning(
+            "Unknown TRACE_REPORT_LOG_LEVEL=%r, defaulting to 'info'",
+            level_str,
+        )
+        level = logging.INFO
+    logger.setLevel(level)
+
+
+class _DiagnosticsExporter:
+    """Wrapper around a real ``MetricExporter`` that logs export results.
+
+    When *diagnostics* is ``True``, successful exports are logged at INFO
+    level and failures at WARNING level with data-point counts.  When
+    *diagnostics* is ``False``, only failures are logged (at WARNING).
+
+    This satisfies Requirements 10.2, 10.3, 7.2, and 7.3.
+    """
+
+    def __init__(self, inner, *, diagnostics: bool = False) -> None:
+        self._inner = inner
+        self._diagnostics = diagnostics
+
+    @staticmethod
+    def _count_data_points(metrics_data) -> int:
+        """Count total data points across all resource/scope metrics."""
+        count = 0
+        for rm in metrics_data.resource_metrics:
+            for sm in rm.scope_metrics:
+                for metric in sm.metrics:
+                    data = metric.data
+                    if hasattr(data, "data_points"):
+                        count += len(data.data_points)
+        return count
+
+    def export(self, metrics_data, timeout_millis=10000, **kwargs):
+        from opentelemetry.sdk.metrics.export import MetricExportResult
+
+        num_points = self._count_data_points(metrics_data)
+
+        try:
+            result = self._inner.export(metrics_data, timeout_millis=timeout_millis, **kwargs)
+        except Exception as exc:
+            # Exporter raised -- log warning and report failure.
+            # Req 7.2: server continues; Req 7.3: log failure reason.
+            logger.warning(
+                "OTLP metric export failed: %s (dropped %d data points)",
+                exc,
+                num_points,
+            )
+            return MetricExportResult.FAILURE
+
+        if result == MetricExportResult.SUCCESS:
+            if self._diagnostics:
+                logger.info(
+                    "OTLP metric export succeeded: %d data points exported",
+                    num_points,
+                )
+        else:
+            # Req 7.3: always log failures as WARNING regardless of diagnostics
+            logger.warning(
+                "OTLP metric export failed (dropped %d data points)",
+                num_points,
+            )
+
+        return result
+
+    def shutdown(self, timeout_millis=30000, **kwargs):
+        return self._inner.shutdown(timeout_millis=timeout_millis, **kwargs)
+
+    def force_flush(self, timeout_millis=10000):
+        return self._inner.force_flush(timeout_millis=timeout_millis)
+
+
 def init_metrics() -> None:
     """Initialize the OTel MeterProvider, instruments, and exporter.
 
@@ -323,6 +405,10 @@ def init_metrics() -> None:
 
     try:
         cfg = _load_config()
+
+        # -- configure log level early (even when metrics disabled) -----------
+        _configure_log_level(cfg.log_level)
+
         if not cfg.enabled:
             return
 
@@ -330,13 +416,18 @@ def init_metrics() -> None:
         _config = cfg
 
         # -- lazy imports (only when metrics are enabled) ---------------------
-        from rf_trace_viewer import __version__
-
         from opentelemetry.metrics import set_meter_provider
         from opentelemetry.sdk.metrics import MeterProvider as _SDKMeterProvider
-        from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-        from opentelemetry.sdk.metrics.view import ExplicitBucketHistogramAggregation, View
+        from opentelemetry.sdk.metrics.export import (
+            PeriodicExportingMetricReader,
+        )
+        from opentelemetry.sdk.metrics.view import (
+            ExplicitBucketHistogramAggregation,
+            View,
+        )
         from opentelemetry.sdk.resources import Resource
+
+        from rf_trace_viewer import __version__
 
         # -- resource ---------------------------------------------------------
         resource = Resource.create(
@@ -364,7 +455,8 @@ def init_metrics() -> None:
                 OTLPMetricExporter,
             )
 
-        exporter = OTLPMetricExporter(**exporter_kwargs)
+        raw_exporter = OTLPMetricExporter(**exporter_kwargs)
+        exporter = _DiagnosticsExporter(raw_exporter, diagnostics=cfg.diagnostics)
 
         # -- reader -----------------------------------------------------------
         reader = PeriodicExportingMetricReader(
@@ -470,14 +562,19 @@ def init_metrics() -> None:
 
         _enabled = True
         logger.info(
-            "OTel metrics initialized (protocol=%s, endpoint=%s, interval=%dms)",
+            "OTel metrics initialized " "(protocol=%s, endpoint=%s, interval=%dms)",
             cfg.otlp_protocol,
             cfg.otlp_endpoint or "(default)",
             cfg.export_interval_ms,
         )
+        if cfg.diagnostics:
+            logger.info("OTel diagnostics logging enabled")
 
     except Exception:
-        logger.error("Failed to initialize OTel metrics; continuing without metrics", exc_info=True)
+        logger.error(
+            "Failed to initialize OTel metrics; continuing without metrics",
+            exc_info=True,
+        )
         _enabled = False
 
 
