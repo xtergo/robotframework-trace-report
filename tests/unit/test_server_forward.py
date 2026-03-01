@@ -12,6 +12,7 @@ import pytest
 
 from rf_trace_viewer.server import LiveServer, _LiveRequestHandler, _forward_payload
 from rf_trace_viewer.generator import ReportOptions
+from rf_trace_viewer.config import BaseFilterConfig
 from urllib.error import URLError
 
 
@@ -250,6 +251,11 @@ class TestCLIForwardArgument:
                 lookback=None,
                 max_spans=500000,
                 service_name=None,
+                health_router=None,
+                status_poller=None,
+                rate_limiter=None,
+                base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
+                query_semaphore=None,
             )
 
     def test_forward_url_default_none(self, monkeypatch):
@@ -284,4 +290,9 @@ class TestCLIForwardArgument:
                 lookback=None,
                 max_spans=500000,
                 service_name=None,
+                health_router=None,
+                status_poller=None,
+                rate_limiter=None,
+                base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
+                query_semaphore=None,
             )
