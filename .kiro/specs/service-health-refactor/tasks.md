@@ -81,18 +81,18 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
     - Test in `tests/unit/test_signoz_rf_metrics.py`
     - Generate random per-suite metric dicts; verify summary values equal sums of per-suite values and pass rate is computed from aggregated counts
 
-- [ ] 4. Checkpoint — Backend complete
+- [x] 4. Checkpoint — Backend complete
   - Ensure all tests pass, ask the user if questions arise.
 
 
-- [ ] 5. Add RF Metrics Section and duration formatting to `service-health.js`
-  - [ ] 5.1 Add duration formatting helper and RF metric card definitions
+- [x] 5. Add RF Metrics Section and duration formatting to `service-health.js`
+  - [x] 5.1 Add duration formatting helper and RF metric card definitions
     - Add `formatDuration(ms)` function: values < 1000 → `"Xms"`, values ≥ 1000 → `"X.Xs"`, null/NaN → `"—"`
     - Define `RF_METRICS` array with 6 card definitions: Tests Run, Pass Rate, Fail Count, Median Duration (p50), p95 Duration, Keywords Executed
     - Define `RF_SPARKLINE_METRICS` map linking card keys to `rf_series` keys
     - _Requirements: 3.2, 3.6_
 
-  - [ ] 5.2 Implement RF Metrics Section rendering
+  - [x] 5.2 Implement RF Metrics Section rendering
     - Create `_renderRfMetricsSection(snapshot)` function
     - Render aggregated summary row with 6 Metric Cards using existing `_createCard` pattern
     - When `snapshot.rf.suites` has >1 suite, render per-suite rows beneath summary

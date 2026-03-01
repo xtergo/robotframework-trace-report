@@ -46,6 +46,11 @@
     dep_p95_latency_ms: []
   };
 
+  var _rfHistory = {
+    p50_duration_ms: [],
+    p95_duration_ms: []
+  };
+
   /* ── Formatting helpers ────────────────────────────────────────── */
 
   function formatLatency(ms) {
@@ -83,12 +88,19 @@
     return '';
   }
 
+  function formatDuration(ms) {
+    if (ms === null || ms === undefined || ms !== ms) return '\u2014';
+    if (ms < 1000) return Math.round(ms) + 'ms';
+    return (ms / 1000).toFixed(1) + 's';
+  }
+
   // Expose formatting functions for testing
   window._serviceHealthFormatLatency = formatLatency;
   window._serviceHealthFormatCount = formatCount;
   window._serviceHealthFormatPercent = formatPercent;
   window._serviceHealthFormatValue = formatValue;
   window._serviceHealthGetThresholdClass = getThresholdClass;
+  window._serviceHealthFormatDuration = formatDuration;
 
   /* ── Metric card definitions ───────────────────────────────────── */
 
@@ -105,6 +117,20 @@
     { key: 'p95_latency_ms', label: 'Dep p95 Latency', section: 'deps', format: formatLatency },
     { key: 'timeout_count', label: 'Dep Timeouts', section: 'deps', format: formatCount }
   ];
+
+  var RF_METRICS = [
+    { key: 'tests_total', label: 'Tests Run', section: 'rf.summary', format: formatCount },
+    { key: 'pass_rate_pct', label: 'Pass Rate', section: 'rf.summary', format: formatPercent, warnBelow100: true },
+    { key: 'tests_failed', label: 'Fail Count', section: 'rf.summary', format: formatCount, warnAboveZero: true },
+    { key: 'p50_duration_ms', label: 'Median Duration (p50)', section: 'rf.summary', format: formatDuration },
+    { key: 'p95_duration_ms', label: 'p95 Duration', section: 'rf.summary', format: formatDuration },
+    { key: 'keywords_executed', label: 'Keywords Executed', section: 'rf.summary', format: formatCount }
+  ];
+
+  var RF_SPARKLINE_METRICS = {
+    'rf.summary.p50_duration_ms': 'p50_duration_ms',
+    'rf.summary.p95_duration_ms': 'p95_duration_ms'
+  };
 
   var ALL_METRICS = HTTP_METRICS.concat(DEP_METRICS);
 
@@ -346,6 +372,169 @@
     }
   }
 
+  /* ── RF Metrics Section ──────────────────────────────────────── */
+
+  var _rfSectionEl = null;
+  var _rfCardEls = {};  // card key → { valueEl, cardEl, sparklineEl }
+
+  function _createRfCard(metric, sectionPrefix) {
+    var card = document.createElement('div');
+    card.className = 'sh-card';
+    var cardKey = sectionPrefix + '.' + metric.key;
+    card.setAttribute('data-metric', cardKey);
+
+    var label = document.createElement('div');
+    label.className = 'sh-card-label';
+    label.textContent = metric.label;
+    card.appendChild(label);
+
+    var value = document.createElement('div');
+    value.className = 'sh-card-value';
+    value.textContent = '\u2014';
+    card.appendChild(value);
+
+    var sparkline = document.createElement('div');
+    sparkline.className = 'sh-card-sparkline';
+    card.appendChild(sparkline);
+
+    _rfCardEls[cardKey] = { valueEl: value, cardEl: card, sparklineEl: sparkline };
+    return card;
+  }
+
+  function _renderRfMetricsSection(snapshot) {
+    // If no RF data, hide the section and bail
+    if (!snapshot || !snapshot.rf) {
+      if (_rfSectionEl) {
+        _rfSectionEl.style.display = 'none';
+      }
+      return;
+    }
+
+    var rf = snapshot.rf;
+    var rfSeries = snapshot.rf_series || {};
+
+    // Lazily create the RF section container on first render
+    if (!_rfSectionEl) {
+      _rfSectionEl = document.createElement('div');
+      _rfSectionEl.className = 'sh-rf-section';
+      if (_tabPane) {
+        _tabPane.appendChild(_rfSectionEl);
+      }
+    }
+
+    _rfSectionEl.style.display = '';
+    // Clear previous content (per-suite rows may change between polls)
+    _rfSectionEl.innerHTML = '';
+
+    // Section title
+    var title = document.createElement('h3');
+    title.className = 'sh-section-title';
+    title.textContent = 'RF Test Metrics';
+    _rfSectionEl.appendChild(title);
+
+    // Aggregated summary row
+    var summaryGrid = document.createElement('div');
+    summaryGrid.className = 'sh-card-grid';
+    var summary = rf.summary || {};
+
+    RF_METRICS.forEach(function (m) {
+      var cardKey = 'rf.summary.' + m.key;
+      var card = _createRfCard(m, 'rf.summary');
+      var rawValue = summary[m.key];
+      var entry = _rfCardEls[cardKey];
+
+      if (rawValue !== null && rawValue !== undefined) {
+        entry.valueEl.textContent = m.format(rawValue);
+      } else {
+        entry.valueEl.textContent = '\u2014';
+      }
+
+      // Warning styles
+      entry.cardEl.classList.remove('sh-card-warning');
+      if (m.warnBelow100 && rawValue !== null && rawValue !== undefined && rawValue < 100) {
+        entry.cardEl.classList.add('sh-card-warning');
+      }
+      if (m.warnAboveZero && rawValue !== null && rawValue !== undefined && rawValue > 0) {
+        entry.cardEl.classList.add('sh-card-warning');
+      }
+
+      summaryGrid.appendChild(card);
+    });
+    _rfSectionEl.appendChild(summaryGrid);
+
+    // Per-suite rows (only when >1 suite)
+    var suites = rf.suites || {};
+    var suiteNames = Object.keys(suites);
+    if (suiteNames.length > 1) {
+      for (var s = 0; s < suiteNames.length; s++) {
+        var suiteName = suiteNames[s];
+        var suiteData = suites[suiteName];
+        var suitePrefix = 'rf.suite.' + suiteName;
+
+        var suiteHeader = document.createElement('h4');
+        suiteHeader.className = 'sh-section-title';
+        suiteHeader.textContent = suiteName;
+        _rfSectionEl.appendChild(suiteHeader);
+
+        var suiteGrid = document.createElement('div');
+        suiteGrid.className = 'sh-card-grid';
+
+        RF_METRICS.forEach(function (m) {
+          var suiteCardKey = suitePrefix + '.' + m.key;
+          var card = _createRfCard(m, suitePrefix);
+          var rawValue = suiteData ? suiteData[m.key] : null;
+          var entry = _rfCardEls[suiteCardKey];
+
+          if (rawValue !== null && rawValue !== undefined) {
+            entry.valueEl.textContent = m.format(rawValue);
+          } else {
+            entry.valueEl.textContent = '\u2014';
+          }
+
+          entry.cardEl.classList.remove('sh-card-warning');
+          if (m.warnBelow100 && rawValue !== null && rawValue !== undefined && rawValue < 100) {
+            entry.cardEl.classList.add('sh-card-warning');
+          }
+          if (m.warnAboveZero && rawValue !== null && rawValue !== undefined && rawValue > 0) {
+            entry.cardEl.classList.add('sh-card-warning');
+          }
+
+          suiteGrid.appendChild(card);
+        });
+        _rfSectionEl.appendChild(suiteGrid);
+      }
+    }
+
+    // Update RF sparkline history buffers from rf_series
+    var rfSeriesKeys = Object.keys(_rfHistory);
+    for (var i = 0; i < rfSeriesKeys.length; i++) {
+      var rKey = rfSeriesKeys[i];
+      var newPoints = rfSeries[rKey];
+      if (newPoints && newPoints.length > 0) {
+        for (var j = 0; j < newPoints.length; j++) {
+          _rfHistory[rKey].push(newPoints[j]);
+        }
+        if (_rfHistory[rKey].length > SPARKLINE_MAX_POINTS) {
+          _rfHistory[rKey] = _rfHistory[rKey].slice(_rfHistory[rKey].length - SPARKLINE_MAX_POINTS);
+        }
+      }
+    }
+
+    // Render sparklines on RF summary cards
+    var rfSparkKeys = Object.keys(RF_SPARKLINE_METRICS);
+    for (var c = 0; c < rfSparkKeys.length; c++) {
+      var rfCardKey = rfSparkKeys[c];
+      var histKey = RF_SPARKLINE_METRICS[rfCardKey];
+      var rfEntry = _rfCardEls[rfCardKey];
+      if (rfEntry && rfEntry.sparklineEl) {
+        renderSparkline(rfEntry.sparklineEl, _rfHistory[histKey]);
+      }
+    }
+  }
+
+  // Expose for testing
+  window._serviceHealthRenderRfMetricsSection = _renderRfMetricsSection;
+
   /* ── HealthRenderer ────────────────────────────────────────────── */
 
   var HealthRenderer = {
@@ -373,6 +562,9 @@
 
       // Update sparklines from series data
       _updateSparklines(snapshot);
+
+      // Render RF Metrics Section
+      _renderRfMetricsSection(snapshot);
     }
   };
 
