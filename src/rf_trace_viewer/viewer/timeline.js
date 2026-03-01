@@ -2669,45 +2669,39 @@
     var spans = timelineState.flatSpans;
     if (spans.length === 0) return;
 
-    // Collect end times from ALL span types
-    var endTimes = [];
-    for (var i = 0; i < spans.length; i++) {
-      endTimes.push(spans[i].endTime);
-    }
-    endTimes.sort(function (a, b) { return b - a; }); // descending
+    // Sort spans by endTime descending to find the most recent activity
+    var sorted = spans.slice().sort(function (a, b) { return b.endTime - a.endTime; });
 
-    // Walk backwards from the latest end time, expanding the cluster
-    // until we hit a gap > 30 seconds
-    var clusterEnd = endTimes[0];
-    var clusterStart = clusterEnd;
+    // Start from the latest span and expand the cluster by including
+    // any span that overlaps or is within GAP_THRESHOLD of the cluster
     var GAP_THRESHOLD = 30; // seconds
-    for (var j = 1; j < endTimes.length; j++) {
-      if (clusterStart - endTimes[j] > GAP_THRESHOLD) break;
-      clusterStart = endTimes[j];
+    var clusterEnd = sorted[0].endTime;
+    var clusterStart = sorted[0].startTime;
+
+    for (var i = 1; i < sorted.length; i++) {
+      var span = sorted[i];
+      // A span belongs to the cluster if its endTime is within GAP_THRESHOLD
+      // of the current cluster start (i.e. it's temporally adjacent)
+      if (clusterStart - span.endTime > GAP_THRESHOLD) break;
+      // Expand cluster bounds
+      if (span.startTime < clusterStart) clusterStart = span.startTime;
+      if (span.endTime > clusterEnd) clusterEnd = span.endTime;
     }
 
-    // Find the actual earliest start time of spans in this cluster
-    var actualStart = clusterEnd;
-    for (var k = 0; k < spans.length; k++) {
-      if (spans[k].endTime >= clusterStart && spans[k].startTime < actualStart) {
-        actualStart = spans[k].startTime;
-      }
-    }
-
-    var clusterRange = clusterEnd - actualStart;
+    var clusterRange = clusterEnd - clusterStart;
 
     // Enforce minimum view width of 30 seconds so short spans are visible
     var MIN_VIEW_SECONDS = 30;
     if (clusterRange < MIN_VIEW_SECONDS) {
-      var center = (actualStart + clusterEnd) / 2;
-      actualStart = center - MIN_VIEW_SECONDS / 2;
+      var center = (clusterStart + clusterEnd) / 2;
+      clusterStart = center - MIN_VIEW_SECONDS / 2;
       clusterEnd = center + MIN_VIEW_SECONDS / 2;
       clusterRange = MIN_VIEW_SECONDS;
     }
 
     // Add 15% padding on each side
     var padding = clusterRange * 0.15;
-    var viewStart = actualStart - padding;
+    var viewStart = clusterStart - padding;
     var viewEnd = clusterEnd + padding;
 
     // Clamp to data bounds
@@ -2725,9 +2719,10 @@
     timelineState.viewStart = viewStart;
     timelineState.viewEnd = viewEnd;
     timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
-    console.log('[Timeline] Locate Recent: ' +
-      Math.round(clusterRange) + 's cluster, ' +
-      Math.round(viewRange) + 's view (zoom ' + timelineState.zoom.toFixed(1) + 'x)');
+    console.log('[Timeline] Locate Recent: cluster=' +
+      Math.round(clusterRange) + 's (' + new Date(clusterStart * 1000).toISOString().substr(11, 8) +
+      ' - ' + new Date(clusterEnd * 1000).toISOString().substr(11, 8) +
+      '), view=' + Math.round(viewRange) + 's, zoom=' + timelineState.zoom.toFixed(1) + 'x');
   }
 
   /**
