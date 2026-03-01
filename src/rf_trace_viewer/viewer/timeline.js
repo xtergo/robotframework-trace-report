@@ -291,6 +291,22 @@
     autoCompactToggle.appendChild(document.createTextNode('Auto-compact'));
     zoomBar.appendChild(autoCompactToggle);
 
+    // Fit All button — zooms to visible span bounds
+    var fitAllBtn = document.createElement('button');
+    fitAllBtn.className = 'timeline-zoom-btn timeline-fitall-btn';
+    fitAllBtn.textContent = 'Fit All';
+    fitAllBtn.setAttribute('aria-label', 'Fit All');
+    fitAllBtn.addEventListener('click', function () {
+      _fitAll();
+    });
+    fitAllBtn.addEventListener('keydown', function (e) {
+      if (e.keyCode === 13 || e.keyCode === 32) {
+        e.preventDefault();
+        _fitAll();
+      }
+    });
+    zoomBar.appendChild(fitAllBtn);
+
     headerEl.appendChild(zoomBar);
 
     // Zoom slider ↔ state synchronization
@@ -2519,6 +2535,100 @@
     _render();
     _renderHeader();
   };
+
+  /**
+   * Show a temporary toast message overlaying the timeline.
+   * @param {string} message - Text to display
+   * @param {number} [duration=3000] - Duration in milliseconds
+   */
+  function _showToast(message, duration) {
+    if (!duration) duration = 3000;
+    var canvas = timelineState.canvas;
+    if (!canvas || !canvas.parentNode) return;
+    var toast = document.createElement('div');
+    toast.className = 'timeline-toast';
+    toast.textContent = message;
+    toast.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);' +
+      'background:rgba(0,0,0,0.8);color:#fff;padding:8px 16px;border-radius:4px;' +
+      'font-size:13px;z-index:100;pointer-events:none;opacity:1;transition:opacity 0.3s;';
+    var parent = canvas.parentNode;
+    if (getComputedStyle(parent).position === 'static') {
+      parent.style.position = 'relative';
+    }
+    parent.appendChild(toast);
+    setTimeout(function () {
+      toast.style.opacity = '0';
+      setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
+    }, duration);
+  }
+
+  /**
+   * Fit All: zoom View_Window to the bounding box of visible (non-filtered) spans,
+   * clamped by activeWindowStart. If no visible spans, zoom to last 5 minutes
+   * within the Load_Window and show a toast.
+   */
+  function _fitAll() {
+    var visible = timelineState.filteredSpans.length > 0
+      ? timelineState.filteredSpans
+      : timelineState.flatSpans;
+    if (visible.length === 0) {
+      // Zoom to last 5 minutes within Load_Window, show toast
+      var end = timelineState.maxTime;
+      var start = end - 300; // 5 minutes
+      var aws = window.RFTraceViewer && window.RFTraceViewer.getActiveWindowStart
+        ? window.RFTraceViewer.getActiveWindowStart()
+        : timelineState.minTime;
+      if (start < aws) start = aws;
+      if (start < timelineState.minTime) start = timelineState.minTime;
+      timelineState.viewStart = start;
+      timelineState.viewEnd = end;
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var viewRange = end - start;
+      if (viewRange > 0 && totalRange > 0) {
+        timelineState.zoom = totalRange / viewRange;
+      }
+      _showToast('No spans in current filters');
+      _render();
+      _renderHeader();
+      if (timelineState._syncSlider) timelineState._syncSlider();
+      if (timelineState._syncHScroll) timelineState._syncHScroll();
+      return;
+    }
+    var minT = Infinity, maxT = -Infinity;
+    for (var i = 0; i < visible.length; i++) {
+      if (visible[i].startTime < minT) minT = visible[i].startTime;
+      if (visible[i].endTime > maxT) maxT = visible[i].endTime;
+    }
+    // Clamp: minT >= activeWindowStart
+    var aws = window.RFTraceViewer && window.RFTraceViewer.getActiveWindowStart
+      ? window.RFTraceViewer.getActiveWindowStart()
+      : timelineState.minTime;
+    if (minT < aws) minT = aws;
+    // Add small padding (2% on each side) for visual comfort
+    var range = maxT - minT;
+    if (range <= 0) range = 60; // fallback: 1 minute
+    var padding = range * 0.02;
+    var viewStart = minT - padding;
+    var viewEnd = maxT + padding;
+    // Clamp to data bounds
+    if (viewStart < timelineState.minTime) viewStart = timelineState.minTime;
+    if (viewEnd > timelineState.maxTime) viewEnd = timelineState.maxTime;
+    // Clamp viewStart to activeWindowStart
+    if (viewStart < aws) viewStart = aws;
+    timelineState.viewStart = viewStart;
+    timelineState.viewEnd = viewEnd;
+    var totalRange = timelineState.maxTime - timelineState.minTime;
+    var viewRange = viewEnd - viewStart;
+    if (viewRange > 0 && totalRange > 0) {
+      timelineState.zoom = totalRange / viewRange;
+    }
+    _render();
+    _renderHeader();
+    if (timelineState._syncSlider) timelineState._syncSlider();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
+  }
 
   /**
    * Auto-zoom to the most recent cluster of spans.
