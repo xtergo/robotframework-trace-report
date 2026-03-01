@@ -9,7 +9,16 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    from opentelemetry.metrics import (
+        Counter,
+        Histogram,
+        MeterProvider,
+        UpDownCounter,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +42,24 @@ class MetricsConfig:
 
 
 _enabled: bool = False
+_meter_provider: MeterProvider | None = None
+
+# -- Instruments (populated by init_metrics) ----------------------------------
+_http_requests: Counter | None = None
+_http_duration: Histogram | None = None
+_http_inflight: UpDownCounter | None = None
+_http_response_size: Histogram | None = None
+_dep_requests: Counter | None = None
+_dep_duration: Histogram | None = None
+_dep_timeouts: Counter | None = None
+_dep_payload_in: Histogram | None = None
+_dep_payload_out: Histogram | None = None
+_items_returned: Histogram | None = None
+
+# -- Histogram bucket boundaries -----------------------------------------------
+DURATION_BUCKETS = (1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000)
+SIZE_BUCKETS = (128, 256, 512, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304)
+ITEMS_BUCKETS = (0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000)
 
 # Known static routes from server.py — used by normalize_route to pass
 # through unchanged.
@@ -280,14 +307,191 @@ def _load_config() -> MetricsConfig:
 def init_metrics() -> None:
     """Initialize the OTel MeterProvider, instruments, and exporter.
 
-    No-op stub.
+    Reads configuration from environment variables via :func:`_load_config`,
+    builds an OTel ``Resource``, creates a ``MeterProvider`` with a
+    ``PeriodicExportingMetricReader`` and OTLP exporter, and creates all
+    10 metric instruments.
+
+    On any failure the error is logged and ``_enabled`` stays ``False`` so
+    that all recording functions remain zero-cost no-ops.
     """
-    pass
+    global _enabled, _meter_provider
+    global _http_requests, _http_duration, _http_inflight, _http_response_size
+    global _dep_requests, _dep_duration, _dep_timeouts
+    global _dep_payload_in, _dep_payload_out, _items_returned
+
+    try:
+        cfg = _load_config()
+        if not cfg.enabled:
+            return
+
+        # -- lazy imports (only when metrics are enabled) ---------------------
+        from rf_trace_viewer import __version__
+
+        from opentelemetry.metrics import set_meter_provider
+        from opentelemetry.sdk.metrics import MeterProvider as _SDKMeterProvider
+        from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+        from opentelemetry.sdk.metrics.view import ExplicitBucketHistogramAggregation, View
+        from opentelemetry.sdk.resources import Resource
+
+        # -- resource ---------------------------------------------------------
+        resource = Resource.create(
+            {
+                "service.name": "robotframework-trace-report",
+                "service.version": __version__,
+            }
+        )
+
+        # -- exporter ---------------------------------------------------------
+        exporter_kwargs: dict = {}
+        if cfg.otlp_endpoint:
+            exporter_kwargs["endpoint"] = cfg.otlp_endpoint
+        if cfg.otlp_timeout_s:
+            exporter_kwargs["timeout"] = cfg.otlp_timeout_s
+        if cfg.otlp_headers:
+            exporter_kwargs["headers"] = list(cfg.otlp_headers.items())
+
+        if cfg.otlp_protocol == "http/protobuf":
+            from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+                OTLPMetricExporter,
+            )
+        else:
+            from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+                OTLPMetricExporter,
+            )
+
+        exporter = OTLPMetricExporter(**exporter_kwargs)
+
+        # -- reader -----------------------------------------------------------
+        reader = PeriodicExportingMetricReader(
+            exporter,
+            export_interval_millis=cfg.export_interval_ms,
+        )
+
+        # -- views (explicit bucket boundaries) -------------------------------
+        duration_view = View(
+            instrument_name="http.server.duration",
+            aggregation=ExplicitBucketHistogramAggregation(boundaries=DURATION_BUCKETS),
+        )
+        response_size_view = View(
+            instrument_name="http.response.size",
+            aggregation=ExplicitBucketHistogramAggregation(boundaries=SIZE_BUCKETS),
+        )
+        dep_duration_view = View(
+            instrument_name="dep.duration",
+            aggregation=ExplicitBucketHistogramAggregation(boundaries=DURATION_BUCKETS),
+        )
+        dep_in_view = View(
+            instrument_name="dep.payload.in_bytes",
+            aggregation=ExplicitBucketHistogramAggregation(boundaries=SIZE_BUCKETS),
+        )
+        dep_out_view = View(
+            instrument_name="dep.payload.out_bytes",
+            aggregation=ExplicitBucketHistogramAggregation(boundaries=SIZE_BUCKETS),
+        )
+        items_view = View(
+            instrument_name="items.returned",
+            aggregation=ExplicitBucketHistogramAggregation(boundaries=ITEMS_BUCKETS),
+        )
+
+        # -- meter provider ---------------------------------------------------
+        provider = _SDKMeterProvider(
+            resource=resource,
+            metric_readers=[reader],
+            views=[
+                duration_view,
+                response_size_view,
+                dep_duration_view,
+                dep_in_view,
+                dep_out_view,
+                items_view,
+            ],
+        )
+        set_meter_provider(provider)
+        _meter_provider = provider
+
+        # -- instruments ------------------------------------------------------
+        meter = provider.get_meter("rf_trace_viewer.metrics")
+
+        _http_requests = meter.create_counter(
+            name="http.server.requests",
+            unit="{request}",
+            description="Total HTTP requests handled",
+        )
+        _http_duration = meter.create_histogram(
+            name="http.server.duration",
+            unit="ms",
+            description="HTTP request duration in milliseconds",
+        )
+        _http_inflight = meter.create_up_down_counter(
+            name="http.server.inflight",
+            unit="{request}",
+            description="Number of in-flight HTTP requests",
+        )
+        _http_response_size = meter.create_histogram(
+            name="http.response.size",
+            unit="By",
+            description="HTTP response body size in bytes",
+        )
+        _dep_requests = meter.create_counter(
+            name="dep.requests",
+            unit="{request}",
+            description="Total dependency requests",
+        )
+        _dep_duration = meter.create_histogram(
+            name="dep.duration",
+            unit="ms",
+            description="Dependency call duration in milliseconds",
+        )
+        _dep_timeouts = meter.create_counter(
+            name="dep.timeouts",
+            unit="{timeout}",
+            description="Dependency call timeouts",
+        )
+        _dep_payload_in = meter.create_histogram(
+            name="dep.payload.in_bytes",
+            unit="By",
+            description="Dependency response payload size in bytes",
+        )
+        _dep_payload_out = meter.create_histogram(
+            name="dep.payload.out_bytes",
+            unit="By",
+            description="Dependency request payload size in bytes",
+        )
+        _items_returned = meter.create_histogram(
+            name="items.returned",
+            unit="{item}",
+            description="Number of items returned per API response",
+        )
+
+        _enabled = True
+        logger.info(
+            "OTel metrics initialized (protocol=%s, endpoint=%s, interval=%dms)",
+            cfg.otlp_protocol,
+            cfg.otlp_endpoint or "(default)",
+            cfg.export_interval_ms,
+        )
+
+    except Exception:
+        logger.error("Failed to initialize OTel metrics; continuing without metrics", exc_info=True)
+        _enabled = False
 
 
 def shutdown_metrics() -> None:
-    """Flush and shut down the MeterProvider. No-op stub."""
-    pass
+    """Flush and shut down the MeterProvider if initialized."""
+    global _enabled, _meter_provider
+
+    if _meter_provider is None:
+        return
+
+    try:
+        _meter_provider.shutdown()
+        logger.info("OTel metrics shut down")
+    except Exception:
+        logger.warning("Error shutting down OTel metrics", exc_info=True)
+    finally:
+        _meter_provider = None
+        _enabled = False
 
 
 def record_request_start(route: str) -> None:

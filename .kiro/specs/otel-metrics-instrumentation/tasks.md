@@ -16,40 +16,40 @@ Add an optional OpenTelemetry metrics subsystem to `robotframework-trace-report`
   - [ ] 1.4 Rebuild the Docker test image to include the new OTel dependencies: `make docker-build-test`
     - _Requirements: (build infrastructure)_
 
-- [ ] 2. Implement pure helper functions and their property tests
-  - [ ] 2.1 Implement `normalize_route(path: str) -> str` in `metrics.py` — strip query strings, replace UUID/numeric/hex dynamic segments with `{id}`, map unknown paths to `/_other`, pass through known static routes unchanged
+- [x] 2. Implement pure helper functions and their property tests
+  - [x] 2.1 Implement `normalize_route(path: str) -> str` in `metrics.py` — strip query strings, replace UUID/numeric/hex dynamic segments with `{id}`, map unknown paths to `/_other`, pass through known static routes unchanged
     - _Requirements: 6.3_
 
   - [ ]* 2.2 Write property test for route normalization
     - **Property 7: Route normalization replaces dynamic segments**
     - **Validates: Requirements 6.3**
 
-  - [ ] 2.3 Implement `status_class(code: int) -> str` in `metrics.py` — map HTTP status codes to `"2xx"`, `"3xx"`, `"4xx"`, `"5xx"`, or `"other"` for 1xx
+  - [x] 2.3 Implement `status_class(code: int) -> str` in `metrics.py` — map HTTP status codes to `"2xx"`, `"3xx"`, `"4xx"`, `"5xx"`, or `"other"` for 1xx
     - _Requirements: 3.1, 4.1_
 
   - [ ]* 2.4 Write property test for status class mapping
     - **Property 12: Status class mapping**
     - **Validates: Requirements 3.1, 4.1**
 
-  - [ ] 2.5 Implement `filter_attributes(attrs: dict[str, str], allowlist: frozenset[str] | None) -> dict[str, str]` in `metrics.py` — return only keys present in both input and allowlist; pass through all keys when allowlist is None
+  - [x] 2.5 Implement `filter_attributes(attrs: dict[str, str], allowlist: frozenset[str] | None) -> dict[str, str]` in `metrics.py` — return only keys present in both input and allowlist; pass through all keys when allowlist is None
     - _Requirements: 6.4_
 
   - [ ]* 2.6 Write property test for attribute allowlist filtering
     - **Property 8: Attribute allowlist filtering**
     - **Validates: Requirements 6.4**
 
-  - [ ] 2.7 Implement OTLP header parsing helper `_parse_otlp_headers(raw: str | None) -> dict[str, str] | None` — parse comma-separated `key=value` pairs
+  - [x] 2.7 Implement OTLP header parsing helper `_parse_otlp_headers(raw: str | None) -> dict[str, str] | None` — parse comma-separated `key=value` pairs
     - _Requirements: 8.4_
 
   - [ ]* 2.8 Write property test for OTLP header parsing
     - **Property 13: OTLP header parsing**
     - **Validates: Requirements 8.4**
 
-- [ ] 3. Checkpoint — Ensure all tests pass
+- [x] 3. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Implement MetricsConfig parsing and validation
-  - [ ] 4.1 Implement `_load_config() -> MetricsConfig` that reads all `TRACE_REPORT_*` and `OTEL_EXPORTER_OTLP_*` environment variables, applies defaults, validates types, and returns a frozen `MetricsConfig`. Handle: `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` takes precedence over `OTEL_EXPORTER_OTLP_ENDPOINT`; invalid `TRACE_REPORT_OTEL_DROP_POLICY` falls back to `drop_oldest` with warning; non-positive `TRACE_REPORT_METRICS_EXPORT_INTERVAL_MS` falls back to default with warning; values below 1000 accepted with warning
+- [x] 4. Implement MetricsConfig parsing and validation
+  - [x] 4.1 Implement `_load_config() -> MetricsConfig` that reads all `TRACE_REPORT_*` and `OTEL_EXPORTER_OTLP_*` environment variables, applies defaults, validates types, and returns a frozen `MetricsConfig`. Handle: `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` takes precedence over `OTEL_EXPORTER_OTLP_ENDPOINT`; invalid `TRACE_REPORT_OTEL_DROP_POLICY` falls back to `drop_oldest` with warning; non-positive `TRACE_REPORT_METRICS_EXPORT_INTERVAL_MS` falls back to default with warning; values below 1000 accepted with warning
     - _Requirements: 8.1, 8.2, 8.3, 8.5, 9.1, 9.2, 9.4, 11.1, 11.2, 11.3, 11.4_
 
   - [ ]* 4.2 Write property test for MetricsConfig round-trip from environment variables
@@ -64,11 +64,11 @@ Add an optional OpenTelemetry metrics subsystem to `robotframework-trace-report`
     - **Property 11: Invalid drop policy falls back to default**
     - **Validates: Requirements 11.4**
 
-- [ ] 5. Implement OTel SDK initialization and resource building
-  - [ ] 5.1 Implement `init_metrics() -> None` — load config, build OTel `Resource` with mandatory `service.name = "robotframework-trace-report"` and `service.version` from `__version__`, merge user-supplied `OTEL_RESOURCE_ATTRIBUTES` (mandatory `service.name` takes precedence), create `MeterProvider` with `PeriodicExportingMetricReader` and OTLP exporter (gRPC or HTTP based on protocol config), create all 10 instruments with correct types/units/bucket boundaries, set module-level `_enabled = True`. Wrap entire body in try/except: on failure log ERROR and leave `_enabled = False`
+- [x] 5. Implement OTel SDK initialization and resource building
+  - [x] 5.1 Implement `init_metrics() -> None` — load config, build OTel `Resource` with mandatory `service.name = "robotframework-trace-report"` and `service.version` from `__version__`, merge user-supplied `OTEL_RESOURCE_ATTRIBUTES` (mandatory `service.name` takes precedence), create `MeterProvider` with `PeriodicExportingMetricReader` and OTLP exporter (gRPC or HTTP based on protocol config), create all 10 instruments with correct types/units/bucket boundaries, set module-level `_enabled = True`. Wrap entire body in try/except: on failure log ERROR and leave `_enabled = False`
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.3, 2.4, 2.5, 2.6, 2.7, 3.5, 7.7, 12.1, 12.2_
 
-  - [ ] 5.2 Implement `shutdown_metrics() -> None` — flush and shut down the `MeterProvider` if initialized
+  - [x] 5.2 Implement `shutdown_metrics() -> None` — flush and shut down the `MeterProvider` if initialized
     - _Requirements: 7.1_
 
   - [ ]* 5.3 Write property test for resource attributes
