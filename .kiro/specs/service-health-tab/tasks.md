@@ -111,8 +111,8 @@ Add a "Service Health" tab to the rf-trace-viewer that queries OpenTelemetry met
     - For any non-negative float `rate`, `getThresholdClass(rate)` returns `""` when ≤5, `"warning"` when 5 < rate ≤ 25, `"critical"` when >25
     - **Validates: Requirements 9.1, 9.2, 9.3**
 
-- [ ] 5. Implement sparkline rendering
-  - [ ] 5.1 Add sparkline rendering to HealthRenderer
+- [x] 5. Implement sparkline rendering
+  - [x] 5.1 Add sparkline rendering to HealthRenderer
     - Implement `renderSparkline(svgEl, dataPoints)` using inline SVG `<polyline>` elements, no external libraries
     - Maintain a rolling history buffer (capped at 20 points) per sparkline metric across polls
     - Render sparklines on p95 HTTP latency, HTTP error rate, and dependency p95 latency cards

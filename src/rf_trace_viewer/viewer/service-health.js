@@ -29,6 +29,23 @@
   var TAB_ID = 'service-health';
   var POLL_INTERVAL_MS = 30000;
 
+  var SPARKLINE_MAX_POINTS = 20;
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // Maps card key → series key from the backend snapshot
+  var SPARKLINE_METRICS = {
+    'http.p95_latency_ms': 'p95_latency_ms',
+    'http.error_rate_pct': 'error_rate_pct',
+    'deps.p95_latency_ms': 'dep_p95_latency_ms'
+  };
+
+  // Rolling history buffer per sparkline metric, capped at SPARKLINE_MAX_POINTS
+  var _history = {
+    p95_latency_ms: [],
+    error_rate_pct: [],
+    dep_p95_latency_ms: []
+  };
+
   /* ── Formatting helpers ────────────────────────────────────────── */
 
   function formatLatency(ms) {
@@ -210,13 +227,123 @@
     value.textContent = '\u2014';
     card.appendChild(value);
 
-    // Sparkline placeholder (for metrics that get sparklines in task 5)
+    // Sparkline container
     var sparkline = document.createElement('div');
     sparkline.className = 'sh-card-sparkline';
     card.appendChild(sparkline);
 
     _cardEls[cardKey] = { valueEl: value, cardEl: card, sparklineEl: sparkline };
     return card;
+  }
+
+  /* ── Sparkline rendering ───────────────────────────────────────── */
+
+  /**
+   * Render a sparkline SVG polyline inside the given container element.
+   * dataPoints is an array of {t, v} objects. If fewer than 2 points,
+   * shows a "No data" placeholder instead.
+   * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5
+   */
+  function renderSparkline(container, dataPoints) {
+    // Clear previous content
+    container.innerHTML = '';
+
+    if (!dataPoints || dataPoints.length < 2) {
+      var placeholder = document.createElement('span');
+      placeholder.className = 'sh-sparkline-nodata';
+      placeholder.textContent = 'No data';
+      container.appendChild(placeholder);
+      return;
+    }
+
+    var width = 120;
+    var height = 32;
+    var padding = 2;
+
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    svg.setAttribute('class', 'sh-sparkline-svg');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Sparkline trend');
+
+    // Extract values
+    var values = [];
+    for (var i = 0; i < dataPoints.length; i++) {
+      values.push(dataPoints[i].v);
+    }
+
+    var minVal = values[0];
+    var maxVal = values[0];
+    for (var j = 1; j < values.length; j++) {
+      if (values[j] < minVal) minVal = values[j];
+      if (values[j] > maxVal) maxVal = values[j];
+    }
+
+    var range = maxVal - minVal;
+    if (range === 0) range = 1; // Flat line — avoid division by zero
+
+    var drawWidth = width - padding * 2;
+    var drawHeight = height - padding * 2;
+    var step = drawWidth / (values.length - 1);
+
+    var points = '';
+    for (var k = 0; k < values.length; k++) {
+      var x = padding + k * step;
+      var y = padding + drawHeight - ((values[k] - minVal) / range) * drawHeight;
+      points += (k > 0 ? ' ' : '') + x.toFixed(1) + ',' + y.toFixed(1);
+    }
+
+    var polyline = document.createElementNS(SVG_NS, 'polyline');
+    polyline.setAttribute('points', points);
+    polyline.setAttribute('class', 'sh-sparkline-line');
+    polyline.setAttribute('fill', 'none');
+    polyline.setAttribute('stroke-width', '1.5');
+    polyline.setAttribute('stroke-linejoin', 'round');
+    polyline.setAttribute('stroke-linecap', 'round');
+
+    svg.appendChild(polyline);
+    container.appendChild(svg);
+  }
+
+  // Expose for testing
+  window._serviceHealthRenderSparkline = renderSparkline;
+
+  /**
+   * Update the rolling history buffers from the snapshot's series data,
+   * then render sparklines on the appropriate cards.
+   */
+  function _updateSparklines(snapshot) {
+    var series = snapshot && snapshot.series ? snapshot.series : {};
+
+    // Update history buffers from series data
+    var seriesKeys = Object.keys(_history);
+    for (var i = 0; i < seriesKeys.length; i++) {
+      var sKey = seriesKeys[i];
+      var newPoints = series[sKey];
+      if (newPoints && newPoints.length > 0) {
+        // Append new points to history
+        for (var j = 0; j < newPoints.length; j++) {
+          _history[sKey].push(newPoints[j]);
+        }
+        // Cap at SPARKLINE_MAX_POINTS
+        if (_history[sKey].length > SPARKLINE_MAX_POINTS) {
+          _history[sKey] = _history[sKey].slice(_history[sKey].length - SPARKLINE_MAX_POINTS);
+        }
+      }
+    }
+
+    // Render sparklines on the 3 designated cards
+    var cardKeys = Object.keys(SPARKLINE_METRICS);
+    for (var c = 0; c < cardKeys.length; c++) {
+      var cardKey = cardKeys[c];
+      var historyKey = SPARKLINE_METRICS[cardKey];
+      var entry = _cardEls[cardKey];
+      if (entry && entry.sparklineEl) {
+        renderSparkline(entry.sparklineEl, _history[historyKey]);
+      }
+    }
   }
 
   /* ── HealthRenderer ────────────────────────────────────────────── */
@@ -243,6 +370,9 @@
           if (cls === 'critical') entry.cardEl.classList.add('sh-card-critical');
         }
       });
+
+      // Update sparklines from series data
+      _updateSparklines(snapshot);
     }
   };
 
