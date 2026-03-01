@@ -480,9 +480,22 @@
   }
 
   /**
+   * Clamp View Window so viewStart is never before activeWindowStart.
+   * Only applies in live mode when activeWindowStart is set.
+   */
+  function _clampViewWindow() {
+    if (!window.__RF_TRACE_LIVE__) return;
+    if (timelineState.activeWindowStart === null) return;
+    if (timelineState.viewStart < timelineState.activeWindowStart) {
+      timelineState.viewStart = timelineState.activeWindowStart;
+    }
+  }
+
+  /**
    * Update the visible time window after zoom change and re-render.
    */
   function _applyZoom() {
+    _clampViewWindow();
     _render();
     _renderHeader();
     if (timelineState._syncHScroll) timelineState._syncHScroll();
@@ -2179,6 +2192,12 @@
    * Emit time range selected event (for filtering).
    */
   function _emitTimeRangeSelected(start, end) {
+    // Clamp filter start to activeWindowStart in live mode
+    if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
+      if (start < timelineState.activeWindowStart) {
+        start = timelineState.activeWindowStart;
+      }
+    }
     if (window.RFTraceViewer && window.RFTraceViewer.emit) {
       window.RFTraceViewer.emit('time-range-selected', { start: start, end: end });
     }
@@ -2215,6 +2234,13 @@
         if (timelineState.viewEnd > timelineState.maxTime) {
           timelineState.viewEnd = timelineState.maxTime;
           timelineState.viewStart = timelineState.viewEnd - viewRange;
+        }
+        // Clamp viewStart to activeWindowStart in live mode
+        if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
+          if (timelineState.viewStart < timelineState.activeWindowStart) {
+            timelineState.viewStart = timelineState.activeWindowStart;
+            timelineState.viewEnd = timelineState.viewStart + viewRange;
+          }
         }
         
         // Vertical scrolling: Find the span's Y position and scroll container to center it
@@ -2388,6 +2414,12 @@
     // Clamp to data bounds
     if (viewStart < timelineState.minTime) viewStart = timelineState.minTime;
     if (viewEnd > timelineState.maxTime) viewEnd = timelineState.maxTime;
+    // Clamp to activeWindowStart in live mode
+    if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
+      if (viewStart < timelineState.activeWindowStart) {
+        viewStart = timelineState.activeWindowStart;
+      }
+    }
 
     // Only auto-zoom if it would actually zoom in meaningfully (> 1.5x)
     var viewRange = viewEnd - viewStart;
