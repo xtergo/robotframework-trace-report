@@ -140,7 +140,7 @@ Incremental implementation of the timeline span viewer across the three existing
       - If `autoCompactAfterFilter` is false, `layoutMode` is `baseline` after filter change; if true, `layoutMode` is `compact`
       - **Validates: Requirements 6.1, 6.3**
 
-- [ ] 6. Checkpoint — Compact layout
+- [x] 6. Checkpoint — Compact layout
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 7. Service State Manager with eviction, grace, and anti-thrash
@@ -197,11 +197,11 @@ Incremental implementation of the timeline span viewer across the three existing
       - After 10s with no toggles, `thrashLocked` becomes false and fetching resumes
       - **Validates: Requirement 9.4**
 
-- [ ] 8. Checkpoint — Service state management
+- [x] 8. Checkpoint — Service state management
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Fit All button
-  - [ ] 9.1 Implement Fit All in `timeline.js`
+- [-] 9. Fit All button
+  - [x] 9.1 Implement Fit All in `timeline.js`
     - Add `_fitAll()` function: compute min/max timestamps of visible (non-filtered) spans
     - Clamp `viewStart` to >= `activeWindowStart`
     - If no visible spans: zoom to last 5 minutes within Load_Window, show toast "No spans in current filters"
@@ -215,8 +215,8 @@ Incremental implementation of the timeline span viewer across the three existing
       - After fitAll, `viewStart` == min startTime of visible spans (clamped to `activeWindowStart`), `viewEnd` == max endTime
       - **Validates: Requirements 10.2, 10.3**
 
-- [ ] 10. Service list UX labels
-  - [ ] 10.1 Extend `_renderServiceList()` in `live.js` with status badges
+- [x] 10. Service list UX labels
+  - [x] 10.1 Extend `_renderServiceList()` in `live.js` with status badges
     - Show "Enabled (N spans cached)" when enabled with cached spans
     - Show "Pending (N s)" with countdown during grace period
     - Show "Evicting in N s" during eviction timer
@@ -232,8 +232,8 @@ Incremental implementation of the timeline span viewer across the three existing
       - For any `ServiceState`, the derived label matches the correct status string based on state fields
       - **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5**
 
-- [ ] 11. Backward compatibility verification
-  - [ ] 11.1 Verify static mode and existing behavior in `timeline.js` and `live.js`
+- [x] 11. Backward compatibility verification
+  - [x] 11.1 Verify static mode and existing behavior in `timeline.js` and `live.js`
     - Ensure `baseline` layout mode uses existing `_assignLanes` unchanged
     - Ensure `json` and `signoz` provider types still work for polling
     - Ensure `timeline-data` events are still emitted and consumed
@@ -249,7 +249,7 @@ Incremental implementation of the timeline span viewer across the three existing
       - For any set of spans in `baseline` mode, lane assignments are identical to existing `_assignLanes` output
       - **Validates: Requirement 12.1**
 
-- [ ] 12. Final checkpoint — Full integration
+- [x] 12. Final checkpoint — Full integration
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
