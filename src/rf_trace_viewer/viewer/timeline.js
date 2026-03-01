@@ -51,7 +51,10 @@
     showTimeMarkers: false,
     showSecondsGrid: true,
     activeWindowStart: null,
-    isFetchingOlderSpans: false
+    isFetchingOlderSpans: false,
+    isDraggingMarker: false,
+    _markerDragDebounceTimer: null,
+    _markerDragOldStart: null
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -394,6 +397,18 @@
           timelineState.activeWindowStart = data.activeWindowStart;
           _render();
         }
+      });
+    }
+
+    // Listen for delta fetch status to show/hide "Fetching older spans…" indicator
+    if (window.RFTraceViewer && window.RFTraceViewer.on) {
+      window.RFTraceViewer.on('delta-fetch-start', function () {
+        timelineState.isFetchingOlderSpans = true;
+        _render();
+      });
+      window.RFTraceViewer.on('delta-fetch-end', function () {
+        timelineState.isFetchingOlderSpans = false;
+        _render();
       });
     }
 
@@ -960,6 +975,18 @@
       var x = e.clientX - rect.left;
       var y = e.clientY - rect.top;
 
+      // Check for Load Start Marker drag (left-click near marker, live mode only)
+      if (e.button === 0 && !e.altKey && window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
+        var markerX = _timeToScreenX(timelineState.activeWindowStart);
+        if (Math.abs(x - markerX) < 10) {
+          e.preventDefault();
+          timelineState.isDraggingMarker = true;
+          timelineState._markerDragOldStart = timelineState.activeWindowStart;
+          canvas.style.cursor = 'ew-resize';
+          return;
+        }
+      }
+
       // Middle mouse button (or left+alt) = start horizontal pan drag
       if (e.button === 1 || (e.button === 0 && e.altKey)) {
         e.preventDefault();
@@ -990,6 +1017,31 @@
 
     // Mouse move: update drag pan or selection
     canvas.addEventListener('mousemove', function (e) {
+      // Handle marker drag (Load Start Marker)
+      if (timelineState.isDraggingMarker) {
+        var rect = canvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left;
+        var newTime = _screenXToTime(mx);
+        // Clamp to [minTime, maxTime]
+        if (newTime < timelineState.minTime) newTime = timelineState.minTime;
+        if (newTime > timelineState.maxTime) newTime = timelineState.maxTime;
+        timelineState.activeWindowStart = newTime;
+        // Debounce: emit load-window-changed every 300ms
+        if (!timelineState._markerDragDebounceTimer) {
+          timelineState._markerDragDebounceTimer = setTimeout(function () {
+            timelineState._markerDragDebounceTimer = null;
+            if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+              window.RFTraceViewer.emit('load-window-changed', {
+                newStart: timelineState.activeWindowStart,
+                oldStart: timelineState._markerDragOldStart
+              });
+            }
+          }, 300);
+        }
+        _render();
+        return;
+      }
+
       // Handle pan drag (middle-click or alt+click)
       if (timelineState.isDragging && timelineState._dragViewStart !== undefined) {
         var canvasWidth = canvas.width / (window.devicePixelRatio || 1);
@@ -1024,6 +1076,14 @@
         _render();
       } else {
         // Hover detection
+        // Show ew-resize cursor when hovering near the Load Start Marker
+        if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
+          var markerHoverX = _timeToScreenX(timelineState.activeWindowStart);
+          if (Math.abs(x - markerHoverX) < 10) {
+            canvas.style.cursor = 'ew-resize';
+            return;
+          }
+        }
         var hoveredSpan = _getSpanAtPoint(x, y);
         if (hoveredSpan !== timelineState.hoveredSpan) {
           timelineState.hoveredSpan = hoveredSpan;
@@ -1035,6 +1095,26 @@
 
     // Mouse up: end drag or selection
     canvas.addEventListener('mouseup', function (e) {
+      // End marker drag
+      if (timelineState.isDraggingMarker) {
+        // Clear debounce timer
+        if (timelineState._markerDragDebounceTimer) {
+          clearTimeout(timelineState._markerDragDebounceTimer);
+          timelineState._markerDragDebounceTimer = null;
+        }
+        // Emit final load-window-changed event
+        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+          window.RFTraceViewer.emit('load-window-changed', {
+            newStart: timelineState.activeWindowStart,
+            oldStart: timelineState._markerDragOldStart
+          });
+        }
+        timelineState.isDraggingMarker = false;
+        timelineState._markerDragOldStart = null;
+        canvas.style.cursor = 'crosshair';
+        return;
+      }
+
       // End pan drag
       if (timelineState.isDragging && timelineState._dragViewStart !== undefined) {
         timelineState.isDragging = false;
@@ -1076,6 +1156,16 @@
 
     // Mouse leave: cancel drag/selection
     canvas.addEventListener('mouseleave', function () {
+      // Cancel marker drag if active
+      if (timelineState.isDraggingMarker) {
+        if (timelineState._markerDragDebounceTimer) {
+          clearTimeout(timelineState._markerDragDebounceTimer);
+          timelineState._markerDragDebounceTimer = null;
+        }
+        timelineState.isDraggingMarker = false;
+        timelineState._markerDragOldStart = null;
+      }
+
       if (timelineState.isSelecting) {
         timelineState.selectionStart = null;
         timelineState.selectionEnd = null;
@@ -1850,6 +1940,19 @@
         labelX = x - 8;
       }
       ctx.fillText(labelText, labelX, labelY);
+
+      // Show "Fetching older spans…" indicator below the label when delta fetch is in progress
+      if (timelineState.isFetchingOlderSpans) {
+        ctx.font = '9px sans-serif';
+        ctx.fillStyle = '#e65100'; // amber/orange
+        var fetchText = 'Fetching older spans\u2026';
+        var fetchY = labelY + 12;
+        if (ctx.textAlign === 'right') {
+          ctx.fillText(fetchText, labelX, fetchY);
+        } else {
+          ctx.fillText(fetchText, labelX, fetchY);
+        }
+      }
     } else {
       // --- Main canvas: vertical dashed line ---
       ctx.strokeStyle = markerColor;
