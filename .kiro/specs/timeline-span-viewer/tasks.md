@@ -6,8 +6,8 @@ Incremental implementation of the timeline span viewer across the three existing
 
 ## Tasks
 
-- [ ] 1. Load Window state and delta fetch engine
-  - [ ] 1.1 Add Load Window state to `live.js`
+- [x] 1. Load Window state and delta fetch engine
+  - [x] 1.1 Add Load Window state to `live.js`
     - Add `_loadWindowState` object to the `live.js` IIFE scope with fields: `activeWindowStart`, `executionStartTime`, `maxLookback` (21600), `stepSize` (900), `isFetching`, `totalCachedSpans`, `maxCachedSpans` (50000)
     - On init (after first `timeline-data`), set `activeWindowStart = executionStartTime - 900`
     - Expose `window.RFTraceViewer.getActiveWindowStart()` and `window.RFTraceViewer.setActiveWindowStart(newStart)` public API
@@ -15,7 +15,7 @@ Incremental implementation of the timeline span viewer across the three existing
     - Gate behind `window.__RF_TRACE_LIVE__` — skip in static mode
     - _Requirements: 1.1, 3.1, 12.4_
 
-  - [ ] 1.2 Implement delta fetch engine in `live.js`
+  - [x] 1.2 Implement delta fetch engine in `live.js`
     - Add `_deltaFetch(fromTime, toTime)` that breaks the interval into 15-minute steps
     - Fetch each step sequentially using existing `_pollSigNoz` / `_pollJson` code paths
     - Merge results into `allSpans[]` using `seenSpanIds` for dedup — never remove existing spans
@@ -24,7 +24,7 @@ Incremental implementation of the timeline span viewer across the three existing
     - On forward drag (newStart > oldStart): update marker position only, no fetch, no cache change
     - _Requirements: 2.2, 2.3, 2.6, 2.7, 3.2, 3.4, 3.5_
 
-  - [ ] 1.3 Wire `load-window-changed` event between Timeline and Live modules
+  - [x] 1.3 Wire `load-window-changed` event between Timeline and Live modules
     - Timeline_Module emits `load-window-changed` with `{ newStart, oldStart }` on marker drag
     - Live_Module listens and calls `_deltaFetch` when `newStart < oldStart`
     - Live_Module emits `active-window-start` for Timeline_Module to sync marker/overlay position
@@ -57,11 +57,11 @@ Incremental implementation of the timeline span viewer across the three existing
       - For any forward drag, cache is identical before/after and no fetch is triggered
       - **Validates: Requirements 2.6, 2.7**
 
-- [ ] 2. Checkpoint — Load Window core
+- [x] 2. Checkpoint — Load Window core
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 3. Load Start Marker and Grey Overlay rendering
-  - [ ] 3.1 Render Load Start Marker in `timeline.js`
+- [x] 3. Load Start Marker and Grey Overlay rendering
+  - [x] 3.1 Render Load Start Marker in `timeline.js`
     - Add `_renderLoadStartMarker(ctx, width)` called during `_renderHeader()` or as overlay
     - Draw vertical line + drag handle at `_timeToScreenX(activeWindowStart)`
     - Display label "Loading from: HH:MM (drag to load older)"
@@ -69,20 +69,20 @@ Incremental implementation of the timeline span viewer across the three existing
     - Gate behind `window.__RF_TRACE_LIVE__` — skip in static mode
     - _Requirements: 1.2, 1.3, 3.3, 12.4_
 
-  - [ ] 3.2 Implement marker drag handling in `timeline.js`
+  - [x] 3.2 Implement marker drag handling in `timeline.js`
     - Integrate drag into existing `_setupEventListeners` mousedown/mousemove/mouseup
     - Debounce: emit `load-window-changed` every 300ms or on mouseup, not per pixel
     - Show "Fetching older spans…" indicator while delta fetch is in progress
     - _Requirements: 2.1, 2.4, 2.5_
 
-  - [ ] 3.3 Render Grey Overlay in `timeline.js`
+  - [x] 3.3 Render Grey Overlay in `timeline.js`
     - Add `_renderGreyOverlay(ctx, width, height)` called at start of `_render()` before span bars
     - Fill `rgba(128, 128, 128, 0.3)` from x=0 to `_timeToScreenX(activeWindowStart)`
     - Update overlay position when `activeWindowStart` changes without changing View_Window
     - Gate behind `window.__RF_TRACE_LIVE__`
     - _Requirements: 1.4, 1.5, 4.4, 12.4_
 
-  - [ ] 3.4 Add View Window clamping in `timeline.js`
+  - [x] 3.4 Add View Window clamping in `timeline.js`
     - Maintain `viewStart`/`viewEnd` (View_Window) and `activeWindowStart` (Load_Window) as separate states
     - Clamp `viewStart` and `filterStart` to always be >= `activeWindowStart` on zoom, pan, and filter changes
     - Ensure zoom/pan only updates View_Window, never Load_Window
@@ -99,11 +99,11 @@ Incremental implementation of the timeline span viewer across the three existing
       - Zoom/pan does not change `activeWindowStart`; changing `activeWindowStart` does not change `viewStart`/`viewEnd`
       - **Validates: Requirements 4.3, 4.4**
 
-- [ ] 4. Checkpoint — Marker, overlay, and view clamping
+- [x] 4. Checkpoint — Marker, overlay, and view clamping
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Compact Layout engine
-  - [ ] 5.1 Add `layoutMode` state and Compact Button in `timeline.js`
+- [x] 5. Compact Layout engine
+  - [x] 5.1 Add `layoutMode` state and Compact Button in `timeline.js`
     - Add `layoutMode: 'baseline'` to `timelineState`
     - Render Compact_Button in the zoom bar area with text "Compact visible spans"
     - Toggle to "Reset layout" when `layoutMode === 'compact'`
@@ -111,14 +111,14 @@ Incremental implementation of the timeline span viewer across the three existing
     - Emit `layout-mode-changed` event on toggle
     - _Requirements: 5.1, 5.2, 5.4, 5.5, 5.6_
 
-  - [ ] 5.2 Implement compact lane packing algorithm in `timeline.js`
+  - [x] 5.2 Implement compact lane packing algorithm in `timeline.js`
     - Add `_compactLanes(workers)` greedy first-fit algorithm
     - Sort spans by startTime, assign each to first lane where it fits (no overlap)
     - Respect group/parent relationships — children stay near parents
     - In baseline mode, use existing `_assignLanes` unchanged
     - _Requirements: 5.3, 12.1_
 
-  - [ ] 5.3 Implement auto-reset on filter change in `timeline.js`
+  - [x] 5.3 Implement auto-reset on filter change in `timeline.js`
     - On any `filter-changed` event, reset `layoutMode` to `baseline` and restore default lane positions
     - Add "Auto-compact after filtering" toggle (default OFF) in settings panel
     - If toggle is ON, re-apply compact after filter reset
@@ -143,27 +143,27 @@ Incremental implementation of the timeline span viewer across the three existing
 - [ ] 6. Checkpoint — Compact layout
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Service State Manager with eviction, grace, and anti-thrash
-  - [ ] 7.1 Add Service State model to `live.js`
+- [x] 7. Service State Manager with eviction, grace, and anti-thrash
+  - [x] 7.1 Add Service State model to `live.js`
     - Replace simple `_activeServices` map with `_serviceStates` object (serviceName → ServiceState)
     - ServiceState fields: `enabled`, `disabledSince`, `pendingEnableFetch`, `evictionTimer`, `graceTimer`, `cachedSpanCount`, `cachedRange`, `toggleHistory`, `thrashLocked`
     - Emit `service-state-changed` event on any state transition
     - _Requirements: 7.5, 11.1, 11.2, 11.3, 11.4, 11.5_
 
-  - [ ] 7.2 Implement toggle-off flow with eviction timer in `live.js`
+  - [x] 7.2 Implement toggle-off flow with eviction timer in `live.js`
     - On toggle off: set `enabled = false`, immediately hide spans (UI filter), start 30s eviction timer
     - On eviction timer expiry: clear service's spans from cache, retain service name in list
     - On toggle back on within 30s: cancel eviction timer, show cached spans
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ] 7.3 Implement toggle-on flow with grace period in `live.js`
+  - [x] 7.3 Implement toggle-on flow with grace period in `live.js`
     - On toggle on (no cache): start 3s grace period (1s if single pending service with no cache)
     - Show countdown "Loading starts in 3…2…1" next to service name
     - On toggle off during grace: cancel pending fetch, no network request
     - On grace expiry: fetch spans for `[activeWindowStart, executionEndTime]`, merge with cache
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 7.4 Implement anti-thrash guard in `live.js`
+  - [x] 7.4 Implement anti-thrash guard in `live.js`
     - Track toggle timestamps per service in `toggleHistory[]` with 10-second sliding window
     - If 5+ toggles in 10s: set `thrashLocked = true`, stop all fetches, show "Stabilizing…"
     - After 10s of no toggles: set `thrashLocked = false`, resume normal behavior

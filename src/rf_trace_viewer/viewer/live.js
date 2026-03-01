@@ -34,6 +34,247 @@
   var _activeServices = {};      // service_name → true (currently checked)
   var _serviceDropdownEl = null; // dropdown container element
   var _svcListEl = null;         // checkbox list inside dropdown
+  var _serviceStates = {};       // serviceName → ServiceState object
+  var _svcLabelTimer = null;     // 1-second interval for countdown label updates
+
+  function _createServiceState(serviceName) {
+    return {
+      enabled: !!_activeServices[serviceName],
+      disabledSince: null,
+      pendingEnableFetch: false,
+      evictionTimer: null,
+      graceTimer: null,
+      cachedSpanCount: 0,
+      cachedRange: null,
+      toggleHistory: [],
+      thrashLocked: false
+    };
+  }
+
+  function _getServiceState(serviceName) {
+    if (!_serviceStates[serviceName]) {
+      _serviceStates[serviceName] = _createServiceState(serviceName);
+    }
+    return _serviceStates[serviceName];
+  }
+
+  function _emitServiceStateChanged(serviceName) {
+    if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+      window.RFTraceViewer.emit('service-state-changed', {
+        serviceName: serviceName,
+        state: _getServiceState(serviceName)
+      });
+    }
+  }
+
+  function _toggleServiceOff(serviceName) {
+    var state = _getServiceState(serviceName);
+    state.enabled = false;
+    state.disabledSince = Date.now();
+
+    // Cancel any pending grace timer (toggle-on was in progress)
+    if (state.graceTimer) {
+      clearTimeout(state.graceTimer);
+      state.graceTimer = null;
+      state.pendingEnableFetch = false;
+    }
+
+    // Start 30-second eviction timer
+    if (state.evictionTimer) clearTimeout(state.evictionTimer);
+    state.evictionTimer = setTimeout(function () {
+      _evictServiceSpans(serviceName);
+    }, 30000);
+
+    delete _activeServices[serviceName];
+    _serviceFilter = _getActiveServiceFilter();
+    _emitServiceStateChanged(serviceName);
+    _renderServiceList();
+    _updateServiceBtnLabel();
+  }
+
+  function _evictServiceSpans(serviceName) {
+    var state = _getServiceState(serviceName);
+    state.evictionTimer = null;
+    state.cachedSpanCount = 0;
+    state.cachedRange = null;
+
+    // Remove this service's spans from allSpans and seenSpanIds
+    var kept = [];
+    for (var i = 0; i < allSpans.length; i++) {
+      var svc = allSpans[i].attributes ? (allSpans[i].attributes['service.name'] || '') : '';
+      if (svc === serviceName) {
+        // Remove from dedup set too
+        if (allSpans[i].span_id) delete seenSpanIds[allSpans[i].span_id];
+      } else {
+        kept.push(allSpans[i]);
+      }
+    }
+    allSpans = kept;
+    _loadWindowState.totalCachedSpans = allSpans.length;
+
+    // Service name stays in _knownServices — just state changes
+    _emitServiceStateChanged(serviceName);
+    _renderServiceList();
+    _rebuildAndRender();
+  }
+
+  function _toggleServiceOn(serviceName) {
+    var state = _getServiceState(serviceName);
+    state.enabled = true;
+    state.disabledSince = null;
+
+    // Cancel eviction timer if toggling back on within 30s
+    if (state.evictionTimer) {
+      clearTimeout(state.evictionTimer);
+      state.evictionTimer = null;
+    }
+
+    _activeServices[serviceName] = true;
+    _serviceFilter = _getActiveServiceFilter();
+
+    // If we have cached spans, just show them (no fetch needed)
+    if (state.cachedSpanCount > 0) {
+      _emitServiceStateChanged(serviceName);
+      _renderServiceList();
+      _updateServiceBtnLabel();
+      _rebuildAndRender();
+      return;
+    }
+
+    // No cached spans — start grace period before fetching
+    state.pendingEnableFetch = true;
+
+    // Determine grace duration: 1s if single pending service with no cache, else 3s
+    var pendingCount = 0;
+    var names = Object.keys(_serviceStates);
+    for (var i = 0; i < names.length; i++) {
+      if (_serviceStates[names[i]].pendingEnableFetch) pendingCount++;
+    }
+    var graceDuration = (pendingCount === 1) ? 1000 : 3000;
+
+    if (state.graceTimer) clearTimeout(state.graceTimer);
+    state.graceTimer = setTimeout(function () {
+      _onGraceExpired(serviceName);
+    }, graceDuration);
+
+    _emitServiceStateChanged(serviceName);
+    _renderServiceList();
+    _updateServiceBtnLabel();
+    _startSvcLabelTimer();
+  }
+
+  function _onGraceExpired(serviceName) {
+    var state = _getServiceState(serviceName);
+    state.graceTimer = null;
+    state.pendingEnableFetch = false;
+
+    // If disabled during grace, do nothing
+    if (!state.enabled) {
+      _emitServiceStateChanged(serviceName);
+      _renderServiceList();
+      return;
+    }
+
+    // Fetch spans for [activeWindowStart, now] for this service
+    var fromTime = _loadWindowState.activeWindowStart || (_loadWindowState.executionStartTime - _loadWindowState.stepSize);
+    var toTime = _loadWindowState.executionStartTime || (Date.now() / 1000);
+
+    // Use delta fetch infrastructure — the spans will be merged via existing ingest
+    _deltaFetch(fromTime, toTime);
+
+    _emitServiceStateChanged(serviceName);
+    _renderServiceList();
+  }
+
+  function _startSvcLabelTimer() {
+    if (_svcLabelTimer) return;
+    _svcLabelTimer = setInterval(function () {
+      // Check if any service still needs countdown updates
+      var needsUpdate = false;
+      var names = Object.keys(_serviceStates);
+      for (var i = 0; i < names.length; i++) {
+        var s = _serviceStates[names[i]];
+        if (s.pendingEnableFetch || s.evictionTimer || s.thrashLocked) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (needsUpdate) {
+        _renderServiceList();
+      } else {
+        clearInterval(_svcLabelTimer);
+        _svcLabelTimer = null;
+      }
+    }, 1000);
+  }
+
+  function _recordToggle(serviceName) {
+    var state = _getServiceState(serviceName);
+    var now = Date.now();
+    state.toggleHistory.push(now);
+
+    // Trim entries older than 10 seconds
+    var cutoff = now - 10000;
+    var trimmed = [];
+    for (var i = 0; i < state.toggleHistory.length; i++) {
+      if (state.toggleHistory[i] >= cutoff) trimmed.push(state.toggleHistory[i]);
+    }
+    state.toggleHistory = trimmed;
+
+    // Check if thrash threshold reached
+    if (state.toggleHistory.length >= 5 && !state.thrashLocked) {
+      state.thrashLocked = true;
+
+      // Cancel any pending timers
+      if (state.graceTimer) {
+        clearTimeout(state.graceTimer);
+        state.graceTimer = null;
+        state.pendingEnableFetch = false;
+      }
+      if (state.evictionTimer) {
+        clearTimeout(state.evictionTimer);
+        state.evictionTimer = null;
+      }
+
+      _emitServiceStateChanged(serviceName);
+      _renderServiceList();
+
+      // Auto-unlock after 10s of no toggles
+      _scheduleThrashUnlock(serviceName);
+    }
+  }
+
+  function _scheduleThrashUnlock(serviceName) {
+    // We use setTimeout; if another toggle comes in, _recordToggle will
+    // re-check and the unlock will be rescheduled
+    setTimeout(function () {
+      var state = _getServiceState(serviceName);
+      if (!state.thrashLocked) return;
+
+      var now = Date.now();
+      var cutoff = now - 10000;
+      // Check if any toggles in last 10s
+      var recent = 0;
+      for (var i = 0; i < state.toggleHistory.length; i++) {
+        if (state.toggleHistory[i] >= cutoff) recent++;
+      }
+
+      if (recent === 0) {
+        // Unlock
+        state.thrashLocked = false;
+        _emitServiceStateChanged(serviceName);
+        _renderServiceList();
+
+        // If enabled, trigger a fetch
+        if (state.enabled && state.cachedSpanCount === 0) {
+          _toggleServiceOn(serviceName);
+        }
+      } else {
+        // Still active — reschedule
+        _scheduleThrashUnlock(serviceName);
+      }
+    }, 10000);
+  }
 
   function _parseServiceFilter() {
     try {
@@ -803,6 +1044,21 @@
         attributes: attrs,
         events: s.events || []
       });
+
+      // Track cached span count per service
+      if (svcName && _serviceStates[svcName]) {
+        _serviceStates[svcName].cachedSpanCount++;
+        if (!_serviceStates[svcName].cachedRange) {
+          _serviceStates[svcName].cachedRange = { start: startNs, end: endNs };
+        } else {
+          if (startNs < _serviceStates[svcName].cachedRange.start) {
+            _serviceStates[svcName].cachedRange.start = startNs;
+          }
+          if (endNs > _serviceStates[svcName].cachedRange.end) {
+            _serviceStates[svcName].cachedRange.end = endNs;
+          }
+        }
+      }
     }
     return newCount;
   }
@@ -1410,6 +1666,7 @@
     if (_defaultService) {
       _knownServices[_defaultService] = true;
       _activeServices[_defaultService] = true;
+      _getServiceState(_defaultService).enabled = true;
       _serviceFilter = _defaultService;
       _renderServiceList();
     }
@@ -1420,6 +1677,7 @@
     if (urlSvc && !_knownServices[urlSvc]) {
       _knownServices[urlSvc] = true;
       _activeServices[urlSvc] = true;
+      _getServiceState(urlSvc).enabled = true;
       _serviceFilter = _getActiveServiceFilter();
       _renderServiceList();
     }
@@ -1441,9 +1699,11 @@
   }
 
   function _onServiceDiscovered(svcName) {
-    // Auto-check the default service; leave others unchecked
+    // Initialize service state if not already tracked
+    var state = _getServiceState(svcName);
     if (svcName === _defaultService) {
       _activeServices[svcName] = true;
+      state.enabled = true;
     }
     _renderServiceList();
     _updateServiceBtnLabel();
@@ -1464,34 +1724,70 @@
 
     for (var i = 0; i < names.length; i++) {
       (function (name) {
+        var state = _getServiceState(name);
         var label = document.createElement('label');
         label.className = 'service-filter-item';
 
         var cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = name;
-        cb.checked = !!_activeServices[name];
+        cb.checked = state.enabled;
 
         cb.addEventListener('change', function () {
-          if (cb.checked) {
-            _activeServices[name] = true;
-          } else {
-            delete _activeServices[name];
+          _recordToggle(name);
+
+          // If thrash-locked, ignore the toggle action (but it was recorded)
+          var st = _getServiceState(name);
+          if (st.thrashLocked) {
+            // Revert checkbox to current state
+            cb.checked = st.enabled;
+            return;
           }
-          _serviceFilter = _getActiveServiceFilter();
-          _updateServiceBtnLabel();
-          // Clear seen spans and re-poll with new filter
-          _resetAndRepoll();
+
+          if (cb.checked) {
+            _toggleServiceOn(name);
+          } else {
+            _toggleServiceOff(name);
+          }
         });
 
-        var span = document.createElement('span');
-        span.textContent = name;
+        var nameSpan = document.createElement('span');
+        nameSpan.textContent = name;
 
         label.appendChild(cb);
-        label.appendChild(span);
+        label.appendChild(nameSpan);
+
+        // Status badge
+        var badge = _deriveServiceBadge(state);
+        if (badge) {
+          var badgeEl = document.createElement('span');
+          badgeEl.className = 'service-status-badge';
+          badgeEl.textContent = badge;
+          badgeEl.style.cssText = 'margin-left:6px;font-size:11px;opacity:0.7;';
+          label.appendChild(badgeEl);
+        }
+
         _svcListEl.appendChild(label);
       })(names[i]);
     }
+  }
+
+  function _deriveServiceBadge(state) {
+    if (state.thrashLocked) return 'Stabilizing\u2026';
+    if (state.pendingEnableFetch && state.graceTimer) {
+      // Approximate remaining seconds
+      return 'Pending';
+    }
+    if (!state.enabled && state.evictionTimer) {
+      return 'Evicting';
+    }
+    if (state.enabled && state.cachedSpanCount > 0) {
+      return 'Enabled (' + state.cachedSpanCount + ' spans cached)';
+    }
+    if (!state.enabled && !state.evictionTimer) {
+      return 'Disabled';
+    }
+    return '';
   }
 
   function _getActiveServiceFilter() {
