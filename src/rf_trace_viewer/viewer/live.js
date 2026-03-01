@@ -44,6 +44,8 @@
       pendingEnableFetch: false,
       evictionTimer: null,
       graceTimer: null,
+      graceStartedAt: null,
+      graceDuration: null,
       cachedSpanCount: 0,
       cachedRange: null,
       toggleHistory: [],
@@ -76,6 +78,8 @@
     if (state.graceTimer) {
       clearTimeout(state.graceTimer);
       state.graceTimer = null;
+      state.graceStartedAt = null;
+      state.graceDuration = null;
       state.pendingEnableFetch = false;
     }
 
@@ -153,6 +157,8 @@
     var graceDuration = (pendingCount === 1) ? 1000 : 3000;
 
     if (state.graceTimer) clearTimeout(state.graceTimer);
+    state.graceStartedAt = Date.now();
+    state.graceDuration = graceDuration;
     state.graceTimer = setTimeout(function () {
       _onGraceExpired(serviceName);
     }, graceDuration);
@@ -166,6 +172,8 @@
   function _onGraceExpired(serviceName) {
     var state = _getServiceState(serviceName);
     state.graceTimer = null;
+    state.graceStartedAt = null;
+    state.graceDuration = null;
     state.pendingEnableFetch = false;
 
     // If disabled during grace, do nothing
@@ -1775,11 +1783,20 @@
   function _deriveServiceBadge(state) {
     if (state.thrashLocked) return 'Stabilizing\u2026';
     if (state.pendingEnableFetch && state.graceTimer) {
-      // Approximate remaining seconds
-      return 'Pending';
+      // Compute remaining grace seconds from stored timestamps
+      var remaining = 0;
+      if (state.graceStartedAt && state.graceDuration) {
+        remaining = Math.max(0, Math.ceil((state.graceStartedAt + state.graceDuration - Date.now()) / 1000));
+      }
+      return 'Pending (' + remaining + ' s)';
     }
     if (!state.enabled && state.evictionTimer) {
-      return 'Evicting';
+      // Compute remaining eviction seconds from disabledSince (30s timer)
+      var evictRemaining = 0;
+      if (state.disabledSince) {
+        evictRemaining = Math.max(0, Math.ceil((state.disabledSince + 30000 - Date.now()) / 1000));
+      }
+      return 'Evicting in ' + evictRemaining + ' s';
     }
     if (state.enabled && state.cachedSpanCount > 0) {
       return 'Enabled (' + state.cachedSpanCount + ' spans cached)';
