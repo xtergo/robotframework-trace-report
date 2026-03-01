@@ -368,6 +368,27 @@
       window.RFTraceViewer.on('live-rebuild', function () {
         _rebuildAndRender();
       });
+
+      // Listen for load window changes from Timeline module
+      window.RFTraceViewer.on('load-window-changed', function (data) {
+        var newStart = data.newStart;
+        var oldStart = data.oldStart;
+
+        // Update activeWindowStart via the public API (handles clamping)
+        window.RFTraceViewer.setActiveWindowStart(newStart);
+
+        // Only fetch when dragging backward (loading older data)
+        if (newStart < oldStart) {
+          _deltaFetch(newStart, oldStart);
+        }
+
+        // Emit active-window-start so Timeline can sync marker/overlay position
+        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+          window.RFTraceViewer.emit('active-window-start', {
+            activeWindowStart: _loadWindowState.activeWindowStart
+          });
+        }
+      });
     }
   });
 

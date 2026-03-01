@@ -49,7 +49,8 @@
     topMargin: 10,
     bottomMargin: 20,
     showTimeMarkers: false,
-    showSecondsGrid: true
+    showSecondsGrid: true,
+    activeWindowStart: null
   };
 
   /** Get the element where CSS custom properties are defined. */
@@ -381,6 +382,16 @@
       window.RFTraceViewer.on('navigate-to-span', function (data) {
         if (data.source !== 'timeline' && data.spanId) {
           window.highlightSpanInTimeline(data.spanId);
+        }
+      });
+    }
+
+    // Listen for active window start updates from Live module
+    if (window.RFTraceViewer && window.RFTraceViewer.on) {
+      window.RFTraceViewer.on('active-window-start', function (data) {
+        if (data && data.activeWindowStart !== undefined) {
+          timelineState.activeWindowStart = data.activeWindowStart;
+          // Re-render to update marker/overlay position (will be implemented in task 3)
         }
       });
     }
