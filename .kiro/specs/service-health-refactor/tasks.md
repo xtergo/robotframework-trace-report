@@ -6,8 +6,8 @@ Refactor the Service Health tab to separate pipeline diagnostics from user-facin
 
 ## Tasks
 
-- [ ] 1. Parameterize `_build_query_payload` for `groupBy` support
-  - [ ] 1.1 Add `group_by` parameter to `_build_query_payload` in `src/rf_trace_viewer/providers/signoz_metrics.py`
+- [x] 1. Parameterize `_build_query_payload` for `groupBy` support
+  - [x] 1.1 Add `group_by` parameter to `_build_query_payload` in `src/rf_trace_viewer/providers/signoz_metrics.py`
     - Add optional `group_by: list[str] | None = None` keyword argument
     - When provided, populate `builderQueries.A.groupBy` with `[{"key": k, "dataType": "string", "type": "tag"} for k in group_by]`
     - Default behavior (empty list) unchanged for existing callers

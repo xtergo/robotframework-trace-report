@@ -67,6 +67,7 @@ class SigNozMetricsQuery:
         attr_type: str = "Sum",
         is_monotonic: bool = True,
         temporality: str = "Delta",
+        group_by: list[str] | None = None,
     ) -> dict:
         """Build a ``/api/v3/query_range`` POST payload.
 
@@ -81,7 +82,11 @@ class SigNozMetricsQuery:
             attr_type: Aggregate attribute type (``Sum``, ``Histogram``).
             is_monotonic: Whether the metric is monotonic.
             temporality: Metric temporality (``Delta``, ``Cumulative``).
+            group_by: Optional list of label keys to group results by.
         """
+        group_by_clause = (
+            [{"key": k, "dataType": "string", "type": "tag"} for k in group_by] if group_by else []
+        )
         return {
             "compositeQuery": {
                 "builderQueries": {
@@ -102,7 +107,7 @@ class SigNozMetricsQuery:
                             "items": list(filters),
                             "op": "AND",
                         },
-                        "groupBy": [],
+                        "groupBy": group_by_clause,
                         "orderBy": [],
                     }
                 },
