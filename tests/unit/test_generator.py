@@ -81,7 +81,7 @@ class TestStaticHTMLGeneration:
         # Verify embedded data can be parsed back
         # Extract the JSON data
         start_marker = "window.__RF_TRACE_DATA__ = "
-        end_marker = ";\n</script>"
+        end_marker = ";\n"
         start_idx = html.find(start_marker)
         end_idx = html.find(end_marker, start_idx)
         assert start_idx != -1, "Could not find data embedding start"
@@ -142,7 +142,7 @@ class TestStaticHTMLGeneration:
 
         # Extract and parse embedded JSON
         start_marker = "window.__RF_TRACE_DATA__ = "
-        end_marker = ";\n</script>"
+        end_marker = ";\n"
         start_idx = html.find(start_marker)
         end_idx = html.find(end_marker, start_idx)
 

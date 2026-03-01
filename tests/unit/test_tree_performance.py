@@ -109,7 +109,7 @@ class TestLargeTracePipeline:
 
         # Extract and validate embedded JSON
         start_marker = "window.__RF_TRACE_DATA__ = "
-        end_marker = ";\n</script>"
+        end_marker = ";\n"
         start_idx = html.find(start_marker)
         end_idx = html.find(end_marker, start_idx)
         assert start_idx != -1, "Could not find data embedding start"
@@ -128,7 +128,7 @@ class TestLargeTracePipeline:
 
         # Extract embedded JSON
         start_marker = "window.__RF_TRACE_DATA__ = "
-        end_marker = ";\n</script>"
+        end_marker = ";\n"
         start_idx = html.find(start_marker)
         end_idx = html.find(end_marker, start_idx)
         json_str = html[start_idx + len(start_marker) : end_idx]
