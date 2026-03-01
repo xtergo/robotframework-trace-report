@@ -60,11 +60,11 @@ Add a "Service Health" tab to the rf-trace-viewer that queries OpenTelemetry met
     - Test 200 response with valid JSON containing all metric fields (Requirement 2.1)
     - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.6_
 
-- [ ] 3. Checkpoint — Backend complete
+- [x] 3. Checkpoint — Backend complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Implement frontend service-health.js module
-  - [ ] 4.1 Create `src/rf_trace_viewer/viewer/service-health.js` with tab visibility and MetricsAPIClient
+- [x] 4. Implement frontend service-health.js module
+  - [x] 4.1 Create `src/rf_trace_viewer/viewer/service-health.js` with tab visibility and MetricsAPIClient
     - Implement `shouldShowTab()` returning `true` only when `window.__RF_TRACE_LIVE__ === true` AND `window.__RF_PROVIDER === "signoz"`
     - On init, if `shouldShowTab()` is false, do nothing (no tab button or pane created)
     - If visible, dynamically create the tab button in the tab bar and the tab pane
@@ -80,7 +80,7 @@ Add a "Service Health" tab to the rf-trace-viewer that queries OpenTelemetry met
     - For any `(isLive: bool, providerType: string)`, `shouldShowTab()` returns `true` iff `isLive === true` AND `providerType === "signoz"`
     - **Validates: Requirements 1.1, 1.2, 1.3**
 
-  - [ ] 4.3 Implement HealthRenderer with metric cards and formatting
+  - [x] 4.3 Implement HealthRenderer with metric cards and formatting
     - Implement `HealthRenderer.render(snapshot)` that updates all 8 metric cards with current values from the snapshot
     - Implement `formatLatency(ms)` — whole milliseconds with "ms" suffix (e.g. "42 ms")
     - Implement `formatCount(n)` — SI suffixes above 999 ("1.2k", "3.4M"), at most one decimal place
