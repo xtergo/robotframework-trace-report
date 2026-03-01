@@ -1,6 +1,14 @@
 # ClickHouse single-replica StatefulSet for integration testing.
 # The Service MUST be named "clickhouse" — trace-report's dev overlay
 # configmap sets CLICKHOUSE_HOST=clickhouse.
+#
+# Init containers handle two setup steps that must complete before
+# ClickHouse is ready to serve SigNoz queries:
+#   1. Download the histogramQuantile UDF binary (from SigNoz releases)
+#   2. Run the SigNoz schema migrator (creates all required tables)
+#
+# Both are idempotent and run on every pod start, making the setup
+# resilient to ClickHouse restarts and data loss.
 apiVersion: v1
 kind: Service
 metadata:
@@ -40,6 +48,30 @@ spec:
         app.kubernetes.io/name: clickhouse
         app.kubernetes.io/part-of: signoz-test
     spec:
+      initContainers:
+        # 1. Download the histogramQuantile UDF binary.
+        #    Same approach as SigNoz's official docker-compose init-clickhouse.
+        - name: init-histogram-udf
+          image: clickhouse/clickhouse-server:25.12.5
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              version="v0.0.1"
+              node_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+              node_arch=$(uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)
+              echo "Fetching histogram-quantile binary for ${node_os}/${node_arch}"
+              cd /tmp
+              wget -O histogram-quantile.tar.gz \
+                "https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F${version}/histogram-quantile_${node_os}_${node_arch}.tar.gz"
+              tar -xvzf histogram-quantile.tar.gz
+              mv histogram-quantile /user-scripts/histogramQuantile
+              chmod +x /user-scripts/histogramQuantile
+              echo "histogramQuantile UDF binary installed"
+          volumeMounts:
+            - name: user-scripts
+              mountPath: /user-scripts
       containers:
         - name: clickhouse
           image: clickhouse/clickhouse-server:25.12.5
@@ -54,6 +86,10 @@ spec:
           volumeMounts:
             - name: clickhouse-config
               mountPath: /etc/clickhouse-server/config.d
+            - name: udf-config
+              mountPath: /etc/clickhouse-server/udf
+            - name: user-scripts
+              mountPath: /var/lib/clickhouse/user_scripts
           startupProbe:
             httpGet:
               path: /ping
@@ -77,3 +113,8 @@ spec:
         - name: clickhouse-config
           configMap:
             name: clickhouse-config
+        - name: udf-config
+          configMap:
+            name: clickhouse-udf-config
+        - name: user-scripts
+          emptyDir: {}

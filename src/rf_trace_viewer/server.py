@@ -25,12 +25,6 @@ from rf_trace_viewer.generator import (
     generate_report,
 )
 from rf_trace_viewer.logging_config import StructuredLogger
-from rf_trace_viewer.parser import parse_line
-from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
-from rf_trace_viewer.providers.signoz_metrics import SigNozMetricsQuery
-from rf_trace_viewer.providers.signoz_provider import SigNozProvider
-from rf_trace_viewer.rf_model import interpret_tree
-from rf_trace_viewer.tree import build_tree
 from rf_trace_viewer.metrics import (
     init_metrics,
     record_items_returned,
@@ -38,6 +32,12 @@ from rf_trace_viewer.metrics import (
     record_request_start,
     shutdown_metrics,
 )
+from rf_trace_viewer.parser import parse_line
+from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
+from rf_trace_viewer.providers.signoz_metrics import SigNozMetricsQuery
+from rf_trace_viewer.providers.signoz_provider import SigNozProvider
+from rf_trace_viewer.rf_model import interpret_tree
+from rf_trace_viewer.tree import build_tree
 
 
 class _LiveRequestHandler(BaseHTTPRequestHandler):
@@ -198,7 +198,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
-        window = int(query.get("window", ["5"])[0])
+        window = int(query.get("window", ["30"])[0])
         window = max(1, min(60, window))
 
         metrics_query = SigNozMetricsQuery(provider)

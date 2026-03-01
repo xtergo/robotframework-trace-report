@@ -1,6 +1,6 @@
 # ConfigMap containing ClickHouse cluster.xml configuration.
-# Defines the single-shard cluster and ZooKeeper connection
-# required by SigNoz schema migrations.
+# Defines the single-shard cluster, ZooKeeper connection, and UDF
+# configuration required by SigNoz schema migrations and queries.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -28,4 +28,42 @@ data:
           <port>2181</port>
         </node>
       </zookeeper>
+      <!-- UDF support: load function definitions from /etc/clickhouse-server/udf/ -->
+      <user_defined_executable_functions_config>/etc/clickhouse-server/udf/*function.xml</user_defined_executable_functions_config>
+      <user_scripts_path>/var/lib/clickhouse/user_scripts/</user_scripts_path>
     </clickhouse>
+---
+# Separate ConfigMap for the histogramQuantile UDF definition.
+# Mounted at /etc/clickhouse-server/udf/ (NOT config.d/) because
+# ClickHouse config.d/ expects <clickhouse> root elements, but UDF
+# definitions use <functions> root.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-udf-config
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/part-of: signoz-test
+data:
+  custom-function.xml: |
+    <functions>
+        <function>
+            <type>executable</type>
+            <name>histogramQuantile</name>
+            <return_type>Float64</return_type>
+            <argument>
+                <type>Array(Float64)</type>
+                <name>buckets</name>
+            </argument>
+            <argument>
+                <type>Array(Float64)</type>
+                <name>counts</name>
+            </argument>
+            <argument>
+                <type>Float64</type>
+                <name>quantile</name>
+            </argument>
+            <format>CSV</format>
+            <command>./histogramQuantile</command>
+        </function>
+    </functions>

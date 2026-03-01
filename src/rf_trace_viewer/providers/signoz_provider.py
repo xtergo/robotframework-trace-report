@@ -14,6 +14,8 @@ from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from rf_trace_viewer.metrics import record_dep_call, record_dep_timeout
+
 from ..config import SigNozConfig
 from .base import (
     AuthenticationError,
@@ -25,7 +27,6 @@ from .base import (
     TraceViewModel,
 )
 from .signoz_auth import SigNozAuth
-from rf_trace_viewer.metrics import record_dep_call, record_dep_timeout
 
 # SigNoz status code mapping: 0=UNSET, 1=OK, 2=ERROR
 _STATUS_MAP = {"0": "UNSET", "1": "OK", "2": "ERROR"}

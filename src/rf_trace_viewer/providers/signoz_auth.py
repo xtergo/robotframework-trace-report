@@ -95,9 +95,20 @@ class SigNozAuth:
         return self._token
 
     def refresh_token(self) -> bool:
-        """Force token refresh after a 401. Returns True if successful."""
+        """Force token refresh after a 401. Returns True if successful.
+
+        Clears cached user/org IDs so that ``_acquire_token`` goes through
+        the full discovery flow (register → login → probe) instead of
+        just re-signing with stale IDs.  This handles the case where
+        SigNoz was restarted with a fresh database and the old user no
+        longer exists.
+        """
         if not self._jwt_secret:
             return False
+        # Clear stale IDs — they may belong to a previous SigNoz instance
+        self._user_id = ""
+        self._org_id = ""
+        self._email = ""
         return self._acquire_token()
 
     def get_headers(self) -> dict[str, str]:
