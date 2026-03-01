@@ -1,7 +1,5 @@
 """Unit tests for RF model interpretation with fixture data."""
 
-import pytest
-
 from rf_trace_viewer.parser import RawSpan, parse_file
 from rf_trace_viewer.rf_model import (
     RFKeyword,
@@ -13,7 +11,6 @@ from rf_trace_viewer.rf_model import (
     _build_suite,
     _build_test,
     classify_span,
-    compute_statistics,
     extract_status,
     interpret_tree,
 )

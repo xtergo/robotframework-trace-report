@@ -3,7 +3,8 @@
 **Validates: Requirements 18.1, 18.2**
 """
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from rf_trace_viewer.rf_model import (
     RFKeyword,
@@ -219,5 +220,7 @@ def test_property_22_keyword_statistics_correctness(suites):
         if len(set(durations)) == 1:
             assert (
                 abs(min_duration - avg_duration) < epsilon
-                and abs(avg_duration - max_duration) < epsilon
-            ), f"Keyword {keyword_name}: all durations equal but min/avg/max differ"
+            ), f"Keyword {keyword_name}: all durations equal but min != avg"
+            assert (
+                abs(avg_duration - max_duration) < epsilon
+            ), f"Keyword {keyword_name}: all durations equal but avg != max"

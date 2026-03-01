@@ -13,7 +13,8 @@ Properties tested:
 - Property 29: Status message passthrough
 """
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from rf_trace_viewer.parser import RawSpan
 from rf_trace_viewer.rf_model import (
@@ -25,9 +26,8 @@ from rf_trace_viewer.rf_model import (
     classify_span,
     extract_status,
 )
-from rf_trace_viewer.tree import SpanNode, build_tree
+from rf_trace_viewer.tree import SpanNode
 from tests.conftest import (
-    hex_id,
     otlp_span,
     rf_keyword_span,
     rf_signal_span,
@@ -40,7 +40,7 @@ from tests.conftest import (
 # ============================================================================
 
 
-class TestProperty9_SpanClassification:
+class TestProperty9SpanClassification:
     """Property 9: Classification matches rf.* attribute presence."""
 
     @given(rf_suite_span())
@@ -162,7 +162,7 @@ class TestProperty9_SpanClassification:
 # ============================================================================
 
 
-class TestProperty10_FieldExtraction:
+class TestProperty10FieldExtraction:
     """Property 10: Model objects contain all specified fields from input."""
 
     @given(rf_suite_span())
@@ -276,7 +276,7 @@ class TestProperty10_FieldExtraction:
 # ============================================================================
 
 
-class TestProperty11_GenericSpanPreservation:
+class TestProperty11GenericSpanPreservation:
     """Property 11: Non-RF spans classified as GENERIC with attributes preserved."""
 
     @given(otlp_span(exclude_rf_attrs=True))
@@ -327,7 +327,7 @@ class TestProperty11_GenericSpanPreservation:
 # ============================================================================
 
 
-class TestProperty12_StatusMapping:
+class TestProperty12StatusMapping:
     """Property 12: OTLP + rf.status maps to correct RFStatus."""
 
     @given(
@@ -514,7 +514,7 @@ def _dict_to_raw_span(span_dict: dict) -> RawSpan:
 # ============================================================================
 
 
-class TestProperty27_EnrichedModelFieldExtraction:
+class TestProperty27EnrichedModelFieldExtraction:
     """Property 27: Enriched keyword/test/suite fields are extracted correctly."""
 
     @given(rf_keyword_span())
@@ -683,7 +683,7 @@ class TestProperty27_EnrichedModelFieldExtraction:
 # ============================================================================
 
 
-class TestProperty28_SuiteMetadataCollection:
+class TestProperty28SuiteMetadataCollection:
     """Property 28: Suite metadata from rf.suite.metadata.* attributes."""
 
     @given(
@@ -780,7 +780,7 @@ class TestProperty28_SuiteMetadataCollection:
 # ============================================================================
 
 
-class TestProperty29_StatusMessagePassthrough:
+class TestProperty29StatusMessagePassthrough:
     """Property 29: status.message passes through to model's status_message field."""
 
     @given(rf_keyword_span(), st.text(min_size=1, max_size=300))

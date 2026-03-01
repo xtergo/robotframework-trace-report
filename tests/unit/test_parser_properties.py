@@ -6,15 +6,16 @@ the correctness of the NDJSON parser across a wide range of inputs.
 """
 
 import json
+
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.rf_trace_viewer.parser import parse_line, flatten_attributes, normalize_id
+from src.rf_trace_viewer.parser import flatten_attributes, normalize_id, parse_line
 from tests.conftest import (
-    otlp_span,
+    hex_id,
     ndjson_line,
     otlp_attribute,
-    hex_id,
+    otlp_span,
 )
 
 # ============================================================================
@@ -60,7 +61,7 @@ def test_property_parser_output_correctness(ndjson_input: str):
     ), f"Expected {len(expected_spans)} spans, got {len(parsed_spans)}"
 
     # Verify each parsed span
-    for parsed, expected in zip(parsed_spans, expected_spans):
+    for parsed, expected in zip(parsed_spans, expected_spans, strict=True):
         original_span = expected["span"]
         expected_resource_attrs = expected["resource_attrs"]
 
@@ -242,8 +243,9 @@ def test_property_gzip_parsing_transparency(ndjson_lines: list[str]):
     Validates: Requirements 1.2
     """
     import gzip
-    import tempfile
     import os
+    import tempfile
+
     from src.rf_trace_viewer.parser import parse_file
 
     # Create the NDJSON content
@@ -272,7 +274,7 @@ def test_property_gzip_parsing_transparency(ndjson_lines: list[str]):
         ), f"Span count mismatch: plain={len(plain_spans)}, gzip={len(gzip_spans)}"
 
         # Verify each span is identical
-        for i, (plain, gz) in enumerate(zip(plain_spans, gzip_spans)):
+        for i, (plain, gz) in enumerate(zip(plain_spans, gzip_spans, strict=True)):
             assert (
                 plain.trace_id == gz.trace_id
             ), f"Span {i}: trace_id mismatch: {plain.trace_id} != {gz.trace_id}"
@@ -338,8 +340,9 @@ def test_property_malformed_line_resilience(
 
     Validates: Requirements 1.4, 1.5
     """
-    import tempfile
     import os
+    import tempfile
+
     from src.rf_trace_viewer.parser import parse_file
 
     # Parse valid content only to get expected spans
@@ -380,7 +383,7 @@ def test_property_malformed_line_resilience(
     ), f"Span count mismatch: expected {len(expected_spans)}, got {len(actual_spans)}"
 
     # Verify each span is identical
-    for i, (expected, actual) in enumerate(zip(expected_spans, actual_spans)):
+    for i, (expected, actual) in enumerate(zip(expected_spans, actual_spans, strict=True)):
         assert (
             actual.trace_id == expected.trace_id
         ), f"Span {i}: trace_id mismatch: {actual.trace_id} != {expected.trace_id}"
@@ -432,8 +435,9 @@ def test_property_incremental_parsing_equivalence(ndjson_lines: list[str]):
 
     Validates: Requirements 1.9
     """
-    import tempfile
     import os
+    import tempfile
+
     from src.rf_trace_viewer.parser import parse_file, parse_incremental
 
     # Create the NDJSON content
@@ -480,7 +484,7 @@ def test_property_incremental_parsing_equivalence(ndjson_lines: list[str]):
         ), f"Span count mismatch: full={len(full_parse_spans)}, incremental={len(incremental_spans)}"
 
         # Verify each span is identical
-        for i, (full, incr) in enumerate(zip(full_parse_spans, incremental_spans)):
+        for i, (full, incr) in enumerate(zip(full_parse_spans, incremental_spans, strict=True)):
             assert (
                 incr.trace_id == full.trace_id
             ), f"Span {i}: trace_id mismatch: {incr.trace_id} != {full.trace_id}"

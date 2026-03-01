@@ -20,12 +20,12 @@ from src.rf_trace_viewer.generator import (
     generate_report,
 )
 from src.rf_trace_viewer.rf_model import (
+    RFKeyword,
     RFRunModel,
     RFSuite,
     RFTest,
-    RFKeyword,
-    Status,
     RunStatistics,
+    Status,
     SuiteStatistics,
 )
 
@@ -592,7 +592,7 @@ def test_property_html_is_valid_structure(model: RFRunModel):
     try:
         parser.feed(html)
     except Exception as e:
-        raise AssertionError(f"Generated HTML is not valid: {e}")
+        raise AssertionError(f"Generated HTML is not valid: {e}") from e
 
     # Verify we found the essential elements
     assert parser.embedded_data is not None, "Could not extract embedded data"

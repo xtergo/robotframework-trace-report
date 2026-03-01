@@ -6,13 +6,11 @@ import json
 import threading
 from http.server import HTTPServer
 from io import BytesIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from rf_trace_viewer.server import LiveServer, _LiveRequestHandler
-from rf_trace_viewer.generator import ReportOptions
 from rf_trace_viewer.config import BaseFilterConfig
+from rf_trace_viewer.generator import ReportOptions
+from rf_trace_viewer.server import LiveServer, _LiveRequestHandler
 
 
 def _make_otlp_payload(spans=None):

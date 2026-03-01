@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from rf_trace_viewer.exceptions import ConfigurationError
 from rf_trace_viewer.providers.base import (
     AuthenticationError,
     ExecutionSummary,
@@ -18,7 +19,6 @@ from rf_trace_viewer.providers.base import (
     TraceSpan,
     TraceViewModel,
 )
-from rf_trace_viewer.exceptions import ConfigurationError
 
 # ============================================================================
 # Helpers
@@ -27,15 +27,15 @@ from rf_trace_viewer.exceptions import ConfigurationError
 
 def _make_span(**overrides) -> TraceSpan:
     """Create a valid TraceSpan with sensible defaults, applying any overrides."""
-    defaults = dict(
-        span_id="aabb0011",
-        parent_span_id="",
-        trace_id="ccdd2233",
-        start_time_ns=1_000_000_000,
-        duration_ns=500_000,
-        status="OK",
-        attributes={"rf.keyword": "Log"},
-    )
+    defaults = {
+        "span_id": "aabb0011",
+        "parent_span_id": "",
+        "trace_id": "ccdd2233",
+        "start_time_ns": 1_000_000_000,
+        "duration_ns": 500_000,
+        "status": "OK",
+        "attributes": {"rf.keyword": "Log"},
+    }
     defaults.update(overrides)
     return TraceSpan(**defaults)
 

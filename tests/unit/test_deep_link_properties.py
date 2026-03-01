@@ -15,7 +15,7 @@ from urllib.parse import quote, unquote
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from hypothesis import given, assume
+from hypothesis import given
 from hypothesis import strategies as st
 
 # ---------------------------------------------------------------------------
@@ -281,7 +281,6 @@ def _normalize_decoded_state(decoded, original):
     When encode omits default values, decode fills them back with defaults.
     This function adjusts the decoded state so we can compare meaningfully.
     """
-    fs_orig = original.get("filterState", {})
     fs_dec = decoded.get("filterState", {})
 
     # view: if original was 'overview', encode omits it, decode defaults to 'overview' — match
@@ -607,7 +606,7 @@ def test_scope_false_encoded():
         },
     }
     hash_str = encode_hash(state)
-    assert "scope=0" in hash_str, f"scope=0 should be in hash when scopeToTestContext is False"
+    assert "scope=0" in hash_str, "scope=0 should be in hash when scopeToTestContext is False"
 
     decoded = decode_hash(hash_str)
     assert decoded["filterState"]["scopeToTestContext"] is False

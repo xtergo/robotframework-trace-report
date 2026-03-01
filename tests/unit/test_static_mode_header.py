@@ -23,7 +23,7 @@ def _load_app_js():
     return path.read_text(encoding="utf-8")
 
 
-def _extract_initApp_body(js):
+def _extract_init_app_body(js):
     """Extract the body of the _initApp function from app.js."""
     start = js.find("function _initApp(data)")
     assert start != -1, "_initApp function not found in app.js"
@@ -74,7 +74,7 @@ class TestLiveOnlyElementsGuarded:
 
     def test_status_cluster_inside_live_guard(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
         assert len(blocks) >= 1, "Expected at least one __RF_TRACE_LIVE__ guard"
 
@@ -86,7 +86,7 @@ class TestLiveOnlyElementsGuarded:
 
     def test_pause_resume_btn_inside_live_guard(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
 
         match = re.search(r"['\"]pause-resume-btn['\"]", fn)
@@ -97,7 +97,7 @@ class TestLiveOnlyElementsGuarded:
 
     def test_diagnostics_panel_inside_live_guard(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
 
         match = re.search(r"['\"]diagnostics-panel['\"]", fn)
@@ -112,7 +112,7 @@ class TestAlwaysRenderedElements:
 
     def test_header_spacer_outside_live_guard(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
 
         match = re.search(r"['\"]header-spacer['\"]", fn)
@@ -123,7 +123,7 @@ class TestAlwaysRenderedElements:
 
     def test_theme_toggle_icon_outside_live_guard(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
 
         match = re.search(r"['\"]theme-toggle-icon['\"]", fn)
@@ -134,7 +134,7 @@ class TestAlwaysRenderedElements:
 
     def test_title_h1_outside_live_guard(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
 
         # The title is created via createElement('h1')
@@ -150,7 +150,7 @@ class TestAppReadyAfterHeader:
 
     def test_app_ready_emitted_after_header_append(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
 
         header_append = fn.find("root.appendChild(header)")
         assert header_append != -1, "root.appendChild(header) not found"
@@ -166,7 +166,7 @@ class TestLogoSlotGuard:
 
     def test_logo_guarded_by_logo_url(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
 
         # Find the logo URL guard
         logo_guard = re.search(r"if\s*\(\s*window\.__RF_LOGO_URL__\s*\)", fn)
@@ -174,7 +174,7 @@ class TestLogoSlotGuard:
 
     def test_logo_not_guarded_by_trace_live(self):
         js = _load_app_js()
-        fn = _extract_initApp_body(js)
+        fn = _extract_init_app_body(js)
         blocks = _find_live_guard_blocks(fn)
 
         logo_guard = re.search(r"if\s*\(\s*window\.__RF_LOGO_URL__\s*\)", fn)

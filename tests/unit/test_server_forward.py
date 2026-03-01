@@ -4,16 +4,14 @@ from __future__ import annotations
 
 import json
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer
 from io import BytesIO
-from unittest.mock import patch, MagicMock, call
-
-import pytest
-
-from rf_trace_viewer.server import LiveServer, _LiveRequestHandler, _forward_payload
-from rf_trace_viewer.generator import ReportOptions
-from rf_trace_viewer.config import BaseFilterConfig
+from unittest.mock import MagicMock, patch
 from urllib.error import URLError
+
+from rf_trace_viewer.config import BaseFilterConfig
+from rf_trace_viewer.generator import ReportOptions
+from rf_trace_viewer.server import LiveServer, _forward_payload, _LiveRequestHandler
 
 
 def _make_otlp_payload(spans=None):
@@ -125,7 +123,6 @@ class TestForwardPayload:
     def test_forward_runs_in_daemon_thread(self, mock_request_cls, mock_urlopen):
         """Forwarding runs in a daemon thread (non-blocking)."""
         event = threading.Event()
-        original_urlopen = mock_urlopen.side_effect
 
         def slow_urlopen(*args, **kwargs):
             event.set()

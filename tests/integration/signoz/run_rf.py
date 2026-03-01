@@ -19,11 +19,11 @@ for elapsed in range(30):
         time.sleep(1)
 
 # Instantiate the listener so we hold a reference to the trace provider
-from robotframework_tracer.listener import TracingListener
+from robotframework_tracer.listener import TracingListener  # noqa: E402
 
 listener_instance = TracingListener()
 
-import robot
+import robot  # noqa: E402
 
 rc = robot.run(
     "/rf/suites",
@@ -32,7 +32,7 @@ rc = robot.run(
 )
 
 # Force flush the trace provider before exiting
-from opentelemetry import trace
+from opentelemetry import trace  # noqa: E402
 
 tp = trace.get_tracer_provider()
 if hasattr(tp, "force_flush"):

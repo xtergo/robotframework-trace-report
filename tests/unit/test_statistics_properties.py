@@ -3,7 +3,8 @@
 **Validates: Requirements 7.1, 7.2, 7.3, 7.4**
 """
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from rf_trace_viewer.rf_model import (
     RFSuite,
@@ -163,7 +164,7 @@ def test_property_15_statistics_computation_correctness(suites):
     ), f"Suite stats count mismatch: expected {len(suites)}, got {len(stats.suite_stats)}"
 
     # Verify each suite's statistics match by position (not by name, as names can be duplicated)
-    for i, (suite, suite_stat) in enumerate(zip(suites, stats.suite_stats)):
+    for i, (suite, suite_stat) in enumerate(zip(suites, stats.suite_stats, strict=True)):
         # Verify the suite name matches
         assert (
             suite_stat.suite_name == suite.name

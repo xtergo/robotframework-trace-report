@@ -1,7 +1,6 @@
 """Unit tests for NDJSON trace file parser edge cases."""
 
 import io
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -194,7 +193,7 @@ class TestFixtureFiles:
         fixture_path = Path("tests/fixtures/malformed_trace.json")
 
         # Should not raise, should skip malformed lines with warnings
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match="."):
             spans = parse_file(str(fixture_path))
 
         # Should have parsed the valid lines

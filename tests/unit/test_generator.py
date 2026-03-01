@@ -25,11 +25,7 @@ from hypothesis import strategies as st
 from rf_trace_viewer.generator import (
     KEY_MAP,
     ReportOptions,
-    _apply_intern_table,
-    _apply_key_map,
-    _build_intern_table,
     _limit_spans,
-    _serialize,
     _serialize_compact,
     embed_data,
     embed_viewer_assets,
@@ -702,7 +698,7 @@ class TestProperty27CompactSerializationRoundTrip:
         assert len(decoded["suites"]) == len(model.suites)
 
         # For each suite, test count preserved
-        for suite_data, suite_model in zip(decoded["suites"], model.suites):
+        for suite_data, suite_model in zip(decoded["suites"], model.suites, strict=True):
             assert suite_data["name"] == suite_model.name
             # children contains tests
             tests_in_data = [c for c in suite_data.get("children", []) if "keywords" in c]

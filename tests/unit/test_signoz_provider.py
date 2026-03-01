@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -16,13 +15,13 @@ from rf_trace_viewer.providers.signoz_provider import SigNozProvider
 
 
 def _make_config(**kwargs) -> SigNozConfig:
-    defaults = dict(
-        endpoint="https://signoz.example.com",
-        api_key="test-key",
-        execution_attribute="essvt.execution_id",
-        max_spans_per_page=10_000,
-        overlap_window_seconds=2.0,
-    )
+    defaults = {
+        "endpoint": "https://signoz.example.com",
+        "api_key": "test-key",
+        "execution_attribute": "essvt.execution_id",
+        "max_spans_per_page": 10_000,
+        "overlap_window_seconds": 2.0,
+    }
     defaults.update(kwargs)
     return SigNozConfig(**defaults)
 
@@ -186,7 +185,7 @@ def test_fetch_all_warning_mentions_cap(capsys):
         return _make_response(ids)
 
     with patch.object(provider, "_api_request", side_effect=fake_api):
-        vm = provider.fetch_all(max_spans=6)
+        provider.fetch_all(max_spans=6)
 
     captured = capsys.readouterr()
     assert "6" in captured.err  # cap value mentioned
@@ -209,17 +208,15 @@ def test_fetch_all_no_warning_when_under_cap(capsys):
 # _parse_spans — fixture-based tests (Task 42.8)
 # ---------------------------------------------------------------------------
 
-import json
-import os
-from io import BytesIO
-from urllib.error import HTTPError, URLError
+import json  # noqa: E402
+import os  # noqa: E402
+from io import BytesIO  # noqa: E402
+from urllib.error import HTTPError, URLError  # noqa: E402
 
-from rf_trace_viewer.providers.base import (
+from rf_trace_viewer.providers.base import (  # noqa: E402
     AuthenticationError,
     ProviderError,
     RateLimitError,
-    TraceSpan,
-    ExecutionSummary,
 )
 
 _FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")

@@ -5,10 +5,8 @@ This module contains unit tests for specific edge cases and scenarios
 using concrete test data and fixtures.
 """
 
-import pytest
-
 from rf_trace_viewer.parser import RawSpan, parse_file
-from rf_trace_viewer.tree import build_tree, SpanNode
+from rf_trace_viewer.tree import SpanNode, build_tree
 
 # ============================================================================
 # Edge Case: Single Span (Root Only)
@@ -735,7 +733,7 @@ def test_duplicate_span_ids():
 # IncrementalTreeBuilder Tests
 # ============================================================================
 
-from rf_trace_viewer.tree import IncrementalTreeBuilder
+from rf_trace_viewer.tree import IncrementalTreeBuilder  # noqa: E402
 
 
 def _collect_tree_structure(roots):

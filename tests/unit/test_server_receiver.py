@@ -6,12 +6,10 @@ import json
 import threading
 from http.server import HTTPServer
 from io import BytesIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from rf_trace_viewer.server import LiveServer, _LiveRequestHandler
 from rf_trace_viewer.parser import parse_line
+from rf_trace_viewer.server import LiveServer, _LiveRequestHandler
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -266,7 +264,7 @@ class TestServeTracesReceiver:
         handler = _get_traces(server, offset=0)
 
         body = handler.wfile.data.decode("utf-8")
-        lines = [l for l in body.strip().split("\n") if l]
+        lines = [line for line in body.strip().split("\n") if line]
         assert len(lines) == 3
 
     def test_offset_returns_remaining(self):
@@ -277,7 +275,7 @@ class TestServeTracesReceiver:
         handler = _get_traces(server, offset=1)
 
         body = handler.wfile.data.decode("utf-8")
-        lines = [l for l in body.strip().split("\n") if l]
+        lines = [line for line in body.strip().split("\n") if line]
         assert len(lines) == 2
 
     def test_offset_at_end_returns_empty(self):
@@ -308,7 +306,7 @@ class TestServeTracesReceiver:
         handler = _get_traces(server, offset=-1)
 
         body = handler.wfile.data.decode("utf-8")
-        lines = [l for l in body.strip().split("\n") if l]
+        lines = [line for line in body.strip().split("\n") if line]
         assert len(lines) == 3
 
     def test_x_file_offset_header_correct(self):
@@ -365,7 +363,7 @@ class TestJournalRecovery:
             buffer_spans.extend(parse_line(line))
 
         assert len(recovered_spans) == len(buffer_spans)
-        for r, b in zip(recovered_spans, buffer_spans):
+        for r, b in zip(recovered_spans, buffer_spans, strict=True):
             assert r.trace_id == b.trace_id
             assert r.span_id == b.span_id
             assert r.name == b.name
@@ -400,7 +398,6 @@ class TestShutdownReportGeneration:
 
     def _make_live_server(self, tmp_path, buffer_lines=None, title=None, report_options=None):
         """Create a LiveServer with a mock _httpd carrying the given buffer."""
-        from rf_trace_viewer.generator import ReportOptions
 
         output = tmp_path / "report.html"
         server = LiveServer(

@@ -9,8 +9,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from rf_trace_viewer.parser import RawSpan
-from rf_trace_viewer.tree import build_tree, SpanNode
-from tests.conftest import span_tree, hex_id
+from rf_trace_viewer.tree import SpanNode, build_tree
+from tests.conftest import hex_id, span_tree
 
 # ============================================================================
 # Helper Functions

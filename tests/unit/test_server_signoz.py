@@ -5,18 +5,15 @@ from __future__ import annotations
 import json
 import threading
 from http.server import HTTPServer
-from io import BytesIO
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from rf_trace_viewer.server import _LiveRequestHandler, LiveServer
 from rf_trace_viewer.providers.base import (
     ProviderError,
     RateLimitError,
     TraceSpan,
     TraceViewModel,
 )
+from rf_trace_viewer.server import _LiveRequestHandler
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -278,7 +275,7 @@ class TestViewerHtmlProvider:
     """Served HTML contains window.__RF_PROVIDER set correctly."""
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_contains_provider_signoz(self, _mock_assets):
+    def test_viewer_html_contains_provider_signoz(self, _mock_assets):  # noqa: PT019
         provider = _make_mock_provider(supports_live=True)
         server = _create_server_with_provider(provider=provider)
 
@@ -288,7 +285,7 @@ class TestViewerHtmlProvider:
         assert 'window.__RF_PROVIDER = "signoz"' in html
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_contains_provider_json(self, _mock_assets):
+    def test_viewer_html_contains_provider_json(self, _mock_assets):  # noqa: PT019
         server = _create_server_with_provider(provider=None)
 
         handler = _get_viewer(server)
@@ -297,7 +294,9 @@ class TestViewerHtmlProvider:
         assert 'window.__RF_PROVIDER = "json"' in html
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_contains_provider_json_when_no_live_poll(self, _mock_assets):
+    def test_viewer_html_contains_provider_json_when_no_live_poll(
+        self, _mock_assets  # noqa: PT019
+    ):
         """Provider that doesn't support live poll → json mode."""
         provider = _make_mock_provider(supports_live=False)
         server = _create_server_with_provider(provider=provider)
@@ -317,7 +316,7 @@ class TestViewerHtmlBaseUrl:
     """Served HTML contains window.__RF_BASE_URL set correctly."""
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_contains_base_url(self, _mock_assets):
+    def test_viewer_html_contains_base_url(self, _mock_assets):  # noqa: PT019
         server = _create_server_with_provider(provider=None)
         server.base_url = "/trace-viewer"
 
@@ -327,7 +326,7 @@ class TestViewerHtmlBaseUrl:
         assert 'window.__RF_BASE_URL = "/trace-viewer"' in html
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_base_url_empty_when_none(self, _mock_assets):
+    def test_viewer_html_base_url_empty_when_none(self, _mock_assets):  # noqa: PT019
         server = _create_server_with_provider(provider=None)
         server.base_url = None
 
@@ -337,7 +336,7 @@ class TestViewerHtmlBaseUrl:
         assert 'window.__RF_BASE_URL = ""' in html
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_base_url_with_signoz_provider(self, _mock_assets):
+    def test_viewer_html_base_url_with_signoz_provider(self, _mock_assets):  # noqa: PT019
         provider = _make_mock_provider(supports_live=True)
         server = _create_server_with_provider(provider=provider)
         server.base_url = "/my-app/traces"
@@ -395,7 +394,7 @@ class TestViewerHtmlLookbackAndMaxSpans:
     """Served HTML contains lookback and max_spans JS config when set."""
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_contains_lookback(self, _mock_assets):
+    def test_viewer_html_contains_lookback(self, _mock_assets):  # noqa: PT019
         server = _create_server_with_provider(provider=None)
         server.lookback = "10m"
         server.max_spans = None
@@ -406,7 +405,7 @@ class TestViewerHtmlLookbackAndMaxSpans:
         assert 'window.__RF_TRACE_LOOKBACK__ = "10m"' in html
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_contains_max_spans(self, _mock_assets):
+    def test_viewer_html_contains_max_spans(self, _mock_assets):  # noqa: PT019
         server = _create_server_with_provider(provider=None)
         server.lookback = None
         server.max_spans = 500000
@@ -417,7 +416,7 @@ class TestViewerHtmlLookbackAndMaxSpans:
         assert "window.__RF_TRACE_MAX_SPANS__ = 500000" in html
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_omits_lookback_when_none(self, _mock_assets):
+    def test_viewer_html_omits_lookback_when_none(self, _mock_assets):  # noqa: PT019
         server = _create_server_with_provider(provider=None)
         server.lookback = None
         server.max_spans = None
@@ -428,7 +427,7 @@ class TestViewerHtmlLookbackAndMaxSpans:
         assert "__RF_TRACE_LOOKBACK__" not in html
 
     @patch("rf_trace_viewer.server.embed_viewer_assets", return_value=("// js", "/* css */"))
-    def test_viewer_html_omits_max_spans_when_none(self, _mock_assets):
+    def test_viewer_html_omits_max_spans_when_none(self, _mock_assets):  # noqa: PT019
         server = _create_server_with_provider(provider=None)
         server.lookback = None
         server.max_spans = None

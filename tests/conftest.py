@@ -15,12 +15,12 @@ Skip slow tests (default):  make test-unit  (uses --skip-slow)
 
 import json
 import os
-import time
 from typing import Any
 
 import pytest
+from hypothesis import HealthCheck
+from hypothesis import settings as hypothesis_settings
 from hypothesis import strategies as st
-from hypothesis import settings as hypothesis_settings, HealthCheck
 
 # Hypothesis profiles: "dev" runs fewer examples for fast feedback,
 # "ci" runs full iterations for thorough coverage.
@@ -592,7 +592,7 @@ def multi_trace_spans(draw, num_traces: int = 3) -> list[dict]:
 # Provider Layer / SigNoz Strategies
 # ============================================================================
 
-from rf_trace_viewer.providers.base import TraceSpan, TraceViewModel
+from rf_trace_viewer.providers.base import TraceSpan, TraceViewModel  # noqa: E402
 
 
 @st.composite
@@ -652,7 +652,7 @@ def trace_span_strategy(
             max_size=num_attrs,
         )
     )
-    attributes = dict(zip(attr_keys, attr_vals))
+    attributes = dict(zip(attr_keys, attr_vals, strict=True))
 
     name = draw(st.text(min_size=1, max_size=100))
 
@@ -708,7 +708,7 @@ def trace_view_model_strategy(draw) -> TraceViewModel:
             max_size=num_res_attrs,
         )
     )
-    resource_attributes = dict(zip(res_keys, res_vals))
+    resource_attributes = dict(zip(res_keys, res_vals, strict=True))
 
     return TraceViewModel(spans=spans, resource_attributes=resource_attributes)
 
@@ -762,7 +762,7 @@ def signoz_span_row(draw) -> dict:
             max_size=num_tags,
         )
     )
-    tag_map = dict(zip(tag_keys, tag_vals))
+    tag_map = dict(zip(tag_keys, tag_vals, strict=True))
 
     return {
         "data": {

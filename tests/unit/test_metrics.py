@@ -7,17 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from rf_trace_viewer.metrics import (
-    MetricsConfig,
-    _DiagnosticsExporter,
     _configure_log_level,
+    _DiagnosticsExporter,
     _load_config,
     init_metrics,
-    shutdown_metrics,
-    record_request_start,
-    record_request_end,
-    record_dep_call,
-    record_dep_timeout,
-    record_items_returned,
 )
 
 

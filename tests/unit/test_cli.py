@@ -1,8 +1,6 @@
 """Unit tests for CLI entry point."""
 
 import io
-import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 

@@ -9,7 +9,6 @@ Validates Requirements 36.1, 36.2, 36.3, 36.5, 36.7:
 - Depth-0 nodes always have margin-left: 0
 """
 
-import json
 import re
 from pathlib import Path
 

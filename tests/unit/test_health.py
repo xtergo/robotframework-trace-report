@@ -8,8 +8,6 @@ import time
 import urllib.error
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from rf_trace_viewer.health import (
     HealthRouter,
     StatusPoller,
@@ -52,7 +50,7 @@ class TestHealthRouterReady:
 
     @patch("rf_trace_viewer.health.urllib.request.urlopen")
     def test_503_when_clickhouse_times_out(self, mock_urlopen):
-        mock_urlopen.side_effect = socket.timeout("timed out")
+        mock_urlopen.side_effect = TimeoutError("timed out")
         router = HealthRouter("localhost")
         status, body = router.handle_ready()
         assert status == 503
@@ -105,7 +103,7 @@ class TestClassifyError:
     """_classify_error maps exceptions to error types."""
 
     def test_socket_timeout(self):
-        err_type, _ = _classify_error(socket.timeout("timed out"))
+        err_type, _ = _classify_error(TimeoutError("timed out"))
         assert err_type == "TIMEOUT"
 
     def test_http_401(self):

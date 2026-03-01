@@ -18,7 +18,6 @@ Output: tests/fixtures/large_diverse_trace.json (NDJSON format)
 import json
 import os
 import random
-import sys
 import time
 
 SEED = 2026
@@ -638,7 +637,6 @@ class TraceGenerator:
             is_last = ki == num_kws - 1
             if test_status == "FAIL" and is_last:
                 kw_status = "FAIL"
-                kw_name = "Fail" if self.rng.random() < 0.3 else self.rng.choice(KW_NAMES)
             elif test_status in ("SKIP", "NOT_RUN"):
                 kw_status = test_status
             else:
@@ -702,7 +700,7 @@ class TraceGenerator:
         suite_time_slice = total_duration_ns // (num_suites + 2)
 
         print(f"Generating {num_suites} suites with {total_tests} total tests...")
-        print(f"Target: ~1,000,000 spans")
+        print("Target: ~1,000,000 spans")
 
         with open(self.output_path, "w", encoding="utf-8") as f:
             self.file = f

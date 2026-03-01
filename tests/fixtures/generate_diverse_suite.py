@@ -153,7 +153,7 @@ def kw(
     return sid, end_ns
 
 
-def test_span(
+def make_test_span(
     parent_id,
     name,
     test_id,
@@ -303,7 +303,7 @@ def build_trace():
     )
 
     # TC1 — PASS, with SETUP/TEARDOWN, nested keywords, events
-    tc1_id, _ = test_span(
+    tc1_id, _ = make_test_span(
         cs_a_id,
         "TC01 - Successful Login",
         "s1-s1-t1",
@@ -353,7 +353,7 @@ def build_trace():
     kw(tc1_id, "Close Browser", "TEARDOWN", 18, t + 303_200_000, 300)
 
     # TC2 — FAIL with error message and traceback-style status_message
-    tc2_id, _ = test_span(
+    tc2_id, _ = make_test_span(
         cs_a_id,
         "TC02 - Login With Invalid Password",
         "s1-s1-t2",
@@ -432,7 +432,7 @@ def build_trace():
     )
 
     # TC3 — SKIP
-    tc3_id, _ = test_span(
+    tc3_id, _ = make_test_span(
         cs_a_id,
         "TC03 - SSO Login",
         "s1-s1-t3",
@@ -460,7 +460,7 @@ def build_trace():
     )
 
     # TC4 — FOR loop
-    tc4_id, _ = test_span(
+    tc4_id, _ = make_test_span(
         cs_b_id,
         "TC04 - FOR Loop Over Items",
         "s1-s2-t1",
@@ -512,7 +512,7 @@ def build_trace():
         )
 
     # TC5 — IF/ELSE branch
-    tc5_id, _ = test_span(
+    tc5_id, _ = make_test_span(
         cs_b_id,
         "TC05 - IF Branch Validation",
         "s1-s2-t2",
@@ -551,7 +551,7 @@ def build_trace():
     )
 
     # TC6 — TRY/EXCEPT
-    tc6_id, _ = test_span(
+    tc6_id, _ = make_test_span(
         cs_b_id,
         "TC06 - TRY EXCEPT Error Handling",
         "s1-s2-t3",
@@ -607,7 +607,7 @@ def build_trace():
     )
 
     # TC7 — WHILE loop
-    tc7_id, _ = test_span(
+    tc7_id, _ = make_test_span(
         cs_b_id,
         "TC07 - WHILE Loop With Limit",
         "s1-s2-t4",
@@ -679,7 +679,7 @@ def build_trace():
     )
 
     # TC8 — deep nesting (4 levels), rich events
-    tc8_id, _ = test_span(
+    tc8_id, _ = make_test_span(
         cs_c_id,
         "TC08 - Create User via REST API",
         "s1-s3-t1",
@@ -778,7 +778,7 @@ def build_trace():
     kw(tc8_id, "Delete Session", "TEARDOWN", 22, t + 25_200_000_000, 120, args="alias=api")
 
     # TC9 — FAIL with rich error + WARN events
-    tc9_id, _ = test_span(
+    tc9_id, _ = make_test_span(
         cs_c_id,
         "TC09 - Delete Nonexistent User",
         "s1-s3-t2",
@@ -906,7 +906,7 @@ def build_pabot_trace():
     emit(root_s)
 
     # TC10 — parallel test, PASS
-    tc10_id, _ = test_span(
+    tc10_id, _ = make_test_span(
         worker_root_id,
         "TC10 - Parallel Data Validation",
         "s2-t1",
@@ -955,7 +955,7 @@ def build_pabot_trace():
     kw(tc10_id, "Disconnect From Database", "TEARDOWN", 11, t + 3_500_000_000, 180)
 
     # TC11 — parallel test with WARN events
-    tc11_id, _ = test_span(
+    tc11_id, _ = make_test_span(
         worker_root_id,
         "TC11 - Cache Invalidation Check",
         "s2-t2",
@@ -1001,7 +1001,6 @@ def main():
 
     print("Building main diverse trace...")
     build_trace()
-    main_spans = len(_spans)
 
     print("Building pabot parallel trace...")
     build_pabot_trace()
@@ -1024,7 +1023,7 @@ def main():
     print(f"  {out2}: {len(all_spans)} spans, {size2:.1f} KB")
 
     print(f"\nDone. {total_spans} total spans across 2 traces.")
-    print(f"Span type coverage:")
+    print("Span type coverage:")
     kw_types = {
         a["value"]["string_value"]
         for s in trace1_spans

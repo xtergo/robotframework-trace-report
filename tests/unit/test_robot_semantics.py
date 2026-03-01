@@ -11,15 +11,15 @@ from rf_trace_viewer.robot_semantics import RobotSemanticsLayer
 
 def _make_span(**kwargs) -> TraceSpan:
     """Create a TraceSpan with sensible defaults to reduce boilerplate."""
-    defaults = dict(
-        span_id="aaa111",
-        parent_span_id="",
-        trace_id="trace001",
-        start_time_ns=1_000_000_000,
-        duration_ns=500_000,
-        status="OK",
-        attributes={},
-    )
+    defaults = {
+        "span_id": "aaa111",
+        "parent_span_id": "",
+        "trace_id": "trace001",
+        "start_time_ns": 1_000_000_000,
+        "duration_ns": 500_000,
+        "status": "OK",
+        "attributes": {},
+    }
     defaults.update(kwargs)
     return TraceSpan(**defaults)
 
