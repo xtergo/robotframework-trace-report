@@ -670,6 +670,24 @@
       window.RFTraceViewer.on('load-window-changed', function (data) {
         var newStart = data.newStart;
         var oldStart = data.oldStart;
+        var nowSec = Date.now() / 1000;
+        var newEnd = data.newEnd || nowSec;
+        var oldEnd = data.oldEnd || nowSec;
+
+        // Detect full reset: new window has zero overlap with old window.
+        // When newStart >= oldEnd or newEnd <= oldStart, the ranges don't
+        // overlap — discard cached spans and reset filter counter so
+        // initSearch is called when the fresh span set arrives.
+        var isFullReset = (newStart >= oldEnd) || (newEnd <= oldStart);
+        if (isFullReset) {
+          console.log('[live] Full reset: no overlap between old [' +
+            oldStart + ',' + oldEnd + '] and new [' +
+            newStart + ',' + newEnd + '] — resetting filter counter');
+          allSpans = [];
+          seenSpanIds = {};
+          _lastFilterSpanCount = 0;
+          _loadWindowState.totalCachedSpans = 0;
+        }
 
         // Update activeWindowStart via the public API (handles clamping)
         window.RFTraceViewer.setActiveWindowStart(newStart);
