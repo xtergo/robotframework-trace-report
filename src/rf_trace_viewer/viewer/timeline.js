@@ -98,6 +98,24 @@
     // Will be implemented in task 1.6
   }
 
+  /**
+   * Undo: restore the previous navigation state from the history stack.
+   * Decrements index, restores viewStart/viewEnd/zoom, and re-renders.
+   */
+  function _navUndo() {
+    if (_navHistory.index <= 0) return; // nothing to undo
+    _navHistory.index--;
+    var s = _navHistory.stack[_navHistory.index];
+    timelineState.viewStart = s.viewStart;
+    timelineState.viewEnd = s.viewEnd;
+    timelineState.zoom = s.zoom;
+    _syncNavButtons();
+    _render();
+    _renderHeader();
+    if (timelineState._syncSlider) timelineState._syncSlider();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
+  }
+
   /** Get the element where CSS custom properties are defined. */
   function _getThemeRoot() {
     return document.querySelector('.rf-trace-viewer') || document.documentElement;

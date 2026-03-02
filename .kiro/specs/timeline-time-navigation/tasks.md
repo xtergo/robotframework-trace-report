@@ -4,8 +4,8 @@
 > **Requirements:** 6.1–6.8, 8.3–8.5 | **Design:** Components §3, Properties 8–13
 
 - [x] 1.1 Implement `_navHistory` object with `stack`, `index`, `maxSize` fields in `timeline.js` IIFE scope
-- [-] 1.2 Implement `_navPush(state)` — discard forward states, append, enforce max 50, update buttons
-- [ ] 1.3 Implement `_navUndo()` — decrement index, restore `viewStart/viewEnd/zoom/serviceFilter`, re-render
+- [x] 1.2 Implement `_navPush(state)` — discard forward states, append, enforce max 50, update buttons
+- [-] 1.3 Implement `_navUndo()` — decrement index, restore `viewStart/viewEnd/zoom/serviceFilter`, re-render
 - [ ] 1.4 Implement `_navRedo()` — increment index, restore state, re-render
 - [ ] 1.5 Implement `_navDebouncePush(state)` — 500ms debounce for wheel/pan events
 - [ ] 1.6 Implement `_syncNavButtons()` — enable/disable undo/redo based on index position
