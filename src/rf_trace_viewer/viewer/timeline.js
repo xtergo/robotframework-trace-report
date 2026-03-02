@@ -3078,7 +3078,8 @@
     // Clear active preset
     _clearActivePreset();
 
-    // Emit load-window-changed if extending beyond current load window
+    // Req 8.1: Emit load-window-changed if extending beyond current load window.
+    // live.js listener calls setActiveWindowStart (clamping) and _deltaFetch (Req 8.2).
     var aws = window.RFTraceViewer && window.RFTraceViewer.getActiveWindowStart
       ? window.RFTraceViewer.getActiveWindowStart()
       : timelineState.minTime;
@@ -3149,7 +3150,8 @@
     var clampedStart = Math.max(minAllowed, viewStart);
     var wasClamped = clampedStart > viewStart;
 
-    // Emit load-window-changed if extending beyond current load window
+    // Req 8.1: Emit load-window-changed if extending beyond current load window.
+    // live.js listener calls setActiveWindowStart (clamping) and _deltaFetch (Req 8.2).
     if (clampedStart < aws) {
       var oldStart = aws;
       if (window.RFTraceViewer && window.RFTraceViewer.emit) {
