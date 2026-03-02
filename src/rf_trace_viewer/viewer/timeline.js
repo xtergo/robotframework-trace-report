@@ -57,7 +57,9 @@
     _markerDragOldStart: null,
     layoutMode: 'baseline',
     autoCompactAfterFilter: false,
-    _compactBtn: null
+    _compactBtn: null,
+    _activePreset: null,
+    _presetBtns: []
   };
 
   // Navigation history state (undo/redo stack)
@@ -67,6 +69,15 @@
     maxSize: 50,    // Maximum number of entries
     _debounceTimer: null  // Debounce timer for wheel/pan events
   };
+
+  // Time preset configuration (label → duration in seconds)
+  var TIME_PRESETS = [
+    { label: '15m', seconds: 900 },
+    { label: '1h',  seconds: 3600 },
+    { label: '6h',  seconds: 21600 },
+    { label: '24h', seconds: 86400 },
+    { label: '7d',  seconds: 604800 }
+  ];
 
   /**
    * Push a navigation state snapshot onto the history stack.
@@ -414,6 +425,26 @@
 
     timelineState._navUndoBtn = undoBtn;
     timelineState._navRedoBtn = redoBtn;
+
+    // Separator before time presets
+    var sepPresets = document.createElement('span');
+    sepPresets.className = 'zoom-bar-sep';
+    zoomBar.appendChild(sepPresets);
+
+    // Time Preset Bar — segmented button group for quick range selection
+    var presetGroup = document.createElement('div');
+    presetGroup.className = 'zoom-bar-group';
+    timelineState._presetBtns = [];
+    TIME_PRESETS.forEach(function (preset) {
+      var btn = document.createElement('button');
+      btn.className = 'timeline-zoom-btn timeline-preset-btn';
+      btn.textContent = preset.label;
+      btn.setAttribute('data-preset', preset.seconds);
+      btn.setAttribute('aria-label', 'Show last ' + preset.label);
+      presetGroup.appendChild(btn);
+      timelineState._presetBtns.push(btn);
+    });
+    zoomBar.appendChild(presetGroup);
 
     // Separator
     var sep1 = document.createElement('span');
