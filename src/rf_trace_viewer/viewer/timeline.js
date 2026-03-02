@@ -593,6 +593,19 @@
     // Set up event listeners
     _setupEventListeners(canvas);
 
+    // Keyboard shortcuts for navigation undo/redo
+    document.addEventListener('keydown', function (e) {
+      if (e.ctrlKey && !e.altKey && e.key === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          _navRedo();
+        } else {
+          e.preventDefault();
+          _navUndo();
+        }
+      }
+    });
+
     // Listen for filter changes
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
       window.RFTraceViewer.on('filter-changed', function(event) {
