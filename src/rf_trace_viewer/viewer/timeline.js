@@ -1456,8 +1456,7 @@
         var rect = canvas.getBoundingClientRect();
         var mx = e.clientX - rect.left;
         var newTime = _screenXToTime(mx);
-        // Clamp to [minTime, maxTime] — minTime is the 6h max lookback boundary
-        timelineState._markerDragAtLimit = (newTime <= timelineState.minTime);
+        // Clamp to view bounds
         if (newTime < timelineState.minTime) newTime = timelineState.minTime;
         if (newTime > timelineState.maxTime) newTime = timelineState.maxTime;
         timelineState.activeWindowStart = newTime;
@@ -2401,28 +2400,22 @@
       ctx.textAlign = 'left';
 
       var labelText;
-      // Check if at max lookback limit: activeWindowStart <= minTime means we've
-      // reached the earliest available data boundary
-      if (timelineState.activeWindowStart <= timelineState.minTime) {
-        labelText = 'Maximum drag limit reached';
-        ctx.fillStyle = _css('--status-fail', '#c62828');
-      } else {
-        // Format to HH:MM only
-        var d = new Date(timelineState.activeWindowStart * 1000);
-        var hh = d.getHours().toString().padStart(2, '0');
-        var mm = d.getMinutes().toString().padStart(2, '0');
-        labelText = 'Loading from: ' + hh + ':' + mm + ' (drag to load older)';
-        ctx.fillStyle = markerColor;
-      }
+      // Format to HH:MM
+      var d = new Date(timelineState.activeWindowStart * 1000);
+      var hh = d.getHours().toString().padStart(2, '0');
+      var mm = d.getMinutes().toString().padStart(2, '0');
+      labelText = 'Loading from: ' + hh + ':' + mm + ' (drag to load older)';
+      ctx.fillStyle = markerColor;
 
       var labelX = x + 8;
-      var labelY = handleY - handleSize - 3;
+      var labelY = 12; // Top of header, above time axis labels
       // If label would overflow right edge, draw on the left side
       var labelWidth = ctx.measureText(labelText).width;
       if (labelX + labelWidth > width - 4) {
         ctx.textAlign = 'right';
         labelX = x - 8;
       }
+      ctx.fillStyle = markerColor;
       ctx.fillText(labelText, labelX, labelY);
 
       // Show inline loading indicator below the label when delta fetch is in progress
@@ -2440,19 +2433,12 @@
         }
       }
 
-      // Show contextual hint during active drag:
-      // Red warning when clamped at 6h max, otherwise "Release to load older data"
+      // Show contextual hint during active drag
       if (timelineState.isDraggingMarker) {
         ctx.font = '11px sans-serif';
         var hintY = handleY + 14;
-        var hintText;
-        if (timelineState._markerDragAtLimit) {
-          hintText = 'Maximum drag limit reached';
-          ctx.fillStyle = _css('--status-fail', '#e53935');
-        } else {
-          hintText = 'Release to load older data';
-          ctx.fillStyle = _css('--text-primary', '#1a1a1a');
-        }
+        var hintText = 'Release to load older data';
+        ctx.fillStyle = _css('--text-primary', '#1a1a1a');
         var hintWidth = ctx.measureText(hintText).width;
         var hintX = x + 10;
         // If hint would overflow right edge, draw on the left side
