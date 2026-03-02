@@ -650,8 +650,12 @@
       };
       window.RFTraceViewer.setActiveWindowStart = function (newStart) {
         var est = _loadWindowState.executionStartTime;
-        var min = est - _loadWindowState.maxLookback;
-        var clamped = Math.max(min, Math.min(est, newStart));
+        // When no spans have arrived yet, executionStartTime is 0.
+        // Use current time as the upper bound so presets can extend
+        // the load window backward even in the empty-timeline state.
+        var upper = est > 0 ? est : (Date.now() / 1000);
+        var min = upper - _loadWindowState.maxLookback;
+        var clamped = Math.max(min, Math.min(upper, newStart));
         _loadWindowState.activeWindowStart = clamped;
         _loadWindowState.totalCachedSpans = allSpans.length;
       };
