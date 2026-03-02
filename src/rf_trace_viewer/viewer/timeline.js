@@ -2368,7 +2368,7 @@
     // Skip if marker is off-screen
     if (x < timelineState.leftMargin - 10 || x > width) return;
 
-    var markerColor = '#1976d2';
+    var markerColor = _css('--focus-outline', '#1976d2');
 
     ctx.save();
 
@@ -2403,7 +2403,7 @@
       // reached the earliest available data boundary (6-hour max)
       if (timelineState.activeWindowStart <= timelineState.minTime) {
         labelText = 'Maximum limit reached (6 hours)';
-        ctx.fillStyle = '#c62828';
+        ctx.fillStyle = _css('--status-fail', '#c62828');
       } else {
         // Format to HH:MM only
         var d = new Date(timelineState.activeWindowStart * 1000);
@@ -2426,7 +2426,7 @@
       // Show inline loading indicator below the label when delta fetch is in progress
       if (timelineState.isFetchingOlderSpans) {
         ctx.font = '9px sans-serif';
-        ctx.fillStyle = '#e65100'; // amber/orange
+        ctx.fillStyle = _css('--status-delayed', '#e65100');
         var fetchText = timelineState._fetchingDuration
           ? 'Loading ' + timelineState._fetchingDuration + ' more\u2026'
           : 'Fetching older spans\u2026';
@@ -2446,7 +2446,7 @@
         var hintText;
         if (timelineState._markerDragAtLimit) {
           hintText = 'Maximum limit reached (6 hours)';
-          ctx.fillStyle = '#e53935';
+          ctx.fillStyle = _css('--status-fail', '#e53935');
         } else {
           hintText = 'Release to load older data';
           ctx.fillStyle = _css('--text-primary', '#1a1a1a');
