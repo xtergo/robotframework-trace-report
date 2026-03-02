@@ -93,9 +93,16 @@
     _syncNavButtons();
   }
 
-  /** Sync undo/redo button enabled/disabled states. Stub until task 1.6. */
+  /** Sync undo/redo button enabled/disabled states based on history index. */
   function _syncNavButtons() {
-    // Will be implemented in task 1.6
+    var canUndo = _navHistory.index > 0;
+    var canRedo = _navHistory.index < _navHistory.stack.length - 1;
+    if (timelineState._navUndoBtn) {
+      timelineState._navUndoBtn.disabled = !canUndo;
+    }
+    if (timelineState._navRedoBtn) {
+      timelineState._navRedoBtn.disabled = !canRedo;
+    }
   }
 
   /**
