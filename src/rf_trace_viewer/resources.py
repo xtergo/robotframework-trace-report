@@ -6,7 +6,9 @@ Falls back gracefully on non-Linux platforms.
 
 from __future__ import annotations
 
+import collections
 import os
+import threading
 import time
 
 
@@ -148,7 +150,6 @@ def _parse_env_millicores(env_var: str) -> int | None:
     if not raw:
         return None
     try:
-        # K8s injects CPU as a plain integer (millicores) by default
         return int(raw.strip())
     except ValueError:
         return None
@@ -204,3 +205,25 @@ def get_resource_snapshot() -> dict:
         "cpu_request_mc": cpu_request_mc,
         "mem_request_mb": mem_request_mb,
     }
+
+
+# ── Ring buffer for history snapshots ────────────────────────────
+
+_HISTORY_MAX = 60  # 60 snapshots x 10s interval = 10 minutes
+_history_lock = threading.Lock()
+_history_buffer: collections.deque = collections.deque(maxlen=_HISTORY_MAX)
+
+
+def record_snapshot() -> dict:
+    """Take a resource snapshot, store it in the ring buffer, and return it."""
+    snap = get_resource_snapshot()
+    snap["ts"] = time.time()
+    with _history_lock:
+        _history_buffer.append(snap)
+    return snap
+
+
+def get_history() -> list[dict]:
+    """Return the full ring buffer as a list (oldest first)."""
+    with _history_lock:
+        return list(_history_buffer)

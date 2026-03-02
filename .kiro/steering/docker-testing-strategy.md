@@ -96,27 +96,22 @@ A Kind (Kubernetes in Docker) cluster runs inside Docker for integration testing
 
 The deployment uses incrementing tags (`dev`, `dev2`, `dev3`, ...) with `imagePullPolicy: IfNotPresent`. To deploy new code:
 
-1. **Build the image on the host:**
+1. **Build the image on the host** (always pass `GIT_SHA` so the version badge shows the commit and build tag):
    ```bash
-   docker build -t trace-report:dev .
+   docker build --build-arg GIT_SHA="$(git rev-parse --short HEAD)-devN" -t trace-report:devN .
    ```
 
-2. **Tag with next increment** (check current: `docker exec trace-report-test-control-plane kubectl get deployment trace-report -o jsonpath='{.spec.template.spec.containers[0].image}'`):
-   ```bash
-   docker tag trace-report:dev trace-report:devN
-   ```
-
-3. **Load into kind cluster** (no `kind` CLI needed — pipe through containerd):
+2. **Load into kind cluster** (no `kind` CLI needed — pipe through containerd):
    ```bash
    docker save trace-report:devN | docker exec -i trace-report-test-control-plane ctr --namespace k8s.io images import -
    ```
 
-4. **Update the deployment:**
+3. **Update the deployment:**
    ```bash
    docker exec trace-report-test-control-plane kubectl set image deployment/trace-report trace-report=trace-report:devN
    ```
 
-5. **Wait for rollout:**
+4. **Wait for rollout:**
    ```bash
    docker exec trace-report-test-control-plane kubectl rollout status deployment/trace-report --timeout=60s
    ```

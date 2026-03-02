@@ -14,7 +14,22 @@
 
   if (!window.__RF_TRACE_LIVE__) return;
 
+  console.log('[live] Build: ' + (window.__RF_VERSION__ || 'unknown'));
+
+  /* ── Session ID (unique per browser tab) ───────────────────────── */
+  var _sessionId = 'xxxxxxxx'.replace(/x/g, function () {
+    return Math.floor(Math.random() * 16).toString(16);
+  });
+  window.__RF_SESSION_ID__ = _sessionId;
+
+  /** Append sid= to a URL (handles existing query params). */
+  function _appendSid(url) {
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'sid=' + _sessionId;
+  }
+
   /* ── configuration ─────────────────────────────────────────────── */
+
+  var provider = window.__RF_PROVIDER || 'json';  // 'json' or 'signoz'
 
   var pollInterval = Math.max(1, Math.min(30,
     Number(window.__RF_TRACE_POLL_INTERVAL__) || 7));
@@ -22,7 +37,7 @@
 
   // Lookback: only fetch spans from the last N seconds on first poll.
   // Supports URL param ?lookback=10m (or 30s, 2h, 1d) and window config.
-  // Default for SigNoz live mode: 10m. Use ?lookback=0 to fetch everything.
+  // Default for SigNoz live mode: 15m. Use ?lookback=0 to fetch everything.
   var _lookbackNs = _parseLookback();
 
   // Service name filter: configurable default from server config,
@@ -303,9 +318,9 @@
     // Explicit "0" or "none" disables lookback
     if (raw === '0' || raw.toLowerCase() === 'none') return 0;
 
-    // If nothing specified, default to 10m for signoz provider
+    // If nothing specified, default to 15m for signoz provider
     if (!raw) {
-      if (provider === 'signoz') return 10 * 60 * 1e9; // 10 minutes in ns
+      if (provider === 'signoz') return 15 * 60 * 1e9; // 15 minutes in ns
       return 0;
     }
 
@@ -320,8 +335,6 @@
   }
 
   /* ── state ─────────────────────────────────────────────────────── */
-
-  var provider = window.__RF_PROVIDER || 'json';  // 'json' or 'signoz'
 
   var byteOffset = 0;          // current byte offset into the trace file
   var lineBuffer = '';          // partial line carried across polls
@@ -420,7 +433,7 @@
         var svc = _serviceFilter;
         url += '&service=' + encodeURIComponent(svc || '');
 
-        fetch(url)
+        fetch(_appendSid(url))
           .then(function (res) {
             if (!res.ok) {
               console.warn('[live] Delta fetch step failed: HTTP ' + res.status);
@@ -441,7 +454,7 @@
       } else {
         var jsonUrl = '/traces.json?from_ns=' + fromNs + '&to_ns=' + toNs;
 
-        fetch(jsonUrl)
+        fetch(_appendSid(jsonUrl))
           .then(function (res) {
             if (!res.ok) {
               console.warn('[live] Delta fetch step failed: HTTP ' + res.status);
@@ -689,7 +702,7 @@
   }
 
   function _pollResources() {
-    fetch('/api/v1/resources')
+    fetch(_appendSid('/api/v1/resources'))
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (data) {
         if (!data) return;
@@ -722,6 +735,21 @@
       lastSeenNs = Math.max(0, nowNs - _lookbackNs);
       console.log('[live] Lookback active: fetching spans from last ' +
         Math.round(_lookbackNs / 1e9) + 's (since_ns=' + lastSeenNs + ')');
+
+      // Init timeline with empty lookback window so the time axis is visible
+      var timelineSection = document.querySelector('.timeline-section');
+      if (timelineSection && !_timelineInitialized && typeof window.initTimeline === 'function') {
+        var nowSec = Date.now() / 1000;
+        var lookbackSec = _lookbackNs / 1e9;
+        var emptyModel = _emptyModel();
+        emptyModel.start_time = (nowSec - lookbackSec) * 1e9;
+        emptyModel.end_time = nowSec * 1e9;
+        window.initTimeline(timelineSection, emptyModel);
+        _timelineInitialized = true;
+        console.log('[live] Initialized empty timeline: ' +
+          new Date((nowSec - lookbackSec) * 1000).toISOString().substr(11, 8) +
+          ' → ' + new Date(nowSec * 1000).toISOString().substr(11, 8));
+      }
     }
     _startPolling();
     _startResourcePolling();
@@ -784,7 +812,7 @@
     polling = true;
     var spansBefore = allSpans.length;
 
-    fetch('/traces.json?offset=' + byteOffset)
+    fetch(_appendSid('/traces.json?offset=' + byteOffset))
       .then(function (res) {
         if (!res.ok) {
           if (res.status === 401) {
@@ -862,7 +890,7 @@
     // Empty string = no filter (all services)
     url += '&service=' + encodeURIComponent(svc || '');
 
-    fetch(url)
+    fetch(_appendSid(url))
       .then(function (res) {
         if (res.status === 429) {
           // Rate limited — exponential backoff

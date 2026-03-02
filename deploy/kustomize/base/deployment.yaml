@@ -35,11 +35,13 @@ spec:
                 resourceFieldRef:
                   containerName: trace-report
                   resource: requests.cpu
+                  divisor: 1m
             - name: K8S_CPU_LIMIT
               valueFrom:
                 resourceFieldRef:
                   containerName: trace-report
                   resource: limits.cpu
+                  divisor: 1m
             - name: K8S_MEM_REQUEST
               valueFrom:
                 resourceFieldRef:

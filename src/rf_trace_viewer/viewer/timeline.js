@@ -60,6 +60,14 @@
     _compactBtn: null
   };
 
+  // Navigation history state (undo/redo stack)
+  var _navHistory = {
+    stack: [],      // Array of NavState snapshots
+    index: -1,      // Current position (-1 = empty)
+    maxSize: 50,    // Maximum number of entries
+    _debounceTimer: null  // Debounce timer for wheel/pan events
+  };
+
   /** Get the element where CSS custom properties are defined. */
   function _getThemeRoot() {
     return document.querySelector('.rf-trace-viewer') || document.documentElement;
@@ -73,6 +81,8 @@
 
   // Expose for debugging/testing
   window.timelineState = timelineState;
+
+
 
   // Debug API for testing
   window.RFTraceViewer = window.RFTraceViewer || {};
@@ -723,6 +733,15 @@
       timelineState.viewStart = timelineState.minTime;
       timelineState.viewEnd = timelineState.maxTime;
       console.log('[Timeline] Time bounds: ' +
+        _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime) +
+        ' (range=' + Math.round(timelineState.maxTime - timelineState.minTime) + 's)');
+    } else if (data.start_time && data.end_time) {
+      // No spans but model has a time window (e.g. empty lookback window)
+      timelineState.minTime = _parseTime(data.start_time);
+      timelineState.maxTime = _parseTime(data.end_time);
+      timelineState.viewStart = timelineState.minTime;
+      timelineState.viewEnd = timelineState.maxTime;
+      console.log('[Timeline] Empty time window: ' +
         _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime) +
         ' (range=' + Math.round(timelineState.maxTime - timelineState.minTime) + 's)');
     }
@@ -2541,13 +2560,21 @@
     var savedPanY = timelineState.panY;
     var savedSelected = timelineState.selectedSpan;
     var savedMaxTime = timelineState.maxTime;
+    var savedMinTime = timelineState.minTime;
     var wasUserZoomed = savedZoom > 1.01 || savedZoom < 0.99;
     var hadSpansBefore = timelineState.flatSpans.length > 0;
 
     // Detect if user's viewEnd was tracking the data edge (tail-follow mode).
     // Allow 2-second tolerance for rounding.
+    // IMPORTANT: Only consider tail-following when the view covers a
+    // significant portion of the data range (>25%). If the user is zoomed
+    // into a narrow cluster near the edge (e.g. _locateRecent auto-zoom),
+    // that's NOT tail-following — it's a focused view that should be preserved.
+    var viewCoverage = (savedMaxTime > savedMinTime)
+      ? (savedViewEnd - savedViewStart) / (savedMaxTime - savedMinTime) : 1;
     var wasTailFollowing = hadSpansBefore &&
-      Math.abs(savedViewEnd - savedMaxTime) < 2;
+      Math.abs(savedViewEnd - savedMaxTime) < 2 &&
+      viewCoverage > 0.25;
 
     // Re-process spans with new data
     try {
@@ -2555,6 +2582,38 @@
     } catch (e) {
       console.error('[Timeline] _processSpans error in updateTimelineData:', e.message, e.stack);
       return;
+    }
+
+    // Restore zoom/view BEFORE resizing canvas (which triggers _render).
+    // _processSpans resets viewStart/viewEnd to full range; we must fix that
+    // before any render happens.
+    if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
+      // First data load: auto-zoom handled after resize below
+    } else if (wasUserZoomed) {
+      timelineState.zoom = savedZoom;
+      timelineState.viewStart = savedViewStart;
+      timelineState.viewEnd = savedViewEnd;
+
+      // Tail-follow: only extend viewEnd if the user was viewing a narrow
+      // window near the data edge AND the data edge moved forward (new live
+      // data arrived). Skip when the data range expanded because older data
+      // was loaded (e.g. fallback full fetch or delta fetch).
+      var dataEdgeMoved = timelineState.maxTime > savedMaxTime;
+      var dataStartMoved = timelineState.minTime < (savedMinTime || timelineState.minTime);
+      if (wasTailFollowing && dataEdgeMoved && !dataStartMoved) {
+        var extension = timelineState.maxTime - savedMaxTime;
+        timelineState.viewEnd += extension;
+        var totalRange = timelineState.maxTime - timelineState.minTime;
+        var viewRange = timelineState.viewEnd - timelineState.viewStart;
+        if (totalRange > 0 && viewRange > 0) {
+          timelineState.zoom = totalRange / viewRange;
+        }
+      }
+      console.log('[Timeline] updateData: restoring zoom=' + timelineState.zoom.toFixed(1) +
+        ', view=' + _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
+    } else {
+      console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
+        '), showing full range');
     }
 
     // Recalculate canvas height for new content
@@ -2568,28 +2627,7 @@
 
     if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
       // First data load: auto-zoom to the most recent cluster of spans
-      // to make short spans visible (they'd be invisible at full range)
       _autoZoomToRecentCluster();
-    } else if (wasUserZoomed) {
-      // User had zoomed — restore their view window
-      timelineState.zoom = savedZoom;
-      timelineState.viewStart = savedViewStart;
-      timelineState.viewEnd = savedViewEnd;
-
-      // If they were tail-following (viewEnd == maxTime), extend to new maxTime
-      // so new spans slide into view automatically
-      if (wasTailFollowing && timelineState.maxTime > savedMaxTime) {
-        var extension = timelineState.maxTime - savedMaxTime;
-        timelineState.viewEnd += extension;
-        // Recompute zoom to match the new view range
-        var totalRange = timelineState.maxTime - timelineState.minTime;
-        var viewRange = timelineState.viewEnd - timelineState.viewStart;
-        if (totalRange > 0 && viewRange > 0) {
-          timelineState.zoom = totalRange / viewRange;
-        }
-      }
-    } else {
-      // Not zoomed — show full range (viewStart/viewEnd already set by _processSpans)
     }
 
     timelineState.panY = savedPanY;

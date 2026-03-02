@@ -17,8 +17,8 @@ from urllib.error import URLError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
-from rf_trace_viewer.config import BaseFilterConfig, validate_svg
 from rf_trace_viewer import __git_sha__, __version__
+from rf_trace_viewer.config import BaseFilterConfig, validate_svg
 from rf_trace_viewer.error_codes import error_response
 from rf_trace_viewer.generator import (
     ReportOptions,
@@ -38,11 +38,36 @@ from rf_trace_viewer.parser import parse_line
 from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
 from rf_trace_viewer.providers.signoz_metrics import SigNozMetricsQuery
 from rf_trace_viewer.providers.signoz_provider import SigNozProvider
-from rf_trace_viewer.resources import get_resource_snapshot
+from rf_trace_viewer.resources import get_history, record_snapshot
 from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 
 _DEFAULT_LOGO = str(Path(__file__).parent / "viewer" / "default-logo.svg")
+
+# ── Active session tracker (unique browser tabs) ─────────────────
+_SESSION_TTL = 30  # seconds — session is "active" if seen within this window
+_active_sessions: dict[str, float] = {}  # sid → last_seen_timestamp
+_session_lock = threading.Lock()
+
+
+def _touch_session(sid: str | None) -> None:
+    """Record a session heartbeat."""
+    if not sid:
+        return
+    now = time.time()
+    with _session_lock:
+        _active_sessions[sid] = now
+
+
+def _get_active_session_count() -> int:
+    """Return the number of sessions seen within the TTL window."""
+    cutoff = time.time() - _SESSION_TTL
+    with _session_lock:
+        # Prune stale entries
+        stale = [k for k, v in _active_sessions.items() if v < cutoff]
+        for k in stale:
+            del _active_sessions[k]
+        return len(_active_sessions)
 
 
 class _LiveRequestHandler(BaseHTTPRequestHandler):
@@ -130,6 +155,10 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         path = parsed.path
         query = parse_qs(parsed.query)
 
+        # Track active browser sessions (sid query param)
+        sid = query.get("sid", [None])[0]
+        _touch_session(sid)
+
         # --- Health endpoints (no rate limiting) ---
         health_router = getattr(self.server, "_health_router", None)
         if path == "/health/live" and health_router is not None:
@@ -196,8 +225,18 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/resources":
-            snapshot = get_resource_snapshot()
+            snapshot = record_snapshot()
+            snapshot["active_users"] = _get_active_session_count()
             self._send_json_response(200, snapshot, request_id)
+            return
+
+        if path == "/api/v1/resources/history":
+            history = get_history()
+            self._send_json_response(
+                200,
+                {"snapshots": history, "active_users": _get_active_session_count()},
+                request_id,
+            )
             return
 
         self.send_error(404)

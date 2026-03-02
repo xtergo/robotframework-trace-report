@@ -511,6 +511,12 @@
 
     var title = document.createElement('h1');
     title.textContent = data.title || 'RF Trace Report';
+    title.style.cursor = 'pointer';
+    title.setAttribute('title', 'Go to Overview');
+    title.addEventListener('click', function () {
+      _switchTab('overview');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
     // Version badge — inside h1 for baseline alignment
     if (window.__RF_VERSION__) {
       var vBadge = document.createElement('span');
@@ -583,10 +589,7 @@
         }},
         { label: 'Last Success', key: 'lastSuccessTs', el: null, format: _formatDiagTimestamp },
         { label: 'Retry Count', key: 'retryCount', el: null },
-        { label: 'Last Error', key: 'lastError', el: null, fallback: 'None' },
-        { label: 'Memory', key: 'memSummary', el: null, format: function (v) { return v || '—'; } },
-        { label: 'Memory %', key: 'rssPct', el: null, format: function (v) { return v != null ? v + '%' : '—'; }, bar: true },
-        { label: 'CPU', key: 'cpuSummary', el: null, format: function (v) { return v || '—'; } }
+        { label: 'Last Error', key: 'lastError', el: null, fallback: 'None' }
       ];
 
       for (var di = 0; di < diagRows.length; di++) {
@@ -827,6 +830,271 @@
     // Paused banner — sits between header and tab nav
     if (typeof pausedBanner !== 'undefined' && pausedBanner) {
       root.appendChild(pausedBanner);
+    }
+
+    // ── Health Dashboard (collapsible, between header and RF tabs) ──
+    var healthDashboard = null;
+    var _healthCharts = {};
+    var _healthPollTimer = null;
+
+    if (window.__RF_TRACE_LIVE__) {
+      healthDashboard = document.createElement('div');
+      healthDashboard.className = 'health-dashboard';
+      healthDashboard.setAttribute('aria-label', 'Service health dashboard');
+
+      var hdHeader = document.createElement('div');
+      hdHeader.className = 'hd-header';
+      var hdTitle = document.createElement('span');
+      hdTitle.className = 'hd-title';
+      hdTitle.textContent = 'Service Health';
+      hdHeader.appendChild(hdTitle);
+      var hdDesc = document.createElement('span');
+      hdDesc.className = 'hd-desc';
+      hdDesc.textContent = 'Infrastructure metrics for this trace-viewer instance';
+      hdHeader.appendChild(hdDesc);
+      var hdRange = document.createElement('span');
+      hdRange.className = 'hd-range';
+      hdRange.textContent = 'Last 60 min';
+      hdHeader.appendChild(hdRange);
+      var hdToggle = document.createElement('button');
+      hdToggle.className = 'hd-toggle';
+      hdToggle.textContent = '\u25b2';
+      hdToggle.setAttribute('aria-label', 'Collapse health dashboard');
+      hdToggle.addEventListener('click', function () {
+        var isOpen = healthDashboard.classList.contains('open');
+        if (isOpen) {
+          healthDashboard.classList.remove('open');
+          hdToggle.textContent = '\u25bc';
+          hdToggle.setAttribute('aria-label', 'Expand health dashboard');
+        } else {
+          healthDashboard.classList.add('open');
+          hdToggle.textContent = '\u25b2';
+          hdToggle.setAttribute('aria-label', 'Collapse health dashboard');
+        }
+      });
+      hdHeader.appendChild(hdToggle);
+      healthDashboard.appendChild(hdHeader);
+
+      var hdBody = document.createElement('div');
+      hdBody.className = 'hd-body';
+
+      // Chart definitions: key matches snapshot field, label for display
+      var chartDefs = [
+        { key: 'rss_mb', label: 'Memory RSS', unit: 'MB', refLines: ['mem_request_mb', 'rss_limit_mb'] },
+        { key: 'cpu_pct', label: 'CPU Usage', unit: '%', refLines: ['cpu_limit_pct'] },
+        { key: 'spansPerSec', label: 'Spans / sec', unit: '', refLines: [] },
+        { key: 'totalSpans', label: 'Total Spans', unit: '', refLines: [] },
+        { key: 'active_users', label: 'Active Users', unit: '', refLines: [] }
+      ];
+
+      for (var ci = 0; ci < chartDefs.length; ci++) {
+        var def = chartDefs[ci];
+        var card = document.createElement('div');
+        card.className = 'hd-card';
+
+        var cardLabel = document.createElement('div');
+        cardLabel.className = 'hd-card-label';
+        cardLabel.textContent = def.label;
+        card.appendChild(cardLabel);
+
+        var cardValue = document.createElement('div');
+        cardValue.className = 'hd-card-value';
+        cardValue.textContent = '—';
+        card.appendChild(cardValue);
+
+        var canvas = document.createElement('canvas');
+        canvas.className = 'hd-sparkline';
+        canvas.width = 200;
+        canvas.height = 48;
+        card.appendChild(canvas);
+
+        hdBody.appendChild(card);
+        _healthCharts[def.key] = { canvas: canvas, valueEl: cardValue, def: def, data: [] };
+      }
+
+      healthDashboard.appendChild(hdBody);
+      healthDashboard.classList.add('open'); // start expanded
+      root.appendChild(healthDashboard);
+
+      // ── Sparkline renderer ──
+      function _drawSparkline(chartObj, refValues) {
+        var canvas = chartObj.canvas;
+        var ctx = canvas.getContext('2d');
+        var w = canvas.width;
+        var h = canvas.height;
+        var data = chartObj.data;
+        var pad = 2;
+
+        ctx.clearRect(0, 0, w, h);
+
+        if (data.length < 2) {
+          ctx.fillStyle = 'var(--text-muted, #999)';
+          ctx.font = '10px sans-serif';
+          ctx.fillText('waiting for data\u2026', 4, h / 2 + 3);
+          return;
+        }
+
+        // Compute Y range
+        var minY = Infinity, maxY = -Infinity;
+        for (var i = 0; i < data.length; i++) {
+          if (data[i] < minY) minY = data[i];
+          if (data[i] > maxY) maxY = data[i];
+        }
+        // Include ref lines in range
+        if (refValues) {
+          for (var ri = 0; ri < refValues.length; ri++) {
+            if (refValues[ri] != null) {
+              if (refValues[ri] > maxY) maxY = refValues[ri];
+              if (refValues[ri] < minY) minY = refValues[ri];
+            }
+          }
+        }
+        if (maxY === minY) { maxY = minY + 1; }
+        var rangeY = maxY - minY;
+
+        // Draw filled area
+        var stepX = (w - pad * 2) / (data.length - 1);
+        ctx.beginPath();
+        ctx.moveTo(pad, h - pad);
+        for (var j = 0; j < data.length; j++) {
+          var x = pad + j * stepX;
+          var y = h - pad - ((data[j] - minY) / rangeY) * (h - pad * 2);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(pad + (data.length - 1) * stepX, h - pad);
+        ctx.closePath();
+
+        // Use CSS custom property or fallback
+        var computedStyle = getComputedStyle(canvas);
+        var strokeColor = computedStyle.getPropertyValue('--sh-sparkline-stroke').trim() || '#2563eb';
+        ctx.fillStyle = strokeColor + '22';
+        ctx.fill();
+
+        // Draw line
+        ctx.beginPath();
+        for (var k = 0; k < data.length; k++) {
+          var lx = pad + k * stepX;
+          var ly = h - pad - ((data[k] - minY) / rangeY) * (h - pad * 2);
+          if (k === 0) ctx.moveTo(lx, ly);
+          else ctx.lineTo(lx, ly);
+        }
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Draw reference lines (dashed)
+        if (refValues) {
+          var refColors = ['#f59e0b', '#ef4444'];
+          for (var rr = 0; rr < refValues.length; rr++) {
+            if (refValues[rr] == null) continue;
+            var ry = h - pad - ((refValues[rr] - minY) / rangeY) * (h - pad * 2);
+            ctx.beginPath();
+            ctx.setLineDash([3, 3]);
+            ctx.moveTo(pad, ry);
+            ctx.lineTo(w - pad, ry);
+            ctx.strokeStyle = refColors[rr % refColors.length];
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+      }
+
+      // ── Poll /api/v1/resources/history ──
+      var _hdSid = window.__RF_SESSION_ID__ || 'xxxxxxxx'.replace(/x/g, function () {
+        return Math.floor(Math.random() * 16).toString(16);
+      });
+      function _pollHealthDashboard() {
+        fetch('/api/v1/resources/history?sid=' + _hdSid)
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (resp) {
+            if (!resp || !resp.snapshots) return;
+            var snaps = resp.snapshots;
+
+            // Also grab live connection state for spansPerSec / totalSpans
+            var connState = window.RFTraceViewer && window.RFTraceViewer.getConnectionState
+              ? window.RFTraceViewer.getConnectionState() : null;
+
+            // Extract series for each chart
+            for (var key in _healthCharts) {
+              if (!_healthCharts.hasOwnProperty(key)) continue;
+              var chart = _healthCharts[key];
+              var series = [];
+
+              if (key === 'spansPerSec' || key === 'totalSpans') {
+                // These come from connection state, not resource snapshots
+                // Push current value onto rolling buffer
+                var val = connState ? connState[key] : null;
+                chart.data.push(val != null ? val : 0);
+                if (chart.data.length > 360) chart.data.shift();
+                series = chart.data;
+              } else if (key === 'active_users') {
+                // Comes from the top-level response, not per-snapshot
+                var auVal = resp.active_users != null ? resp.active_users : 0;
+                chart.data.push(auVal);
+                if (chart.data.length > 360) chart.data.shift();
+                series = chart.data;
+              } else {
+                // From resource snapshots
+                series = [];
+                for (var si = 0; si < snaps.length; si++) {
+                  var v = snaps[si][key];
+                  series.push(v != null ? v : 0);
+                }
+                chart.data = series;
+              }
+
+              // Update current value display
+              var latest = series.length > 0 ? series[series.length - 1] : null;
+              if (latest != null) {
+                var formatted = chart.def.unit
+                  ? (Math.round(latest * 10) / 10) + ' ' + chart.def.unit
+                  : (key === 'totalSpans' ? Math.round(latest).toLocaleString()
+                    : key === 'active_users' ? Math.round(latest).toString()
+                    : (Math.round(latest * 10) / 10).toString());
+                chart.valueEl.textContent = formatted;
+              }
+
+              // Compute reference line values
+              var refs = [];
+              if (chart.def.refLines && snaps.length > 0) {
+                var lastSnap = snaps[snaps.length - 1];
+                for (var rl = 0; rl < chart.def.refLines.length; rl++) {
+                  var refKey = chart.def.refLines[rl];
+                  if (refKey === 'cpu_limit_pct') {
+                    // Convert cpu_limit_mc to percentage (limit_mc / 10 = % of 1 core)
+                    var limMc = lastSnap.cpu_limit_mc;
+                    refs.push(limMc != null ? limMc / 10 : null);
+                  } else {
+                    refs.push(lastSnap[refKey] != null ? lastSnap[refKey] : null);
+                  }
+                }
+              }
+
+              _drawSparkline(chart, refs);
+            }
+          })
+          .catch(function () { /* silent */ });
+      }
+
+      // Start polling when dashboard is visible
+      _pollHealthDashboard();
+      _healthPollTimer = setInterval(_pollHealthDashboard, 10000);
+
+      // Wire green dot click to also toggle health dashboard
+      if (typeof statusCluster !== 'undefined') {
+        statusDot.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var isOpen = healthDashboard.classList.contains('open');
+          if (isOpen) {
+            healthDashboard.classList.remove('open');
+            hdToggle.textContent = '\u25bc';
+          } else {
+            healthDashboard.classList.add('open');
+            hdToggle.textContent = '\u25b2';
+          }
+        });
+      }
     }
 
     // Tab navigation

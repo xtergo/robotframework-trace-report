@@ -158,19 +158,22 @@
   var _tabPane = null;
   var _cardEls = {};   // metric key → { valueEl, cardEl }
   var _warningEl = null;
+  var _tabInserted = false;
 
   function _initTab() {
     tabNav = document.querySelector('.rf-trace-viewer .tab-nav');
     tabContent = document.querySelector('.rf-trace-viewer .tab-content');
     if (!tabNav || !tabContent) return;
 
+    // Build the tab button and pane in memory but do NOT insert into DOM yet.
+    // They are only inserted after the first successful /api/metrics fetch.
+
     // Create tab button
     _tabBtn = document.createElement('button');
     _tabBtn.className = 'tab-btn';
-    _tabBtn.textContent = 'Service Health';
+    _tabBtn.textContent = 'Test Analytics';
     _tabBtn.setAttribute('data-tab', TAB_ID);
     _tabBtn.addEventListener('click', function () {
-      // Use the same pattern as app.js — query all tab-btn and tab-pane
       var btns = document.querySelectorAll('.tab-btn');
       btns.forEach(function (btn) {
         btn.classList.toggle('active', btn.getAttribute('data-tab') === TAB_ID);
@@ -183,7 +186,6 @@
         window.RFTraceViewer.emit('tab-changed', { tabId: TAB_ID });
       }
     });
-    tabNav.appendChild(_tabBtn);
 
     // Create tab pane
     _tabPane = document.createElement('div');
@@ -195,6 +197,12 @@
     _warningEl.className = 'sh-warning';
     _warningEl.style.display = 'none';
     _tabPane.appendChild(_warningEl);
+
+    // Description banner — explains what this tab shows
+    var descBanner = document.createElement('div');
+    descBanner.className = 'sh-description';
+    descBanner.textContent = 'Live metrics from the observability pipeline. HTTP and dependency metrics reflect the trace-collection backend, not the system under test.';
+    _tabPane.appendChild(descBanner);
 
     // Metric cards container
     var cardsContainer = document.createElement('div');
@@ -231,10 +239,21 @@
     cardsContainer.appendChild(depSection);
 
     _tabPane.appendChild(cardsContainer);
-    tabContent.appendChild(_tabPane);
 
-    // Start listening for tab changes
+    // Tab is built but NOT in the DOM yet — _insertTabIfNeeded() adds it
+    // after the first successful /api/metrics response.
+
+    // Start probing for metrics
     _initPolling();
+  }
+
+  /** Insert the tab button + pane into the DOM (once). */
+  function _insertTabIfNeeded() {
+    if (_tabInserted) return;
+    if (!tabNav || !tabContent || !_tabBtn || !_tabPane) return;
+    tabNav.appendChild(_tabBtn);
+    tabContent.appendChild(_tabPane);
+    _tabInserted = true;
   }
 
   function _createCard(metric) {
@@ -431,6 +450,11 @@
     title.className = 'sh-section-title';
     title.textContent = 'RF Test Metrics';
     _rfSectionEl.appendChild(title);
+
+    var rfDesc = document.createElement('div');
+    rfDesc.className = 'sh-description';
+    rfDesc.textContent = 'Aggregated statistics from the Robot Framework test execution being observed. Updated every 30 seconds from the SigNoz backend.';
+    _rfSectionEl.appendChild(rfDesc);
 
     // Aggregated summary row
     var summaryGrid = document.createElement('div');
@@ -690,8 +714,8 @@
       var pipelineCardsEl = _tabPane ? _tabPane.querySelector('.sh-cards') : null;
 
       if (hasRf) {
-        // RF data present: tab becomes "RF Metrics"
-        if (_tabBtn) _tabBtn.textContent = 'RF Metrics';
+        // RF data present: tab becomes "Test Analytics"
+        if (_tabBtn) _tabBtn.textContent = 'Test Analytics';
 
         // Hide pipeline cards in primary tab area
         if (pipelineCardsEl) pipelineCardsEl.style.display = 'none';
@@ -703,8 +727,8 @@
         // Show RF metrics as primary content
         _renderRfMetricsSection(snapshot);
       } else {
-        // No RF data: tab stays "Service Health"
-        if (_tabBtn) _tabBtn.textContent = 'Service Health';
+        // No RF data: tab stays "Test Analytics"
+        if (_tabBtn) _tabBtn.textContent = 'Test Analytics';
 
         // Show pipeline cards in primary tab area
         if (pipelineCardsEl) pipelineCardsEl.style.display = '';
@@ -757,6 +781,7 @@
         })
         .then(function (snapshot) {
           _hideWarning();
+          _insertTabIfNeeded();
           HealthRenderer.render(snapshot);
           return snapshot;
         })
@@ -798,15 +823,23 @@
   /* ── Polling lifecycle ─────────────────────────────────────────── */
 
   function _initPolling() {
+    // Probe immediately — if /api/metrics responds, the tab appears
+    MetricsAPIClient.fetchMetrics();
+
+    // Continue polling in the background so the tab appears as soon as
+    // metrics become available, and stays updated once visible.
+    _pollTimer = setInterval(function () {
+      MetricsAPIClient.fetchMetrics();
+    }, POLL_INTERVAL_MS);
+    _isActive = true;
+
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
       window.RFTraceViewer.on('tab-changed', function (data) {
         if (!data) return;
+        // No need to start/stop polling — it runs continuously.
+        // But we can do an immediate refresh when the tab is selected.
         if (data.tabId === TAB_ID) {
-          // Tab became active — fetch immediately and start polling
-          MetricsAPIClient.startPolling();
-        } else if (_isActive) {
-          // Tab became inactive — stop polling
-          MetricsAPIClient.stopPolling();
+          MetricsAPIClient.fetchMetrics();
         }
       });
     }

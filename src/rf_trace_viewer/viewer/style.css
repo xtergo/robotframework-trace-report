@@ -2680,3 +2680,120 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .sh-card.sh-card-critical .sh-card-value {
   color: var(--sh-critical-color);
 }
+
+/* ── Health Dashboard (collapsible panel between header and RF tabs) ── */
+
+.rf-trace-viewer .health-dashboard {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+.rf-trace-viewer .health-dashboard:not(.open) .hd-body {
+  display: none;
+}
+
+.rf-trace-viewer .hd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rf-trace-viewer .hd-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.rf-trace-viewer .hd-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+.rf-trace-viewer .hd-toggle:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .hd-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  padding: 0 16px 12px;
+}
+
+.rf-trace-viewer .hd-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rf-trace-viewer .hd-card-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.rf-trace-viewer .hd-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.rf-trace-viewer .hd-sparkline {
+  width: 100%;
+  height: 48px;
+  margin-top: 4px;
+  display: block;
+}
+
+@media (max-width: 600px) {
+  .rf-trace-viewer .hd-body {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ── Tab description banners ── */
+.rf-trace-viewer .sh-description {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.rf-trace-viewer .hd-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.rf-trace-viewer .hd-range {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: auto;
+  padding-right: 8px;
+}

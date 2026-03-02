@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
 from rf_trace_viewer.resources import (
     _get_cpu_limit_millicores,
     _get_memory_limit_kb,
     _parse_proc_status,
+    get_history,
     get_resource_snapshot,
+    record_snapshot,
 )
 
 
@@ -112,3 +114,26 @@ class TestGetResourceSnapshot:
         assert snapshot["rss_limit_mb"] == 500.0
         assert snapshot["rss_pct"] == 20.0
         assert snapshot["cpu_limit_mc"] == 500
+
+
+class TestRingBuffer:
+    def test_record_snapshot_adds_timestamp(self):
+        snap = record_snapshot()
+        assert "ts" in snap
+        assert isinstance(snap["ts"], float)
+        assert "rss_mb" in snap
+
+    def test_get_history_returns_list(self):
+        record_snapshot()
+        history = get_history()
+        assert isinstance(history, list)
+        assert len(history) >= 1
+        assert "ts" in history[-1]
+
+    def test_history_preserves_order(self):
+        # Record a few snapshots and verify oldest-first ordering
+        for _ in range(3):
+            record_snapshot()
+        history = get_history()
+        timestamps = [s["ts"] for s in history]
+        assert timestamps == sorted(timestamps)
