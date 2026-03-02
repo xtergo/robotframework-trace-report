@@ -110,7 +110,8 @@
       });
     }
 
-    // Initial filter application (no filters active, all visible)
+    // Re-apply active filters against the (possibly updated) span set so that
+    // resultCounts.visible reflects the current Load_Window (Req 9.3).
     _applyFilters();
   };
 
