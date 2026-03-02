@@ -68,6 +68,36 @@
     _debounceTimer: null  // Debounce timer for wheel/pan events
   };
 
+  /**
+   * Push a navigation state snapshot onto the history stack.
+   * Discards any forward states (standard undo behavior),
+   * enforces maxSize by trimming the oldest entry, and syncs button states.
+   */
+  function _navPush(state) {
+    // Discard forward states beyond current index
+    _navHistory.stack = _navHistory.stack.slice(0, _navHistory.index + 1);
+    // Append new state
+    _navHistory.stack.push({
+      viewStart: state.viewStart,
+      viewEnd: state.viewEnd,
+      zoom: state.zoom,
+      serviceFilter: state.serviceFilter || ''
+    });
+    // Enforce max size by trimming oldest
+    if (_navHistory.stack.length > _navHistory.maxSize) {
+      _navHistory.stack = _navHistory.stack.slice(_navHistory.stack.length - _navHistory.maxSize);
+    }
+    // Point index to the new top
+    _navHistory.index = _navHistory.stack.length - 1;
+    // Sync undo/redo button enabled states
+    _syncNavButtons();
+  }
+
+  /** Sync undo/redo button enabled/disabled states. Stub until task 1.6. */
+  function _syncNavButtons() {
+    // Will be implemented in task 1.6
+  }
+
   /** Get the element where CSS custom properties are defined. */
   function _getThemeRoot() {
     return document.querySelector('.rf-trace-viewer') || document.documentElement;
