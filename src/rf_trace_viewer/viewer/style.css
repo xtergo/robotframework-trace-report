@@ -281,6 +281,23 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   height: 26px;
 }
 
+/* Time picker popover (absolute time range selection) —
+   Hidden by default via inline style.display='none' set in JS;
+   clearing that inline style reveals the flex layout below. */
+.rf-trace-viewer .timeline-time-picker {
+  position: absolute;
+  z-index: 1000;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .rf-trace-viewer .timeline-zoom-slider {
   width: 100px;
   height: 4px;
