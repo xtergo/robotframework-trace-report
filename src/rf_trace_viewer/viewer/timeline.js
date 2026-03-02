@@ -527,11 +527,7 @@
         applyBtn.disabled = true;
         return;
       }
-      if ((e - s) > 21600) {
-        pickerError.textContent = 'Maximum range is 6 hours';
-        applyBtn.disabled = true;
-        return;
-      }
+      // No max range limit for the date picker — users can reach any data in ClickHouse
     }
     startInput.addEventListener('input', _validateTimePicker);
     endInput.addEventListener('input', _validateTimePicker);
@@ -776,8 +772,8 @@
           // activeWindowStart so the load-start marker is visible and draggable.
           if (timelineState.flatSpans.length === 0) {
             var now = Date.now() / 1000;
-            // Allow dragging leftward up to 6h max lookback
-            var maxLookback = 21600; // 6 hours
+            // Allow dragging leftward up to 7d (matching largest preset)
+            var maxLookback = 604800; // 7 days
             timelineState.minTime = now - maxLookback;
             timelineState.maxTime = now;
             // Default view: from activeWindowStart to now (or a 5-min window if too narrow)
@@ -2400,9 +2396,9 @@
 
       var labelText;
       // Check if at max lookback limit: activeWindowStart <= minTime means we've
-      // reached the earliest available data boundary (6-hour max)
+      // reached the earliest available data boundary
       if (timelineState.activeWindowStart <= timelineState.minTime) {
-        labelText = 'Maximum limit reached (6 hours)';
+        labelText = 'Maximum drag limit reached';
         ctx.fillStyle = _css('--status-fail', '#c62828');
       } else {
         // Format to HH:MM only
@@ -2445,7 +2441,7 @@
         var hintY = handleY + 14;
         var hintText;
         if (timelineState._markerDragAtLimit) {
-          hintText = 'Maximum limit reached (6 hours)';
+          hintText = 'Maximum drag limit reached';
           ctx.fillStyle = _css('--status-fail', '#e53935');
         } else {
           hintText = 'Release to load older data';
@@ -3095,8 +3091,7 @@
   function _applyTimePicker(startEpoch, endEpoch) {
     // Validate: start < end
     if (startEpoch >= endEpoch) return;
-    // Validate: range <= 6h
-    if ((endEpoch - startEpoch) > 21600) return;
+    // No max range limit for the date picker
 
     // Clear active preset
     _clearActivePreset();
@@ -3163,15 +3158,13 @@
     var viewEnd = now;
     var viewStart = now - durationSeconds;
 
-    // Clamp load window start to maxLookback (6h)
-    var maxLookback = 21600; // 6 hours
+    // Presets are self-clamping: the duration IS the lookback.
+    // No additional maxLookback clamp needed — setActiveWindowStart handles upper bound.
     var aws = window.RFTraceViewer && window.RFTraceViewer.getActiveWindowStart
       ? window.RFTraceViewer.getActiveWindowStart()
       : timelineState.minTime;
-    var est = timelineState.minTime; // execution start time approximation
-    var minAllowed = est - maxLookback;
-    var clampedStart = Math.max(minAllowed, viewStart);
-    var wasClamped = clampedStart > viewStart;
+    var clampedStart = viewStart;
+    var wasClamped = false;
 
     // Req 8.1: Emit load-window-changed if extending beyond current load window.
     // live.js listener calls setActiveWindowStart (clamping) and _deltaFetch (Req 8.2).
@@ -3217,7 +3210,7 @@
 
     // Toast notification if range was clamped
     if (wasClamped) {
-      _showToast('Range clamped to 6-hour maximum');
+      _showToast('Range clamped to 24-hour maximum');
     }
 
     // Re-render

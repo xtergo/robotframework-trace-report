@@ -11,7 +11,10 @@ from hypothesis import strategies as st
 # Constants (mirror timeline.js / live.js)
 # ---------------------------------------------------------------------------
 
-MAX_LOOKBACK = 21600  # 6 hours in seconds
+# Presets are self-clamping: each preset's duration IS its own lookback.
+# The date picker has no range limit — users can reach any data in ClickHouse.
+# The drag handle uses a 7-day limit (matching the largest preset).
+DRAG_MAX_LOOKBACK = 604800  # 7 days in seconds (drag handle limit)
 
 
 # ---------------------------------------------------------------------------
@@ -22,15 +25,17 @@ MAX_LOOKBACK = 21600  # 6 hours in seconds
 def apply_preset(duration_seconds, now, execution_start_time, active_window_start):
     """Reference implementation of _applyPreset from timeline.js.
 
-    Returns (view_start, view_end, clamped_start, was_clamped, should_emit, emit_payload).
+    Presets are self-clamping: the duration IS the lookback.
+    No global maxLookback clamp — setActiveWindowStart handles upper bound.
+
+    Returns (view_end, clamped_start, was_clamped, should_emit, emit_payload).
     """
     view_end = now
     view_start = now - duration_seconds
 
-    # Clamp load window start to maxLookback
-    min_allowed = execution_start_time - MAX_LOOKBACK
-    clamped_start = max(min_allowed, view_start)
-    was_clamped = clamped_start > view_start
+    # No global maxLookback clamp — presets self-clamp via their own duration
+    clamped_start = view_start
+    was_clamped = False
 
     # Determine if load-window-changed should be emitted
     should_emit = clamped_start < active_window_start
@@ -49,25 +54,25 @@ def clear_active_preset(active_preset):
     return None
 
 
-def clamp_load_window_start(requested_start, execution_start_time, max_lookback=MAX_LOOKBACK):
-    """Reference implementation of load window start clamping.
+def clamp_load_window_start(requested_start, upper_bound):
+    """Reference implementation of setActiveWindowStart clamping from live.js.
 
-    Returns max(execution_start_time - max_lookback, requested_start),
-    never allowing a start earlier than max_lookback before execution start.
+    With maxLookback=0, no lower bound — only clamps to upper bound.
+    Returns min(upper_bound, requested_start).
     """
-    min_allowed = execution_start_time - max_lookback
-    return max(min_allowed, requested_start)
+    return min(upper_bound, requested_start)
 
 
 def validate_time_picker(start_epoch, end_epoch):
     """Reference implementation of _validateTimePicker from timeline.js.
 
+    Only validates start < end. No max range limit — the date picker
+    can reach any data in ClickHouse.
+
     Returns (is_valid, error_message).
     """
     if start_epoch >= end_epoch:
         return False, "Start must be before end"
-    if (end_epoch - start_epoch) > MAX_LOOKBACK:
-        return False, "Maximum range is 6 hours"
     return True, ""
 
 
@@ -121,10 +126,10 @@ any_duration_strategy = st.floats(
     execution_start=epoch_strategy,
 )
 def test_preset_view_window_calculation(duration, now, execution_start):
-    """Clicking a preset sets viewEnd=now, viewStart=now-duration (before clamping).
+    """Clicking a preset sets viewEnd=now, viewStart=now-duration.
 
-    The raw (unclamped) view range always equals the preset duration.
-    After clamping, viewStart >= execution_start - MAX_LOOKBACK.
+    Presets are self-clamping: the duration IS the lookback.
+    No global maxLookback clamp.
     """
     aws = execution_start  # active window start = execution start initially
     view_end, clamped_start, was_clamped, _, _ = apply_preset(duration, now, execution_start, aws)
@@ -132,17 +137,11 @@ def test_preset_view_window_calculation(duration, now, execution_start):
     # viewEnd is always now
     assert view_end == now
 
-    # Raw (unclamped) range equals duration
-    raw_start = now - duration
-    assert abs((now - raw_start) - duration) < 1e-6
+    # Start is always now - duration (no clamping)
+    assert abs(clamped_start - (now - duration)) < 1e-6
 
-    # Clamped start is never earlier than min_allowed
-    min_allowed = execution_start - MAX_LOOKBACK
-    assert clamped_start >= min_allowed - 1e-6
-
-    # If clamping occurred, clamped_start == min_allowed
-    if was_clamped:
-        assert abs(clamped_start - min_allowed) < 1e-6
+    # was_clamped is always False (presets self-clamp)
+    assert was_clamped is False
 
 
 # ---------------------------------------------------------------------------
@@ -155,9 +154,7 @@ def test_preset_view_window_calculation(duration, now, execution_start):
     duration=any_duration_strategy,
     now=epoch_strategy,
     execution_start=epoch_strategy,
-    aws_offset=st.floats(
-        min_value=0.0, max_value=MAX_LOOKBACK, allow_nan=False, allow_infinity=False
-    ),
+    aws_offset=st.floats(min_value=0.0, max_value=604800, allow_nan=False, allow_infinity=False),
 )
 def test_conditional_delta_fetch_triggering(duration, now, execution_start, aws_offset):
     """load-window-changed is emitted iff requestedStart < activeWindowStart.
@@ -217,12 +214,13 @@ def test_time_picker_start_before_end_validation(start, end):
         assert is_valid is False
         assert error == "Start must be before end"
     else:
-        # May still fail for range > 6h, but won't fail for start >= end
-        assert error != "Start must be before end"
+        # No max range limit — all valid ranges pass
+        assert is_valid is True
+        assert error == ""
 
 
 # ---------------------------------------------------------------------------
-# Property 6: Time picker max range validation
+# Property 6: Time picker accepts any valid range (no max limit)
 # Feature: timeline-time-navigation, Property 6
 # ---------------------------------------------------------------------------
 
@@ -230,18 +228,18 @@ def test_time_picker_start_before_end_validation(start, end):
 @given(
     start=epoch_strategy,
     offset=st.floats(
-        min_value=MAX_LOOKBACK + 1,
-        max_value=MAX_LOOKBACK * 10,
+        min_value=1.0,
+        max_value=604800 * 4,  # up to 4 weeks
         allow_nan=False,
         allow_infinity=False,
     ),
 )
-def test_time_picker_max_range_validation(start, offset):
-    """When range exceeds 6 hours, validation fails with max range message."""
+def test_time_picker_any_range_accepted(start, offset):
+    """Any range where start < end is valid — no max range limit."""
     end = start + offset
     is_valid, error = validate_time_picker(start, end)
-    assert is_valid is False
-    assert error == "Maximum range is 6 hours"
+    assert is_valid is True
+    assert error == ""
 
 
 # ---------------------------------------------------------------------------
@@ -273,35 +271,33 @@ def test_time_picker_pre_population_round_trip(view_start, view_end):
 
 
 # ---------------------------------------------------------------------------
-# Property 1: Max lookback clamping
-# Feature: timeline-time-navigation, Property 1: Max lookback clamping
-# Validates: Requirements 1.5, 4.7
+# Property 1: setActiveWindowStart upper-bound clamping
+# Feature: timeline-time-navigation, Property 1
+# Validates: Requirements 1.5
 # ---------------------------------------------------------------------------
 
 
 @given(
     requested_start=epoch_strategy,
-    execution_start=epoch_strategy,
+    upper_bound=epoch_strategy,
 )
-def test_max_lookback_clamping(requested_start, execution_start):
-    """For any requested load window start time, the result is clamped to
-    max(executionStartTime - maxLookback, requestedStart).
+def test_upper_bound_clamping(requested_start, upper_bound):
+    """setActiveWindowStart clamps to upper bound (executionStartTime or now).
 
-    Verifies:
-    1. Result is never earlier than execution_start - MAX_LOOKBACK
-    2. If requested_start >= min_allowed, result == requested_start (no clamping)
-    3. If requested_start < min_allowed, result == min_allowed (clamped)
+    With maxLookback=0:
+    1. Result is never later than upper_bound
+    2. If requested_start <= upper_bound, result == requested_start
+    3. If requested_start > upper_bound, result == upper_bound
     """
-    result = clamp_load_window_start(requested_start, execution_start)
-    min_allowed = execution_start - MAX_LOOKBACK
+    result = clamp_load_window_start(requested_start, upper_bound)
 
-    # 1. Result is never earlier than the minimum allowed start
-    assert result >= min_allowed
+    # 1. Result is never later than upper bound
+    assert result <= upper_bound + 1e-6
 
     # 2. No clamping needed: result equals requested_start
-    if requested_start >= min_allowed:
+    if requested_start <= upper_bound:
         assert result == requested_start
 
-    # 3. Clamping applied: result equals the minimum allowed start
-    if requested_start < min_allowed:
-        assert result == min_allowed
+    # 3. Clamping applied: result equals upper bound
+    if requested_start > upper_bound:
+        assert result == upper_bound

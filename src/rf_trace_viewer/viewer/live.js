@@ -362,7 +362,7 @@
   var _loadWindowState = {
     activeWindowStart: 0,       // epoch seconds
     executionStartTime: 0,      // epoch seconds (from first span data)
-    maxLookback: 21600,         // 6 hours in seconds
+    maxLookback: 0,              // 0 = no limit (presets self-clamp; picker is unconstrained)
     stepSize: 900,              // 15 minutes per delta fetch step
     isFetching: false,
     totalCachedSpans: 0,
@@ -654,8 +654,14 @@
         // Use current time as the upper bound so presets can extend
         // the load window backward even in the empty-timeline state.
         var upper = est > 0 ? est : (Date.now() / 1000);
-        var min = upper - _loadWindowState.maxLookback;
-        var clamped = Math.max(min, Math.min(upper, newStart));
+        var clamped;
+        if (_loadWindowState.maxLookback > 0) {
+          var min = upper - _loadWindowState.maxLookback;
+          clamped = Math.max(min, Math.min(upper, newStart));
+        } else {
+          // No artificial limit — allow any start time up to upper bound
+          clamped = Math.min(upper, newStart);
+        }
         _loadWindowState.activeWindowStart = clamped;
         _loadWindowState.totalCachedSpans = allSpans.length;
       };
