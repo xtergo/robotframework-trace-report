@@ -809,6 +809,10 @@
         var emptyModel = _emptyModel();
         emptyModel.start_time = (nowSec - lookbackSec) * 1e9;
         emptyModel.end_time = nowSec * 1e9;
+        // Initialize activeWindowStart to now — "we have no older data yet".
+        // This ensures presets requesting older data (now - duration < now)
+        // will trigger load-window-changed and delta fetch.
+        _loadWindowState.activeWindowStart = nowSec;
         window.initTimeline(timelineSection, emptyModel);
         _timelineInitialized = true;
         console.log('[live] Initialized empty timeline: ' +
