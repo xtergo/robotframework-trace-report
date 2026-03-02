@@ -1409,6 +1409,8 @@
       // Check for Load Start Marker drag (left-click near marker, live mode only)
       if (e.button === 0 && !e.altKey && window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
         var markerX = _timeToScreenX(timelineState.activeWindowStart);
+        // Clamp to left margin (same as rendering) so drag works when marker is pinned
+        if (markerX < timelineState.leftMargin) markerX = timelineState.leftMargin;
         if (Math.abs(x - markerX) < 10) {
           e.preventDefault();
           timelineState.isDraggingMarker = true;
@@ -1513,6 +1515,8 @@
         // Show ew-resize cursor when hovering near the Load Start Marker
         if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
           var markerHoverX = _timeToScreenX(timelineState.activeWindowStart);
+          // Clamp to left margin (same as rendering and mousedown) so hover works when marker is pinned
+          if (markerHoverX < timelineState.leftMargin) markerHoverX = timelineState.leftMargin;
           if (Math.abs(x - markerHoverX) < 10) {
             canvas.style.cursor = 'ew-resize';
             return;
@@ -2343,6 +2347,7 @@
     if (timelineState.activeWindowStart === null) return;
 
     var markerX = _timeToScreenX(timelineState.activeWindowStart);
+    // No overlay needed if active window start is at or before the view start
     if (markerX <= timelineState.leftMargin) return;
     if (markerX > width) markerX = width;
 
@@ -2366,8 +2371,16 @@
     if (timelineState.activeWindowStart === null) return;
 
     var x = _timeToScreenX(timelineState.activeWindowStart);
-    // Skip if marker is off-screen
-    if (x < timelineState.leftMargin - 10 || x > width) return;
+    // Clamp marker to left edge so it's always visible and draggable.
+    // When activeWindowStart is before the view window, pin the marker
+    // at the left margin so the user can still see and drag it.
+    var isClamped = false;
+    if (x < timelineState.leftMargin) {
+      x = timelineState.leftMargin;
+      isClamped = true;
+    }
+    // Skip only if marker is beyond the right edge
+    if (x > width) return;
 
     var markerColor = _css('--focus-outline', '#1976d2');
 
@@ -2404,7 +2417,9 @@
       var d = new Date(timelineState.activeWindowStart * 1000);
       var hh = d.getHours().toString().padStart(2, '0');
       var mm = d.getMinutes().toString().padStart(2, '0');
-      labelText = 'Loading from: ' + hh + ':' + mm + ' (drag to load older)';
+      labelText = isClamped
+        ? 'Data loaded from: ' + hh + ':' + mm + ' \u25c0'
+        : 'Loading from: ' + hh + ':' + mm + ' (drag to load older)';
       ctx.fillStyle = markerColor;
 
       var labelX = x + 8;
