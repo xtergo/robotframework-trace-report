@@ -10,8 +10,8 @@
 - [x] 1.5 Implement `_navDebouncePush(state)` — 500ms debounce for wheel/pan events
 - [x] 1.6 Implement `_syncNavButtons()` — enable/disable undo/redo based on index position
 - [x] 1.7 Add undo (←) and redo (→) buttons to zoom bar with `timeline-zoom-btn` styling, tooltips, aria-labels
-- [-] 1.8 Wire Ctrl+Z for undo and Ctrl+Shift+Z for redo keyboard shortcuts
-- [ ] 1.9 <PBT> Property 8: nav history records all navigation actions — `tests/unit/test_nav_history.py`
+- [x] 1.8 Wire Ctrl+Z for undo and Ctrl+Shift+Z for redo keyboard shortcuts
+- [-] 1.9 <PBT> Property 8: nav history records all navigation actions — `tests/unit/test_nav_history.py`
 - [ ] 1.10 <PBT> Property 9: undo restores previous state — `tests/unit/test_nav_history.py`
 - [ ] 1.11 <PBT> Property 10: redo restores forward state — `tests/unit/test_nav_history.py`
 - [ ] 1.12 <PBT> Property 11: new action after undo discards forward states — `tests/unit/test_nav_history.py`
