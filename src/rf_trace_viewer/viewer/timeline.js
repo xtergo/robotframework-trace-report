@@ -55,6 +55,7 @@
     isDraggingMarker: false,
     _markerDragDebounceTimer: null,
     _markerDragOldStart: null,
+    _markerDragAtLimit: false,
     layoutMode: 'baseline',
     autoCompactAfterFilter: false,
     _compactBtn: null,
@@ -1425,7 +1426,8 @@
         var rect = canvas.getBoundingClientRect();
         var mx = e.clientX - rect.left;
         var newTime = _screenXToTime(mx);
-        // Clamp to [minTime, maxTime]
+        // Clamp to [minTime, maxTime] — minTime is the 6h max lookback boundary
+        timelineState._markerDragAtLimit = (newTime <= timelineState.minTime);
         if (newTime < timelineState.minTime) newTime = timelineState.minTime;
         if (newTime > timelineState.maxTime) newTime = timelineState.maxTime;
         timelineState.activeWindowStart = newTime;
@@ -1514,6 +1516,7 @@
         }
         timelineState.isDraggingMarker = false;
         timelineState._markerDragOldStart = null;
+        timelineState._markerDragAtLimit = false;
         canvas.style.cursor = 'crosshair';
         return;
       }
@@ -1565,6 +1568,7 @@
         }
         timelineState.isDraggingMarker = false;
         timelineState._markerDragOldStart = null;
+        timelineState._markerDragAtLimit = false;
       }
 
       if (timelineState.isSelecting) {
@@ -2387,12 +2391,19 @@
         }
       }
 
-      // Show "Release to load older data" contextual hint during active drag
+      // Show contextual hint during active drag:
+      // Red warning when clamped at 6h max, otherwise "Release to load older data"
       if (timelineState.isDraggingMarker) {
         ctx.font = '11px sans-serif';
-        ctx.fillStyle = _css('--text-primary', '#1a1a1a');
-        var hintText = 'Release to load older data';
         var hintY = handleY + 14;
+        var hintText;
+        if (timelineState._markerDragAtLimit) {
+          hintText = 'Maximum limit reached (6 hours)';
+          ctx.fillStyle = '#e53935';
+        } else {
+          hintText = 'Release to load older data';
+          ctx.fillStyle = _css('--text-primary', '#1a1a1a');
+        }
         var hintWidth = ctx.measureText(hintText).width;
         var hintX = x + 10;
         // If hint would overflow right edge, draw on the left side
