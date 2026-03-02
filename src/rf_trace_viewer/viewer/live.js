@@ -377,106 +377,113 @@
    * Fetches each step sequentially, merges into allSpans via existing ingest functions.
    */
   function _deltaFetch(fromTime, toTime) {
-    if (_loadWindowState.isFetching) return;
-    if (_loadWindowState.totalCachedSpans >= _loadWindowState.maxCachedSpans) return;
+      if (_loadWindowState.isFetching) {
+        console.log('[live] Delta fetch skipped: already fetching');
+        return;
+      }
+      if (_loadWindowState.totalCachedSpans >= _loadWindowState.maxCachedSpans) {
+        console.log('[live] Delta fetch skipped: span cap reached');
+        return;
+      }
 
-    _loadWindowState.isFetching = true;
-    var stepSize = _loadWindowState.stepSize; // 900 seconds = 15 min
+      _loadWindowState.isFetching = true;
+      console.log('[live] Delta fetch starting: from=' + fromTime + ' to=' + toTime +
+        ' (' + Math.round(toTime - fromTime) + 's)');
 
-    // Build array of step intervals [start, end] covering [fromTime, toTime]
-    var steps = [];
-    var cursor = fromTime;
-    while (cursor < toTime) {
-      var stepEnd = Math.min(cursor + stepSize, toTime);
-      steps.push({ from: cursor, to: stepEnd });
-      cursor = stepEnd;
-    }
-
-    if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-      window.RFTraceViewer.emit('delta-fetch-start', { from: fromTime, to: toTime });
-    }
-
-    // Fetch steps sequentially using promises
-    var stepIndex = 0;
-
-    function _finishDeltaFetch() {
-      _loadWindowState.isFetching = false;
-      _loadWindowState.totalCachedSpans = allSpans.length;
       if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-        window.RFTraceViewer.emit('delta-fetch-end', { spanCount: allSpans.length });
-      }
-      _rebuildAndRender();
-    }
-
-    function fetchNextStep() {
-      if (stepIndex >= steps.length) {
-        _finishDeltaFetch();
-        return;
+        window.RFTraceViewer.emit('delta-fetch-start', { from: fromTime, to: toTime });
       }
 
-      // Check span cap before each step
-      if (allSpans.length >= _loadWindowState.maxCachedSpans) {
-        console.warn('[live] Delta fetch stopped: span cap reached (' + allSpans.length + ')');
-        _finishDeltaFetch();
-        return;
+      function _finishDeltaFetch() {
+        _loadWindowState.isFetching = false;
+        _loadWindowState.totalCachedSpans = allSpans.length;
+        console.log('[live] Delta fetch complete: allSpans=' + allSpans.length);
+        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+          window.RFTraceViewer.emit('delta-fetch-end', { spanCount: allSpans.length });
+        }
+        _rebuildAndRender();
       }
-
-      var step = steps[stepIndex];
-      stepIndex++;
 
       // Convert epoch seconds to nanoseconds for the API
-      var fromNs = step.from * 1e9;
-      var toNs = step.to * 1e9;
+      var fromNs = fromTime * 1e9;
 
       if (provider === 'signoz') {
-        var url = '/api/spans?since_ns=' + fromNs + '&until_ns=' + toNs;
+        // Single fetch — server returns all spans since fromNs
+        var url = '/api/spans?since_ns=' + fromNs;
         var svc = _serviceFilter;
         url += '&service=' + encodeURIComponent(svc || '');
 
         fetch(_appendSid(url))
           .then(function (res) {
             if (!res.ok) {
-              console.warn('[live] Delta fetch step failed: HTTP ' + res.status);
+              console.warn('[live] Delta fetch failed: HTTP ' + res.status);
               return null;
             }
             return res.json();
           })
           .then(function (data) {
             if (data && data.spans && data.spans.length > 0) {
+              console.log('[live] Delta fetch got ' + data.spans.length + ' spans');
               _ingestSigNozSpans(data.spans);
+            } else {
+              console.log('[live] Delta fetch got 0 spans');
             }
-            fetchNextStep();
+            _finishDeltaFetch();
           })
           .catch(function (err) {
-            console.warn('[live] Delta fetch step error:', err.message);
-            fetchNextStep(); // continue with next step on error
+            console.warn('[live] Delta fetch error:', err.message);
+            _finishDeltaFetch();
           });
       } else {
-        var jsonUrl = '/traces.json?from_ns=' + fromNs + '&to_ns=' + toNs;
+        // JSON provider: use stepped fetch (supports from_ns/to_ns)
+        var stepSize = _loadWindowState.stepSize;
+        var steps = [];
+        var cursor = fromTime;
+        while (cursor < toTime) {
+          var stepEnd = Math.min(cursor + stepSize, toTime);
+          steps.push({ from: cursor, to: stepEnd });
+          cursor = stepEnd;
+        }
+        var stepIndex = 0;
 
-        fetch(_appendSid(jsonUrl))
-          .then(function (res) {
-            if (!res.ok) {
-              console.warn('[live] Delta fetch step failed: HTTP ' + res.status);
-              return null;
-            }
-            return res.text();
-          })
-          .then(function (text) {
-            if (text && text.length > 0) {
-              _ingestNdjson(text);
-            }
-            fetchNextStep();
-          })
-          .catch(function (err) {
-            console.warn('[live] Delta fetch step error:', err.message);
-            fetchNextStep(); // continue with next step on error
-          });
+        function fetchNextStep() {
+          if (stepIndex >= steps.length) {
+            _finishDeltaFetch();
+            return;
+          }
+          if (allSpans.length >= _loadWindowState.maxCachedSpans) {
+            console.warn('[live] Delta fetch stopped: span cap reached (' + allSpans.length + ')');
+            _finishDeltaFetch();
+            return;
+          }
+          var step = steps[stepIndex];
+          stepIndex++;
+          var stepFromNs = step.from * 1e9;
+          var stepToNs = step.to * 1e9;
+          var jsonUrl = '/traces.json?from_ns=' + stepFromNs + '&to_ns=' + stepToNs;
+
+          fetch(_appendSid(jsonUrl))
+            .then(function (res) {
+              if (!res.ok) {
+                console.warn('[live] Delta fetch step failed: HTTP ' + res.status);
+                return null;
+              }
+              return res.text();
+            })
+            .then(function (text) {
+              if (text && text.length > 0) {
+                _ingestNdjson(text);
+              }
+              fetchNextStep();
+            })
+            .catch(function (err) {
+              console.warn('[live] Delta fetch step error:', err.message);
+              fetchNextStep();
+            });
+        }
+        fetchNextStep();
       }
     }
-
-    fetchNextStep();
-  }
 
   /* ── Connection state model ────────────────────────────────────── */
 
@@ -683,6 +690,8 @@
         var nowSec = Date.now() / 1000;
         var newEnd = data.newEnd || nowSec;
         var oldEnd = data.oldEnd || nowSec;
+        console.log('[live] load-window-changed: newStart=' + newStart +
+          ' oldStart=' + oldStart + ' newEnd=' + newEnd + ' oldEnd=' + oldEnd);
 
         // Detect full reset: new window has zero overlap with old window.
         // When newStart >= oldEnd or newEnd <= oldStart, the ranges don't
@@ -736,6 +745,8 @@
         }
 
         // Only fetch when dragging backward (loading older data)
+        console.log('[live] load-window-changed decision: newStart=' + newStart +
+          ' < oldStart=' + oldStart + '? ' + (newStart < oldStart));
         if (newStart < oldStart) {
           _deltaFetch(newStart, oldStart);
         } else if (prunedCount > 0) {
