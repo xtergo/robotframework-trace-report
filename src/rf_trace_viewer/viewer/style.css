@@ -271,6 +271,16 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: #fff;
 }
 
+.rf-trace-viewer .timeline-zoom-btn.timeline-preset-btn {
+  max-width: 40px;
+  width: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  border-radius: 13px;
+  white-space: nowrap;
+  height: 26px;
+}
+
 .rf-trace-viewer .timeline-zoom-slider {
   width: 100px;
   height: 4px;
