@@ -756,6 +756,20 @@
       window.RFTraceViewer.on('active-window-start', function (data) {
         if (data && data.activeWindowStart !== undefined) {
           timelineState.activeWindowStart = data.activeWindowStart;
+          // When there are zero spans, set up a default view window around
+          // activeWindowStart so the load-start marker is visible and draggable.
+          if (timelineState.flatSpans.length === 0) {
+            var now = Date.now() / 1000;
+            // Allow dragging leftward up to 6h max lookback
+            var maxLookback = 21600; // 6 hours
+            timelineState.minTime = now - maxLookback;
+            timelineState.maxTime = now;
+            // Default view: from activeWindowStart to now (or a 5-min window if too narrow)
+            var range = now - data.activeWindowStart;
+            if (range < 300) range = 300; // minimum 5 minutes
+            timelineState.viewStart = data.activeWindowStart;
+            timelineState.viewEnd = data.activeWindowStart + range;
+          }
           _render();
         }
       });
