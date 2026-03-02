@@ -1366,6 +1366,7 @@
         }
         timelineState.viewStart = newStart;
         timelineState.viewEnd = newEnd;
+        _navDebouncePush({ viewStart: timelineState.viewStart, viewEnd: timelineState.viewEnd, zoom: timelineState.zoom, serviceFilter: '' });
         _applyZoom();
         return;
       }
@@ -1399,6 +1400,7 @@
       var actualRange = timelineState.viewEnd - timelineState.viewStart;
       timelineState.zoom = (totalRange > 0 && actualRange > 0) ? totalRange / actualRange : 1;
       if (timelineState._syncSlider) timelineState._syncSlider();
+      _navDebouncePush({ viewStart: timelineState.viewStart, viewEnd: timelineState.viewEnd, zoom: timelineState.zoom, serviceFilter: '' });
       _applyZoom();
     }, { passive: false });
 
