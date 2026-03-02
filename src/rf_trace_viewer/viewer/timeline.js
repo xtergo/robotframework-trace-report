@@ -2398,6 +2398,20 @@
       ctx.setLineDash([]);
     }
 
+    // --- Ghosted preview rectangle during marker drag ---
+    // Shows the extended time range between drag position and original activeWindowStart
+    if (timelineState.isDraggingMarker && timelineState._markerDragOldStart !== null) {
+      var dragX = _timeToScreenX(timelineState.activeWindowStart);
+      var oldX = _timeToScreenX(timelineState._markerDragOldStart);
+      var previewLeft = Math.max(Math.min(dragX, oldX), timelineState.leftMargin);
+      var previewRight = Math.min(Math.max(dragX, oldX), width);
+      var previewWidth = previewRight - previewLeft;
+      if (previewWidth > 0) {
+        ctx.fillStyle = 'rgba(25, 118, 210, 0.15)';
+        ctx.fillRect(previewLeft, 0, previewWidth, height);
+      }
+    }
+
     ctx.restore();
   }
 
