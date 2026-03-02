@@ -116,6 +116,24 @@
     if (timelineState._syncHScroll) timelineState._syncHScroll();
   }
 
+  /**
+   * Redo: restore the next forward navigation state from the history stack.
+   * Increments index, restores viewStart/viewEnd/zoom, and re-renders.
+   */
+  function _navRedo() {
+    if (_navHistory.index >= _navHistory.stack.length - 1) return; // nothing to redo
+    _navHistory.index++;
+    var s = _navHistory.stack[_navHistory.index];
+    timelineState.viewStart = s.viewStart;
+    timelineState.viewEnd = s.viewEnd;
+    timelineState.zoom = s.zoom;
+    _syncNavButtons();
+    _render();
+    _renderHeader();
+    if (timelineState._syncSlider) timelineState._syncSlider();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
+  }
+
   /** Get the element where CSS custom properties are defined. */
   function _getThemeRoot() {
     return document.querySelector('.rf-trace-viewer') || document.documentElement;
