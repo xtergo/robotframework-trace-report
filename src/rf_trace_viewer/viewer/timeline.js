@@ -441,6 +441,7 @@
       btn.textContent = preset.label;
       btn.setAttribute('data-preset', preset.seconds);
       btn.setAttribute('aria-label', 'Show last ' + preset.label);
+      btn.addEventListener('click', function () { _applyPreset(preset.seconds); });
       presetGroup.appendChild(btn);
       timelineState._presetBtns.push(btn);
     });
@@ -1201,6 +1202,7 @@
     // Mouse wheel: Shift+wheel = horizontal pan, plain wheel = zoom
     canvas.addEventListener('wheel', function (e) {
       e.preventDefault();
+      _clearActivePreset();
       var rect = canvas.getBoundingClientRect();
       var mouseX = e.clientX - rect.left;
 
@@ -1271,6 +1273,7 @@
           timelineState.isDraggingMarker = true;
           timelineState._markerDragOldStart = timelineState.activeWindowStart;
           canvas.style.cursor = 'ew-resize';
+          _clearActivePreset();
           return;
         }
       }
@@ -1283,6 +1286,7 @@
         timelineState._dragViewStart = timelineState.viewStart;
         timelineState._dragViewEnd = timelineState.viewEnd;
         canvas.style.cursor = 'grabbing';
+        _clearActivePreset();
         return;
       }
 
@@ -1421,6 +1425,7 @@
         // Only act if the selection is meaningful (more than 5% of current view)
         var viewRange = timelineState.viewEnd - timelineState.viewStart;
         if (selectedRange > viewRange * 0.05) {
+          _clearActivePreset();
           // Set viewport to the selected range (zoom only, no filter)
           timelineState.viewStart = startTime;
           timelineState.viewEnd = endTime;
@@ -1475,6 +1480,7 @@
     canvas.addEventListener('touchmove', function (e) {
       if (e.touches.length === 2) {
         e.preventDefault();
+        _clearActivePreset();
         var distance = _getTouchDistance(e.touches);
         var delta = distance / lastTouchDistance;
         // Scale current view range by inverse of pinch delta
@@ -2795,6 +2801,90 @@
     _render();
     _renderHeader();
   };
+
+  /**
+   * Clear the active preset highlight from all preset buttons.
+   */
+  function _clearActivePreset() {
+    timelineState._activePreset = null;
+    for (var i = 0; i < timelineState._presetBtns.length; i++) {
+      timelineState._presetBtns[i].classList.remove('active');
+    }
+  }
+
+  /**
+   * Apply a time preset: set view window to [now - duration, now],
+   * clamp load window to maxLookback, emit load-window-changed if extending,
+   * push nav history, and highlight the active preset button.
+   * @param {number} durationSeconds - Preset duration in seconds
+   */
+  function _applyPreset(durationSeconds) {
+    var now = Date.now() / 1000;
+    var viewEnd = now;
+    var viewStart = now - durationSeconds;
+
+    // Clamp load window start to maxLookback (6h)
+    var maxLookback = 21600; // 6 hours
+    var aws = window.RFTraceViewer && window.RFTraceViewer.getActiveWindowStart
+      ? window.RFTraceViewer.getActiveWindowStart()
+      : timelineState.minTime;
+    var est = timelineState.minTime; // execution start time approximation
+    var minAllowed = est - maxLookback;
+    var clampedStart = Math.max(minAllowed, viewStart);
+    var wasClamped = clampedStart > viewStart;
+
+    // Emit load-window-changed if extending beyond current load window
+    if (clampedStart < aws) {
+      var oldStart = aws;
+      if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+        window.RFTraceViewer.emit('load-window-changed', {
+          newStart: clampedStart,
+          oldStart: oldStart
+        });
+      }
+    }
+
+    // Update view window
+    timelineState.viewStart = clampedStart;
+    timelineState.viewEnd = viewEnd;
+
+    // Recompute zoom from actual view range
+    var totalRange = timelineState.maxTime - timelineState.minTime;
+    var viewRange = viewEnd - clampedStart;
+    if (viewRange > 0 && totalRange > 0) {
+      timelineState.zoom = totalRange / viewRange;
+    }
+
+    // Push nav history
+    _navPush({
+      viewStart: timelineState.viewStart,
+      viewEnd: timelineState.viewEnd,
+      zoom: timelineState.zoom,
+      serviceFilter: ''
+    });
+
+    // Highlight active preset
+    timelineState._activePreset = durationSeconds;
+    for (var i = 0; i < timelineState._presetBtns.length; i++) {
+      var btn = timelineState._presetBtns[i];
+      if (parseInt(btn.getAttribute('data-preset'), 10) === durationSeconds) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+
+    // Toast notification if range was clamped
+    if (wasClamped) {
+      _showToast('Range clamped to 6-hour maximum');
+    }
+
+    // Re-render
+    if (timelineState._syncSlider) timelineState._syncSlider();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
+    _render();
+    _renderHeader();
+  }
 
   /**
    * Show a temporary toast message overlaying the timeline.
