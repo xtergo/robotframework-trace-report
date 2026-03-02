@@ -49,6 +49,38 @@ def clear_active_preset(active_preset):
     return None
 
 
+def validate_time_picker(start_epoch, end_epoch):
+    """Reference implementation of _validateTimePicker from timeline.js.
+
+    Returns (is_valid, error_message).
+    """
+    if start_epoch >= end_epoch:
+        return False, "Start must be before end"
+    if (end_epoch - start_epoch) > MAX_LOOKBACK:
+        return False, "Maximum range is 6 hours"
+    return True, ""
+
+
+def epoch_to_datetime_local(epoch_sec):
+    """Reference implementation of _epochToDatetimeLocal from timeline.js.
+
+    Converts epoch seconds to a datetime-local string (YYYY-MM-DDTHH:MM:SS).
+    Returns the string.
+    """
+    import datetime
+
+    dt = datetime.datetime.fromtimestamp(epoch_sec)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def datetime_local_to_epoch(dt_str):
+    """Parse a datetime-local string back to epoch seconds."""
+    import datetime
+
+    dt = datetime.datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
+    return dt.timestamp()
+
+
 # ---------------------------------------------------------------------------
 # Hypothesis strategies
 # ---------------------------------------------------------------------------
@@ -156,3 +188,75 @@ def test_preset_deselection_on_manual_interaction(active_preset):
     """Any manual interaction clears the active preset to None."""
     result = clear_active_preset(active_preset)
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Property 5: Time picker start-before-end validation
+# Feature: timeline-time-navigation, Property 5
+# ---------------------------------------------------------------------------
+
+
+@given(
+    start=epoch_strategy,
+    end=epoch_strategy,
+)
+def test_time_picker_start_before_end_validation(start, end):
+    """When start >= end, validation fails with 'Start must be before end'."""
+    is_valid, error = validate_time_picker(start, end)
+    if start >= end:
+        assert is_valid is False
+        assert error == "Start must be before end"
+    else:
+        # May still fail for range > 6h, but won't fail for start >= end
+        assert error != "Start must be before end"
+
+
+# ---------------------------------------------------------------------------
+# Property 6: Time picker max range validation
+# Feature: timeline-time-navigation, Property 6
+# ---------------------------------------------------------------------------
+
+
+@given(
+    start=epoch_strategy,
+    offset=st.floats(
+        min_value=MAX_LOOKBACK + 1,
+        max_value=MAX_LOOKBACK * 10,
+        allow_nan=False,
+        allow_infinity=False,
+    ),
+)
+def test_time_picker_max_range_validation(start, offset):
+    """When range exceeds 6 hours, validation fails with max range message."""
+    end = start + offset
+    is_valid, error = validate_time_picker(start, end)
+    assert is_valid is False
+    assert error == "Maximum range is 6 hours"
+
+
+# ---------------------------------------------------------------------------
+# Property 7: Time picker pre-population round trip
+# Feature: timeline-time-navigation, Property 7
+# ---------------------------------------------------------------------------
+
+
+@given(
+    view_start=st.floats(
+        min_value=1.577e9, max_value=1.767e9, allow_nan=False, allow_infinity=False
+    ),
+    view_end=st.floats(min_value=1.577e9, max_value=1.767e9, allow_nan=False, allow_infinity=False),
+)
+def test_time_picker_pre_population_round_trip(view_start, view_end):
+    """Opening the time picker pre-populates with current view window.
+
+    Converting viewStart/viewEnd to datetime-local and back yields the same
+    epoch-second boundaries within 1-second tolerance (datetime-local rounds
+    to whole seconds).
+    """
+    start_str = epoch_to_datetime_local(view_start)
+    end_str = epoch_to_datetime_local(view_end)
+    recovered_start = datetime_local_to_epoch(start_str)
+    recovered_end = datetime_local_to_epoch(end_str)
+    # Within 1-second tolerance for datetime-local rounding
+    assert abs(recovered_start - view_start) <= 1.0
+    assert abs(recovered_end - view_end) <= 1.0
