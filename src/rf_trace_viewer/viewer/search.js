@@ -934,7 +934,8 @@
     _updateTimeRangeDisplay();
     _updateFilterSummaryBar();
 
-    // Emit filter-changed event
+    // Req 9.6: emit filter-changed with updated resultCounts and filteredSpans
+    // after any recalculation (including time-range-triggered ones).
     if (window.RFTraceViewer && window.RFTraceViewer.emit) {
       window.RFTraceViewer.emit('filter-changed', {
         filterState: filterState,
