@@ -51,7 +51,7 @@
     showTimeMarkers: false,
     showSecondsGrid: true,
     activeWindowStart: null,
-    isFetchingOlderSpans: false,
+    isFetchingOlderSpans: false, // Render-only flag: does NOT block pan/zoom/selection (Req 2.2)
     isDraggingMarker: false,
     _markerDragDebounceTimer: null,
     _markerDragOldStart: null,
