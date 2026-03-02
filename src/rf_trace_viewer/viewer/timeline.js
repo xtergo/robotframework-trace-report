@@ -62,7 +62,8 @@
     _activePreset: null,
     _presetBtns: [],
     _timePickerEl: null,
-    _timePickerOpen: false
+    _timePickerOpen: false,
+    _fetchingDuration: null
   };
 
   // Navigation history state (undo/redo stack)
@@ -778,12 +779,28 @@
 
     // Listen for delta fetch status to show/hide "Fetching older spans…" indicator
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
-      window.RFTraceViewer.on('delta-fetch-start', function () {
+      window.RFTraceViewer.on('delta-fetch-start', function (payload) {
         timelineState.isFetchingOlderSpans = true;
+        // Compute approximate duration string from payload { from, to } (epoch seconds)
+        if (payload && typeof payload.from === 'number' && typeof payload.to === 'number') {
+          var deltaSec = Math.abs(payload.to - payload.from);
+          if (deltaSec < 60) {
+            timelineState._fetchingDuration = Math.max(1, Math.round(deltaSec)) + 's';
+          } else if (deltaSec < 3600) {
+            timelineState._fetchingDuration = Math.round(deltaSec / 60) + 'm';
+          } else if (deltaSec < 86400) {
+            timelineState._fetchingDuration = Math.round(deltaSec / 3600) + 'h';
+          } else {
+            timelineState._fetchingDuration = Math.round(deltaSec / 86400) + 'd';
+          }
+        } else {
+          timelineState._fetchingDuration = null;
+        }
         _render();
       });
       window.RFTraceViewer.on('delta-fetch-end', function () {
         timelineState.isFetchingOlderSpans = false;
+        timelineState._fetchingDuration = null;
         _render();
       });
     }
@@ -2378,11 +2395,13 @@
       }
       ctx.fillText(labelText, labelX, labelY);
 
-      // Show "Fetching older spans…" indicator below the label when delta fetch is in progress
+      // Show inline loading indicator below the label when delta fetch is in progress
       if (timelineState.isFetchingOlderSpans) {
         ctx.font = '9px sans-serif';
         ctx.fillStyle = '#e65100'; // amber/orange
-        var fetchText = 'Fetching older spans\u2026';
+        var fetchText = timelineState._fetchingDuration
+          ? 'Loading ' + timelineState._fetchingDuration + ' more\u2026'
+          : 'Fetching older spans\u2026';
         var fetchY = labelY + 12;
         if (ctx.textAlign === 'right') {
           ctx.fillText(fetchText, labelX, fetchY);
