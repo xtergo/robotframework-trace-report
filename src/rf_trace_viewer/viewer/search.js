@@ -65,7 +65,8 @@
   window.initSearch = function (container, data) {
     if (!container || !data) return;
 
-    // Extract all spans from data
+    // Rebuild allSpans from the current model so filter counters reflect
+    // the loaded time window after any range change (Req 9.1, 9.2).
     allSpans = _extractAllSpans(data);
     spanParents = {};  // Reset parent map (rebuilt by _extractAllSpans)
     window._spanLookup = null;  // Reset span lookup cache
