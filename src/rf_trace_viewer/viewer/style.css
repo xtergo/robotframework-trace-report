@@ -298,6 +298,12 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   height: 26px;
 }
 
+.rf-trace-viewer .timeline-zoom-btn.timeline-preset-btn.active {
+  background: var(--focus-outline);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
 /* Time picker popover (absolute time range selection) —
    Hidden by default via inline style.display='none' set in JS;
    clearing that inline style reveals the flex layout below. */
