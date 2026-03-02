@@ -929,6 +929,7 @@
       }));
       console.trace('[search] _applyFilters caller stack');
     }
+    // Req 9.4: update displayed counts within the same render cycle as the span set update.
     _updateResultCountDisplay();
     _updateTimeRangeDisplay();
     _updateFilterSummaryBar();
