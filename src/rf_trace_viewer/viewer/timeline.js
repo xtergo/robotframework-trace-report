@@ -2309,6 +2309,11 @@
     ctx.strokeRect(left, 0, right - left, height);
   }
 
+  // Overlay boundary updates within the same render frame because this function
+  // reads timelineState.activeWindowStart directly (no cached/stale copy).
+  // All code paths that change activeWindowStart — the 'active-window-start'
+  // event handler, marker drag, and _applyPreset — call _render() synchronously
+  // after the state update, so the overlay always reflects the current value.
   function _renderGreyOverlay(ctx, width, height) {
     if (!window.__RF_TRACE_LIVE__) return;
     if (timelineState.activeWindowStart === null) return;
