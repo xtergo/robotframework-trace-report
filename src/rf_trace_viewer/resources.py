@@ -214,10 +214,18 @@ _history_lock = threading.Lock()
 _history_buffer: collections.deque = collections.deque(maxlen=_HISTORY_MAX)
 
 
-def record_snapshot() -> dict:
-    """Take a resource snapshot, store it in the ring buffer, and return it."""
+def record_snapshot(extra: dict | None = None) -> dict:
+    """Take a resource snapshot, store it in the ring buffer, and return it.
+
+    Args:
+        extra: Optional dict of additional fields to include in the snapshot
+               (e.g. active_users, total_spans). These are stored in the ring
+               buffer so history queries return them consistently.
+    """
     snap = get_resource_snapshot()
     snap["ts"] = time.time()
+    if extra:
+        snap.update(extra)
     with _history_lock:
         _history_buffer.append(snap)
     return snap

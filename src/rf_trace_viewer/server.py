@@ -49,6 +49,10 @@ _SESSION_TTL = 30  # seconds — session is "active" if seen within this window
 _active_sessions: dict[str, float] = {}  # sid → last_seen_timestamp
 _session_lock = threading.Lock()
 
+# ── Total ingested span counter (server-authoritative) ───────────
+_total_ingested_spans = 0
+_total_spans_lock = threading.Lock()
+
 
 def _touch_session(sid: str | None) -> None:
     """Record a session heartbeat."""
@@ -68,6 +72,19 @@ def _get_active_session_count() -> int:
         for k in stale:
             del _active_sessions[k]
         return len(_active_sessions)
+
+
+def _increment_ingested_spans(count: int) -> None:
+    """Add to the total ingested span counter."""
+    global _total_ingested_spans
+    with _total_spans_lock:
+        _total_ingested_spans += count
+
+
+def _get_total_ingested_spans() -> int:
+    """Return the total number of spans served to clients."""
+    with _total_spans_lock:
+        return _total_ingested_spans
 
 
 class _LiveRequestHandler(BaseHTTPRequestHandler):
@@ -225,16 +242,29 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/resources":
-            snapshot = record_snapshot()
-            snapshot["active_users"] = _get_active_session_count()
+            snapshot = record_snapshot(
+                extra={
+                    "active_users": _get_active_session_count(),
+                    "total_spans": _get_total_ingested_spans(),
+                }
+            )
             self._send_json_response(200, snapshot, request_id)
             return
 
         if path == "/api/v1/resources/history":
             history = get_history()
+            # Backfill active_users/total_spans for old snapshots that
+            # were recorded before these fields were added to record_snapshot.
+            au = _get_active_session_count()
+            ts_count = _get_total_ingested_spans()
+            for snap in history:
+                if "active_users" not in snap:
+                    snap["active_users"] = au
+                if "total_spans" not in snap:
+                    snap["total_spans"] = ts_count
             self._send_json_response(
                 200,
-                {"snapshots": history, "active_users": _get_active_session_count()},
+                {"snapshots": history, "active_users": au},
                 request_id,
             )
             return
@@ -500,6 +530,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 "orphan_count": orphan_count,
                 "total_count": len(view_model.spans),
             }
+            _increment_ingested_spans(len(view_model.spans))
             record_items_returned("/api/v1/spans", "query_spans", len(view_model.spans))
             body = json.dumps(result).encode("utf-8")
             self.send_response(200)

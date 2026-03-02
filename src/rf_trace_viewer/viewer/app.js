@@ -581,6 +581,12 @@
         { label: 'Data Source', key: 'dataSource', el: null },
         { label: 'Backend', key: 'backendType', el: null },
         { label: 'Total Spans', key: 'totalSpans', el: null, format: function (v) { return v != null ? v.toLocaleString() : '0'; } },
+        { label: 'Earliest Span', key: 'earliestSpanNs', el: null, format: function (v) {
+          if (!v) return 'N/A';
+          var d = new Date(v / 1e6);
+          return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' +
+            String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+        }},
         { label: 'Latest Span', key: 'lastSeenNs', el: null, format: function (v) {
           if (!v) return 'N/A';
           var d = new Date(v / 1e6);
@@ -883,7 +889,7 @@
         { key: 'rss_mb', label: 'Memory RSS', unit: 'MB', refLines: ['mem_request_mb', 'rss_limit_mb'] },
         { key: 'cpu_pct', label: 'CPU Usage', unit: '%', refLines: ['cpu_limit_pct'] },
         { key: 'spansPerSec', label: 'Spans / sec', unit: '', refLines: [] },
-        { key: 'totalSpans', label: 'Total Spans', unit: '', refLines: [] },
+        { key: 'total_spans', label: 'Total Spans', unit: '', refLines: [] },
         { key: 'active_users', label: 'Active Users', unit: '', refLines: [] }
       ];
 
@@ -1011,31 +1017,27 @@
             if (!resp || !resp.snapshots) return;
             var snaps = resp.snapshots;
 
-            // Also grab live connection state for spansPerSec / totalSpans
-            var connState = window.RFTraceViewer && window.RFTraceViewer.getConnectionState
-              ? window.RFTraceViewer.getConnectionState() : null;
-
             // Extract series for each chart
             for (var key in _healthCharts) {
               if (!_healthCharts.hasOwnProperty(key)) continue;
               var chart = _healthCharts[key];
               var series = [];
 
-              if (key === 'spansPerSec' || key === 'totalSpans') {
-                // These come from connection state, not resource snapshots
-                // Push current value onto rolling buffer
+              if (key === 'spansPerSec') {
+                // spansPerSec comes from live connection state (client-side
+                // ingestion rate), not from server snapshots.
+                var connState = window.RFTraceViewer && window.RFTraceViewer.getConnectionState
+                  ? window.RFTraceViewer.getConnectionState() : null;
                 var val = connState ? connState[key] : null;
                 chart.data.push(val != null ? val : 0);
                 if (chart.data.length > 360) chart.data.shift();
                 series = chart.data;
-              } else if (key === 'active_users') {
-                // Comes from the top-level response, not per-snapshot
-                var auVal = resp.active_users != null ? resp.active_users : 0;
-                chart.data.push(auVal);
-                if (chart.data.length > 360) chart.data.shift();
-                series = chart.data;
               } else {
-                // From resource snapshots
+                // All other metrics (rss_mb, cpu_pct, active_users,
+                // total_spans) come from server resource snapshots.
+                // This keeps them independent of timeline time-range
+                // navigation — pressing 7d or any preset has zero
+                // effect on these charts.
                 series = [];
                 for (var si = 0; si < snaps.length; si++) {
                   var v = snaps[si][key];
@@ -1049,7 +1051,7 @@
               if (latest != null) {
                 var formatted = chart.def.unit
                   ? (Math.round(latest * 10) / 10) + ' ' + chart.def.unit
-                  : (key === 'totalSpans' ? Math.round(latest).toLocaleString()
+                  : (key === 'total_spans' ? Math.round(latest).toLocaleString()
                     : key === 'active_users' ? Math.round(latest).toString()
                     : (Math.round(latest * 10) / 10).toString());
                 chart.valueEl.textContent = formatted;

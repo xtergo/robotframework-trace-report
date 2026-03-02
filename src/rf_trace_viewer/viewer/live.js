@@ -506,6 +506,7 @@
     cpuLimitMc: null,
     // Data watermark
     lastSeenNs: 0,
+    earliestSpanNs: 0,
     totalSpans: 0,
     // Combined req/limit display strings
     memSummary: null,
@@ -646,6 +647,7 @@
           cpuPct: _connectionState.cpuPct,
           cpuLimitMc: _connectionState.cpuLimitMc,
           lastSeenNs: _connectionState.lastSeenNs,
+          earliestSpanNs: _connectionState.earliestSpanNs,
           totalSpans: _connectionState.totalSpans,
           memSummary: _connectionState.memSummary,
           cpuSummary: _connectionState.cpuSummary
@@ -706,6 +708,7 @@
           seenSpanIds = {};
           _lastFilterSpanCount = 0;
           _loadWindowState.totalCachedSpans = 0;
+          _connectionState.earliestSpanNs = 0;
         }
 
         // Update activeWindowStart via the public API (handles clamping)
@@ -738,6 +741,7 @@
             _loadWindowState.totalCachedSpans = allSpans.length;
             _lastFilterSpanCount = 0; // force initSearch re-init
             prunedCount = pruned.length;
+            _connectionState.earliestSpanNs = _computeEarliestSpanNs();
             console.log('[live] Pruned ' + prunedCount +
               ' out-of-range spans (before winStart=' + winStart +
               '): ' + beforeLen + ' → ' + allSpans.length);
@@ -1068,6 +1072,15 @@
   }
 
   /** Parse incremental NDJSON text, handling partial trailing lines. */
+  function _computeEarliestSpanNs() {
+    if (allSpans.length === 0) return 0;
+    var earliest = allSpans[0].start_time;
+    for (var i = 1; i < allSpans.length; i++) {
+      if (allSpans[i].start_time < earliest) earliest = allSpans[i].start_time;
+    }
+    return earliest;
+  }
+
   function _ingestNdjson(text) {
     if (_spanCapReached) return;
 
@@ -1173,6 +1186,8 @@
     }
     _connectionState.lastSeenNs = lastSeenNs;
     _connectionState.totalSpans = allSpans.length;
+    // Recompute earliest span from allSpans (covers ingestion + pruning)
+    _connectionState.earliestSpanNs = _computeEarliestSpanNs();
     return newCount;
   }
 

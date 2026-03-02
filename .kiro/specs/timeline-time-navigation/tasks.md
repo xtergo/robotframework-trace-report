@@ -81,7 +81,7 @@
 
 - [x] 7.1 Add CSS for `.timeline-preset-btn` (max-width 40px, compact styling matching `timeline-zoom-btn`)
 - [x] 7.2 Add CSS for `.timeline-time-picker` popover (absolute positioning, theme custom properties, dark/light mode)
-- [-] 7.3 Add CSS for `.time-picker-input`, `.time-picker-error`, `.time-picker-apply` within popover
-- [~] 7.4 Add CSS for undo/redo button disabled state (greyed out)
-- [~] 7.5 Add CSS for active preset highlight state
-- [~] 7.6 Ensure all new CSS classes use `var(--*)` custom properties via `_css()` for theme compliance
+- [x] 7.3 Add CSS for `.time-picker-input`, `.time-picker-error`, `.time-picker-apply` within popover
+- [x] 7.4 Add CSS for undo/redo button disabled state (greyed out)
+- [x] 7.5 Add CSS for active preset highlight state
+- [x] 7.6 Ensure all new CSS classes use `var(--*)` custom properties via `_css()` for theme compliance

@@ -600,7 +600,7 @@
 
       var summary = document.createElement('summary');
       summary.className = 'sh-diagnostics-summary';
-      summary.textContent = 'Pipeline Diagnostics';
+      summary.textContent = 'Service Diagnostics';
       _diagPanelEl.appendChild(summary);
 
       var content = document.createElement('div');

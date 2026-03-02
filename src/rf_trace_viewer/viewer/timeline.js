@@ -3160,8 +3160,10 @@
 
     // Req 8.1: Emit load-window-changed if extending beyond current load window.
     // live.js listener calls setActiveWindowStart (clamping) and _deltaFetch (Req 8.2).
-    if (clampedStart < aws) {
-      var oldStart = aws;
+    // Also emit when narrowing the window (newStart > aws) so live.js can prune
+    // out-of-range spans and update earliestSpanNs.
+    var oldStart = aws;
+    if (clampedStart !== aws) {
       if (window.RFTraceViewer && window.RFTraceViewer.emit) {
         window.RFTraceViewer.emit('load-window-changed', {
           newStart: clampedStart,
