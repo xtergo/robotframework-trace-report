@@ -298,6 +298,37 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   gap: 8px;
 }
 
+.rf-trace-viewer .timeline-time-picker label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rf-trace-viewer .time-picker-input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.rf-trace-viewer .time-picker-error {
+  color: var(--status-fail, #c62828);
+  font-size: 11px;
+  min-height: 16px;
+  line-height: 16px;
+}
+
+.rf-trace-viewer .time-picker-apply {
+  width: 100%;
+  margin-top: 4px;
+}
+
 .rf-trace-viewer .timeline-zoom-slider {
   width: 100px;
   height: 4px;

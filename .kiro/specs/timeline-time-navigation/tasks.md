@@ -74,14 +74,14 @@
 - [x] 6.6 Ensure `filter-changed` event includes updated `resultCounts` and `filteredSpans` after time-range-triggered recalculation
 - [x] 6.7 <PBT> Property 14: full reset recalculates filter counts from new span set only — `tests/unit/test_filter_refresh.py`
 - [x] 6.8 <PBT> Property 15: incremental delta load recalculates filter counts from updated span set — `tests/unit/test_filter_refresh.py`
-- [~] 6.9 <PBT> Property 16: discarded spans excluded from allSpans after non-overlapping range change — `tests/unit/test_filter_refresh.py`
+- [x] 6.9 <PBT> Property 16: discarded spans excluded from allSpans after non-overlapping range change — `tests/unit/test_filter_refresh.py`
 
 ## Task 7: CSS and Theme Integration
 > **Requirements:** 7.1–7.6 | **Design:** Design Decisions
 
-- [~] 7.1 Add CSS for `.timeline-preset-btn` (max-width 40px, compact styling matching `timeline-zoom-btn`)
-- [~] 7.2 Add CSS for `.timeline-time-picker` popover (absolute positioning, theme custom properties, dark/light mode)
-- [~] 7.3 Add CSS for `.time-picker-input`, `.time-picker-error`, `.time-picker-apply` within popover
+- [x] 7.1 Add CSS for `.timeline-preset-btn` (max-width 40px, compact styling matching `timeline-zoom-btn`)
+- [x] 7.2 Add CSS for `.timeline-time-picker` popover (absolute positioning, theme custom properties, dark/light mode)
+- [-] 7.3 Add CSS for `.time-picker-input`, `.time-picker-error`, `.time-picker-apply` within popover
 - [~] 7.4 Add CSS for undo/redo button disabled state (greyed out)
 - [~] 7.5 Add CSS for active preset highlight state
 - [~] 7.6 Ensure all new CSS classes use `var(--*)` custom properties via `_css()` for theme compliance
