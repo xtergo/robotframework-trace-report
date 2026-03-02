@@ -347,7 +347,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             f"{max_spans_js}"
             f"{svc_name_js}"
             'window.__RF_LOGO_URL__ = "/logo.svg";\n'
-            f'window.__RF_VERSION__ = "{_escape_html(__version__)} (sha {_escape_html(__git_sha__[:7])})";\n'
+            f'window.__RF_VERSION__ = "{_escape_html(__version__)} ({_escape_html(__git_sha__)})";\n'
             "</script>\n"
             "<script>\n"
             f"{js_content}\n"

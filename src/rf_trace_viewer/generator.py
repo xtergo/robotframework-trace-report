@@ -294,7 +294,7 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
         "<script>\n"
         f"{data_script}"
         f"{logo_script}"
-        f'window.__RF_VERSION__ = "{_escape_html(__version__)} (sha {_escape_html(__git_sha__[:7])})";\n'
+        f'window.__RF_VERSION__ = "{_escape_html(__version__)} ({_escape_html(__git_sha__)})";\n'
         "</script>\n"
         "<script>\n"
         f"{js_content}\n"
