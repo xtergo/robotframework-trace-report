@@ -824,12 +824,21 @@
         var emptyModel = _emptyModel();
         emptyModel.start_time = (nowSec - lookbackSec) * 1e9;
         emptyModel.end_time = nowSec * 1e9;
-        // Initialize activeWindowStart to now — "we have no older data yet".
-        // This ensures presets requesting older data (now - duration < now)
-        // will trigger load-window-changed and delta fetch.
-        _loadWindowState.activeWindowStart = nowSec;
+        // Initialize activeWindowStart to the left edge of the lookback window.
+        // This makes the blue load-start marker visible from the start.
+        _loadWindowState.activeWindowStart = nowSec - lookbackSec;
         window.initTimeline(timelineSection, emptyModel);
         _timelineInitialized = true;
+        // Emit active-window-start so the timeline shows the blue marker immediately
+        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+          window.RFTraceViewer.emit('active-window-start', {
+            activeWindowStart: _loadWindowState.activeWindowStart
+          });
+        }
+        // Highlight the preset button matching the default lookback
+        if (typeof window.setActivePreset === 'function') {
+          window.setActivePreset(lookbackSec);
+        }
         console.log('[live] Initialized empty timeline: ' +
           new Date((nowSec - lookbackSec) * 1000).toISOString().substr(11, 8) +
           ' → ' + new Date(nowSec * 1000).toISOString().substr(11, 8));

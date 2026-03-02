@@ -56,6 +56,8 @@
     _markerDragDebounceTimer: null,
     _markerDragOldStart: null,
     _markerDragAtLimit: false,
+    _markerSettleTimer: null,
+    _markerPendingFetch: false,
     layoutMode: 'baseline',
     autoCompactAfterFilter: false,
     _compactBtn: null,
@@ -824,6 +826,22 @@
   };
 
   /**
+   * Highlight a preset button without applying the preset logic.
+   * Called by live.js to mark the default lookback on initial load.
+   */
+  window.setActivePreset = function (durationSeconds) {
+    timelineState._activePreset = durationSeconds;
+    for (var i = 0; i < timelineState._presetBtns.length; i++) {
+      var btn = timelineState._presetBtns[i];
+      if (parseInt(btn.getAttribute('data-preset'), 10) === durationSeconds) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+  };
+
+  /**
    * Calculate the required canvas height to fit all spans.
    */
   function _calculateRequiredHeight() {
@@ -1413,6 +1431,12 @@
         if (markerX < timelineState.leftMargin) markerX = timelineState.leftMargin;
         if (Math.abs(x - markerX) < 10) {
           e.preventDefault();
+          // Cancel any pending settle fetch from a previous drag
+          if (timelineState._markerSettleTimer) {
+            clearTimeout(timelineState._markerSettleTimer);
+            timelineState._markerSettleTimer = null;
+            timelineState._markerPendingFetch = false;
+          }
           timelineState.isDraggingMarker = true;
           timelineState._markerDragOldStart = timelineState.activeWindowStart;
           canvas.style.cursor = 'ew-resize';
@@ -1462,18 +1486,8 @@
         if (newTime < timelineState.minTime) newTime = timelineState.minTime;
         if (newTime > timelineState.maxTime) newTime = timelineState.maxTime;
         timelineState.activeWindowStart = newTime;
-        // Debounce: emit load-window-changed every 300ms
-        if (!timelineState._markerDragDebounceTimer) {
-          timelineState._markerDragDebounceTimer = setTimeout(function () {
-            timelineState._markerDragDebounceTimer = null;
-            if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-              window.RFTraceViewer.emit('load-window-changed', {
-                newStart: timelineState.activeWindowStart,
-                oldStart: timelineState._markerDragOldStart
-              });
-            }
-          }, 300);
-        }
+        // Don't fetch during drag — just update visuals.
+        // The actual load-window-changed is emitted on mouseup after a 1s settle delay.
         _render();
         return;
       }
@@ -1535,22 +1549,32 @@
     canvas.addEventListener('mouseup', function (e) {
       // End marker drag
       if (timelineState.isDraggingMarker) {
-        // Clear debounce timer
-        if (timelineState._markerDragDebounceTimer) {
-          clearTimeout(timelineState._markerDragDebounceTimer);
-          timelineState._markerDragDebounceTimer = null;
+        // Cancel any pending settle timer from a previous drag
+        if (timelineState._markerSettleTimer) {
+          clearTimeout(timelineState._markerSettleTimer);
+          timelineState._markerSettleTimer = null;
         }
-        // Emit final load-window-changed event
-        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-          window.RFTraceViewer.emit('load-window-changed', {
-            newStart: timelineState.activeWindowStart,
-            oldStart: timelineState._markerDragOldStart
-          });
-        }
+        var finalStart = timelineState.activeWindowStart;
+        var oldStart = timelineState._markerDragOldStart;
         timelineState.isDraggingMarker = false;
-        timelineState._markerDragOldStart = null;
         timelineState._markerDragAtLimit = false;
         canvas.style.cursor = 'crosshair';
+
+        // Show "will load" indicator and wait 1s before actually fetching.
+        // This lets the user adjust further without triggering expensive fetches.
+        timelineState._markerPendingFetch = true;
+        _render();
+        timelineState._markerSettleTimer = setTimeout(function () {
+          timelineState._markerSettleTimer = null;
+          timelineState._markerPendingFetch = false;
+          timelineState._markerDragOldStart = null;
+          if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+            window.RFTraceViewer.emit('load-window-changed', {
+              newStart: finalStart,
+              oldStart: oldStart
+            });
+          }
+        }, 1000);
         return;
       }
 
@@ -2446,6 +2470,12 @@
         } else {
           ctx.fillText(fetchText, labelX, fetchY);
         }
+      } else if (timelineState._markerPendingFetch) {
+        // Settle delay: show hint that fetch will start soon
+        ctx.font = '9px sans-serif';
+        ctx.fillStyle = _css('--status-delayed', '#e65100');
+        var pendingY = labelY + 12;
+        ctx.fillText('Loading shortly\u2026', labelX, pendingY);
       }
 
       // Show contextual hint during active drag
