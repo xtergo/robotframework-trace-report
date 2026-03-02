@@ -49,6 +49,16 @@ def clear_active_preset(active_preset):
     return None
 
 
+def clamp_load_window_start(requested_start, execution_start_time, max_lookback=MAX_LOOKBACK):
+    """Reference implementation of load window start clamping.
+
+    Returns max(execution_start_time - max_lookback, requested_start),
+    never allowing a start earlier than max_lookback before execution start.
+    """
+    min_allowed = execution_start_time - max_lookback
+    return max(min_allowed, requested_start)
+
+
 def validate_time_picker(start_epoch, end_epoch):
     """Reference implementation of _validateTimePicker from timeline.js.
 
@@ -260,3 +270,38 @@ def test_time_picker_pre_population_round_trip(view_start, view_end):
     # Within 1-second tolerance for datetime-local rounding
     assert abs(recovered_start - view_start) <= 1.0
     assert abs(recovered_end - view_end) <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Property 1: Max lookback clamping
+# Feature: timeline-time-navigation, Property 1: Max lookback clamping
+# Validates: Requirements 1.5, 4.7
+# ---------------------------------------------------------------------------
+
+
+@given(
+    requested_start=epoch_strategy,
+    execution_start=epoch_strategy,
+)
+def test_max_lookback_clamping(requested_start, execution_start):
+    """For any requested load window start time, the result is clamped to
+    max(executionStartTime - maxLookback, requestedStart).
+
+    Verifies:
+    1. Result is never earlier than execution_start - MAX_LOOKBACK
+    2. If requested_start >= min_allowed, result == requested_start (no clamping)
+    3. If requested_start < min_allowed, result == min_allowed (clamped)
+    """
+    result = clamp_load_window_start(requested_start, execution_start)
+    min_allowed = execution_start - MAX_LOOKBACK
+
+    # 1. Result is never earlier than the minimum allowed start
+    assert result >= min_allowed
+
+    # 2. No clamping needed: result equals requested_start
+    if requested_start >= min_allowed:
+        assert result == requested_start
+
+    # 3. Clamping applied: result equals the minimum allowed start
+    if requested_start < min_allowed:
+        assert result == min_allowed
