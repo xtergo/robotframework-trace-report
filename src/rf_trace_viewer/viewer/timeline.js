@@ -2386,6 +2386,24 @@
           ctx.fillText(fetchText, labelX, fetchY);
         }
       }
+
+      // Show "Release to load older data" contextual hint during active drag
+      if (timelineState.isDraggingMarker) {
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = _css('--text-primary', '#1a1a1a');
+        var hintText = 'Release to load older data';
+        var hintY = handleY + 14;
+        var hintWidth = ctx.measureText(hintText).width;
+        var hintX = x + 10;
+        // If hint would overflow right edge, draw on the left side
+        if (hintX + hintWidth > width - 4) {
+          ctx.textAlign = 'right';
+          hintX = x - 10;
+        } else {
+          ctx.textAlign = 'left';
+        }
+        ctx.fillText(hintText, hintX, hintY);
+      }
     } else {
       // --- Main canvas: vertical dashed line ---
       ctx.strokeStyle = markerColor;
