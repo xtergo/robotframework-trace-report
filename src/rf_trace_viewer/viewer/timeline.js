@@ -1562,6 +1562,13 @@
           timelineState.viewEnd = endTime;
           timelineState.zoom = totalRange / selectedRange;
           if (timelineState._syncSlider) timelineState._syncSlider();
+          // Record drag-to-zoom view change in nav history (Req 8.3)
+          _navPush({
+            viewStart: timelineState.viewStart,
+            viewEnd: timelineState.viewEnd,
+            zoom: timelineState.zoom,
+            serviceFilter: ''
+          });
         }
 
         // Clear selection
