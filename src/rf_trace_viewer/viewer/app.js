@@ -574,14 +574,19 @@
       var diagRows = [
         { label: 'Data Source', key: 'dataSource', el: null },
         { label: 'Backend', key: 'backendType', el: null },
+        { label: 'Total Spans', key: 'totalSpans', el: null, format: function (v) { return v != null ? v.toLocaleString() : '0'; } },
+        { label: 'Latest Span', key: 'lastSeenNs', el: null, format: function (v) {
+          if (!v) return 'N/A';
+          var d = new Date(v / 1e6);
+          return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' +
+            String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+        }},
         { label: 'Last Success', key: 'lastSuccessTs', el: null, format: _formatDiagTimestamp },
         { label: 'Retry Count', key: 'retryCount', el: null },
         { label: 'Last Error', key: 'lastError', el: null, fallback: 'None' },
-        { label: 'Memory (RSS)', key: 'rssMb', el: null, format: function (v) { return v != null ? v + ' MB' : '—'; } },
-        { label: 'Memory Limit', key: 'rssLimitMb', el: null, format: function (v) { return v != null ? v + ' MB' : 'unlimited'; } },
+        { label: 'Memory', key: 'memSummary', el: null, format: function (v) { return v || '—'; } },
         { label: 'Memory %', key: 'rssPct', el: null, format: function (v) { return v != null ? v + '%' : '—'; }, bar: true },
-        { label: 'CPU %', key: 'cpuPct', el: null, format: function (v) { return v != null ? v + '%' : '—'; } },
-        { label: 'CPU Limit', key: 'cpuLimitMc', el: null, format: function (v) { return v != null ? v + 'm' : 'unlimited'; } }
+        { label: 'CPU', key: 'cpuSummary', el: null, format: function (v) { return v || '—'; } }
       ];
 
       for (var di = 0; di < diagRows.length; di++) {

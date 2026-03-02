@@ -137,6 +137,37 @@ def _get_cpu_limit_millicores() -> int | None:
     return None
 
 
+def _parse_env_millicores(env_var: str) -> int | None:
+    """Parse a K8s Downward API CPU resource env var to millicores.
+
+    The value is injected as a plain integer string representing the
+    number of millicores (e.g. "50" for 50m, "1000" for 1 CPU).
+    Kubernetes resourceFieldRef with divisor=1 gives the raw integer.
+    """
+    raw = os.environ.get(env_var)
+    if not raw:
+        return None
+    try:
+        # K8s injects CPU as a plain integer (millicores) by default
+        return int(raw.strip())
+    except ValueError:
+        return None
+
+
+def _parse_env_megabytes(env_var: str) -> float | None:
+    """Parse a K8s Downward API memory resource env var to megabytes.
+
+    The value is injected as a plain integer string representing bytes.
+    """
+    raw = os.environ.get(env_var)
+    if not raw:
+        return None
+    try:
+        return round(int(raw.strip()) / (1024 * 1024), 1)
+    except ValueError:
+        return None
+
+
 def get_resource_snapshot() -> dict:
     """Return a snapshot of process resource usage.
 
@@ -146,6 +177,8 @@ def get_resource_snapshot() -> dict:
       - rss_pct: RSS as percentage of limit (or null)
       - cpu_pct: CPU usage percentage since last call (or null on first call)
       - cpu_limit_mc: CPU limit in millicores (or null)
+      - cpu_request_mc: CPU request in millicores (from K8S_CPU_REQUEST env, or null)
+      - mem_request_mb: Memory request in MB (from K8S_MEM_REQUEST env, or null)
     """
     mem = _parse_proc_status()
     rss_kb = mem.get("rss_kb", 0)
@@ -158,10 +191,16 @@ def get_resource_snapshot() -> dict:
     cpu_pct = _get_cpu_percent()
     cpu_limit_mc = _get_cpu_limit_millicores()
 
+    # K8s Downward API env vars (set via resourceFieldRef in deployment.yaml)
+    cpu_request_mc = _parse_env_millicores("K8S_CPU_REQUEST")
+    mem_request_mb = _parse_env_megabytes("K8S_MEM_REQUEST")
+
     return {
         "rss_mb": rss_mb,
         "rss_limit_mb": rss_limit_mb,
         "rss_pct": rss_pct,
         "cpu_pct": cpu_pct,
         "cpu_limit_mc": cpu_limit_mc,
+        "cpu_request_mc": cpu_request_mc,
+        "mem_request_mb": mem_request_mb,
     }

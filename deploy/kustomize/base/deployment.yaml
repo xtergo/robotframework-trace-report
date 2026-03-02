@@ -29,6 +29,27 @@ spec:
                 name: trace-report-config
             - secretRef:
                 name: trace-report-secrets
+          env:
+            - name: K8S_CPU_REQUEST
+              valueFrom:
+                resourceFieldRef:
+                  containerName: trace-report
+                  resource: requests.cpu
+            - name: K8S_CPU_LIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: trace-report
+                  resource: limits.cpu
+            - name: K8S_MEM_REQUEST
+              valueFrom:
+                resourceFieldRef:
+                  containerName: trace-report
+                  resource: requests.memory
+            - name: K8S_MEM_LIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: trace-report
+                  resource: limits.memory
           # Uncomment to set a custom logo path from the mounted ConfigMap
           # env:
           #   - name: LOGO_PATH

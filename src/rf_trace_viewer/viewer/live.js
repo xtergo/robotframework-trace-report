@@ -483,7 +483,13 @@
     rssLimitMb: null,
     rssPct: null,
     cpuPct: null,
-    cpuLimitMc: null
+    cpuLimitMc: null,
+    // Data watermark
+    lastSeenNs: 0,
+    totalSpans: 0,
+    // Combined req/limit display strings
+    memSummary: null,
+    cpuSummary: null
   };
 
   // After this many consecutive poll failures, escalate to Disconnected
@@ -618,7 +624,11 @@
           rssLimitMb: _connectionState.rssLimitMb,
           rssPct: _connectionState.rssPct,
           cpuPct: _connectionState.cpuPct,
-          cpuLimitMc: _connectionState.cpuLimitMc
+          cpuLimitMc: _connectionState.cpuLimitMc,
+          lastSeenNs: _connectionState.lastSeenNs,
+          totalSpans: _connectionState.totalSpans,
+          memSummary: _connectionState.memSummary,
+          cpuSummary: _connectionState.cpuSummary
         };
       };
       window.RFTraceViewer.setPaused = _setPaused;
@@ -688,6 +698,15 @@
         _connectionState.rssPct = data.rss_pct;
         _connectionState.cpuPct = data.cpu_pct;
         _connectionState.cpuLimitMc = data.cpu_limit_mc;
+        // Build combined summary strings: usage / request / limit
+        var rss = data.rss_mb != null ? Math.round(data.rss_mb) : '—';
+        var memReq = data.mem_request_mb != null ? Math.round(data.mem_request_mb) : '—';
+        var memLim = data.rss_limit_mb != null ? Math.round(data.rss_limit_mb) : '∞';
+        _connectionState.memSummary = rss + ' / ' + memReq + ' / ' + memLim + ' MB';
+        var cpuUse = data.cpu_pct != null ? data.cpu_pct + '%' : '—';
+        var cpuReq = data.cpu_request_mc != null ? data.cpu_request_mc + 'm' : '—';
+        var cpuLim = data.cpu_limit_mc != null ? data.cpu_limit_mc + 'm' : '∞';
+        _connectionState.cpuSummary = cpuUse + ' / ' + cpuReq + ' / ' + cpuLim;
         _emitDiagnostics();
       })
       .catch(function () { /* silent — resource metrics are best-effort */ });
@@ -1039,6 +1058,8 @@
         }
       }
     }
+    _connectionState.lastSeenNs = lastSeenNs;
+    _connectionState.totalSpans = allSpans.length;
     return newCount;
   }
 

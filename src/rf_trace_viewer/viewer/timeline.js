@@ -369,12 +369,19 @@
       timelineState.zoom = 1.0;
       timelineState.viewStart = timelineState.minTime;
       timelineState.viewEnd = timelineState.maxTime;
+      var range = timelineState.maxTime - timelineState.minTime;
+      console.log('[Timeline] Full Range: ' +
+        _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime) +
+        ' (' + Math.round(range) + 's), spans=' + timelineState.flatSpans.length);
       syncSlider();
       _applyZoom();
     });
 
     zoomLocateRecent.addEventListener('click', function () {
       _locateRecent();
+      console.log('[Timeline] After Locate Recent: view=' +
+        _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd) +
+        ', zoom=' + timelineState.zoom.toFixed(1) + 'x');
       syncSlider();
       _applyZoom();
     });
@@ -715,11 +722,9 @@
       for (var _xi = 0; _xi < allSpans.length; _xi++) { if (allSpans[_xi].endTime > timelineState.maxTime) timelineState.maxTime = allSpans[_xi].endTime; }
       timelineState.viewStart = timelineState.minTime;
       timelineState.viewEnd = timelineState.maxTime;
-      console.log('[Timeline] Time bounds:', { 
-        minTime: timelineState.minTime, 
-        maxTime: timelineState.maxTime,
-        range: timelineState.maxTime - timelineState.minTime
-      });
+      console.log('[Timeline] Time bounds: ' +
+        _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime) +
+        ' (range=' + Math.round(timelineState.maxTime - timelineState.minTime) + 's)');
     }
 
     // Detect workers
@@ -2118,6 +2123,17 @@
       return base + '.' + ms;
     }
     return base;
+  }
+
+  /** Format epoch seconds as "YYYY-MM-DD HH:MM:SS" for console logging. */
+  function _fmtEpoch(epochSec) {
+    var d = new Date(epochSec * 1000);
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0') + ' ' +
+      String(d.getHours()).padStart(2, '0') + ':' +
+      String(d.getMinutes()).padStart(2, '0') + ':' +
+      String(d.getSeconds()).padStart(2, '0');
   }
 
   /**

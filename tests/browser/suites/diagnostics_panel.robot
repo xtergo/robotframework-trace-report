@@ -53,53 +53,48 @@ Diagnostics Panel Shows Resource Metrics
 
     # Check expected rows exist
     Should Contain    ${labels}    Data Source
-    Should Contain    ${labels}    Memory (RSS)
-    Should Contain    ${labels}    Memory Limit
+    Should Contain    ${labels}    Memory
     Should Contain    ${labels}    Memory %
-    Should Contain    ${labels}    CPU %
-    Should Contain    ${labels}    CPU Limit
+    Should Contain    ${labels}    CPU
 
     Take Screenshot    diag-panel-rows
 
 Memory RSS Should Show Real Value
-    [Documentation]    Memory RSS should show a numeric MB value, not a dash
-    ${rss_text}=    Evaluate JavaScript    .diagnostics-panel
+    [Documentation]    Memory row should show usage/request/limit format
+    ${mem_text}=    Evaluate JavaScript    .diagnostics-panel
     ...    (el) => {
     ...        var rows = el.querySelectorAll('.diagnostics-row');
     ...        for (var i = 0; i < rows.length; i++) {
     ...            var lbl = rows[i].querySelector('.diagnostics-label');
-    ...            if (lbl && lbl.textContent === 'Memory (RSS)') {
+    ...            if (lbl && lbl.textContent === 'Memory') {
     ...                return rows[i].querySelector('.diagnostics-value').textContent;
     ...            }
     ...        }
     ...        return 'NOT_FOUND';
     ...    }
 
-    Log    Memory RSS value: ${rss_text}
-    Should Not Be Equal    ${rss_text}    —
-    Should Contain    ${rss_text}    MB
-    Take Screenshot    diag-memory-rss
+    Log    Memory value: ${mem_text}
+    Should Not Be Equal    ${mem_text}    —
+    Should Contain    ${mem_text}    MB
+    Take Screenshot    diag-memory
 
 Memory Limit Should Show Real Value
-    [Documentation]    Memory Limit should show the container limit in MB
-    ${limit_text}=    Evaluate JavaScript    .diagnostics-panel
+    [Documentation]    Memory row should contain slash-separated values
+    ${mem_text}=    Evaluate JavaScript    .diagnostics-panel
     ...    (el) => {
     ...        var rows = el.querySelectorAll('.diagnostics-row');
     ...        for (var i = 0; i < rows.length; i++) {
     ...            var lbl = rows[i].querySelector('.diagnostics-label');
-    ...            if (lbl && lbl.textContent === 'Memory Limit') {
+    ...            if (lbl && lbl.textContent === 'Memory') {
     ...                return rows[i].querySelector('.diagnostics-value').textContent;
     ...            }
     ...        }
     ...        return 'NOT_FOUND';
     ...    }
 
-    Log    Memory Limit value: ${limit_text}
-    Should Not Be Equal    ${limit_text}    —
-    # Should be either "256.0 MB" or "unlimited"
-    ${has_mb}=    Evaluate    'MB' in '''${limit_text}''' or 'unlimited' in '''${limit_text}'''
-    Should Be True    ${has_mb}    Unexpected limit value: ${limit_text}
-    Take Screenshot    diag-memory-limit
+    Log    Memory value: ${mem_text}
+    Should Contain    ${mem_text}    /    Memory should show usage/req/limit format
+    Take Screenshot    diag-memory-format
 
 Memory Percent Should Have Bar
     [Documentation]    Memory % row should have a colored mini bar element
