@@ -628,6 +628,13 @@
       console.log('[Timeline] Full Range: ' +
         _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime) +
         ' (' + Math.round(range) + 's), spans=' + timelineState.flatSpans.length);
+      // Record Full Range view change in nav history (Req 8.5)
+      _navPush({
+        viewStart: timelineState.viewStart,
+        viewEnd: timelineState.viewEnd,
+        zoom: timelineState.zoom,
+        serviceFilter: ''
+      });
       syncSlider();
       _applyZoom();
     });
@@ -637,6 +644,13 @@
       console.log('[Timeline] After Locate Recent: view=' +
         _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd) +
         ', zoom=' + timelineState.zoom.toFixed(1) + 'x');
+      // Record Locate Recent view change in nav history (Req 8.5)
+      _navPush({
+        viewStart: timelineState.viewStart,
+        viewEnd: timelineState.viewEnd,
+        zoom: timelineState.zoom,
+        serviceFilter: ''
+      });
       syncSlider();
       _applyZoom();
     });
