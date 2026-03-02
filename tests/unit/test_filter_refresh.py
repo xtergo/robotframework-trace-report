@@ -242,3 +242,45 @@ def test_incremental_delta_load_recalculates_filter_counts_from_updated_span_set
     combined = retained + list(newly_fetched)
     expected_visible = len([s for s in combined if filter_fn(s)])
     assert result["visible"] == expected_visible
+
+
+# ---------------------------------------------------------------------------
+# Property 16: Discarded spans excluded from allSpans after non-overlapping range change
+# Feature: timeline-time-navigation, Property 16: Discarded spans excluded from allSpans after non-overlapping range change
+# Validates: Requirements 9.5
+# ---------------------------------------------------------------------------
+
+
+@given(data=non_overlapping_windows_and_spans())
+def test_discarded_spans_excluded_from_allspans_after_non_overlapping_range_change(data):
+    """For any non-overlapping range change that discards spans, after the
+    range change completes, every span in allSpans shall have a start_time
+    within the new Load_Window boundaries. The intersection of the old span
+    set and the new allSpans shall be empty.
+
+    **Validates: Requirements 9.5**
+
+    Verifies:
+    1. Every span in allSpans has start_time within [new_start, new_end]
+    2. The intersection of old span IDs and new allSpans span IDs is empty
+    3. allSpans contains exactly the new spans (no extra or missing spans)
+    """
+    old_spans, new_spans, filter_fn, _, (new_start, new_end) = data
+
+    result = full_reset(old_spans, new_spans, filter_fn)
+    all_spans = result["allSpans"]
+
+    # 1. Every span in allSpans has start_time within new Load_Window boundaries
+    for span in all_spans:
+        assert new_start <= span.start_time <= new_end, (
+            f"Span {span.span_id} has start_time {span.start_time} "
+            f"outside new window [{new_start}, {new_end}]"
+        )
+
+    # 2. Intersection of old span IDs and new allSpans span IDs is empty
+    old_ids = {s.span_id for s in old_spans}
+    new_ids = {s.span_id for s in all_spans}
+    assert old_ids.isdisjoint(new_ids), f"Old span IDs leaked into allSpans: {old_ids & new_ids}"
+
+    # 3. allSpans contains exactly the new spans (no extra or missing)
+    assert all_spans == list(new_spans)
