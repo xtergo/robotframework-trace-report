@@ -134,6 +134,20 @@
     if (timelineState._syncHScroll) timelineState._syncHScroll();
   }
 
+  /**
+   * Debounced push for wheel zoom and shift+wheel pan events.
+   * Only records the settled state after 500ms of inactivity.
+   */
+  function _navDebouncePush(state) {
+    if (_navHistory._debounceTimer) {
+      clearTimeout(_navHistory._debounceTimer);
+    }
+    _navHistory._debounceTimer = setTimeout(function () {
+      _navHistory._debounceTimer = null;
+      _navPush(state);
+    }, 500);
+  }
+
   /** Get the element where CSS custom properties are defined. */
   function _getThemeRoot() {
     return document.querySelector('.rf-trace-viewer') || document.documentElement;
