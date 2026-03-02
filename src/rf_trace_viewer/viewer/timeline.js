@@ -59,7 +59,9 @@
     autoCompactAfterFilter: false,
     _compactBtn: null,
     _activePreset: null,
-    _presetBtns: []
+    _presetBtns: [],
+    _timePickerEl: null,
+    _timePickerOpen: false
   };
 
   // Navigation history state (undo/redo stack)
@@ -446,6 +448,101 @@
       timelineState._presetBtns.push(btn);
     });
     zoomBar.appendChild(presetGroup);
+
+    // Calendar/clock icon button for absolute time picker
+    var calendarBtn = document.createElement('button');
+    calendarBtn.className = 'timeline-zoom-btn';
+    calendarBtn.textContent = '\uD83D\uDCC5'; // 📅 calendar emoji
+    calendarBtn.title = 'Select absolute time range';
+    calendarBtn.setAttribute('aria-label', 'Open time range picker');
+    calendarBtn.addEventListener('click', function () {
+      if (timelineState._timePickerOpen) {
+        _closeTimePicker();
+      } else {
+        _openTimePicker();
+      }
+    });
+    zoomBar.appendChild(calendarBtn);
+
+    // Time picker popover (hidden by default)
+    var timePickerEl = document.createElement('div');
+    timePickerEl.className = 'timeline-time-picker';
+    timePickerEl.setAttribute('role', 'dialog');
+    timePickerEl.setAttribute('aria-label', 'Select time range');
+    timePickerEl.style.display = 'none';
+
+    var startLabel = document.createElement('label');
+    startLabel.textContent = 'Start ';
+    var startInput = document.createElement('input');
+    startInput.type = 'datetime-local';
+    startInput.className = 'time-picker-input';
+    startInput.step = '1';
+    startLabel.appendChild(startInput);
+    timePickerEl.appendChild(startLabel);
+
+    var endLabel = document.createElement('label');
+    endLabel.textContent = 'End ';
+    var endInput = document.createElement('input');
+    endInput.type = 'datetime-local';
+    endInput.className = 'time-picker-input';
+    endInput.step = '1';
+    endLabel.appendChild(endInput);
+    timePickerEl.appendChild(endLabel);
+
+    var pickerError = document.createElement('div');
+    pickerError.className = 'time-picker-error';
+    pickerError.setAttribute('role', 'alert');
+    timePickerEl.appendChild(pickerError);
+
+    var applyBtn = document.createElement('button');
+    applyBtn.className = 'timeline-zoom-btn time-picker-apply';
+    applyBtn.textContent = 'Apply';
+    applyBtn.addEventListener('click', function () {
+      var s = new Date(startInput.value).getTime() / 1000;
+      var e = new Date(endInput.value).getTime() / 1000;
+      if (!isNaN(s) && !isNaN(e)) {
+        _applyTimePicker(s, e);
+      }
+    });
+    timePickerEl.appendChild(applyBtn);
+
+    // Inline validation on input change
+    function _validateTimePicker() {
+      var s = new Date(startInput.value).getTime() / 1000;
+      var e = new Date(endInput.value).getTime() / 1000;
+      pickerError.textContent = '';
+      applyBtn.disabled = false;
+      if (!startInput.value || !endInput.value) {
+        applyBtn.disabled = true;
+        return;
+      }
+      if (isNaN(s) || isNaN(e)) {
+        applyBtn.disabled = true;
+        return;
+      }
+      if (s >= e) {
+        pickerError.textContent = 'Start must be before end';
+        applyBtn.disabled = true;
+        return;
+      }
+      if ((e - s) > 21600) {
+        pickerError.textContent = 'Maximum range is 6 hours';
+        applyBtn.disabled = true;
+        return;
+      }
+    }
+    startInput.addEventListener('input', _validateTimePicker);
+    endInput.addEventListener('input', _validateTimePicker);
+
+    // Store references
+    timelineState._timePickerEl = timePickerEl;
+    timelineState._timePickerStartInput = startInput;
+    timelineState._timePickerEndInput = endInput;
+    timelineState._timePickerError = pickerError;
+    timelineState._timePickerApplyBtn = applyBtn;
+    timelineState._calendarBtn = calendarBtn;
+
+    zoomBar.appendChild(timePickerEl);
 
     // Separator
     var sep1 = document.createElement('span');
@@ -2801,6 +2898,144 @@
     _render();
     _renderHeader();
   };
+
+  /**
+   * Convert epoch seconds to a datetime-local input value string (YYYY-MM-DDTHH:MM:SS).
+   */
+  function _epochToDatetimeLocal(epochSec) {
+    var d = new Date(epochSec * 1000);
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  /**
+   * Open the time picker popover, pre-populated with current view window.
+   */
+  function _openTimePicker() {
+    var el = timelineState._timePickerEl;
+    if (!el) return;
+
+    // Pre-populate with current view window
+    if (timelineState._timePickerStartInput) {
+      timelineState._timePickerStartInput.value = _epochToDatetimeLocal(timelineState.viewStart);
+    }
+    if (timelineState._timePickerEndInput) {
+      timelineState._timePickerEndInput.value = _epochToDatetimeLocal(timelineState.viewEnd);
+    }
+
+    // Clear previous errors
+    if (timelineState._timePickerError) {
+      timelineState._timePickerError.textContent = '';
+    }
+    if (timelineState._timePickerApplyBtn) {
+      timelineState._timePickerApplyBtn.disabled = false;
+    }
+
+    // Position below the calendar button
+    if (timelineState._calendarBtn) {
+      var btnRect = timelineState._calendarBtn.getBoundingClientRect();
+      var barRect = el.parentNode ? el.parentNode.getBoundingClientRect() : btnRect;
+      el.style.position = 'absolute';
+      el.style.top = (btnRect.bottom - barRect.top + 4) + 'px';
+      el.style.left = (btnRect.left - barRect.left) + 'px';
+    }
+
+    el.style.display = '';
+    timelineState._timePickerOpen = true;
+
+    // Click-outside listener (delayed to avoid catching the opening click)
+    setTimeout(function () {
+      timelineState._timePickerClickOutside = function (evt) {
+        if (!el.contains(evt.target) && evt.target !== timelineState._calendarBtn) {
+          _closeTimePicker();
+        }
+      };
+      document.addEventListener('mousedown', timelineState._timePickerClickOutside);
+    }, 0);
+
+    // Escape key listener
+    timelineState._timePickerEscapeHandler = function (evt) {
+      if (evt.key === 'Escape' || evt.keyCode === 27) {
+        _closeTimePicker();
+      }
+    };
+    document.addEventListener('keydown', timelineState._timePickerEscapeHandler);
+  }
+
+  /**
+   * Close the time picker popover and remove listeners.
+   */
+  function _closeTimePicker() {
+    var el = timelineState._timePickerEl;
+    if (!el) return;
+    el.style.display = 'none';
+    timelineState._timePickerOpen = false;
+
+    // Remove click-outside listener
+    if (timelineState._timePickerClickOutside) {
+      document.removeEventListener('mousedown', timelineState._timePickerClickOutside);
+      timelineState._timePickerClickOutside = null;
+    }
+    // Remove escape listener
+    if (timelineState._timePickerEscapeHandler) {
+      document.removeEventListener('keydown', timelineState._timePickerEscapeHandler);
+      timelineState._timePickerEscapeHandler = null;
+    }
+  }
+
+  /**
+   * Apply the time picker selection: validate, set view window,
+   * emit load-window-changed if needed, push nav history, close popover.
+   */
+  function _applyTimePicker(startEpoch, endEpoch) {
+    // Validate: start < end
+    if (startEpoch >= endEpoch) return;
+    // Validate: range <= 6h
+    if ((endEpoch - startEpoch) > 21600) return;
+
+    // Clear active preset
+    _clearActivePreset();
+
+    // Emit load-window-changed if extending beyond current load window
+    var aws = window.RFTraceViewer && window.RFTraceViewer.getActiveWindowStart
+      ? window.RFTraceViewer.getActiveWindowStart()
+      : timelineState.minTime;
+    if (startEpoch < aws) {
+      if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+        window.RFTraceViewer.emit('load-window-changed', {
+          newStart: startEpoch,
+          oldStart: aws
+        });
+      }
+    }
+
+    // Update view window
+    timelineState.viewStart = startEpoch;
+    timelineState.viewEnd = endEpoch;
+
+    // Recompute zoom
+    var totalRange = timelineState.maxTime - timelineState.minTime;
+    var viewRange = endEpoch - startEpoch;
+    if (viewRange > 0 && totalRange > 0) {
+      timelineState.zoom = totalRange / viewRange;
+    }
+
+    // Push nav history
+    _navPush({
+      viewStart: timelineState.viewStart,
+      viewEnd: timelineState.viewEnd,
+      zoom: timelineState.zoom,
+      serviceFilter: ''
+    });
+
+    // Close popover and re-render
+    _closeTimePicker();
+    if (timelineState._syncSlider) timelineState._syncSlider();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
+    _render();
+    _renderHeader();
+  }
 
   /**
    * Clear the active preset highlight from all preset buttons.
