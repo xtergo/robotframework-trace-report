@@ -73,7 +73,7 @@
 - [x] 6.5 Ensure `_updateResultCountDisplay()` and `_updateFilterSummaryBar()` are called after time-range-triggered recalculation
 - [x] 6.6 Ensure `filter-changed` event includes updated `resultCounts` and `filteredSpans` after time-range-triggered recalculation
 - [x] 6.7 <PBT> Property 14: full reset recalculates filter counts from new span set only — `tests/unit/test_filter_refresh.py`
-- [~] 6.8 <PBT> Property 15: incremental delta load recalculates filter counts from updated span set — `tests/unit/test_filter_refresh.py`
+- [x] 6.8 <PBT> Property 15: incremental delta load recalculates filter counts from updated span set — `tests/unit/test_filter_refresh.py`
 - [~] 6.9 <PBT> Property 16: discarded spans excluded from allSpans after non-overlapping range change — `tests/unit/test_filter_refresh.py`
 
 ## Task 7: CSS and Theme Integration
