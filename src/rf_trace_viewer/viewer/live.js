@@ -798,6 +798,11 @@
 
   /* ── 4. Fetch + parse ──────────────────────────────────────────── */
 
+  // Req 8.6 guarantee: live polling is independent of time navigation state.
+  // _poll/_pollJson/_pollSigNoz never read viewStart, viewEnd, _navHistory,
+  // or any preset/time-picker flag from timeline.js.  Navigation actions
+  // (presets, absolute time picker, undo/redo) only modify the view window
+  // and emit load-window-changed — they never stop or gate polling.
   function _poll() {
     if (polling) return;
     _connectionState.retryCountdownSec = 0;
