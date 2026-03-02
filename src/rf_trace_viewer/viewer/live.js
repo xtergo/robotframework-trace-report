@@ -692,9 +692,46 @@
         // Update activeWindowStart via the public API (handles clamping)
         window.RFTraceViewer.setActiveWindowStart(newStart);
 
+        // Incremental delta load: prune spans outside the new Load_Window
+        // before rebuilding the model. This ensures allSpans only contains
+        // spans within [activeWindowStart, now] after a partial-overlap
+        // range change (Design §7 — Incremental Delta Load).
+        var prunedCount = 0;
+        if (!isFullReset) {
+          var winStart = _loadWindowState.activeWindowStart;
+          var winStartNs = winStart * 1e9;
+          var beforeLen = allSpans.length;
+          var pruned = [];
+          for (var pi = 0; pi < allSpans.length; pi++) {
+            if (allSpans[pi].start_time < winStartNs) {
+              pruned.push(allSpans[pi]);
+            }
+          }
+          if (pruned.length > 0) {
+            // Remove pruned span IDs from dedup map so they can be
+            // re-fetched if the window moves back later.
+            for (var ri = 0; ri < pruned.length; ri++) {
+              delete seenSpanIds[pruned[ri].span_id];
+            }
+            allSpans = allSpans.filter(function (s) {
+              return s.start_time >= winStartNs;
+            });
+            _loadWindowState.totalCachedSpans = allSpans.length;
+            _lastFilterSpanCount = 0; // force initSearch re-init
+            prunedCount = pruned.length;
+            console.log('[live] Pruned ' + prunedCount +
+              ' out-of-range spans (before winStart=' + winStart +
+              '): ' + beforeLen + ' → ' + allSpans.length);
+          }
+        }
+
         // Only fetch when dragging backward (loading older data)
         if (newStart < oldStart) {
           _deltaFetch(newStart, oldStart);
+        } else if (prunedCount > 0) {
+          // Window moved forward with no new fetch needed — rebuild
+          // to reflect pruned spans in the model and filter counters.
+          _rebuildAndRender();
         }
 
         // Emit active-window-start so Timeline can sync marker/overlay position
