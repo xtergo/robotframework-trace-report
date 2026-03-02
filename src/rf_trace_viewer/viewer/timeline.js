@@ -88,7 +88,7 @@
         range: timelineState.maxTime - timelineState.minTime
       };
     },
-    forceRender: function() { _render(); },
+    forceRender: function() { if (timelineState.canvas) _render(); },
     dumpState: function() {
       // Avoid circular references by only including safe properties
       var sampleSpan = timelineState.flatSpans[0];

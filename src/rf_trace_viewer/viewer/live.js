@@ -1589,9 +1589,6 @@
 
     // Search / filter — always re-init in live mode when data changes.
     var filterContent = document.querySelector('.panel-filter .filter-content');
-    if (!filterContent) {
-      console.warn('[live] filter-content element not found');
-    }
     if (filterContent && typeof window.initSearch === 'function' && newSpanCount > 0) {
       if (newSpanCount !== _lastFilterSpanCount) {
         console.log('[live] Re-initializing filter: spanCount', _lastFilterSpanCount, '->', newSpanCount);
