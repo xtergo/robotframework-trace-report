@@ -1441,6 +1441,7 @@
       }
 
       // Start zoom selection (drag to zoom into a time range)
+      console.log('[Timeline] Drag-to-zoom: mousedown at x=' + x + ', time=' + _screenXToTime(x));
       timelineState.isSelecting = true;
       timelineState.selectionStartX = x;
       timelineState.selectionEndX = x;
@@ -1565,9 +1566,14 @@
         var totalRange = timelineState.maxTime - timelineState.minTime;
         var selectedRange = endTime - startTime;
 
-        // Only act if the selection is meaningful (more than 5% of current view)
-        var viewRange = timelineState.viewEnd - timelineState.viewStart;
-        if (selectedRange > viewRange * 0.05) {
+        // Only act if the selection is meaningful (more than 10px on screen)
+        var canvasWidth = canvas.width / (window.devicePixelRatio || 1);
+        var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
+        var selectionPx = Math.abs(timelineState.selectionEndX - timelineState.selectionStartX);
+        console.log('[Timeline] Drag-to-zoom: mouseup startTime=' + startTime +
+          ' endTime=' + endTime + ' selectedRange=' + selectedRange.toFixed(1) +
+          's selectionPx=' + selectionPx.toFixed(0) + 'px pass=' + (selectionPx > 10));
+        if (selectionPx > 10) {
           _clearActivePreset();
           // Set viewport to the selected range (zoom only, no filter)
           timelineState.viewStart = startTime;
