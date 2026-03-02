@@ -560,7 +560,6 @@
       diagPanel.className = 'diagnostics-panel';
       diagPanel.setAttribute('role', 'dialog');
       diagPanel.setAttribute('aria-label', 'Connection diagnostics');
-      diagPanel.style.display = 'none';
 
       // Helper to format a ms-timestamp for display
       function _formatDiagTimestamp(ts) {
@@ -636,13 +635,13 @@
       function _toggleDiagPanel(e) {
         // Don't toggle if click was inside the panel itself
         if (diagPanel.contains(e.target)) return;
-        var isOpen = diagPanel.style.display !== 'none';
+        var isOpen = diagPanel.classList.contains('open');
         if (isOpen) {
-          diagPanel.style.display = 'none';
+          diagPanel.classList.remove('open');
           statusCluster.setAttribute('aria-expanded', 'false');
         } else {
           _refreshDiagnostics();
-          diagPanel.style.display = '';
+          diagPanel.classList.add('open');
           statusCluster.setAttribute('aria-expanded', 'true');
         }
       }
@@ -657,17 +656,17 @@
 
       // Close on click outside
       document.addEventListener('click', function (e) {
-        if (diagPanel.style.display === 'none') return;
+        if (!diagPanel.classList.contains('open')) return;
         if (!statusCluster.contains(e.target)) {
-          diagPanel.style.display = 'none';
+          diagPanel.classList.remove('open');
           statusCluster.setAttribute('aria-expanded', 'false');
         }
       });
 
       // Close on Escape key
       document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && diagPanel.style.display !== 'none') {
-          diagPanel.style.display = 'none';
+        if (e.key === 'Escape' && diagPanel.classList.contains('open')) {
+          diagPanel.classList.remove('open');
           statusCluster.setAttribute('aria-expanded', 'false');
           statusCluster.focus();
         }
@@ -765,7 +764,7 @@
 
       // Listen to diagnostics-updated events to refresh panel in-place
       eventBus.on('diagnostics-updated', function () {
-        if (diagPanel.style.display !== 'none') {
+        if (diagPanel.classList.contains('open')) {
           _refreshDiagnostics();
         }
       });
