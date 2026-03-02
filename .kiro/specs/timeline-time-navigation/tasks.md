@@ -8,8 +8,8 @@
 - [x] 1.3 Implement `_navUndo()` — decrement index, restore `viewStart/viewEnd/zoom/serviceFilter`, re-render
 - [x] 1.4 Implement `_navRedo()` — increment index, restore state, re-render
 - [x] 1.5 Implement `_navDebouncePush(state)` — 500ms debounce for wheel/pan events
-- [-] 1.6 Implement `_syncNavButtons()` — enable/disable undo/redo based on index position
-- [ ] 1.7 Add undo (←) and redo (→) buttons to zoom bar with `timeline-zoom-btn` styling, tooltips, aria-labels
+- [x] 1.6 Implement `_syncNavButtons()` — enable/disable undo/redo based on index position
+- [-] 1.7 Add undo (←) and redo (→) buttons to zoom bar with `timeline-zoom-btn` styling, tooltips, aria-labels
 - [ ] 1.8 Wire Ctrl+Z for undo and Ctrl+Shift+Z for redo keyboard shortcuts
 - [ ] 1.9 <PBT> Property 8: nav history records all navigation actions — `tests/unit/test_nav_history.py`
 - [ ] 1.10 <PBT> Property 9: undo restores previous state — `tests/unit/test_nav_history.py`
