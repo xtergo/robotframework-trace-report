@@ -390,33 +390,6 @@
     navGroup.appendChild(zoomLocateRecent);
     zoomBar.appendChild(navGroup);
 
-    // Separator before undo/redo
-    var sepNav = document.createElement('span');
-    sepNav.className = 'zoom-bar-sep';
-    zoomBar.appendChild(sepNav);
-
-    // Undo/Redo navigation buttons
-    var undoBtn = document.createElement('button');
-    undoBtn.className = 'timeline-zoom-btn';
-    undoBtn.textContent = '\u2190';
-    undoBtn.title = 'Undo navigation (Ctrl+Z)';
-    undoBtn.setAttribute('aria-label', 'Undo navigation');
-    undoBtn.disabled = true;
-    undoBtn.addEventListener('click', function () { _navUndo(); });
-    zoomBar.appendChild(undoBtn);
-
-    var redoBtn = document.createElement('button');
-    redoBtn.className = 'timeline-zoom-btn';
-    redoBtn.textContent = '\u2192';
-    redoBtn.title = 'Redo navigation (Ctrl+Shift+Z)';
-    redoBtn.setAttribute('aria-label', 'Redo navigation');
-    redoBtn.disabled = true;
-    redoBtn.addEventListener('click', function () { _navRedo(); });
-    zoomBar.appendChild(redoBtn);
-
-    timelineState._navUndoBtn = undoBtn;
-    timelineState._navRedoBtn = redoBtn;
-
     // Separator before time presets
     var sepPresets = document.createElement('span');
     sepPresets.className = 'zoom-bar-sep';
@@ -670,19 +643,6 @@
 
     // Set up event listeners
     _setupEventListeners(canvas);
-
-    // Keyboard shortcuts for navigation undo/redo
-    document.addEventListener('keydown', function (e) {
-      if (e.ctrlKey && !e.altKey && e.key === 'z') {
-        if (e.shiftKey) {
-          e.preventDefault();
-          _navRedo();
-        } else {
-          e.preventDefault();
-          _navUndo();
-        }
-      }
-    });
 
     // Listen for filter changes
     if (window.RFTraceViewer && window.RFTraceViewer.on) {
