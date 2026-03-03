@@ -896,22 +896,10 @@
     // Do an immediate first poll
     _poll();
 
-    // Wall-clock advance: every 10s, push the timeline right edge to now
-    // and auto-unmark the preset button when elapsed time exceeds the preset.
-    var _wallClockLoadTime = Date.now() / 1000;
-    var _wallClockLookbackSec = _lookbackNs > 0 ? _lookbackNs / 1e9 : 0;
+    // Wall-clock advance: every 10s, push the timeline right edge to now.
     setInterval(function () {
-      // Advance the timeline right edge to wall-clock time
       if (typeof window.advanceTimelineNow === 'function') {
         window.advanceTimelineNow();
-      }
-      // Auto-unmark preset once the view has grown beyond the preset duration.
-      // After even 10s the view is 15m10s which is no longer "15m".
-      if (_wallClockLookbackSec > 0 && typeof window.clearActivePreset === 'function') {
-        var elapsed = (Date.now() / 1000) - _wallClockLoadTime;
-        if (elapsed > 10) {
-          window.clearActivePreset();
-        }
       }
     }, 10000);
   }
