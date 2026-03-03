@@ -786,9 +786,23 @@
     if (nowSec > timelineState.maxTime) {
       timelineState.maxTime = nowSec;
     }
-    // Only slide the view window if no preset is active (passive live watching).
-    // When a preset is active the user explicitly chose a time range — don't override it.
-    if (!timelineState._activePreset) {
+    // When a preset is active (e.g. "15m"), treat it as a rolling window:
+    // always slide viewEnd to now and viewStart to (now - presetDuration).
+    // This keeps the timeline advancing in real time.
+    if (timelineState._activePreset) {
+      var presetSec = timelineState._activePreset;
+      timelineState.viewEnd = nowSec;
+      timelineState.viewStart = nowSec - presetSec;
+      if (timelineState.viewStart < timelineState.minTime) {
+        timelineState.minTime = timelineState.viewStart;
+      }
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var newViewRange = timelineState.viewEnd - timelineState.viewStart;
+      timelineState.zoom = (totalRange > 0 && newViewRange > 0) ? totalRange / newViewRange : 1;
+      if (timelineState._syncSlider) timelineState._syncSlider();
+      if (timelineState._syncHScroll) timelineState._syncHScroll();
+    } else {
+      // No preset — only slide if user is viewing the right edge (passive live watching)
       var viewRange = timelineState.viewEnd - timelineState.viewStart;
       var wasAtRightEdge = (oldMaxTime - timelineState.viewEnd) < 2;
       if (wasAtRightEdge) {
@@ -799,14 +813,15 @@
         }
       }
       // Update zoom ratio
-      var totalRange = timelineState.maxTime - timelineState.minTime;
-      var newViewRange = timelineState.viewEnd - timelineState.viewStart;
-      timelineState.zoom = (totalRange > 0 && newViewRange > 0) ? totalRange / newViewRange : 1;
+      var totalRange2 = timelineState.maxTime - timelineState.minTime;
+      var newViewRange2 = timelineState.viewEnd - timelineState.viewStart;
+      timelineState.zoom = (totalRange2 > 0 && newViewRange2 > 0) ? totalRange2 / newViewRange2 : 1;
       if (timelineState._syncSlider) timelineState._syncSlider();
       if (timelineState._syncHScroll) timelineState._syncHScroll();
     }
     // Always re-render so the header timestamps stay fresh
     _render();
+    _renderHeader();
   };
 
   /**
