@@ -705,21 +705,17 @@
         if (newVal === _executionFilter) return;
         _executionFilter = newVal;
         console.log('[live] Execution filter changed: ' + (_executionFilter || '(all)'));
-        // Full reset: clear spans, force polling gate open, reset load window
+        // Full reset: clear spans, force polling gate open
+        var savedWindowStart = _loadWindowState.activeWindowStart;
         allSpans = [];
         seenSpanIds = {};
-        lastSeenNs = 0;
         _lastFilterSpanCount = 0;
         _loadWindowState.totalCachedSpans = 0;
         _loadWindowState.isFetching = false;
         polling = false; // force gate open so _poll() actually fires
-        // Reset activeWindowStart to current lookback origin so the
-        // load-window-changed handler doesn't re-fetch old unfiltered data
-        if (_lookbackNs > 0) {
-          var nowNs = Date.now() * 1e6;
-          lastSeenNs = Math.max(0, nowNs - _lookbackNs);
-          _loadWindowState.activeWindowStart = (Date.now() / 1000) - (_lookbackNs / 1e9);
-        }
+        // Set lastSeenNs to the saved window start so the poll fetches
+        // from the user's current load window, not just the 15-min lookback
+        lastSeenNs = Math.max(0, savedWindowStart * 1e9);
         // Immediately clear the display before the fetch returns
         _rebuildAndRender();
         _poll();
