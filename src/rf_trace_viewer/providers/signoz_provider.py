@@ -229,11 +229,14 @@ class SigNozProvider(TraceProvider):
         service_name: str | None = None,
         execution_id: str | None = None,
     ) -> TraceViewModel:
-        """Fetch spans newer than since_ns with overlap window.
+        """Fetch spans newer than since_ns with automatic pagination.
 
         No server-side dedup here — the browser's lastSeenNs watermark
         handles incremental polling. This allows page refreshes to get
         all spans again (the browser starts fresh with since_ns=0).
+
+        Pages through SigNoz results (max_spans_per_page at a time) up to
+        the configured max_spans cap so large time ranges return all data.
 
         If service_name is provided, only spans from that service.name are returned.
         """
@@ -283,17 +286,41 @@ class SigNozProvider(TraceProvider):
                 }
             )
 
-        query = self._build_span_query(
-            filters=filters, offset=0, limit=self._config.max_spans_per_page
-        )
-        # Override start to filter by time (must be valid Unix timestamp)
         start_s = query_start_ns // 1_000_000_000
         if start_s < 1_000_000_000:
             start_s = int(time.time()) - 86400  # fallback: 1 day ago
-        query["start"] = start_s
-        response = self._api_request("/api/v3/query_range", query)
-        spans = self._parse_spans(response)
-        return TraceViewModel(spans=spans)
+
+        # Paginate using timestamp-based cursoring instead of offset.
+        # SigNoz v0.113 returns 500 on large offsets, so we advance
+        # the start time to the last span's timestamp on each page.
+        all_spans: list[TraceSpan] = []
+        page_size = self._config.max_spans_per_page
+        max_total = self._config.max_spans
+        cursor_start_s = start_s
+
+        while len(all_spans) < max_total:
+            remaining = max_total - len(all_spans)
+            limit = min(page_size, remaining)
+            query = self._build_span_query(filters=filters, offset=0, limit=limit)
+            query["start"] = cursor_start_s
+            response = self._api_request("/api/v3/query_range", query)
+            page_spans = self._parse_spans(response)
+            if not page_spans:
+                break
+            all_spans.extend(page_spans)
+            # If we got fewer than the limit, there are no more pages
+            if len(page_spans) < limit:
+                break
+            # Advance cursor to the last span's timestamp (seconds)
+            # to fetch the next page without using offset
+            last_ts_ns = max(s.start_time_ns for s in page_spans)
+            next_start_s = last_ts_ns // 1_000_000_000
+            # If cursor didn't advance, bump by 1s to avoid infinite loop
+            if next_start_s <= cursor_start_s:
+                next_start_s = cursor_start_s + 1
+            cursor_start_s = next_start_s
+
+        return TraceViewModel(spans=all_spans)
 
     # ------------------------------------------------------------------
     # HTTP client

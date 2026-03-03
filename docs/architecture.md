@@ -205,7 +205,9 @@ Wraps the existing NDJSON parser as a `TraceProvider`. Reads local trace files a
 Fetches trace data from a SigNoz instance via the `/api/v3/query_range` API.
 
 - Supports live polling (`supports_live_poll() → True`)
-- Automatic pagination with configurable page size
+- Automatic pagination with configurable page size (`max_spans_per_page`, default 10,000)
+- `poll_new_spans()` paginates through all available spans up to `max_spans` (default 500,000), enabling large time-range queries (e.g., 7-day lookback) to return complete datasets instead of being silently capped at one page
+- `fetch_all()` uses the same pagination pattern for static report generation
 - Span deduplication via `_seen_span_ids` set (reset on `fetch_all()`)
 - Overlap window for live poll to handle clock skew
 - Handles SigNoz-specific response formats (ISO timestamps, nested result structure)
@@ -229,8 +231,34 @@ The viewer is a vanilla JavaScript application embedded in the generated HTML re
 | `theme.js` | Theme management — light/dark mode toggle, system preference detection, CSS custom properties |
 | `flow-table.js` | Execution flow table — tabular view of test execution sequence |
 | `live.js` | Live mode — polling loop, incremental data fetching, NDJSON parsing in browser |
-| `app.js` | Main application — initialization, event bus, view coordination |
+| `app.js` | Main application — initialization, event bus, view coordination, service health dashboard |
 | `style.css` | Styles — light and dark themes via CSS custom properties, responsive layout |
+
+### Service Health Dashboard
+
+The health dashboard (`app.js`) displays real-time sparkline charts for server and client metrics. It polls `/api/v1/resources/history` every 10 seconds and renders canvas-based sparklines with optional reference lines (e.g., memory/CPU limits).
+
+Server-side charts (from resource snapshots):
+- Memory RSS (MB) — with request and limit reference lines
+- CPU Usage (%) — with limit reference line
+- Total Spans — count in the backend
+- Active Users — connected browser sessions
+
+Client-side charts (from `performance.memory`):
+- Spans/sec — ingestion rate computed in the browser
+- Browser JS Heap (MB) — only shown on Chromium browsers (Chrome, Edge, Opera) where `performance.memory` is available. Displays `usedJSHeapSize` with `jsHeapSizeLimit` as a dashed reference line. The card is labeled "(client)" and does not appear at all on non-Chromium browsers.
+
+### Span Ingestion Limits
+
+The viewer has a multi-layer approach to span limits:
+
+| Layer | Config | Default | Purpose |
+|-------|--------|---------|---------|
+| SigNoz page size | `MAX_SPANS_PER_PAGE` | 10,000 | Spans per SigNoz API request |
+| Server total cap | `MAX_SPANS` | 500,000 | Max spans `poll_new_spans` will paginate through |
+| Client span cap | `__RF_TRACE_MAX_SPANS__` | 1,000,000 | Browser-side cap before polling stops |
+
+When the client cap is reached, a dismissible banner appears and polling pauses. Dismissing the banner doubles the cap and resumes polling.
 
 ### Load Order
 
@@ -461,7 +489,7 @@ The SigNozProvider uses `POST /api/v3/query_range` for all data access:
 
 - **List executions**: Aggregate query grouped by execution attribute (e.g., `execution_id`)
 - **Fetch spans**: List query with filters (execution ID, trace ID, service name), pagination via offset/limit, ordered by timestamp ascending
-- **Live poll**: Same as fetch spans but with a time-based start filter and overlap window for dedup
+- **Live poll**: Same as fetch spans but with a time-based start filter; paginates through all results up to `max_spans` to support large time-range lookbacks (e.g., 7 days)
 
 ### ClickHouse Storage
 

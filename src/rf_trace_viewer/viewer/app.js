@@ -927,6 +927,36 @@
         _healthCharts[def.key] = { canvas: canvas, valueEl: cardValue, def: def, data: [] };
       }
 
+      // ── Client-side JS Heap chart (Chromium only) ──
+      if (typeof performance !== 'undefined' && performance.memory) {
+        var jsHeapDef = { key: 'js_heap_mb', label: 'Browser JS Heap', unit: 'MB', refLines: [] };
+        var jhCard = document.createElement('div');
+        jhCard.className = 'hd-card';
+
+        var jhLabel = document.createElement('div');
+        jhLabel.className = 'hd-card-label';
+        jhLabel.textContent = jsHeapDef.label;
+        var jhHint = document.createElement('span');
+        jhHint.style.cssText = 'opacity:0.4;font-size:0.85em;margin-left:4px;text-transform:none;';
+        jhHint.textContent = '(client)';
+        jhLabel.appendChild(jhHint);
+        jhCard.appendChild(jhLabel);
+
+        var jhValue = document.createElement('div');
+        jhValue.className = 'hd-card-value';
+        jhValue.textContent = '\u2014';
+        jhCard.appendChild(jhValue);
+
+        var jhCanvas = document.createElement('canvas');
+        jhCanvas.className = 'hd-sparkline';
+        jhCanvas.width = 200;
+        jhCanvas.height = 48;
+        jhCard.appendChild(jhCanvas);
+
+        hdBody.appendChild(jhCard);
+        _healthCharts[jsHeapDef.key] = { canvas: jhCanvas, valueEl: jhValue, def: jsHeapDef, data: [] };
+      }
+
       healthDashboard.appendChild(hdBody);
       healthDashboard.classList.add('open'); // start expanded
       root.appendChild(healthDashboard);
@@ -1108,6 +1138,37 @@
                     labelEl.appendChild(durationSpan);
                   }
                   durationSpan.textContent = '(' + durationLabel + ')';
+                }
+              }
+            }
+
+            // ── Client-side JS Heap sampling (Chromium only) ──
+            if (typeof performance !== 'undefined' && performance.memory && _healthCharts['js_heap_mb']) {
+              var jhChart = _healthCharts['js_heap_mb'];
+              var heapMb = performance.memory.usedJSHeapSize / (1024 * 1024);
+              var heapLimitMb = performance.memory.jsHeapSizeLimit / (1024 * 1024);
+              jhChart.data.push(heapMb);
+              if (jhChart.data.length > 360) jhChart.data.shift();
+              jhChart.valueEl.textContent = (Math.round(heapMb * 10) / 10) + ' MB';
+              _drawSparkline(jhChart, [heapLimitMb]);
+
+              var jhDurSec = (jhChart.data.length - 1) * 10;
+              if (jhDurSec > 0) {
+                var jhDurLabel = jhDurSec >= 3600
+                  ? Math.round(jhDurSec / 3600) + 'hr'
+                  : jhDurSec >= 60
+                  ? Math.round(jhDurSec / 60) + 'min'
+                  : jhDurSec + 's';
+                var jhLabelEl = jhChart.canvas.parentElement.querySelector('.hd-card-label');
+                if (jhLabelEl) {
+                  var jhDurSpan = jhLabelEl.querySelector('.hd-duration');
+                  if (!jhDurSpan) {
+                    jhDurSpan = document.createElement('span');
+                    jhDurSpan.className = 'hd-duration';
+                    jhDurSpan.style.cssText = 'opacity:0.4;font-size:0.8em;margin-left:4px;text-transform:none;';
+                    jhLabelEl.appendChild(jhDurSpan);
+                  }
+                  jhDurSpan.textContent = '(' + jhDurLabel + ')';
                 }
               }
             }
