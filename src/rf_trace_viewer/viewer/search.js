@@ -262,7 +262,9 @@
    */
   function _buildFilterUI(container) {
     container.innerHTML = '';
-    container.className = 'filter-panel';
+    if (!container.classList.contains('filter-panel')) {
+      container.classList.add('filter-panel');
+    }
 
     // Header with result count
     var header = document.createElement('div');
