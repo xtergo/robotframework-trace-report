@@ -705,20 +705,22 @@
         if (newVal === _executionFilter) return;
         _executionFilter = newVal;
         console.log('[live] Execution filter changed: ' + (_executionFilter || '(all)'));
-        // Full reset: clear spans, force polling gate open
+        // Full reset: clear spans, cancel any in-flight delta fetch
         var savedWindowStart = _loadWindowState.activeWindowStart;
         allSpans = [];
         seenSpanIds = {};
         _lastFilterSpanCount = 0;
         _loadWindowState.totalCachedSpans = 0;
         _loadWindowState.isFetching = false;
-        polling = false; // force gate open so _poll() actually fires
-        // Set lastSeenNs to the saved window start so the poll fetches
-        // from the user's current load window, not just the 15-min lookback
+        polling = false;
+        // Set lastSeenNs to the saved window start so incremental polls
+        // continue from the right point after the delta fetch completes
         lastSeenNs = Math.max(0, savedWindowStart * 1e9);
         // Immediately clear the display before the fetch returns
         _rebuildAndRender();
-        _poll();
+        // Reload the full load window with the new filter
+        var nowSec = Date.now() / 1000;
+        _deltaFetch(savedWindowStart, nowSec);
       };
 
       // Listen for background fetch merge events from app.js (SigNoz paged loading)
