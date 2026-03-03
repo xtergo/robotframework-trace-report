@@ -26,7 +26,7 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--port",
         type=int,
-        default=8077,
+        default=None,
         help="Port for live server (default: 8077)",
     )
     parser.add_argument(
@@ -42,7 +42,7 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--poll-interval",
         type=int,
-        default=5,
+        default=None,
         help="Polling interval in seconds for live mode (default: 5, range: 1-30)",
     )
     parser.add_argument(
@@ -117,13 +117,13 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--execution-attribute",
-        default="execution_id",
+        default=None,
         help="Span attribute name for grouping executions (default: execution_id)",
     )
     parser.add_argument(
         "--max-spans-per-page",
         type=int,
-        default=10000,
+        default=None,
         metavar="N",
         help="Page size for paged span retrieval (default: 10000)",
     )
@@ -136,7 +136,7 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--overlap-window",
         type=float,
-        default=2.0,
+        default=None,
         metavar="SECONDS",
         help="Overlap window in seconds for live poll deduplication (default: 2.0)",
     )
