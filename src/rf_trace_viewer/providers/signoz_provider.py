@@ -275,7 +275,7 @@ class SigNozProvider(TraceProvider):
                     "key": {
                         "key": self._config.execution_attribute,
                         "dataType": "string",
-                        "type": "tag",
+                        "type": "resource",
                         "isColumn": False,
                     },
                     "op": "=",
