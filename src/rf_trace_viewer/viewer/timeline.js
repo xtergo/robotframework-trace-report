@@ -3040,34 +3040,54 @@
     // before any render happens.
     var _shouldAutoZoom = false;
     if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
-      // First data load: keep the current view window (e.g. 15m rolling preset).
-      // Spans appear naturally within the window. User can click "Locate Recent"
-      // to zoom into the cluster if desired.
-      timelineState.viewStart = savedViewStart;
-      timelineState.viewEnd = savedViewEnd;
-      // Extend minTime/maxTime to cover the view window so the preset range is preserved
-      if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-      if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+      // First data load: if a preset is active, use the rolling window (now - preset → now)
+      // so new spans that just arrived are visible. Otherwise keep the saved view.
+      if (timelineState._activePreset) {
+        var nowSec = Date.now() / 1000;
+        var presetSec = timelineState._activePreset;
+        timelineState.viewEnd = nowSec;
+        timelineState.viewStart = nowSec - presetSec;
+        if (timelineState.viewStart < timelineState.minTime) timelineState.minTime = timelineState.viewStart;
+        if (timelineState.viewEnd > timelineState.maxTime) timelineState.maxTime = timelineState.viewEnd;
+      } else {
+        timelineState.viewStart = savedViewStart;
+        timelineState.viewEnd = savedViewEnd;
+        if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+        if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+      }
       var totalRange = timelineState.maxTime - timelineState.minTime;
       var viewRange = timelineState.viewEnd - timelineState.viewStart;
       timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
-      console.log('[Timeline] updateData: first data load, keeping current view ' +
-        _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+      console.log('[Timeline] updateData: first data load, view ' +
+        _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
     } else if (wasUserZoomed) {
       // Check if the saved view still overlaps with the (possibly pruned) data range.
       // After pruning, the data range can shrink so the old view points at empty space.
       var viewOverlapsData = timelineState.flatSpans.length > 0 &&
         savedViewEnd > timelineState.minTime && savedViewStart < timelineState.maxTime;
       if (!viewOverlapsData && timelineState.flatSpans.length > 0) {
-        // Saved view is completely outside the current data — restore saved view anyway.
-        // User can click "Locate Recent" to find the spans.
-        timelineState.zoom = savedZoom;
-        timelineState.viewStart = savedViewStart;
-        timelineState.viewEnd = savedViewEnd;
-        if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-        if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-        console.log('[Timeline] updateData: saved view has no overlap with data, keeping view ' +
-          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+        // Saved view is completely outside the current data.
+        // If a preset is active, snap to the rolling window so spans are visible.
+        // Otherwise keep the saved view — user can click "Locate Recent".
+        if (timelineState._activePreset) {
+          var nowSec2 = Date.now() / 1000;
+          var presetSec2 = timelineState._activePreset;
+          timelineState.viewEnd = nowSec2;
+          timelineState.viewStart = nowSec2 - presetSec2;
+          if (timelineState.viewStart < timelineState.minTime) timelineState.minTime = timelineState.viewStart;
+          if (timelineState.viewEnd > timelineState.maxTime) timelineState.maxTime = timelineState.viewEnd;
+          var tr = timelineState.maxTime - timelineState.minTime;
+          var vr = timelineState.viewEnd - timelineState.viewStart;
+          timelineState.zoom = (tr > 0 && vr > 0) ? tr / vr : 1;
+        } else {
+          timelineState.zoom = savedZoom;
+          timelineState.viewStart = savedViewStart;
+          timelineState.viewEnd = savedViewEnd;
+          if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+          if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+        }
+        console.log('[Timeline] updateData: no overlap, view ' +
+          _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
       } else {
         timelineState.zoom = savedZoom;
         timelineState.viewStart = savedViewStart;
