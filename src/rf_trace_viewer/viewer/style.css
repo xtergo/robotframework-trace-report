@@ -433,6 +433,21 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: var(--text-primary);
 }
 
+.rf-trace-viewer .timeline-resize-handle {
+  height: 5px;
+  cursor: ns-resize;
+  background: var(--border-color);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+  transition: background 0.15s;
+}
+
+.rf-trace-viewer .timeline-resize-handle:hover,
+.rf-trace-viewer .timeline-resize-handle:active {
+  background: var(--focus-outline, #1976d2);
+}
+
 .rf-trace-viewer .panel-filter {
   width: 280px;
   min-width: 220px;
@@ -2877,4 +2892,325 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-weight: 400;
   margin-left: auto;
   padding-right: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Date Range Picker — panel layout + Flatpickr theme overrides
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Panel container ── */
+.date-range-panel {
+  position: fixed;
+  z-index: 1000;
+  min-width: 580px;
+  max-width: 720px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: row;
+}
+
+/* ── Sidebar (presets) ── */
+.drp-sidebar {
+  width: 140px;
+  padding: 12px;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drp-preset {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.drp-preset:hover {
+  background: var(--hover-bg);
+}
+
+.drp-preset.active {
+  background: var(--focus-outline);
+  color: #fff;
+  border-color: var(--focus-outline);
+}
+
+/* ── Main area (calendar + inputs + actions) ── */
+.drp-main {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Calendar host — Flatpickr handles its own layout */
+.drp-calendar-container {
+  /* minimal — Flatpickr manages internal sizing */
+}
+
+/* ── Manual entry row ── */
+.drp-manual-row {
+  display: flex;
+  gap: 12px;
+}
+
+.drp-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drp-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.drp-manual-input {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.drp-manual-input:focus {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -1px;
+}
+
+.drp-field-error {
+  font-size: 11px;
+  color: var(--status-fail);
+  min-height: 16px;
+}
+
+/* ── Range summary ── */
+.drp-summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  min-height: 20px;
+}
+
+/* ── Action buttons ── */
+.drp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.drp-cancel {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.drp-cancel:hover {
+  background: var(--hover-bg);
+}
+
+.drp-apply {
+  background: var(--focus-outline);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.drp-apply:hover {
+  filter: brightness(1.1);
+}
+
+.drp-apply:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Flatpickr theme overrides — CSS custom properties for
+   automatic light / dark theme support
+   ══════════════════════════════════════════════════════════════ */
+
+.rf-trace-viewer .flatpickr-calendar {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  box-shadow: none;
+}
+
+.rf-trace-viewer .flatpickr-months .flatpickr-month {
+  color: var(--text-primary);
+  fill: var(--text-primary);
+}
+
+.rf-trace-viewer .flatpickr-current-month {
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .flatpickr-weekdays {
+  background: var(--bg-secondary);
+}
+
+.rf-trace-viewer .flatpickr-weekday {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.rf-trace-viewer .flatpickr-day {
+  color: var(--text-primary);
+  border-radius: 4px;
+}
+
+.rf-trace-viewer .flatpickr-day:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .flatpickr-day.selected,
+.rf-trace-viewer .flatpickr-day.startRange,
+.rf-trace-viewer .flatpickr-day.endRange {
+  background: var(--focus-outline);
+  color: #fff;
+  border-color: var(--focus-outline);
+}
+
+.rf-trace-viewer .flatpickr-day.inRange {
+  background: color-mix(in srgb, var(--focus-outline) 15%, transparent);
+  box-shadow: none;
+}
+
+.rf-trace-viewer .flatpickr-day.today {
+  border-color: var(--focus-outline);
+}
+
+.rf-trace-viewer .flatpickr-time {
+  border-top: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .flatpickr-time input {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.rf-trace-viewer .flatpickr-time .flatpickr-am-pm {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.rf-trace-viewer .flatpickr-months .flatpickr-prev-month,
+.rf-trace-viewer .flatpickr-months .flatpickr-next-month {
+  color: var(--text-primary);
+  fill: var(--text-primary);
+}
+
+.rf-trace-viewer .flatpickr-months .flatpickr-prev-month:hover,
+.rf-trace-viewer .flatpickr-months .flatpickr-next-month:hover {
+  color: var(--focus-outline);
+  fill: var(--focus-outline);
+}
+
+.rf-trace-viewer .numInputWrapper:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .flatpickr-day.flatpickr-disabled {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Fallback container (when Flatpickr fails to load)
+   ══════════════════════════════════════════════════════════════ */
+
+.drp-fallback-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.drp-fallback-input {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* ── Date Range Picker — Responsive layout ── */
+
+@media (max-width: 640px) {
+  .date-range-panel {
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100vw;
+    width: 100%;
+  }
+
+  .drp-sidebar {
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .drp-preset {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .drp-manual-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* Touch targets — minimum 44x44px on touch-capable devices */
+@media (pointer: coarse) {
+  .drp-preset {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .drp-manual-input {
+    min-height: 44px;
+  }
+
+  .drp-apply,
+  .drp-cancel {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Internal scroll if panel exceeds viewport height */
+.date-range-panel {
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
 }

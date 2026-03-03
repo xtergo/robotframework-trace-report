@@ -386,6 +386,7 @@
         return;
       }
 
+      var _deltaFetchOrigStart = _loadWindowState.activeWindowStart;
       _loadWindowState.isFetching = true;
       console.log('[live] Delta fetch starting: from=' + fromTime + ' to=' + toTime +
         ' (' + Math.round(toTime - fromTime) + 's)');
@@ -398,6 +399,17 @@
         _loadWindowState.isFetching = false;
         _loadWindowState.totalCachedSpans = allSpans.length;
         console.log('[live] Delta fetch complete: allSpans=' + allSpans.length);
+        // If still 0 spans after backward fetch, snap activeWindowStart back
+        // to the lookback origin so the grey overlay doesn't cover the whole view.
+        if (allSpans.length === 0 && _loadWindowState.activeWindowStart < _deltaFetchOrigStart) {
+          console.log('[live] Delta fetch found nothing, resetting activeWindowStart');
+          _loadWindowState.activeWindowStart = _deltaFetchOrigStart;
+          if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+            window.RFTraceViewer.emit('active-window-start', {
+              activeWindowStart: _loadWindowState.activeWindowStart
+            });
+          }
+        }
         if (window.RFTraceViewer && window.RFTraceViewer.emit) {
           window.RFTraceViewer.emit('delta-fetch-end', { spanCount: allSpans.length });
         }
@@ -427,6 +439,9 @@
               _ingestSigNozSpans(data.spans);
             } else {
               console.log('[live] Delta fetch got 0 spans');
+            }
+            if (data && data.earliest_db_span_ns && data.earliest_db_span_ns > 0) {
+              _connectionState.earliestDbSpanNs = data.earliest_db_span_ns;
             }
             _finishDeltaFetch();
           })
@@ -507,6 +522,7 @@
     // Data watermark
     lastSeenNs: 0,
     earliestSpanNs: 0,
+    earliestDbSpanNs: 0, // earliest span in DB (from server)
     totalSpans: 0,
     // Combined req/limit display strings
     memSummary: null,
@@ -648,6 +664,7 @@
           cpuLimitMc: _connectionState.cpuLimitMc,
           lastSeenNs: _connectionState.lastSeenNs,
           earliestSpanNs: _connectionState.earliestSpanNs,
+          earliestDbSpanNs: _connectionState.earliestDbSpanNs,
           totalSpans: _connectionState.totalSpans,
           memSummary: _connectionState.memSummary,
           cpuSummary: _connectionState.cpuSummary
@@ -849,6 +866,25 @@
     _listenVisibility();
     // Do an immediate first poll
     _poll();
+
+    // Wall-clock advance: every 10s, push the timeline right edge to now
+    // and auto-unmark the preset button when elapsed time exceeds the preset.
+    var _wallClockLoadTime = Date.now() / 1000;
+    var _wallClockLookbackSec = _lookbackNs > 0 ? _lookbackNs / 1e9 : 0;
+    setInterval(function () {
+      // Advance the timeline right edge to wall-clock time
+      if (typeof window.advanceTimelineNow === 'function') {
+        window.advanceTimelineNow();
+      }
+      // Auto-unmark preset once the view has grown beyond the preset duration.
+      // After even 10s the view is 15m10s which is no longer "15m".
+      if (_wallClockLookbackSec > 0 && typeof window.clearActivePreset === 'function') {
+        var elapsed = (Date.now() / 1000) - _wallClockLoadTime;
+        if (elapsed > 10) {
+          window.clearActivePreset();
+        }
+      }
+    }, 10000);
   }
 
   function _startPolling() {
@@ -982,7 +1018,14 @@
 
   function _pollSigNoz() {
     polling = true;
-    var url = '/api/spans?since_ns=' + lastSeenNs;
+    // Apply 5-second lookback buffer to handle out-of-order span arrival.
+    // Spans may arrive with timestamps slightly before the watermark due to:
+    // - Concurrent test execution
+    // - Network/processing delays
+    // - Clock skew between components
+    var lookbackBufferNs = 5 * 1e9; // 5 seconds in nanoseconds
+    var pollFromNs = Math.max(0, lastSeenNs - lookbackBufferNs);
+    var url = '/api/spans?since_ns=' + pollFromNs;
     var svc = _serviceFilter;
     // Always send service param so server doesn't fall back to its config default
     // Empty string = no filter (all services)
@@ -1047,6 +1090,10 @@
         if (!data || !data.spans) {
           _updateTelemetry(0);
           return;
+        }
+        // Track earliest DB span timestamp from server (cached, updates slowly)
+        if (data.earliest_db_span_ns && data.earliest_db_span_ns > 0) {
+          _connectionState.earliestDbSpanNs = data.earliest_db_span_ns;
         }
         var spans = data.spans;
         if (spans.length > 0) {

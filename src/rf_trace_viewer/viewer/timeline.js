@@ -43,8 +43,8 @@
     hoveredSpan: null,
     selectedSpan: null,
     rowHeight: 24,
-    headerHeight: 40,
-    leftMargin: 200,
+    headerHeight: 48,
+    leftMargin: 110,
     rightMargin: 20,
     topMargin: 10,
     bottomMargin: 20,
@@ -59,12 +59,10 @@
     _markerSettleTimer: null,
     _markerPendingFetch: false,
     layoutMode: 'baseline',
-    autoCompactAfterFilter: false,
     _compactBtn: null,
     _activePreset: null,
     _presetBtns: [],
-    _timePickerEl: null,
-    _timePickerOpen: false,
+    _dateRangePicker: null,
     _fetchingDuration: null
   };
 
@@ -324,7 +322,7 @@
       _render();
     });
     markerToggle.appendChild(markerCb);
-    markerToggle.appendChild(document.createTextNode('Grid lines'));
+    markerToggle.appendChild(document.createTextNode('Grid span'));
 
     // Time grid toggle (adaptive — always on by default)
     var gridToggle = document.createElement('label');
@@ -338,7 +336,7 @@
       _render();
     });
     gridToggle.appendChild(gridCb);
-    gridToggle.appendChild(document.createTextNode('Grid'));
+    gridToggle.appendChild(document.createTextNode('Grid time'));
 
     // Compact layout toggle button
     var compactBtn = document.createElement('button');
@@ -383,19 +381,6 @@
     });
     zoomBar.appendChild(compactBtn);
     timelineState._compactBtn = compactBtn;
-
-    // Auto-compact after filtering toggle (default OFF)
-    var autoCompactToggle = document.createElement('label');
-    autoCompactToggle.className = 'zoom-bar-toggle';
-    var autoCompactCb = document.createElement('input');
-    autoCompactCb.type = 'checkbox';
-    autoCompactCb.checked = false;
-    autoCompactCb.setAttribute('aria-label', 'Auto-compact after filtering');
-    autoCompactCb.addEventListener('change', function () {
-      timelineState.autoCompactAfterFilter = autoCompactCb.checked;
-    });
-    autoCompactToggle.appendChild(autoCompactCb);
-    autoCompactToggle.appendChild(document.createTextNode('Auto-compact'));
 
     // ── Assemble zoom bar with grouped sections ──
     // Group 1: Navigation buttons
@@ -447,7 +432,13 @@
       btn.textContent = preset.label;
       btn.setAttribute('data-preset', preset.seconds);
       btn.setAttribute('aria-label', 'Show last ' + preset.label);
-      btn.addEventListener('click', function () { _applyPreset(preset.seconds); });
+      btn.addEventListener('click', function () {
+        _applyPreset(preset.seconds);
+        // Sync open picker if panel is visible
+        if (timelineState._dateRangePicker && timelineState._dateRangePicker.isOpen()) {
+          timelineState._dateRangePicker.updateSelection(timelineState.viewStart, timelineState.viewEnd);
+        }
+      });
       presetGroup.appendChild(btn);
       timelineState._presetBtns.push(btn);
     });
@@ -460,89 +451,31 @@
     calendarBtn.title = 'Select absolute time range';
     calendarBtn.setAttribute('aria-label', 'Open time range picker');
     calendarBtn.addEventListener('click', function () {
-      if (timelineState._timePickerOpen) {
-        _closeTimePicker();
+      if (dateRangePicker.isOpen()) {
+        dateRangePicker.close();
       } else {
-        _openTimePicker();
+        dateRangePicker.open();
       }
     });
     zoomBar.appendChild(calendarBtn);
 
-    // Time picker popover (hidden by default)
-    var timePickerEl = document.createElement('div');
-    timePickerEl.className = 'timeline-time-picker';
-    timePickerEl.setAttribute('role', 'dialog');
-    timePickerEl.setAttribute('aria-label', 'Select time range');
-    timePickerEl.style.display = 'none';
-
-    var startLabel = document.createElement('label');
-    startLabel.textContent = 'Start ';
-    var startInput = document.createElement('input');
-    startInput.type = 'datetime-local';
-    startInput.className = 'time-picker-input';
-    startInput.step = '1';
-    startLabel.appendChild(startInput);
-    timePickerEl.appendChild(startLabel);
-
-    var endLabel = document.createElement('label');
-    endLabel.textContent = 'End ';
-    var endInput = document.createElement('input');
-    endInput.type = 'datetime-local';
-    endInput.className = 'time-picker-input';
-    endInput.step = '1';
-    endLabel.appendChild(endInput);
-    timePickerEl.appendChild(endLabel);
-
-    var pickerError = document.createElement('div');
-    pickerError.className = 'time-picker-error';
-    pickerError.setAttribute('role', 'alert');
-    timePickerEl.appendChild(pickerError);
-
-    var applyBtn = document.createElement('button');
-    applyBtn.className = 'timeline-zoom-btn time-picker-apply';
-    applyBtn.textContent = 'Apply';
-    applyBtn.addEventListener('click', function () {
-      var s = new Date(startInput.value).getTime() / 1000;
-      var e = new Date(endInput.value).getTime() / 1000;
-      if (!isNaN(s) && !isNaN(e)) {
-        _applyTimePicker(s, e);
-      }
+    // DateRangePicker (replaces old timeline-time-picker popover)
+    var dateRangePicker = new window.RFTraceViewer.DateRangePicker({
+      anchorEl: calendarBtn,
+      containerEl: zoomBar,
+      onApply: function(startEpoch, endEpoch) {
+        _applyTimePicker(startEpoch, endEpoch);
+      },
+      onCancel: function() {
+        // No state changes on cancel
+      },
+      getViewWindow: function() {
+        return { start: timelineState.viewStart, end: timelineState.viewEnd };
+      },
+      themeRootEl: container
     });
-    timePickerEl.appendChild(applyBtn);
-
-    // Inline validation on input change
-    function _validateTimePicker() {
-      var s = new Date(startInput.value).getTime() / 1000;
-      var e = new Date(endInput.value).getTime() / 1000;
-      pickerError.textContent = '';
-      applyBtn.disabled = false;
-      if (!startInput.value || !endInput.value) {
-        applyBtn.disabled = true;
-        return;
-      }
-      if (isNaN(s) || isNaN(e)) {
-        applyBtn.disabled = true;
-        return;
-      }
-      if (s >= e) {
-        pickerError.textContent = 'Start must be before end';
-        applyBtn.disabled = true;
-        return;
-      }
-      // No max range limit for the date picker — users can reach any data in ClickHouse
-    }
-    startInput.addEventListener('input', _validateTimePicker);
-    endInput.addEventListener('input', _validateTimePicker);
-
-    // Store references
-    timelineState._timePickerEl = timePickerEl;
-    timelineState._timePickerStartInput = startInput;
-    timelineState._timePickerEndInput = endInput;
-    timelineState._timePickerError = pickerError;
-    timelineState._timePickerApplyBtn = applyBtn;
+    timelineState._dateRangePicker = dateRangePicker;
     timelineState._calendarBtn = calendarBtn;
-
-    zoomBar.appendChild(timePickerEl);
 
     // Separator
     var sep1 = document.createElement('span');
@@ -565,7 +498,6 @@
     var layoutGroup = document.createElement('div');
     layoutGroup.className = 'zoom-bar-group';
     layoutGroup.appendChild(compactBtn);
-    layoutGroup.appendChild(autoCompactToggle);
     zoomBar.appendChild(layoutGroup);
 
     headerEl.appendChild(zoomBar);
@@ -689,9 +621,12 @@
     function _syncHScroll() {
       if (_hScrollSyncing) return;
       var totalRange = timelineState.maxTime - timelineState.minTime;
-      if (totalRange <= 0) return;
+      if (totalRange <= 0) { hScrollWrap.style.display = 'none'; return; }
       var viewRange = timelineState.viewEnd - timelineState.viewStart;
       var ratio = totalRange / Math.max(viewRange, 0.001);
+      // Hide scrollbar when not zoomed (ratio ≈ 1.0)
+      if (ratio < 1.01) { hScrollWrap.style.display = 'none'; return; }
+      hScrollWrap.style.display = '';
       // Inner width = container width * ratio (makes scrollbar thumb proportional)
       var containerWidth = hScrollWrap.clientWidth;
       hScrollInner.style.width = Math.round(containerWidth * ratio) + 'px';
@@ -770,20 +705,8 @@
       window.RFTraceViewer.on('active-window-start', function (data) {
         if (data && data.activeWindowStart !== undefined) {
           timelineState.activeWindowStart = data.activeWindowStart;
-          // When there are zero spans, set up a default view window around
-          // activeWindowStart so the load-start marker is visible and draggable.
-          if (timelineState.flatSpans.length === 0) {
-            var now = Date.now() / 1000;
-            // Allow dragging leftward up to 7d (matching largest preset)
-            var maxLookback = 604800; // 7 days
-            timelineState.minTime = now - maxLookback;
-            timelineState.maxTime = now;
-            // Default view: from activeWindowStart to now (or a 5-min window if too narrow)
-            var range = now - data.activeWindowStart;
-            if (range < 300) range = 300; // minimum 5 minutes
-            timelineState.viewStart = data.activeWindowStart;
-            timelineState.viewEnd = data.activeWindowStart + range;
-          }
+          // Only adjust the view window when there are actual spans to show.
+          // With 0 spans, the marker and overlay are hidden, so no view changes needed.
           _render();
         }
       });
@@ -839,6 +762,51 @@
         btn.classList.remove('active');
       }
     }
+  };
+
+  /**
+   * Clear the active preset highlight.
+   * Called by live.js when the view expands beyond the initial lookback window.
+   */
+  window.clearActivePreset = function () {
+    _clearActivePreset();
+  };
+
+  /**
+   * Advance the timeline right edge to wall-clock time.
+   * Called every ~10s by live.js so the time axis stays current
+   * even when no new spans arrive.
+   * Only extends viewEnd if the user is already viewing the right edge
+   * (i.e. hasn't manually panned/zoomed away from it).
+   */
+  window.advanceTimelineNow = function () {
+    var nowSec = Date.now() / 1000;
+    var oldMaxTime = timelineState.maxTime;
+    // Always extend maxTime to now
+    if (nowSec > timelineState.maxTime) {
+      timelineState.maxTime = nowSec;
+    }
+    // Only slide the view window if no preset is active (passive live watching).
+    // When a preset is active the user explicitly chose a time range — don't override it.
+    if (!timelineState._activePreset) {
+      var viewRange = timelineState.viewEnd - timelineState.viewStart;
+      var wasAtRightEdge = (oldMaxTime - timelineState.viewEnd) < 2;
+      if (wasAtRightEdge) {
+        timelineState.viewEnd = nowSec;
+        timelineState.viewStart = nowSec - viewRange;
+        if (timelineState.viewStart < timelineState.minTime) {
+          timelineState.viewStart = timelineState.minTime;
+        }
+      }
+      // Update zoom ratio
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var newViewRange = timelineState.viewEnd - timelineState.viewStart;
+      timelineState.zoom = (totalRange > 0 && newViewRange > 0) ? totalRange / newViewRange : 1;
+      if (timelineState._syncSlider) timelineState._syncSlider();
+      if (timelineState._syncHScroll) timelineState._syncHScroll();
+    }
+    // Always re-render so the header timestamps stay fresh
+    _render();
   };
 
   /**
@@ -908,7 +876,11 @@
     if (!window.__RF_TRACE_LIVE__) return;
     if (timelineState.activeWindowStart === null) return;
     if (timelineState.viewStart < timelineState.activeWindowStart) {
+      var shift = timelineState.activeWindowStart - timelineState.viewStart;
       timelineState.viewStart = timelineState.activeWindowStart;
+      // Preserve the view range — push viewEnd forward by the same amount
+      // so the window never collapses to zero or negative width.
+      timelineState.viewEnd += shift;
     }
   }
 
@@ -1394,6 +1366,10 @@
       // Using totalRange caused the view to jump when totalRange >> viewRange.
       var currentRange = timelineState.viewEnd - timelineState.viewStart;
       var newRange = currentRange / factor;
+      // Enforce minimum view range: 0.1% of total data range, hard floor 0.5s
+      var totalDataRange = timelineState.maxTime - timelineState.minTime;
+      var MIN_VIEW_RANGE = Math.max(0.5, totalDataRange * 0.001);
+      if (newRange < MIN_VIEW_RANGE) newRange = MIN_VIEW_RANGE;
       // Keep mouse position anchored
       var canvasWidth = canvas.width / (window.devicePixelRatio || 1);
       var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
@@ -1425,6 +1401,7 @@
       var y = e.clientY - rect.top;
 
       // Check for Load Start Marker drag (left-click near marker, live mode only)
+      // Jog-shuttle style: displacement from anchor controls scroll speed, not position.
       if (e.button === 0 && !e.altKey && window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
         var markerX = _timeToScreenX(timelineState.activeWindowStart);
         // Clamp to left margin (same as rendering) so drag works when marker is pinned
@@ -1439,8 +1416,41 @@
           }
           timelineState.isDraggingMarker = true;
           timelineState._markerDragOldStart = timelineState.activeWindowStart;
+          timelineState._jogAnchorX = x;
+          timelineState._jogDisplacement = 0;
+          timelineState._jogLastTick = performance.now();
           canvas.style.cursor = 'ew-resize';
           _clearActivePreset();
+
+          // Start jog-shuttle animation loop
+          function _jogTick() {
+            if (!timelineState.isDraggingMarker) return;
+            var now = performance.now();
+            var dt = (now - timelineState._jogLastTick) / 1000; // seconds
+            timelineState._jogLastTick = now;
+
+            var disp = timelineState._jogDisplacement; // pixels from anchor
+            if (Math.abs(disp) > 5) { // dead zone of 5px
+              // Speed: proportional to displacement and current view range
+              // At max displacement (100px), scroll 1x viewRange per second
+              var viewRange = timelineState.viewEnd - timelineState.viewStart;
+              var maxDisp = 100;
+              var normalizedDisp = Math.max(-1, Math.min(1, disp / maxDisp));
+              // Quadratic curve for finer control near center
+              var speedFactor = normalizedDisp * Math.abs(normalizedDisp);
+              var scrollAmount = speedFactor * viewRange * dt;
+
+              timelineState.activeWindowStart += scrollAmount;
+              timelineState.viewStart += scrollAmount;
+              timelineState.viewEnd += scrollAmount;
+              timelineState.minTime = Math.min(timelineState.minTime, timelineState.viewStart);
+
+              _render();
+              _renderHeader();
+            }
+            timelineState._jogRAF = requestAnimationFrame(_jogTick);
+          }
+          timelineState._jogRAF = requestAnimationFrame(_jogTick);
           return;
         }
       }
@@ -1477,18 +1487,12 @@
 
     // Mouse move: update drag pan or selection
     canvas.addEventListener('mousemove', function (e) {
-      // Handle marker drag (Load Start Marker)
+      // Handle marker drag — jog shuttle: update displacement from anchor
       if (timelineState.isDraggingMarker) {
         var rect = canvas.getBoundingClientRect();
         var mx = e.clientX - rect.left;
-        var newTime = _screenXToTime(mx);
-        // Clamp to view bounds
-        if (newTime < timelineState.minTime) newTime = timelineState.minTime;
-        if (newTime > timelineState.maxTime) newTime = timelineState.maxTime;
-        timelineState.activeWindowStart = newTime;
-        // Don't fetch during drag — just update visuals.
-        // The actual load-window-changed is emitted on mouseup after a 1s settle delay.
-        _render();
+        // Displacement: negative = drag left = scroll back in time
+        timelineState._jogDisplacement = mx - timelineState._jogAnchorX;
         return;
       }
 
@@ -1547,8 +1551,12 @@
 
     // Mouse up: end drag or selection
     canvas.addEventListener('mouseup', function (e) {
-      // End marker drag
+      // End marker drag — stop jog shuttle
       if (timelineState.isDraggingMarker) {
+        if (timelineState._jogRAF) {
+          cancelAnimationFrame(timelineState._jogRAF);
+          timelineState._jogRAF = null;
+        }
         // Cancel any pending settle timer from a previous drag
         if (timelineState._markerSettleTimer) {
           clearTimeout(timelineState._markerSettleTimer);
@@ -1559,6 +1567,13 @@
         timelineState.isDraggingMarker = false;
         timelineState._markerDragAtLimit = false;
         canvas.style.cursor = 'crosshair';
+
+        // Process any data that arrived during the jog drag
+        if (timelineState._jogPendingData) {
+          var pendingData = timelineState._jogPendingData;
+          timelineState._jogPendingData = null;
+          window.updateTimelineData(pendingData);
+        }
 
         // Show "will load" indicator and wait 1s before actually fetching.
         // This lets the user adjust further without triggering expensive fetches.
@@ -1602,6 +1617,15 @@
           's selectionPx=' + selectionPx.toFixed(0) + 'px pass=' + (selectionPx > 10));
         if (selectionPx > 10) {
           _clearActivePreset();
+          // Enforce minimum view range: 0.1% of total data range, hard floor 0.5s
+          var totalDataRange = timelineState.maxTime - timelineState.minTime;
+          var MIN_VIEW_RANGE = Math.max(0.5, totalDataRange * 0.001);
+          if (selectedRange < MIN_VIEW_RANGE) {
+            var mid = (startTime + endTime) / 2;
+            startTime = mid - MIN_VIEW_RANGE / 2;
+            endTime = mid + MIN_VIEW_RANGE / 2;
+            selectedRange = MIN_VIEW_RANGE;
+          }
           // Set viewport to the selected range (zoom only, no filter)
           timelineState.viewStart = startTime;
           timelineState.viewEnd = endTime;
@@ -1631,6 +1655,10 @@
     canvas.addEventListener('mouseleave', function () {
       // Cancel marker drag if active
       if (timelineState.isDraggingMarker) {
+        if (timelineState._jogRAF) {
+          cancelAnimationFrame(timelineState._jogRAF);
+          timelineState._jogRAF = null;
+        }
         if (timelineState._markerDragDebounceTimer) {
           clearTimeout(timelineState._markerDragDebounceTimer);
           timelineState._markerDragDebounceTimer = null;
@@ -1859,7 +1887,7 @@
         0.05, 0.1, 0.2, 0.5,
         1, 2, 5, 10, 15, 30,
         60, 120, 300, 600, 900, 1800,
-        3600, 7200, 14400, 28800, 43200
+        3600, 7200, 14400, 28800, 43200, 86400
       ];
       var interval = niceIntervals[niceIntervals.length - 1];
       for (var ni = 0; ni < niceIntervals.length; ni++) {
@@ -1882,14 +1910,27 @@
         var x = _timeToScreenX(t);
         if (x >= timelineState.leftMargin + 20 && x <= width - timelineState.rightMargin - 20) {
           var label = _formatTime(t);
+
+          // Always show DD-MM-YYYY above the time
+          var tickDate = new Date(t * 1000);
+          var day = String(tickDate.getDate()).padStart(2, '0');
+          var mon = String(tickDate.getMonth() + 1).padStart(2, '0');
+          var yr = tickDate.getFullYear();
+          var dateLabel = day + '-' + mon + '-' + yr;
+
           var labelW = ctx.measureText(label).width;
+          var dateLabelW = ctx.measureText(dateLabel).width;
+          if (dateLabelW > labelW) labelW = dateLabelW;
+
           var labelLeft = x - labelW / 2;
 
           // Skip this label if it would overlap the previous one
           if (labelLeft < lastLabelRight + MIN_LABEL_GAP) continue;
 
           ctx.fillStyle = textColor;
-          ctx.fillText(label, x, height - 10);
+          // Two rows: date on top, time on bottom
+          ctx.fillText(dateLabel, x, height - 20);
+          ctx.fillText(label, x, height - 8);
           lastLabelRight = x + labelW / 2;
 
           ctx.strokeStyle = borderColor;
@@ -2273,23 +2314,7 @@
 
       ctx.setLineDash([]);
 
-      // Draw small labels at the bottom of the main canvas for each grid line
-      ctx.font = '9px sans-serif';
-      ctx.fillStyle = labelColor;
-      ctx.textAlign = 'center';
-      var lastGridLabelRight = -Infinity;
-      var GRID_LABEL_GAP = 6;
-      for (var t2 = firstTick; t2 <= viewEnd; t2 += interval) {
-        var x2 = _timeToScreenX(t2);
-        if (x2 >= timelineState.leftMargin + 20 && x2 <= width - timelineState.rightMargin - 20) {
-          var glabel = _formatGridLabel(t2, interval);
-          var glabelW = ctx.measureText(glabel).width;
-          var glabelLeft = x2 - glabelW / 2;
-          if (glabelLeft < lastGridLabelRight + GRID_LABEL_GAP) continue;
-          ctx.fillText(glabel, x2, height - 4);
-          lastGridLabelRight = x2 + glabelW / 2;
-        }
-      }
+      // Bottom grid labels removed — header now always shows DD-MM-YYYY + time
 
       ctx.restore();
     }
@@ -2800,16 +2825,6 @@
       _reassignFilteredLanes(filteredWorkers);
     }
     
-    // If auto-compact is enabled, re-apply compact layout after filter (Req 6.3)
-    if (timelineState.autoCompactAfterFilter) {
-      timelineState.layoutMode = 'compact';
-      _compactLanes(timelineState.workers);
-      if (timelineState._compactBtn) {
-        timelineState._compactBtn.textContent = 'Reset layout';
-        timelineState._compactBtn.setAttribute('aria-label', 'Reset layout');
-      }
-    }
-    
     // Recalculate canvas height based on filtered content
     var canvas = timelineState.canvas;
     if (canvas) {
@@ -2951,6 +2966,24 @@
   window.updateTimelineData = function (data) {
     if (!timelineState.canvas || !timelineState.ctx) return;
 
+    // While the jog shuttle is active, defer data updates to avoid
+    // fighting with the continuous scroll. Queue the data and process
+    // it when the drag ends.
+    if (timelineState.isDraggingMarker) {
+      timelineState._jogPendingData = data;
+      return;
+    }
+
+    // Cancel any pending marker settle timer. When new data arrives (especially
+    // on first data load), a stale settle timer can fire load-window-changed
+    // after _autoZoomToRecentCluster has set up the view, causing a cascade of
+    // prune → rebuild → view reset. Cancelling it here breaks that cycle.
+    if (timelineState._markerSettleTimer) {
+      clearTimeout(timelineState._markerSettleTimer);
+      timelineState._markerSettleTimer = null;
+      timelineState._markerPendingFetch = false;
+    }
+
     // Save current zoom/pan state
     var savedZoom = timelineState.zoom;
     var savedViewStart = timelineState.viewStart;
@@ -2985,33 +3018,74 @@
     // Restore zoom/view BEFORE resizing canvas (which triggers _render).
     // _processSpans resets viewStart/viewEnd to full range; we must fix that
     // before any render happens.
+    var _shouldAutoZoom = false;
     if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
-      // First data load: auto-zoom handled after resize below
+      // First data load: always auto-zoom to the recent cluster.
+      _shouldAutoZoom = true;
+      console.log('[Timeline] updateData: first data load, will auto-zoom to recent cluster');
     } else if (wasUserZoomed) {
-      timelineState.zoom = savedZoom;
-      timelineState.viewStart = savedViewStart;
-      timelineState.viewEnd = savedViewEnd;
+      // Check if the saved view still overlaps with the (possibly pruned) data range.
+      // After pruning, the data range can shrink so the old view points at empty space.
+      var viewOverlapsData = timelineState.flatSpans.length > 0 &&
+        savedViewEnd > timelineState.minTime && savedViewStart < timelineState.maxTime;
+      if (!viewOverlapsData && timelineState.flatSpans.length > 0) {
+        // Saved view is completely outside the current data — re-zoom to recent cluster
+        _shouldAutoZoom = true;
+        console.log('[Timeline] updateData: saved view (' + _fmtEpoch(savedViewStart) +
+          ' → ' + _fmtEpoch(savedViewEnd) + ') has no overlap with data (' +
+          _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime) +
+          '), will re-zoom to recent cluster');
+      } else {
+        timelineState.zoom = savedZoom;
+        timelineState.viewStart = savedViewStart;
+        timelineState.viewEnd = savedViewEnd;
 
-      // Tail-follow: only extend viewEnd if the user was viewing a narrow
-      // window near the data edge AND the data edge moved forward (new live
-      // data arrived). Skip when the data range expanded because older data
-      // was loaded (e.g. fallback full fetch or delta fetch).
-      var dataEdgeMoved = timelineState.maxTime > savedMaxTime;
-      var dataStartMoved = timelineState.minTime < (savedMinTime || timelineState.minTime);
-      if (wasTailFollowing && dataEdgeMoved && !dataStartMoved) {
-        var extension = timelineState.maxTime - savedMaxTime;
-        timelineState.viewEnd += extension;
-        var totalRange = timelineState.maxTime - timelineState.minTime;
-        var viewRange = timelineState.viewEnd - timelineState.viewStart;
-        if (totalRange > 0 && viewRange > 0) {
-          timelineState.zoom = totalRange / viewRange;
+        // Tail-follow: only extend viewEnd if the user was viewing a narrow
+        // window near the data edge AND the data edge moved forward (new live
+        // data arrived). Skip when the data range expanded because older data
+        // was loaded (e.g. fallback full fetch or delta fetch).
+        var dataEdgeMoved = timelineState.maxTime > savedMaxTime;
+        var dataStartMoved = timelineState.minTime < (savedMinTime || timelineState.minTime);
+        if (wasTailFollowing && dataEdgeMoved && !dataStartMoved) {
+          var extension = timelineState.maxTime - savedMaxTime;
+          timelineState.viewEnd += extension;
+          var totalRange = timelineState.maxTime - timelineState.minTime;
+          var viewRange = timelineState.viewEnd - timelineState.viewStart;
+          if (totalRange > 0 && viewRange > 0) {
+            timelineState.zoom = totalRange / viewRange;
+          }
         }
+        console.log('[Timeline] updateData: restoring zoom=' + timelineState.zoom.toFixed(1) +
+          ', view=' + _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
       }
-      console.log('[Timeline] updateData: restoring zoom=' + timelineState.zoom.toFixed(1) +
-        ', view=' + _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
     } else {
-      console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
-        '), showing full range');
+      // Not zoomed (zoom ≈ 1.0). If we already had spans, keep the current
+      // view — this prevents repeated updateData calls from resetting the
+      // view after _autoZoomToRecentCluster or marker drag set it up.
+      if (hadSpansBefore) {
+        // Check if new data extends beyond the current view
+        var dataExtendedBeyondView = timelineState.maxTime > savedViewEnd || 
+                                      timelineState.minTime < savedViewStart;
+        
+        if (dataExtendedBeyondView) {
+          // New spans arrived outside the view — expand to show all data
+          timelineState.viewStart = timelineState.minTime;
+          timelineState.viewEnd = timelineState.maxTime;
+          console.log('[Timeline] updateData: data extended beyond view, expanding to full range ' +
+            _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime));
+        } else {
+          // Data still within view — keep existing view
+          timelineState.viewStart = savedViewStart;
+          timelineState.viewEnd = savedViewEnd;
+          if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+          if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+          console.log('[Timeline] updateData: keeping existing view ' +
+            _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+        }
+      } else {
+        console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
+          '), showing full range');
+      }
     }
 
     // Recalculate canvas height for new content
@@ -3023,8 +3097,7 @@
       _resizeHeaderCanvas(timelineState.headerCanvas);
     }
 
-    if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
-      // First data load: auto-zoom to the most recent cluster of spans
+    if (_shouldAutoZoom && timelineState.flatSpans.length > 0) {
       _autoZoomToRecentCluster();
     }
 
@@ -3037,87 +3110,20 @@
   };
 
   /**
-   * Convert epoch seconds to a datetime-local input value string (YYYY-MM-DDTHH:MM:SS).
-   */
-  function _epochToDatetimeLocal(epochSec) {
-    var d = new Date(epochSec * 1000);
-    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-  }
-
-  /**
-   * Open the time picker popover, pre-populated with current view window.
+   * Open the date range picker panel.
    */
   function _openTimePicker() {
-    var el = timelineState._timePickerEl;
-    if (!el) return;
-
-    // Pre-populate with current view window
-    if (timelineState._timePickerStartInput) {
-      timelineState._timePickerStartInput.value = _epochToDatetimeLocal(timelineState.viewStart);
+    if (timelineState._dateRangePicker) {
+      timelineState._dateRangePicker.open();
     }
-    if (timelineState._timePickerEndInput) {
-      timelineState._timePickerEndInput.value = _epochToDatetimeLocal(timelineState.viewEnd);
-    }
-
-    // Clear previous errors
-    if (timelineState._timePickerError) {
-      timelineState._timePickerError.textContent = '';
-    }
-    if (timelineState._timePickerApplyBtn) {
-      timelineState._timePickerApplyBtn.disabled = false;
-    }
-
-    // Position below the calendar button
-    if (timelineState._calendarBtn) {
-      var btnRect = timelineState._calendarBtn.getBoundingClientRect();
-      var barRect = el.parentNode ? el.parentNode.getBoundingClientRect() : btnRect;
-      el.style.position = 'absolute';
-      el.style.top = (btnRect.bottom - barRect.top + 4) + 'px';
-      el.style.left = (btnRect.left - barRect.left) + 'px';
-    }
-
-    el.style.display = '';
-    timelineState._timePickerOpen = true;
-
-    // Click-outside listener (delayed to avoid catching the opening click)
-    setTimeout(function () {
-      timelineState._timePickerClickOutside = function (evt) {
-        if (!el.contains(evt.target) && evt.target !== timelineState._calendarBtn) {
-          _closeTimePicker();
-        }
-      };
-      document.addEventListener('mousedown', timelineState._timePickerClickOutside);
-    }, 0);
-
-    // Escape key listener
-    timelineState._timePickerEscapeHandler = function (evt) {
-      if (evt.key === 'Escape' || evt.keyCode === 27) {
-        _closeTimePicker();
-      }
-    };
-    document.addEventListener('keydown', timelineState._timePickerEscapeHandler);
   }
 
   /**
-   * Close the time picker popover and remove listeners.
+   * Close the date range picker panel.
    */
   function _closeTimePicker() {
-    var el = timelineState._timePickerEl;
-    if (!el) return;
-    el.style.display = 'none';
-    timelineState._timePickerOpen = false;
-
-    // Remove click-outside listener
-    if (timelineState._timePickerClickOutside) {
-      document.removeEventListener('mousedown', timelineState._timePickerClickOutside);
-      timelineState._timePickerClickOutside = null;
-    }
-    // Remove escape listener
-    if (timelineState._timePickerEscapeHandler) {
-      document.removeEventListener('keydown', timelineState._timePickerEscapeHandler);
-      timelineState._timePickerEscapeHandler = null;
+    if (timelineState._dateRangePicker) {
+      timelineState._dateRangePicker.close();
     }
   }
 
@@ -3166,8 +3172,7 @@
       serviceFilter: ''
     });
 
-    // Close popover and re-render
-    _closeTimePicker();
+    // Re-render
     if (timelineState._syncSlider) timelineState._syncSlider();
     if (timelineState._syncHScroll) timelineState._syncHScroll();
     _render();
@@ -3400,9 +3405,10 @@
     // Clamp to data bounds
     if (viewStart < timelineState.minTime) viewStart = timelineState.minTime;
     if (viewEnd > timelineState.maxTime) viewEnd = timelineState.maxTime;
-    // Clamp to activeWindowStart in live mode
+    // Clamp to activeWindowStart in live mode, but only if it doesn't
+    // invert the view window (can happen when spans are older than lookback)
     if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
-      if (viewStart < timelineState.activeWindowStart) {
+      if (viewStart < timelineState.activeWindowStart && timelineState.activeWindowStart < viewEnd) {
         viewStart = timelineState.activeWindowStart;
       }
     }

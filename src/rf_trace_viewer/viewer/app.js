@@ -521,7 +521,14 @@
     if (window.__RF_VERSION__) {
       var vBadge = document.createElement('span');
       vBadge.className = 'version-badge';
-      vBadge.textContent = ' v' + window.__RF_VERSION__;
+      // Extract devN tag from version string like "0.1.1 (abc1234-dev83)"
+      var devMatch = window.__RF_VERSION__.match(/dev(\d+)/);
+      if (devMatch) {
+        vBadge.textContent = ' dev' + devMatch[1];
+        vBadge.title = 'v' + window.__RF_VERSION__;
+      } else {
+        vBadge.textContent = ' v' + window.__RF_VERSION__;
+      }
       title.appendChild(vBadge);
     }
     header.appendChild(title);
@@ -582,6 +589,12 @@
         { label: 'Backend', key: 'backendType', el: null },
         { label: 'Total Spans', key: 'totalSpans', el: null, format: function (v) { return v != null ? v.toLocaleString() : '0'; } },
         { label: 'Earliest Span', key: 'earliestSpanNs', el: null, format: function (v) {
+          if (!v) return 'N/A';
+          var d = new Date(v / 1e6);
+          return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' +
+            String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+        }},
+        { label: 'Oldest DB Entry', key: 'earliestDbSpanNs', el: null, format: function (v) {
           if (!v) return 'N/A';
           var d = new Date(v / 1e6);
           return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' +
@@ -858,10 +871,6 @@
       hdDesc.className = 'hd-desc';
       hdDesc.textContent = 'Infrastructure metrics for this trace-viewer instance';
       hdHeader.appendChild(hdDesc);
-      var hdRange = document.createElement('span');
-      hdRange.className = 'hd-range';
-      hdRange.textContent = 'Last 60 min';
-      hdHeader.appendChild(hdRange);
       var hdToggle = document.createElement('button');
       hdToggle.className = 'hd-toggle';
       hdToggle.textContent = '\u25b2';
@@ -956,6 +965,10 @@
           }
         }
         if (maxY === minY) { maxY = minY + 1; }
+        // Always anchor Y-axis at 0 for all metrics so sparklines
+        // don't mislead when values are constant or near-constant.
+        if (minY > 0) minY = 0;
+        if (maxY === 0) maxY = 1;
         var rangeY = maxY - minY;
 
         // Draw filled area
@@ -1022,6 +1035,7 @@
               if (!_healthCharts.hasOwnProperty(key)) continue;
               var chart = _healthCharts[key];
               var series = [];
+              var durationSec = 0;
 
               if (key === 'spansPerSec') {
                 // spansPerSec comes from live connection state (client-side
@@ -1032,6 +1046,7 @@
                 chart.data.push(val != null ? val : 0);
                 if (chart.data.length > 360) chart.data.shift();
                 series = chart.data;
+                durationSec = (series.length - 1) * 10;
               } else {
                 // All other metrics (rss_mb, cpu_pct, active_users,
                 // total_spans) come from server resource snapshots.
@@ -1044,6 +1059,7 @@
                   series.push(v != null ? v : 0);
                 }
                 chart.data = series;
+                durationSec = (snaps.length - 1) * 10;
               }
 
               // Update current value display
@@ -1074,6 +1090,26 @@
               }
 
               _drawSparkline(chart, refs);
+
+              // Update duration hint in label
+              if (durationSec > 0) {
+                var durationLabel = durationSec >= 3600
+                  ? Math.round(durationSec / 3600) + 'hr'
+                  : durationSec >= 60
+                  ? Math.round(durationSec / 60) + 'min'
+                  : durationSec + 's';
+                var labelEl = chart.canvas.parentElement.querySelector('.hd-card-label');
+                if (labelEl) {
+                  var durationSpan = labelEl.querySelector('.hd-duration');
+                  if (!durationSpan) {
+                    durationSpan = document.createElement('span');
+                    durationSpan.className = 'hd-duration';
+                    durationSpan.style.cssText = 'opacity:0.4;font-size:0.8em;margin-left:4px;text-transform:none;';
+                    labelEl.appendChild(durationSpan);
+                  }
+                  durationSpan.textContent = '(' + durationLabel + ')';
+                }
+              }
             }
           })
           .catch(function () { /* silent */ });
@@ -1146,7 +1182,43 @@
     timelineSection.style.height = '300px';
     timelineSection.style.borderBottom = '1px solid var(--border-color)';
     centerColumn.appendChild(timelineSection);
-    
+
+    // Resize handle between timeline and tree
+    var resizeHandle = document.createElement('div');
+    resizeHandle.className = 'timeline-resize-handle';
+    resizeHandle.setAttribute('aria-label', 'Drag to resize timeline height');
+    centerColumn.appendChild(resizeHandle);
+
+    (function () {
+      var startY = 0;
+      var startH = 0;
+      var dragging = false;
+
+      resizeHandle.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        dragging = true;
+        startY = e.clientY;
+        startH = timelineSection.offsetHeight;
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+      });
+
+      document.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        var newH = Math.max(120, Math.min(startH + (e.clientY - startY), window.innerHeight - 200));
+        timelineSection.style.height = newH + 'px';
+        // Notify timeline to resize its canvases
+        window.dispatchEvent(new Event('resize'));
+      });
+
+      document.addEventListener('mouseup', function () {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      });
+    })();
+
     var treePanel = document.createElement('main');
     treePanel.className = 'panel-tree';
     centerColumn.appendChild(treePanel);
