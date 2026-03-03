@@ -365,8 +365,7 @@
     maxLookback: 0,              // 0 = no limit (presets self-clamp; picker is unconstrained)
     stepSize: 900,              // 15 minutes per delta fetch step
     isFetching: false,
-    totalCachedSpans: 0,
-    maxCachedSpans: 50000
+    totalCachedSpans: 0
   };
 
   /* ── Delta fetch engine ────────────────────────────────────────── */
@@ -381,8 +380,8 @@
         console.log('[live] Delta fetch skipped: already fetching');
         return;
       }
-      if (_loadWindowState.totalCachedSpans >= _loadWindowState.maxCachedSpans) {
-        console.log('[live] Delta fetch skipped: span cap reached');
+      if (allSpans.length >= MAX_SPANS) {
+        console.log('[live] Delta fetch skipped: global span cap reached');
         return;
       }
 
@@ -466,8 +465,8 @@
             _finishDeltaFetch();
             return;
           }
-          if (allSpans.length >= _loadWindowState.maxCachedSpans) {
-            console.warn('[live] Delta fetch stopped: span cap reached (' + allSpans.length + ')');
+          if (allSpans.length >= MAX_SPANS) {
+            console.warn('[live] Delta fetch stopped: global span cap reached (' + allSpans.length + ')');
             _finishDeltaFetch();
             return;
           }
