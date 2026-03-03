@@ -459,7 +459,7 @@ headers = {
 
 The SigNozProvider uses `POST /api/v3/query_range` for all data access:
 
-- **List executions**: Aggregate query grouped by execution attribute (e.g., `essvt.execution_id`)
+- **List executions**: Aggregate query grouped by execution attribute (e.g., `execution_id`)
 - **Fetch spans**: List query with filters (execution ID, trace ID, service name), pagination via offset/limit, ordered by timestamp ascending
 - **Live poll**: Same as fetch spans but with a time-based start filter and overlap window for dedup
 

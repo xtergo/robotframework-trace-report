@@ -4,10 +4,10 @@ WORKDIR /rf
 
 # Install dependencies (cached layer)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir robotframework==7.4.1 robotframework-tracer
+    pip install --no-cache-dir robotframework==7.4.1 robotframework-tracer==0.5.11
 
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4318/v1/traces
-ENV OTEL_RESOURCE_ATTRIBUTES="essvt.execution_id=integration-test-run"
+ENV OTEL_RESOURCE_ATTRIBUTES="execution_id=integration-test-run"
 # Flush spans every 1s instead of the default 5s
 ENV OTEL_BSP_SCHEDULE_DELAY=1000
 

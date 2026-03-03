@@ -117,8 +117,8 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--execution-attribute",
-        default="essvt.execution_id",
-        help="Span attribute name for grouping executions (default: essvt.execution_id)",
+        default="execution_id",
+        help="Span attribute name for grouping executions (default: execution_id)",
     )
     parser.add_argument(
         "--max-spans-per-page",

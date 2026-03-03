@@ -21,6 +21,6 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://otel-collector:4318/v1/traces"
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "essvt.execution_id=kind-test-run-002"
+          value: "execution_id=kind-test-run-002"
         - name: OTEL_BSP_SCHEDULE_DELAY
           value: "1000"

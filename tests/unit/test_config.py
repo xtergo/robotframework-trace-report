@@ -81,7 +81,7 @@ def test_load_config_file_sample_fixture():
     # Nested signoz.* keys flattened with prefix and snake_cased
     assert result["signoz_endpoint"] == "https://signoz.example.com"
     assert result["signoz_api_key"] == "your-api-key-here"
-    assert result["signoz_execution_attribute"] == "essvt.execution_id"
+    assert result["signoz_execution_attribute"] == "execution_id"
     assert result["signoz_poll_interval_seconds"] == 5
     assert result["signoz_max_spans_per_page"] == 10000
 
@@ -350,7 +350,7 @@ def test_app_config_defaults():
     assert config.title is None
     assert config.signoz_endpoint is None
     assert config.signoz_api_key is None
-    assert config.execution_attribute == "essvt.execution_id"
+    assert config.execution_attribute == "execution_id"
     assert config.poll_interval == 5
     assert config.max_spans_per_page == 10_000
     assert config.max_spans == 500_000
@@ -382,7 +382,7 @@ def test_signoz_config_construction():
 def test_signoz_config_defaults():
     """Validates: Requirements 46.3 — SigNozConfig default values."""
     cfg = SigNozConfig(endpoint="https://x.com", api_key="k")
-    assert cfg.execution_attribute == "essvt.execution_id"
+    assert cfg.execution_attribute == "execution_id"
     assert cfg.poll_interval == 5
     assert cfg.max_spans_per_page == 10_000
     assert cfg.max_spans == 500_000
@@ -430,12 +430,12 @@ class TestEnvVarsDockerDeployment:
         assert isinstance(config.max_spans_per_page, int)
 
     def test_execution_attribute_env_overrides_default(self, monkeypatch):
-        """EXECUTION_ATTRIBUTE env var overrides the default 'essvt.execution_id'."""
+        """EXECUTION_ATTRIBUTE env var overrides the default 'execution_id'."""
         _clear_env(monkeypatch)
         monkeypatch.setenv("EXECUTION_ATTRIBUTE", "my.custom.attribute")
         config = load_config({})
         assert config.execution_attribute == "my.custom.attribute"
-        assert config.execution_attribute != "essvt.execution_id"
+        assert config.execution_attribute != "execution_id"
 
 
 class TestBaseUrlDeployment:

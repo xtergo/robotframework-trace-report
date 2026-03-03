@@ -18,7 +18,7 @@ def _make_config(**kwargs) -> SigNozConfig:
     defaults = {
         "endpoint": "https://signoz.example.com",
         "api_key": "test-key",
-        "execution_attribute": "essvt.execution_id",
+        "execution_attribute": "execution_id",
         "max_spans_per_page": 10_000,
         "overlap_window_seconds": 2.0,
     }

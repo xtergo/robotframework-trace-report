@@ -41,7 +41,7 @@ class AppConfig:
     # SigNoz provider settings
     signoz_endpoint: str | None = None
     signoz_api_key: str | None = None
-    execution_attribute: str = "essvt.execution_id"
+    execution_attribute: str = "execution_id"
     poll_interval: int = 5  # seconds (1-30)
     max_spans_per_page: int = 10_000
     max_spans: int = 500_000
@@ -93,7 +93,7 @@ class SigNozConfig:
 
     endpoint: str  # e.g. "https://signoz.example.com"
     api_key: str  # Bearer token or empty for auto-auth
-    execution_attribute: str = "essvt.execution_id"
+    execution_attribute: str = "execution_id"
     poll_interval: int = 5
     max_spans_per_page: int = 10_000
     max_spans: int = 500_000

@@ -1401,7 +1401,7 @@
   /** Build the full RFRunModel-equivalent from flat spans. */
   function _buildModel(spans) {
     // Execution attribute name (from server config)
-    var _execAttr = window.__RF_EXECUTION_ATTRIBUTE__ || 'essvt.execution_id';
+    var _execAttr = window.__RF_EXECUTION_ATTRIBUTE__ || 'execution_id';
 
     // Index spans by span_id
     var byId = {};

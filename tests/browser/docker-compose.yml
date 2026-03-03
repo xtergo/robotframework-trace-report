@@ -7,5 +7,14 @@ services:
       - ../..:/workspace
     environment:
       - PYTHONPATH=/workspace/src
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://trace-report-test-control-plane:30318/v1/traces
+      - OTEL_RESOURCE_ATTRIBUTES=execution_id=browser-test-run
+      - OTEL_BSP_SCHEDULE_DELAY=1000
     working_dir: /workspace
     command: pabot --processes 4 --exclude flaky --outputdir /workspace/tests/browser/results /workspace/tests/browser/suites
+    networks:
+      - kind
+
+networks:
+  kind:
+    external: true

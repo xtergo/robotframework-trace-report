@@ -145,7 +145,7 @@ All SigNoz-related CLI options are shared between the default command and the `s
 | `--signoz-endpoint <url>` | *(none)* | SigNoz API base URL. Required when `--provider signoz`. Also settable via `SIGNOZ_ENDPOINT` env var. |
 | `--signoz-api-key <token>` | *(none)* | SigNoz API key for authentication. Also readable from `SIGNOZ_API_KEY` env var. |
 | `--signoz-jwt-secret <secret>` | *(none)* | JWT signing secret for self-hosted SigNoz token auto-refresh. Also readable from `SIGNOZ_JWT_SECRET` env var. |
-| `--execution-attribute <name>` | `essvt.execution_id` | Span attribute name used to group spans into test executions. |
+| `--execution-attribute <name>` | `execution_id` | Span attribute name used to group spans into test executions. |
 | `--max-spans-per-page <N>` | `10000` | Page size for paged span retrieval from SigNoz. |
 | `--service-name <name>` | *(none)* | Filter SigNoz spans by `service.name` attribute (e.g., `robot-framework`). Also settable via `?service=<name>` URL parameter in the browser. |
 | `--lookback <duration>` | *(fetch all)* | Only fetch spans from the last N duration on startup (e.g., `10m`, `1h`, `30s`). Applies to live and SigNoz modes only. |
@@ -169,7 +169,7 @@ SigNoz settings can also be provided via a JSON configuration file:
   "signoz": {
     "endpoint": "https://signoz.example.com",
     "apiKey": "your-api-key-here",
-    "executionAttribute": "essvt.execution_id",
+    "executionAttribute": "execution_id",
     "pollIntervalSeconds": 5,
     "maxSpansPerPage": 10000
   }
@@ -403,7 +403,7 @@ Both should show `exited (exit 0)`.
    - OTLP/gRPC: port 4317 on the OTel Collector
    - OTLP/HTTP: port 4318 on the OTel Collector
 
-4. Check that the `--execution-attribute` matches the attribute set by your tracer (default: `essvt.execution_id`)
+4. Check that the `--execution-attribute` matches the attribute set by your tracer (default: `execution_id`)
 
 5. If using `--service-name`, verify the service name matches what the tracer reports (check `service.name` resource attribute in ClickHouse)
 

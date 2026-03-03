@@ -19,7 +19,7 @@ class RobotSemanticsLayer:
     Operates on TraceViewModel — provider-agnostic.
     """
 
-    def __init__(self, execution_attribute: str = "essvt.execution_id") -> None:
+    def __init__(self, execution_attribute: str = "execution_id") -> None:
         self._execution_attribute = execution_attribute
 
     def enrich(self, vm: TraceViewModel) -> TraceViewModel:

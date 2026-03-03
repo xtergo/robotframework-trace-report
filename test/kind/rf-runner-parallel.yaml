@@ -20,7 +20,7 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://otel-collector:4318/v1/traces"
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "essvt.execution_id=parallel-run-A"
+          value: "execution_id=parallel-run-A"
         - name: OTEL_BSP_SCHEDULE_DELAY
           value: "1000"
 ---
@@ -46,6 +46,6 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://otel-collector:4318/v1/traces"
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "essvt.execution_id=parallel-run-B"
+          value: "execution_id=parallel-run-B"
         - name: OTEL_BSP_SCHEDULE_DELAY
           value: "1000"

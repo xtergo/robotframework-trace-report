@@ -228,7 +228,7 @@
     var tagSet = {};
     var suiteSet = {};
     var execSet = {};
-    var execAttr = window.__RF_EXECUTION_ATTRIBUTE__ || 'essvt.execution_id';
+    var execAttr = window.__RF_EXECUTION_ATTRIBUTE__ || 'execution_id';
 
     for (var i = 0; i < spans.length; i++) {
       var span = spans[i];

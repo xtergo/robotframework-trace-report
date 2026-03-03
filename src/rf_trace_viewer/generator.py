@@ -17,10 +17,14 @@ from rf_trace_viewer.rf_model import (
     RFRunModel,
 )
 
-# Order matters: stats.js, tree.js, timeline.js, keyword-stats.js, and search.js define functions used by app.js
+# Order matters: flatpickr.min.js must load first (defines window.flatpickr),
+# date-range-picker.js before timeline.js (defines DateRangePicker),
+# stats.js, tree.js, timeline.js, keyword-stats.js, and search.js define functions used by app.js
 _JS_FILES = (
+    "flatpickr.min.js",
     "stats.js",
     "tree.js",
+    "date-range-picker.js",
     "timeline.js",
     "keyword-stats.js",
     "search.js",
@@ -31,7 +35,7 @@ _JS_FILES = (
     "service-health.js",
     "app.js",
 )
-_CSS_FILES = ("style.css",)
+_CSS_FILES = ("flatpickr.min.css", "style.css")
 _VIEWER_DIR = Path(__file__).parent / "viewer"
 
 

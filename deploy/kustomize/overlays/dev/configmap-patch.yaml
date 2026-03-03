@@ -11,7 +11,7 @@ data:
   CLICKHOUSE_PORT: "8123"
   MAX_SPANS_PER_PAGE: "10000"
   MAX_SPANS: "500000"
-  EXECUTION_ATTRIBUTE: "essvt.execution_id"
+  EXECUTION_ATTRIBUTE: "execution_id"
   PORT: "8077"
   POLL_INTERVAL: "5"
   # Rate limiting for dev (generous)

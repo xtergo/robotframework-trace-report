@@ -92,7 +92,7 @@ The `serve` subcommand accepts all the same options as the default command excep
 | `--signoz-endpoint <url>` | *(none)* | SigNoz API base URL (required when `--provider signoz`). Also settable via `SIGNOZ_ENDPOINT` env var. |
 | `--signoz-api-key <token>` | *(none)* | SigNoz API key for authentication. Also readable from `SIGNOZ_API_KEY` env var. |
 | `--signoz-jwt-secret <secret>` | *(none)* | JWT signing secret for self-hosted SigNoz token auto-refresh. Also readable from `SIGNOZ_JWT_SECRET` env var. |
-| `--execution-attribute <name>` | `essvt.execution_id` | Span attribute name used to group spans into test executions. |
+| `--execution-attribute <name>` | `execution_id` | Span attribute name used to group spans into test executions. |
 | `--max-spans-per-page <N>` | `10000` | Page size for paged span retrieval from SigNoz. |
 | `--service-name <name>` | *(none)* | Filter SigNoz spans by `service.name` attribute (e.g., `robot-framework`). Also settable via `?service=<name>` URL parameter by end users in the browser. |
 | `--lookback <duration>` | *(fetch all)* | Only fetch spans from the last N duration on startup (e.g., `10m`, `1h`, `30s`). Applies to live and SigNoz modes only. |

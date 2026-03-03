@@ -19,7 +19,7 @@ data:
   # Maximum total spans (affects memory usage: ~1KB per span)
   MAX_SPANS: "500000"
   # Execution attribute for SigNoz trace correlation
-  EXECUTION_ATTRIBUTE: "essvt.execution_id"
+  EXECUTION_ATTRIBUTE: "execution_id"
   # Server port
   PORT: "8077"
   # Poll interval for live mode (seconds, 1-30)

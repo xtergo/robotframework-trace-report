@@ -8,13 +8,16 @@ metadata:
     app.kubernetes.io/name: otel-collector
     app.kubernetes.io/part-of: signoz-test
 spec:
+  type: NodePort
   ports:
     - name: otlp-grpc
       port: 4317
       targetPort: 4317
+      nodePort: 30317
     - name: otlp-http
       port: 4318
       targetPort: 4318
+      nodePort: 30318
     - name: health
       port: 13133
       targetPort: 13133

@@ -385,17 +385,16 @@ class SigNozProvider(TraceProvider):
             "step": 60,
         }
 
-    @staticmethod
-    def _build_span_filters(execution_id: str | None, trace_id: str | None) -> list[dict]:
+    def _build_span_filters(self, execution_id: str | None, trace_id: str | None) -> list[dict]:
         """Build filter items for span queries."""
         items: list[dict] = []
         if execution_id is not None:
             items.append(
                 {
                     "key": {
-                        "key": "essvt.execution_id",
+                        "key": self._config.execution_attribute,
                         "dataType": "string",
-                        "type": "tag",
+                        "type": "resource",
                         "isColumn": False,
                     },
                     "op": "=",
@@ -420,6 +419,75 @@ class SigNozProvider(TraceProvider):
     def _build_span_query(self, filters: list[dict], offset: int = 0, limit: int = 10_000) -> dict:
         """Build query_range payload for fetching spans."""
         now_s = int(time.time())
+        # Build select columns — always include the execution attribute
+        # as a resource-level column so SigNoz returns it in the response.
+        select_columns = [
+            {"key": "spanID", "dataType": "string", "type": "", "isColumn": True},
+            {
+                "key": "parentSpanID",
+                "dataType": "string",
+                "type": "",
+                "isColumn": True,
+            },
+            {"key": "traceID", "dataType": "string", "type": "", "isColumn": True},
+            {
+                "key": "serviceName",
+                "dataType": "string",
+                "type": "",
+                "isColumn": True,
+            },
+            {
+                "key": "durationNano",
+                "dataType": "float64",
+                "type": "",
+                "isColumn": True,
+            },
+            {
+                "key": "statusCode",
+                "dataType": "float64",
+                "type": "",
+                "isColumn": True,
+            },
+            {"key": "name", "dataType": "string", "type": "", "isColumn": True},
+            # RF-specific tag attributes for test/suite/keyword classification
+            {
+                "key": "rf.suite.name",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "rf.test.name",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "rf.keyword.name",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "rf.status",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+        ]
+        # Execution attribute is a resource attribute set via
+        # OTEL_RESOURCE_ATTRIBUTES — request it as type "resource"
+        # so SigNoz includes it in the response.
+        exec_attr = self._config.execution_attribute
+        if exec_attr:
+            select_columns.append(
+                {
+                    "key": exec_attr,
+                    "dataType": "string",
+                    "type": "resource",
+                    "isColumn": False,
+                }
+            )
         return {
             "compositeQuery": {
                 "builderQueries": {
@@ -429,60 +497,7 @@ class SigNozProvider(TraceProvider):
                         "dataSource": "traces",
                         "aggregateOperator": "noop",
                         "filters": {"items": filters, "op": "AND"},
-                        "selectColumns": [
-                            {"key": "spanID", "dataType": "string", "type": "", "isColumn": True},
-                            {
-                                "key": "parentSpanID",
-                                "dataType": "string",
-                                "type": "",
-                                "isColumn": True,
-                            },
-                            {"key": "traceID", "dataType": "string", "type": "", "isColumn": True},
-                            {
-                                "key": "serviceName",
-                                "dataType": "string",
-                                "type": "",
-                                "isColumn": True,
-                            },
-                            {
-                                "key": "durationNano",
-                                "dataType": "float64",
-                                "type": "",
-                                "isColumn": True,
-                            },
-                            {
-                                "key": "statusCode",
-                                "dataType": "float64",
-                                "type": "",
-                                "isColumn": True,
-                            },
-                            {"key": "name", "dataType": "string", "type": "", "isColumn": True},
-                            # RF-specific tag attributes for test/suite/keyword classification
-                            {
-                                "key": "rf.suite.name",
-                                "dataType": "string",
-                                "type": "tag",
-                                "isColumn": False,
-                            },
-                            {
-                                "key": "rf.test.name",
-                                "dataType": "string",
-                                "type": "tag",
-                                "isColumn": False,
-                            },
-                            {
-                                "key": "rf.keyword.name",
-                                "dataType": "string",
-                                "type": "tag",
-                                "isColumn": False,
-                            },
-                            {
-                                "key": "rf.status",
-                                "dataType": "string",
-                                "type": "tag",
-                                "isColumn": False,
-                            },
-                        ],
+                        "selectColumns": select_columns,
                         "orderBy": [{"columnName": "timestamp", "order": "asc"}],
                         "limit": limit,
                         "offset": offset,
@@ -543,10 +558,23 @@ class SigNozProvider(TraceProvider):
                         for k, v in tag_map.items():
                             attributes[k] = str(v)
 
-                # Extract RF-specific attributes from data dict (SigNoz v0.113+
-                # returns requested tag attributes directly in the data dict)
+                # Also merge resource-level tags (SigNoz stores resource
+                # attributes set via OTEL_RESOURCE_ATTRIBUTES here)
+                for res_key in ("resourceTagsMap", "resourceStringTagsMap"):
+                    res_map = data.get(res_key)
+                    if isinstance(res_map, dict):
+                        for k, v in res_map.items():
+                            if k not in attributes:
+                                attributes[k] = str(v)
+
+                # Extract custom attributes from data dict (SigNoz v0.113+
+                # returns requested tag/resource attributes directly in the
+                # data dict when they are in selectColumns). We identify
+                # these by their dotted key format (e.g. "rf.suite.name",
+                # "my.custom.attr") — built-in columns like "spanID"
+                # or "traceID" never contain dots.
                 for k, v in data.items():
-                    if k.startswith("rf.") and k not in attributes:
+                    if "." in k and k not in attributes:
                         val = str(v)
                         if val:  # skip empty strings
                             attributes[k] = val

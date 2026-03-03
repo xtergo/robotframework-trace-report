@@ -3,7 +3,7 @@
   "signoz": {
     "endpoint": "https://signoz.example.com",
     "apiKey": "your-api-key-here",
-    "executionAttribute": "essvt.execution_id",
+    "executionAttribute": "execution_id",
     "pollIntervalSeconds": 5,
     "maxSpansPerPage": 10000
   }

@@ -149,15 +149,15 @@ class TestGroupByExecutionGroupsCorrectly:
     def test_group_by_execution_groups_correctly(self) -> None:
         span_a = _make_span(
             span_id="s1",
-            attributes={"essvt.execution_id": "exec-1"},
+            attributes={"execution_id": "exec-1"},
         )
         span_b = _make_span(
             span_id="s2",
-            attributes={"essvt.execution_id": "exec-2"},
+            attributes={"execution_id": "exec-2"},
         )
         span_c = _make_span(
             span_id="s3",
-            attributes={"essvt.execution_id": "exec-1"},
+            attributes={"execution_id": "exec-1"},
         )
         vm = _make_vm([span_a, span_b, span_c])
 
@@ -183,7 +183,7 @@ class TestGroupByExecutionUnknownForMissing:
     def test_group_by_execution_unknown_for_missing_attribute(self) -> None:
         span_with = _make_span(
             span_id="s1",
-            attributes={"essvt.execution_id": "exec-1"},
+            attributes={"execution_id": "exec-1"},
         )
         span_without = _make_span(
             span_id="s2",

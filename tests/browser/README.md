@@ -2,6 +2,44 @@
 
 This directory contains end-to-end browser tests using Robot Framework and Playwright.
 
+## Tracing Configuration
+
+Browser tests are instrumented with `robotframework-tracer` to send OTLP traces to the SigNoz collector running in the kind cluster. This allows the tests themselves to generate spans that appear in the live viewer.
+
+### Network Setup
+
+The browser test container joins the `kind` Docker network to communicate with services in the kind cluster:
+- **OTel Collector**: `trace-report-test-control-plane:30318` (OTLP HTTP NodePort)
+- **Live Viewer**: `trace-report-test-control-plane:30077` (NodePort service)
+
+### Environment Variables
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: Points to the OTel collector in the kind cluster
+- `OTEL_RESOURCE_ATTRIBUTES`: Sets execution ID for grouping spans
+- `OTEL_BSP_SCHEDULE_DELAY`: Flush spans every 1s (faster than default 5s)
+
+### Running Tests with Tracing
+
+```bash
+cd tests/browser
+docker compose run --rm browser-tests robot \
+  --listener robotframework_tracer.listener.TracingListener \
+  --outputdir /workspace/tests/browser/results \
+  --suite gantt_grid_consistency \
+  /workspace/tests/browser/suites/gantt_grid_consistency.robot
+```
+
+### Known Limitations
+
+**robotframework-tracer v0.5.11** has inconsistent test span emission:
+- ✅ Always emits: Suite spans (with `rf.suite.name`)
+- ✅ Always emits: Keyword spans (with `rf.keyword.name`)  
+- ⚠️ Sometimes missing: Test spans (with `rf.test.name`)
+
+Test-level spans may not appear for all test runs. The viewer works correctly with just suite and keyword spans, but the tree view will show suites → keywords instead of suites → tests → keywords.
+
+**Viewing browser test spans**: Browser tests generate spans successfully. To view them in the live viewer, click "Full Range" button or use `?lookback=0` URL parameter. The default 15-minute lookback window may not show older test spans. See `TRACING_ISSUE.md` for details.
+
 ## Quick Start
 
 ```bash

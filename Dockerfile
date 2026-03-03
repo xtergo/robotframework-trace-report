@@ -24,7 +24,7 @@ COPY --from=builder /install /usr/local
 # Environment defaults
 ENV SIGNOZ_ENDPOINT="" \
     SIGNOZ_API_KEY="" \
-    EXECUTION_ATTRIBUTE="essvt.execution_id" \
+    EXECUTION_ATTRIBUTE="execution_id" \
     POLL_INTERVAL="7" \
     MAX_SPANS_PER_PAGE="10000" \
     PORT="8077" \
