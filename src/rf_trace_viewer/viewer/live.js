@@ -422,38 +422,68 @@
       var fromNs = fromTime * 1e9;
 
       if (provider === 'signoz') {
-        // Single fetch — server returns all spans since fromNs
-        var url = '/api/spans?since_ns=' + fromNs;
-        var svc = _serviceFilter;
-        url += '&service=' + encodeURIComponent(svc || '');
-        if (_executionFilter) {
-          url += '&execution_id=' + encodeURIComponent(_executionFilter);
-        }
+        // Paginated fetch — server returns one page (max 10k spans) per request.
+        // Loop: fetch a page, advance the watermark to the highest span end time,
+        // fetch again until a page returns fewer than 10k (no more data).
+        var pageWatermark = fromNs;
+        var totalFetched = 0;
 
-        fetch(_appendSid(url))
-          .then(function (res) {
-            if (!res.ok) {
-              console.warn('[live] Delta fetch failed: HTTP ' + res.status);
-              return null;
-            }
-            return res.json();
-          })
-          .then(function (data) {
-            if (data && data.spans && data.spans.length > 0) {
-              console.log('[live] Delta fetch got ' + data.spans.length + ' spans');
-              _ingestSigNozSpans(data.spans);
-            } else {
-              console.log('[live] Delta fetch got 0 spans');
-            }
-            if (data && data.earliest_db_span_ns && data.earliest_db_span_ns > 0) {
-              _connectionState.earliestDbSpanNs = data.earliest_db_span_ns;
-            }
+        function fetchNextPage() {
+          if (allSpans.length >= MAX_SPANS) {
+            console.warn('[live] Delta fetch stopped: span cap reached');
             _finishDeltaFetch();
-          })
-          .catch(function (err) {
-            console.warn('[live] Delta fetch error:', err.message);
-            _finishDeltaFetch();
-          });
+            return;
+          }
+          var url = '/api/spans?since_ns=' + pageWatermark;
+          var svc = _serviceFilter;
+          url += '&service=' + encodeURIComponent(svc || '');
+          if (_executionFilter) {
+            url += '&execution_id=' + encodeURIComponent(_executionFilter);
+          }
+
+          fetch(_appendSid(url))
+            .then(function (res) {
+              if (!res.ok) {
+                console.warn('[live] Delta fetch page failed: HTTP ' + res.status);
+                return null;
+              }
+              return res.json();
+            })
+            .then(function (data) {
+              if (data && data.earliest_db_span_ns && data.earliest_db_span_ns > 0) {
+                _connectionState.earliestDbSpanNs = data.earliest_db_span_ns;
+              }
+              if (!data || !data.spans || data.spans.length === 0) {
+                console.log('[live] Delta fetch done: ' + totalFetched + ' spans total');
+                _finishDeltaFetch();
+                return;
+              }
+              var pageSize = data.spans.length;
+              totalFetched += pageSize;
+              var added = _ingestSigNozSpans(data.spans);
+              console.log('[live] Delta fetch page: ' + pageSize + ' spans (' + added + ' new), total=' + totalFetched);
+
+              // Render incrementally so the user sees progress
+              if (added > 0) {
+                _rebuildAndRender();
+              }
+
+              // If page was full (10k), there may be more — advance watermark and fetch next
+              if (pageSize >= 10000) {
+                // Advance watermark to lastSeenNs (updated by _ingestSigNozSpans)
+                pageWatermark = lastSeenNs;
+                fetchNextPage();
+              } else {
+                console.log('[live] Delta fetch done: ' + totalFetched + ' spans total (last page < 10k)');
+                _finishDeltaFetch();
+              }
+            })
+            .catch(function (err) {
+              console.warn('[live] Delta fetch error:', err.message);
+              _finishDeltaFetch();
+            });
+        }
+        fetchNextPage();
       } else {
         // JSON provider: use stepped fetch (supports from_ns/to_ns)
         var stepSize = _loadWindowState.stepSize;
