@@ -7,6 +7,7 @@ rows into canonical TraceSpan objects consumed by the rendering pipeline.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sys
 import time
@@ -27,6 +28,8 @@ from .base import (
     TraceViewModel,
 )
 from .signoz_auth import SigNozAuth
+
+logger = logging.getLogger(__name__)
 
 # SigNoz status code mapping: 0=UNSET, 1=OK, 2=ERROR
 _STATUS_MAP = {"0": "UNSET", "1": "OK", "2": "ERROR"}
@@ -164,7 +167,68 @@ class SigNozProvider(TraceProvider):
     def supports_live_poll(self) -> bool:
         return True
 
-    def poll_new_spans(self, since_ns: int, service_name: str | None = None) -> TraceViewModel:
+    def get_earliest_span_ns(self) -> int:
+        """Return the timestamp (ns) of the earliest span in the DB.
+
+        Uses a limit-1 query ordered by timestamp ASC.  Result is cached
+        for 5 minutes so repeated calls are cheap.
+        """
+        now = time.monotonic()
+        if hasattr(self, "_earliest_span_cache") and self._earliest_span_cache[1] > now:
+            return self._earliest_span_cache[0]
+
+        now_s = int(time.time())
+        query = {
+            "compositeQuery": {
+                "builderQueries": {
+                    "A": {
+                        "queryName": "A",
+                        "expression": "A",
+                        "dataSource": "traces",
+                        "aggregateOperator": "noop",
+                        "filters": {"items": [], "op": "AND"},
+                        "selectColumns": [
+                            {
+                                "key": "timestamp",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            },
+                        ],
+                        "orderBy": [{"columnName": "timestamp", "order": "asc"}],
+                        "limit": 1,
+                        "offset": 0,
+                    }
+                },
+                "panelType": "list",
+                "queryType": "builder",
+            },
+            "start": 1_000_000_000,  # ~2001 — far enough back
+            "end": now_s,
+            "step": 60,
+        }
+        try:
+            response = self._api_request("/api/v3/query_range", query)
+            result_container = response.get("data") or response
+            result = result_container.get("result") or []
+            for series in result:
+                for row in series.get("list") or []:
+                    row_ts = row.get("timestamp")
+                    if row_ts is not None:
+                        ns = _parse_timestamp(row_ts)
+                        if ns > 0:
+                            self._earliest_span_cache = (ns, now + 300)
+                            return ns
+        except Exception:
+            pass
+        return 0
+
+    def poll_new_spans(
+        self,
+        since_ns: int,
+        service_name: str | None = None,
+        execution_id: str | None = None,
+    ) -> TraceViewModel:
         """Fetch spans newer than since_ns with overlap window.
 
         No server-side dedup here — the browser's lastSeenNs watermark
@@ -201,6 +265,21 @@ class SigNozProvider(TraceProvider):
                     },
                     "op": "=",
                     "value": svc,
+                }
+            )
+
+        # Execution ID filter — narrows to a specific test run
+        if execution_id:
+            filters.append(
+                {
+                    "key": {
+                        "key": self._config.execution_attribute,
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    "op": "=",
+                    "value": execution_id,
                 }
             )
 

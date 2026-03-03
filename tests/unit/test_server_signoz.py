@@ -363,7 +363,9 @@ class TestServiceNameFilter:
 
         _get_api_spans(server, since_ns=0, service_name="robot-framework")
 
-        provider.poll_new_spans.assert_called_once_with(0, service_name="robot-framework")
+        provider.poll_new_spans.assert_called_once_with(
+            0, service_name="robot-framework", execution_id=None
+        )
 
     def test_service_name_none_when_not_provided(self):
         provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
@@ -371,7 +373,7 @@ class TestServiceNameFilter:
 
         _get_api_spans(server, since_ns=0)
 
-        provider.poll_new_spans.assert_called_once_with(0, service_name=None)
+        provider.poll_new_spans.assert_called_once_with(0, service_name=None, execution_id=None)
 
     def test_service_name_returns_filtered_spans(self):
         """When service_name is provided, response still contains valid JSON."""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import os
 import signal
 import sys
@@ -43,6 +44,8 @@ from rf_trace_viewer.rf_model import interpret_tree
 from rf_trace_viewer.tree import build_tree
 
 _DEFAULT_LOGO = str(Path(__file__).parent / "viewer" / "default-logo.svg")
+
+logger = logging.getLogger(__name__)
 
 # ── Active session tracker (unique browser tabs) ─────────────────
 _SESSION_TTL = 30  # seconds — session is "active" if seen within this window
@@ -213,6 +216,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             "/api/v1/spans",
             "/api/v1/services",
             "/api/spans",
+            "/api/executions",
             "/api/metrics",
         ):
             if self._check_rate_limit(request_id):
@@ -230,7 +234,17 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         if path in ("/api/v1/spans", "/api/spans"):
             since_ns = int(query.get("since_ns", ["0"])[0])
             service = query.get("service", [None])[0]
-            self._serve_signoz_spans(since_ns, service_name=service, request_id=request_id)
+            execution_id = query.get("execution_id", [None])[0]
+            self._serve_signoz_spans(
+                since_ns,
+                service_name=service,
+                execution_id=execution_id,
+                request_id=request_id,
+            )
+            return
+
+        if path == "/api/executions":
+            self._serve_executions(request_id)
             return
 
         if path == "/api/v1/services":
@@ -412,6 +426,43 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def _serve_executions(self, request_id: str) -> None:
+        """Serve distinct execution IDs from SigNoz."""
+        import time
+
+        provider = getattr(self.server, "provider", None)
+        if provider is None or not hasattr(provider, "list_executions"):
+            self._send_json_response(200, [], request_id)
+            return
+
+        semaphore = getattr(self.server, "_query_semaphore", None)
+        if semaphore is not None and not semaphore.acquire(blocking=False):
+            status, body = error_response(
+                "RATE_LIMITED", "Too many concurrent queries", request_id, status=503
+            )
+            self._send_json_response(status, body, request_id)
+            return
+
+        try:
+            now_ns = int(time.time() * 1e9)
+            start_ns = now_ns - (86400 * 7 * 1_000_000_000)  # last 7 days
+            executions = provider.list_executions(start_ns=start_ns, end_ns=now_ns)
+            result = [
+                {
+                    "execution_id": e.execution_id,
+                    "start_time_ns": e.start_time_ns,
+                    "span_count": e.span_count,
+                }
+                for e in executions
+            ]
+            self._send_json_response(200, result, request_id)
+        except Exception as exc:
+            status, body = error_response("INTERNAL_ERROR", str(exc), request_id, status=500)
+            self._send_json_response(status, body, request_id)
+        finally:
+            if semaphore is not None:
+                semaphore.release()
+
     def _serve_services(self, request_id: str) -> None:
         """Serve service discovery list from SigNoz with base filter annotations."""
         import time
@@ -473,7 +524,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 semaphore.release()
 
     def _serve_signoz_spans(
-        self, since_ns: int, service_name: str | None = None, request_id: str = ""
+        self,
+        since_ns: int,
+        service_name: str | None = None,
+        execution_id: str | None = None,
+        request_id: str = "",
     ) -> None:
         """Serve spans from a live-poll provider (e.g. SigNoz)."""
         provider = getattr(self.server, "provider", None)
@@ -500,7 +555,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            view_model = provider.poll_new_spans(since_ns, service_name=service_name)
+            view_model = provider.poll_new_spans(
+                since_ns, service_name=service_name, execution_id=execution_id
+            )
 
             # Apply base filter: exclude spans from excluded-by-default services
             # (and hard-blocked services) unless explicitly included via service param
@@ -530,6 +587,14 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 "orphan_count": orphan_count,
                 "total_count": len(view_model.spans),
             }
+            # Include earliest DB span timestamp (cheap — cached 5 min)
+            if hasattr(provider, "get_earliest_span_ns"):
+                try:
+                    earliest_ns = provider.get_earliest_span_ns()
+                    if isinstance(earliest_ns, int) and earliest_ns > 0:
+                        result["earliest_db_span_ns"] = earliest_ns
+                except Exception:
+                    pass
             _increment_ingested_spans(len(view_model.spans))
             record_items_returned("/api/v1/spans", "query_spans", len(view_model.spans))
             body = json.dumps(result).encode("utf-8")
