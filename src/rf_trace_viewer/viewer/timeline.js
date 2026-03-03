@@ -943,7 +943,8 @@
           elapsed: node.elapsed_time || 0,
           depth: depth,
           worker: worker,
-          children: []
+          children: [],
+          execution_id: node.execution_id || ''
         };
         allSpans.push(span);
 
@@ -969,7 +970,8 @@
           depth: depth,
           worker: worker,
           parent: parentSpan,
-          children: []
+          children: [],
+          execution_id: node.execution_id || ''
         };
         allSpans.push(span);
         if (parentSpan) parentSpan.children.push(span);
@@ -2143,7 +2145,11 @@
       ctx.fillStyle = colors.text;
       ctx.font = span.type === 'suite' ? 'bold 10px sans-serif' : '10px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(_truncateText(ctx, span.name, barWidth - 8), x1 + 5, y + 14);
+      var nameText = span.name;
+      if (span.execution_id && barWidth > 200) {
+        nameText += '  [' + span.execution_id + ']';
+      }
+      ctx.fillText(_truncateText(ctx, nameText, barWidth - 8), x1 + 5, y + 14);
     }
   }
 

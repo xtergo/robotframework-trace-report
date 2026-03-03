@@ -1252,6 +1252,9 @@ function _renderDetailPanel(opts) {
 
 /** Render suite-specific detail rows. */
 function _renderSuiteDetail(panel, data) {
+  if (data.execution_id) {
+    _addBadgeRow(panel, 'Execution ID', data.execution_id);
+  }
   if (data.source) {
     _addDetailRow(panel, 'Source', data.source);
   }
@@ -1269,6 +1272,9 @@ function _renderSuiteDetail(panel, data) {
 
 /** Render test-specific detail rows. */
 function _renderTestDetail(panel, data) {
+  if (data.execution_id) {
+    _addBadgeRow(panel, 'Execution ID', data.execution_id);
+  }
   if (data.doc) {
     _addDetailRow(panel, 'Documentation', data.doc);
   }
@@ -1632,6 +1638,15 @@ function _createTreeNode(opts) {
     argsEl.className = 'kw-args';
     argsEl.textContent = opts.kwArgs;
     nameEl.appendChild(argsEl);
+  }
+
+  // Execution ID badge (for suites and tests)
+  if (opts.data && opts.data.execution_id) {
+    var execBadge = document.createElement('span');
+    execBadge.className = 'exec-id-badge';
+    execBadge.textContent = opts.data.execution_id;
+    execBadge.title = 'Execution ID: ' + opts.data.execution_id;
+    nameEl.appendChild(execBadge);
   }
   row.appendChild(nameEl);
 
