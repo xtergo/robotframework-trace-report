@@ -381,6 +381,7 @@ def _run_live_server(args: argparse.Namespace) -> int:
         lookback=config.lookback or getattr(args, "lookback", None),
         max_spans=config.max_spans,
         service_name=config.service_name,
+        execution_attribute=config.execution_attribute,
         health_router=health_router,
         status_poller=status_poller,
         rate_limiter=rate_limiter,

@@ -54,7 +54,6 @@
 
   // Execution ID filter — narrows to a specific test run
   var _executionFilter = '';     // empty = all executions
-  var _executionDropdownEl = null;
 
   function _createServiceState(serviceName) {
     return {
@@ -698,6 +697,27 @@
         _loadWindowState.totalCachedSpans = allSpans.length;
       };
       window.RFTraceViewer.on('app-ready', _onAppReady);
+
+      // Execution filter API — used by search.js filter panel
+      window.RFTraceViewer.getExecutionFilter = function () { return _executionFilter; };
+      window.RFTraceViewer.setExecutionFilter = function (val) {
+        var newVal = val || '';
+        if (newVal === _executionFilter) return;
+        _executionFilter = newVal;
+        console.log('[live] Execution filter changed: ' + (_executionFilter || '(all)'));
+        // Reset state and re-fetch
+        allSpans = [];
+        seenSpanIds = {};
+        lastSeenNs = 0;
+        _lastFilterSpanCount = 0;
+        _loadWindowState.totalCachedSpans = 0;
+        if (_lookbackNs > 0) {
+          var nowNs = Date.now() * 1e6;
+          lastSeenNs = Math.max(0, nowNs - _lookbackNs);
+        }
+        _poll();
+      };
+
       // Listen for background fetch merge events from app.js (SigNoz paged loading)
       window.RFTraceViewer.on('spans-merge', function (data) {
         if (data && data.spans) {
@@ -2039,77 +2059,6 @@
     }
   }
 
-  /* ── 8b. Execution ID filter ──────────────────────────────────── */
-
-  function _createExecutionFilter(header) {
-    _executionDropdownEl = document.createElement('div');
-    _executionDropdownEl.className = 'service-filter';
-    _executionDropdownEl.style.marginLeft = '8px';
-
-    var select = document.createElement('select');
-    select.className = 'execution-filter-select';
-    select.setAttribute('aria-label', 'Filter by execution ID');
-    select.style.cssText = 'padding:4px 8px;border-radius:4px;border:1px solid var(--border-color,#ccc);background:var(--bg-secondary,#f5f5f5);color:var(--text-primary,#333);font-size:12px;max-width:280px;cursor:pointer;';
-
-    var allOption = document.createElement('option');
-    allOption.value = '';
-    allOption.textContent = 'All Executions';
-    select.appendChild(allOption);
-
-    select.addEventListener('change', function () {
-      var newVal = select.value;
-      if (newVal === _executionFilter) return;
-      _executionFilter = newVal;
-      console.log('[live] Execution filter changed: ' + (_executionFilter || '(all)'));
-      // Reset state and re-fetch
-      allSpans = [];
-      seenSpanIds = {};
-      lastSeenNs = 0;
-      _lastFilterSpanCount = 0;
-      _loadWindowState.totalCachedSpans = 0;
-      if (_lookbackNs > 0) {
-        var nowNs = Date.now() * 1e6;
-        lastSeenNs = Math.max(0, nowNs - _lookbackNs);
-      }
-      _poll();
-    });
-
-    _executionDropdownEl.appendChild(select);
-    header.appendChild(_executionDropdownEl);
-
-    // Fetch execution list from server
-    _refreshExecutionList(select);
-  }
-
-  function _refreshExecutionList(select) {
-    fetch(_appendSid('/api/executions'))
-      .then(function (res) { return res.ok ? res.json() : []; })
-      .then(function (executions) {
-        // Keep the "All" option, remove old entries
-        while (select.options.length > 1) {
-          select.remove(1);
-        }
-        // Sort by start_time descending (most recent first)
-        executions.sort(function (a, b) { return b.start_time_ns - a.start_time_ns; });
-        for (var i = 0; i < executions.length; i++) {
-          var ex = executions[i];
-          var opt = document.createElement('option');
-          opt.value = ex.execution_id;
-          var date = new Date(ex.start_time_ns / 1e6);
-          var dateStr = date.toISOString().replace('T', ' ').substr(0, 19);
-          opt.textContent = ex.execution_id + ' (' + dateStr + ', ' + ex.span_count + ' spans)';
-          select.appendChild(opt);
-        }
-        // Restore selection if still valid
-        if (_executionFilter) {
-          select.value = _executionFilter;
-        }
-      })
-      .catch(function (err) {
-        console.warn('[live] Failed to fetch executions:', err.message);
-      });
-  }
-
   /* ── 9. Status bar ─────────────────────────────────────────────── */
 
   function _createStatusBar() {
@@ -2118,7 +2067,6 @@
 
       if (provider === 'signoz') {
         _createServiceFilter(header);
-        _createExecutionFilter(header);
       }
     }
 

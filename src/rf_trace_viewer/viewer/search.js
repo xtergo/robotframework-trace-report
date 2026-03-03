@@ -32,6 +32,7 @@
     durationMax: null,  // Maximum duration in seconds
     timeRangeStart: null,  // Timeline selection start (epoch seconds)
     timeRangeEnd: null,    // Timeline selection end (epoch seconds)
+    executionId: '',       // Execution ID filter (empty = all)
     scopeToTestContext: true  // When true, keyword filters are scoped to parent test context
   };
 
@@ -39,6 +40,7 @@
   var availableOptions = {
     tags: [],
     suites: [],
+    executionIds: [],
     keywordTypes: ['KEYWORD', 'SETUP', 'TEARDOWN', 'FOR', 'IF', 'TRY', 'WHILE']
   };
 
@@ -94,6 +96,11 @@
     // Restore scope toggle from localStorage (default true if absent)
     var savedScope = localStorage.getItem('rf-trace-scope-to-test-context');
     filterState.scopeToTestContext = savedScope !== '0';
+
+    // Sync execution filter from live engine (if active)
+    if (window.RFTraceViewer && window.RFTraceViewer.getExecutionFilter) {
+      filterState.executionId = window.RFTraceViewer.getExecutionFilter() || '';
+    }
 
     // Build filter UI
     _buildFilterUI(container);
@@ -220,6 +227,8 @@
   function _extractFilterOptions(spans) {
     var tagSet = {};
     var suiteSet = {};
+    var execSet = {};
+    var execAttr = window.__RF_EXECUTION_ATTRIBUTE__ || 'essvt.execution_id';
 
     for (var i = 0; i < spans.length; i++) {
       var span = spans[i];
@@ -235,10 +244,17 @@
       if (span.suite) {
         suiteSet[span.suite] = true;
       }
+
+      // Collect execution IDs from span attributes
+      if (span.attributes) {
+        var eid = span.attributes[execAttr];
+        if (eid) execSet[eid] = true;
+      }
     }
 
     availableOptions.tags = Object.keys(tagSet).sort();
     availableOptions.suites = Object.keys(suiteSet).sort();
+    availableOptions.executionIds = Object.keys(execSet).sort();
   }
 
   /**
@@ -310,6 +326,11 @@
     // Keyword type filters
     var kwTypeSection = _buildKeywordTypeFilters();
     container.appendChild(kwTypeSection);
+
+    // Execution ID filter (searchable combo-box, server-side filtering)
+    container.appendChild(_buildAndIndicator());
+    var execSection = _buildExecutionFilter();
+    container.appendChild(execSection);
 
     container.appendChild(_buildAndIndicator());
 
@@ -635,6 +656,170 @@
     section.appendChild(hint);
 
     return section;
+  }
+
+  /**
+   * Build execution ID filter — searchable combo-box.
+   * Auto-populated from span attributes; user can also type to search/filter.
+   * Selecting an ID triggers server-side filtering via live.js.
+   */
+  function _buildExecutionFilter() {
+    var section = document.createElement('div');
+    section.className = 'filter-section filter-execution-section';
+
+    var label = document.createElement('label');
+    label.textContent = 'Execution ID';
+    label.setAttribute('for', 'filter-execution-input');
+    section.appendChild(label);
+
+    // Wrapper for the combo-box
+    var wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:relative;';
+
+    // Text input for searching
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'filter-execution-input';
+    input.className = 'filter-text-input';
+    input.placeholder = 'All executions (type to filter)';
+    input.value = filterState.executionId || '';
+    input.setAttribute('autocomplete', 'off');
+
+    // Dropdown list
+    var listEl = document.createElement('div');
+    listEl.className = 'filter-execution-dropdown';
+    listEl.style.cssText = 'display:none;position:absolute;left:0;right:0;top:100%;max-height:200px;overflow-y:auto;background:var(--bg-secondary,#f5f5f5);border:1px solid var(--border-color,#ccc);border-radius:0 0 4px 4px;z-index:100;';
+
+    function _renderList(filter) {
+      listEl.innerHTML = '';
+      var lowerFilter = (filter || '').toLowerCase();
+      var ids = availableOptions.executionIds;
+      var matched = 0;
+
+      // "All executions" option
+      if (!lowerFilter || 'all executions'.indexOf(lowerFilter) !== -1) {
+        var allItem = document.createElement('div');
+        allItem.className = 'filter-execution-item';
+        allItem.style.cssText = 'padding:4px 8px;cursor:pointer;font-size:12px;font-style:italic;';
+        allItem.textContent = 'All executions';
+        allItem.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          input.value = '';
+          filterState.executionId = '';
+          listEl.style.display = 'none';
+          _setLiveExecutionFilter('');
+        });
+        allItem.addEventListener('mouseenter', function () { this.style.background = 'var(--bg-hover,#e0e0e0)'; });
+        allItem.addEventListener('mouseleave', function () { this.style.background = ''; });
+        listEl.appendChild(allItem);
+        matched++;
+      }
+
+      for (var i = 0; i < ids.length; i++) {
+        if (lowerFilter && ids[i].toLowerCase().indexOf(lowerFilter) === -1) continue;
+        matched++;
+        var item = document.createElement('div');
+        item.className = 'filter-execution-item';
+        item.style.cssText = 'padding:4px 8px;cursor:pointer;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        item.textContent = ids[i];
+        item.setAttribute('data-value', ids[i]);
+        item.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          var val = this.getAttribute('data-value');
+          input.value = val;
+          filterState.executionId = val;
+          listEl.style.display = 'none';
+          _setLiveExecutionFilter(val);
+        });
+        item.addEventListener('mouseenter', function () { this.style.background = 'var(--bg-hover,#e0e0e0)'; });
+        item.addEventListener('mouseleave', function () { this.style.background = ''; });
+        listEl.appendChild(item);
+      }
+
+      if (matched === 0) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'padding:4px 8px;font-size:12px;color:var(--text-secondary,#999);';
+        empty.textContent = 'No matching executions';
+        listEl.appendChild(empty);
+      }
+    }
+
+    input.addEventListener('focus', function () {
+      _renderList(input.value);
+      listEl.style.display = '';
+    });
+
+    input.addEventListener('input', function () {
+      _renderList(input.value);
+      listEl.style.display = '';
+    });
+
+    input.addEventListener('blur', function () {
+      // Delay hide so mousedown on list items fires first
+      setTimeout(function () { listEl.style.display = 'none'; }, 150);
+    });
+
+    // Allow clearing with Escape
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        listEl.style.display = 'none';
+        input.blur();
+      }
+      if (e.key === 'Enter') {
+        // If typed value matches an option exactly, select it
+        var val = input.value.trim();
+        if (val && availableOptions.executionIds.indexOf(val) !== -1) {
+          filterState.executionId = val;
+          listEl.style.display = 'none';
+          _setLiveExecutionFilter(val);
+        } else if (!val) {
+          filterState.executionId = '';
+          listEl.style.display = 'none';
+          _setLiveExecutionFilter('');
+        }
+      }
+    });
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(listEl);
+    section.appendChild(wrapper);
+
+    // Clear button
+    var clearBtn = document.createElement('button');
+    clearBtn.className = 'filter-time-range-clear';
+    clearBtn.textContent = 'Clear Execution Filter';
+    clearBtn.style.display = filterState.executionId ? '' : 'none';
+    clearBtn.addEventListener('click', function () {
+      input.value = '';
+      filterState.executionId = '';
+      clearBtn.style.display = 'none';
+      _setLiveExecutionFilter('');
+    });
+    section.appendChild(clearBtn);
+
+    // Store reference for updating clear button visibility
+    section._clearBtn = clearBtn;
+    section._input = input;
+
+    var hint = document.createElement('div');
+    hint.className = 'filter-hint';
+    hint.textContent = 'Filter spans by execution ID. Empty = all executions.';
+    section.appendChild(hint);
+
+    return section;
+  }
+
+  /**
+   * Set the execution filter on the live polling engine.
+   * This triggers a server-side re-fetch with the new filter.
+   */
+  function _setLiveExecutionFilter(val) {
+    if (window.RFTraceViewer && window.RFTraceViewer.setExecutionFilter) {
+      window.RFTraceViewer.setExecutionFilter(val);
+    }
+    // Update clear button visibility
+    var clearBtn = document.querySelector('.filter-execution-section .filter-time-range-clear');
+    if (clearBtn) clearBtn.style.display = val ? '' : 'none';
   }
 
   /**
@@ -1011,6 +1196,12 @@
     filterState.timeRangeEnd = null;
     filterState.scopeToTestContext = true;
 
+    // Clear execution filter
+    if (filterState.executionId) {
+      filterState.executionId = '';
+      _setLiveExecutionFilter('');
+    }
+
     // Update UI
     var textInput = document.getElementById('filter-text-input');
     if (textInput) textInput.value = '';
@@ -1034,6 +1225,9 @@
 
     var scopeToggle = document.getElementById('filter-scope-toggle');
     if (scopeToggle) scopeToggle.checked = true;
+
+    var execInput = document.getElementById('filter-execution-input');
+    if (execInput) execInput.value = '';
 
     _applyFilters();
   }
@@ -1309,6 +1503,19 @@
           filterState.timeRangeStart = null;
           filterState.timeRangeEnd = null;
           _applyFilters();
+        }
+      });
+    }
+
+    // Execution ID
+    if (filterState.executionId) {
+      chips.push({
+        label: 'Exec: ' + filterState.executionId,
+        remove: function () {
+          filterState.executionId = '';
+          var execInput = document.getElementById('filter-execution-input');
+          if (execInput) execInput.value = '';
+          _setLiveExecutionFilter('');
         }
       });
     }

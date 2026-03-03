@@ -339,6 +339,14 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             f'window.__RF_SERVICE_NAME__ = "{_escape_html(svc_name)}";\n' if svc_name else ""
         )
 
+        # Execution attribute name (so the browser knows which span attribute holds execution ID)
+        exec_attr = getattr(self.server, "execution_attribute", None) or ""
+        exec_attr_js = (
+            f'window.__RF_EXECUTION_ATTRIBUTE__ = "{_escape_html(exec_attr)}";\n'
+            if exec_attr
+            else ""
+        )
+
         html = (
             "<!DOCTYPE html>\n"
             '<html lang="en">\n'
@@ -360,6 +368,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             f"{lookback_js}"
             f"{max_spans_js}"
             f"{svc_name_js}"
+            f"{exec_attr_js}"
             'window.__RF_LOGO_URL__ = "/logo.svg";\n'
             f'window.__RF_VERSION__ = "{_escape_html(__version__)} ({_escape_html(__git_sha__)})";\n'
             "</script>\n"
@@ -815,6 +824,7 @@ class LiveServer:
         lookback: str | None = None,
         max_spans: int | None = None,
         service_name: str | None = None,
+        execution_attribute: str | None = None,
         health_router: object | None = None,
         status_poller: object | None = None,
         rate_limiter: object | None = None,
@@ -839,6 +849,7 @@ class LiveServer:
         self.lookback = lookback
         self.max_spans = max_spans
         self.service_name = service_name
+        self.execution_attribute = execution_attribute
         self.health_router = health_router
         self.status_poller = status_poller
         self.rate_limiter = rate_limiter
@@ -877,6 +888,7 @@ class LiveServer:
         self._httpd.lookback = self.lookback  # type: ignore[attr-defined]
         self._httpd.max_spans = self.max_spans  # type: ignore[attr-defined]
         self._httpd.service_name = self.service_name  # type: ignore[attr-defined]
+        self._httpd.execution_attribute = self.execution_attribute  # type: ignore[attr-defined]
 
         # K8s integration: health, status, rate limiting, base filter
         self._httpd._health_router = self.health_router  # type: ignore[attr-defined]
