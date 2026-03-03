@@ -229,34 +229,27 @@ class SigNozProvider(TraceProvider):
         service_name: str | None = None,
         execution_id: str | None = None,
     ) -> TraceViewModel:
-        """Fetch spans newer than since_ns with automatic pagination.
+        """Fetch one page of spans newer than since_ns.
 
-        No server-side dedup here — the browser's lastSeenNs watermark
-        handles incremental polling. This allows page refreshes to get
-        all spans again (the browser starts fresh with since_ns=0).
-
-        Pages through SigNoz results (max_spans_per_page at a time) up to
-        the configured max_spans cap so large time ranges return all data.
+        Returns a single page (max_spans_per_page) and lets the browser's
+        polling loop advance the watermark to fetch subsequent pages.
+        This keeps each request fast (~3s) instead of blocking on
+        multi-page pagination (~10s+ for large time ranges).
 
         If service_name is provided, only spans from that service.name are returned.
         """
-        # On incremental polls (since_ns > 0) skip the overlap window so the
-        # query starts right at the watermark.  With "ORDER BY timestamp ASC"
-        # and a LIMIT, subtracting overlap caused old already-seen spans to
-        # fill the result before any new spans were reached.
         if since_ns > 0:
             query_start_ns = since_ns
         else:
             overlap_ns = int(self._config.overlap_window_seconds * 1_000_000_000)
             query_start_ns = max(0, since_ns - overlap_ns)
 
-        # Build filters — service.name filter if provided by end user
-        # None = use config default, empty string = no filter (all services)
+        # Build filters
         filters: list[dict] = []
         if service_name is None:
             svc = self._config.service_name
         else:
-            svc = service_name  # explicit value from URL param (may be empty)
+            svc = service_name
         if svc:
             filters.append(
                 {
@@ -271,7 +264,6 @@ class SigNozProvider(TraceProvider):
                 }
             )
 
-        # Execution ID filter — narrows to a specific test run
         if execution_id:
             filters.append(
                 {
@@ -288,39 +280,17 @@ class SigNozProvider(TraceProvider):
 
         start_s = query_start_ns // 1_000_000_000
         if start_s < 1_000_000_000:
-            start_s = int(time.time()) - 86400  # fallback: 1 day ago
+            start_s = int(time.time()) - 86400
 
-        # Paginate using timestamp-based cursoring instead of offset.
-        # SigNoz v0.113 returns 500 on large offsets, so we advance
-        # the start time to the last span's timestamp on each page.
-        all_spans: list[TraceSpan] = []
-        page_size = self._config.max_spans_per_page
-        max_total = self._config.max_spans
-        cursor_start_s = start_s
+        # Single page fetch — no server-side pagination loop.
+        # The browser advances lastSeenNs and polls again for more.
+        limit = self._config.max_spans_per_page
+        query = self._build_span_query(filters=filters, offset=0, limit=limit)
+        query["start"] = start_s
+        response = self._api_request("/api/v3/query_range", query)
+        spans = self._parse_spans(response)
 
-        while len(all_spans) < max_total:
-            remaining = max_total - len(all_spans)
-            limit = min(page_size, remaining)
-            query = self._build_span_query(filters=filters, offset=0, limit=limit)
-            query["start"] = cursor_start_s
-            response = self._api_request("/api/v3/query_range", query)
-            page_spans = self._parse_spans(response)
-            if not page_spans:
-                break
-            all_spans.extend(page_spans)
-            # If we got fewer than the limit, there are no more pages
-            if len(page_spans) < limit:
-                break
-            # Advance cursor to the last span's timestamp (seconds)
-            # to fetch the next page without using offset
-            last_ts_ns = max(s.start_time_ns for s in page_spans)
-            next_start_s = last_ts_ns // 1_000_000_000
-            # If cursor didn't advance, bump by 1s to avoid infinite loop
-            if next_start_s <= cursor_start_s:
-                next_start_s = cursor_start_s + 1
-            cursor_start_s = next_start_s
-
-        return TraceViewModel(spans=all_spans)
+        return TraceViewModel(spans=spans)
 
     # ------------------------------------------------------------------
     # HTTP client
