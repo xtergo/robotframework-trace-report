@@ -740,8 +740,7 @@
       });
     }
 
-    // Auto-zoom to recent cluster if spans are spread across a wide time range
-    _autoZoomToRecentCluster();
+    // Initial sync and render (no auto-zoom — user can click "Locate Recent")
     if (timelineState._syncSlider) timelineState._syncSlider();
 
     // Initial render
@@ -3041,21 +3040,34 @@
     // before any render happens.
     var _shouldAutoZoom = false;
     if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
-      // First data load: always auto-zoom to the recent cluster.
-      _shouldAutoZoom = true;
-      console.log('[Timeline] updateData: first data load, will auto-zoom to recent cluster');
+      // First data load: keep the current view window (e.g. 15m rolling preset).
+      // Spans appear naturally within the window. User can click "Locate Recent"
+      // to zoom into the cluster if desired.
+      timelineState.viewStart = savedViewStart;
+      timelineState.viewEnd = savedViewEnd;
+      // Extend minTime/maxTime to cover the view window so the preset range is preserved
+      if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+      if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+      var totalRange = timelineState.maxTime - timelineState.minTime;
+      var viewRange = timelineState.viewEnd - timelineState.viewStart;
+      timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
+      console.log('[Timeline] updateData: first data load, keeping current view ' +
+        _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
     } else if (wasUserZoomed) {
       // Check if the saved view still overlaps with the (possibly pruned) data range.
       // After pruning, the data range can shrink so the old view points at empty space.
       var viewOverlapsData = timelineState.flatSpans.length > 0 &&
         savedViewEnd > timelineState.minTime && savedViewStart < timelineState.maxTime;
       if (!viewOverlapsData && timelineState.flatSpans.length > 0) {
-        // Saved view is completely outside the current data — re-zoom to recent cluster
-        _shouldAutoZoom = true;
-        console.log('[Timeline] updateData: saved view (' + _fmtEpoch(savedViewStart) +
-          ' → ' + _fmtEpoch(savedViewEnd) + ') has no overlap with data (' +
-          _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime) +
-          '), will re-zoom to recent cluster');
+        // Saved view is completely outside the current data — restore saved view anyway.
+        // User can click "Locate Recent" to find the spans.
+        timelineState.zoom = savedZoom;
+        timelineState.viewStart = savedViewStart;
+        timelineState.viewEnd = savedViewEnd;
+        if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+        if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+        console.log('[Timeline] updateData: saved view has no overlap with data, keeping view ' +
+          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
       } else {
         timelineState.zoom = savedZoom;
         timelineState.viewStart = savedViewStart;
@@ -3116,10 +3128,6 @@
     _resizeCanvas(canvas);
     if (timelineState.headerCanvas) {
       _resizeHeaderCanvas(timelineState.headerCanvas);
-    }
-
-    if (_shouldAutoZoom && timelineState.flatSpans.length > 0) {
-      _autoZoomToRecentCluster();
     }
 
     timelineState.panY = savedPanY;
