@@ -595,16 +595,40 @@
 
     // Lazily create the diagnostics panel on first render
     if (!_diagPanelEl) {
-      _diagPanelEl = document.createElement('details');
+      _diagPanelEl = document.createElement('div');
       _diagPanelEl.className = 'sh-diagnostics-panel';
 
-      var summary = document.createElement('summary');
-      summary.className = 'sh-diagnostics-summary';
-      summary.textContent = 'Service Diagnostics';
-      _diagPanelEl.appendChild(summary);
+      var diagHeader = document.createElement('div');
+      diagHeader.className = 'sh-diagnostics-header';
+      var diagTitle = document.createElement('span');
+      diagTitle.className = 'sh-diagnostics-title';
+      diagTitle.textContent = 'Service Diagnostics';
+      diagHeader.appendChild(diagTitle);
+      var diagToggle = document.createElement('button');
+      diagToggle.className = 'sh-diagnostics-toggle';
+      diagToggle.textContent = '\u25bc';
+      diagToggle.setAttribute('aria-label', 'Expand service diagnostics');
+      diagHeader.appendChild(diagToggle);
 
       var content = document.createElement('div');
       content.className = 'sh-diagnostics-content';
+      content.style.display = 'none';
+
+      diagHeader.style.cursor = 'pointer';
+      diagHeader.addEventListener('click', function () {
+        var isOpen = content.style.display !== 'none';
+        if (isOpen) {
+          content.style.display = 'none';
+          diagToggle.textContent = '\u25bc';
+          diagToggle.setAttribute('aria-label', 'Expand service diagnostics');
+        } else {
+          content.style.display = '';
+          diagToggle.textContent = '\u25b2';
+          diagToggle.setAttribute('aria-label', 'Collapse service diagnostics');
+        }
+      });
+
+      _diagPanelEl.appendChild(diagHeader);
 
       // HTTP section
       var httpSection = document.createElement('div');

@@ -1284,9 +1284,50 @@
     treePanel.className = 'panel-tree';
     centerColumn.appendChild(treePanel);
 
+    // Resize handle between tree and flow table
+    var treeFlowHandle = document.createElement('div');
+    treeFlowHandle.className = 'tree-flow-resize-handle';
+    treeFlowHandle.setAttribute('aria-label', 'Drag to resize tree / flow table split');
+    centerColumn.appendChild(treeFlowHandle);
+
     var flowTableSection = document.createElement('section');
     flowTableSection.className = 'flow-table-section';
+    flowTableSection.style.height = '200px';
     centerColumn.appendChild(flowTableSection);
+
+    (function () {
+      var startY = 0;
+      var startTreeH = 0;
+      var startFlowH = 0;
+      var dragging = false;
+
+      treeFlowHandle.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        dragging = true;
+        startY = e.clientY;
+        startTreeH = treePanel.offsetHeight;
+        startFlowH = flowTableSection.offsetHeight;
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+      });
+
+      document.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        var dy = e.clientY - startY;
+        var newTreeH = Math.max(80, startTreeH + dy);
+        var newFlowH = Math.max(60, startFlowH - dy);
+        treePanel.style.flex = 'none';
+        treePanel.style.height = newTreeH + 'px';
+        flowTableSection.style.height = newFlowH + 'px';
+      });
+
+      document.addEventListener('mouseup', function () {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      });
+    })();
 
     var filterSidebar = document.createElement('aside');
     filterSidebar.className = 'panel-filter collapsed';

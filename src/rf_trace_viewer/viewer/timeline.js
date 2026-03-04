@@ -61,6 +61,8 @@
     layoutMode: 'baseline',
     _compactBtn: null,
     _activePreset: null,
+    _userInteracted: false,
+    _locateRecentPending: false,
     _presetBtns: [],
     _dateRangePicker: null,
     _fetchingDuration: null
@@ -247,8 +249,11 @@
   window.initTimeline = function (container, data) {
     if (!container || !data) return;
 
-    // Clear container
+    // Clear container and set up flex column so hscroll stays pinned at bottom
     container.innerHTML = '';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.overflow = 'hidden';
 
     // Process data first to know how many spans we have
     try {
@@ -475,6 +480,16 @@
 
     headerEl.appendChild(zoomBar);
 
+    // Loading banner — shown during delta fetch, between zoom bar and time axis
+    var loadingBanner = document.createElement('div');
+    loadingBanner.className = 'timeline-loading-banner';
+    loadingBanner.style.cssText = 'display:none;padding:3px 12px;font-size:12px;' +
+      'color:#e65100;background:#fff3e0;border-bottom:1px solid #ffe0b2;' +
+      'text-align:center;font-weight:500;';
+    loadingBanner.textContent = 'Loading spans\u2026';
+    headerEl.appendChild(loadingBanner);
+    timelineState._loadingBanner = loadingBanner;
+
     // Zoom slider ↔ state synchronization
     // Slider uses logarithmic scale: value 0 = zoom 1.0, each step = ~8% change
     function sliderToZoom(val) { return Math.pow(1.08, parseFloat(val)); }
@@ -568,7 +583,13 @@
     headerCanvas.style.height = timelineState.headerHeight + 'px';
     headerCanvas.style.display = 'block';
     headerEl.appendChild(headerCanvas);
+    headerEl.style.flexShrink = '0';
     container.appendChild(headerEl);
+
+    // Vertical scroll wrapper for the canvas (flex:1 fills remaining space)
+    var canvasVScroll = document.createElement('div');
+    canvasVScroll.className = 'timeline-vscroll';
+    canvasVScroll.style.cssText = 'flex:1 1 0;overflow-y:auto;overflow-x:hidden;min-height:0;';
 
     // Create main canvas (spans only, no header)
     var canvas = document.createElement('canvas');
@@ -577,19 +598,19 @@
     canvas.style.height = requiredHeight + 'px';
     canvas.style.cursor = 'crosshair';
     canvas.style.display = 'block';
-    container.appendChild(canvas);
+    canvasVScroll.appendChild(canvas);
+    container.appendChild(canvasVScroll);
 
     // Horizontal scrollbar for panning
     var hScrollWrap = document.createElement('div');
     hScrollWrap.className = 'timeline-hscroll-wrap';
-    hScrollWrap.style.cssText = 'width:100%;overflow-x:auto;overflow-y:hidden;height:14px;';
+    hScrollWrap.style.cssText = 'width:100%;overflow-x:auto;overflow-y:hidden;height:14px;flex-shrink:0;';
     var hScrollInner = document.createElement('div');
     hScrollInner.className = 'timeline-hscroll-inner';
     hScrollInner.style.cssText = 'height:1px;';
     hScrollWrap.appendChild(hScrollInner);
     container.appendChild(hScrollWrap);
 
-    // Sync scrollbar thumb size and position with viewport
     var _hScrollSyncing = false;
     function _syncHScroll() {
       if (_hScrollSyncing) return;
@@ -597,13 +618,10 @@
       if (totalRange <= 0) { hScrollWrap.style.display = 'none'; return; }
       var viewRange = timelineState.viewEnd - timelineState.viewStart;
       var ratio = totalRange / Math.max(viewRange, 0.001);
-      // Hide scrollbar when not zoomed (ratio ≈ 1.0)
       if (ratio < 1.01) { hScrollWrap.style.display = 'none'; return; }
       hScrollWrap.style.display = '';
-      // Inner width = container width * ratio (makes scrollbar thumb proportional)
       var containerWidth = hScrollWrap.clientWidth;
       hScrollInner.style.width = Math.round(containerWidth * ratio) + 'px';
-      // Set scroll position
       var scrollFraction = (timelineState.viewStart - timelineState.minTime) / (totalRange - viewRange || 1);
       var maxScrollLeft = hScrollInner.clientWidth - containerWidth;
       _hScrollSyncing = true;
@@ -612,6 +630,9 @@
     }
     hScrollWrap.addEventListener('scroll', function () {
       if (_hScrollSyncing) return;
+      _clearActivePreset();
+      timelineState._userInteracted = true;
+      timelineState._locateRecentPending = false;
       var containerWidth = hScrollWrap.clientWidth;
       var maxScrollLeft = hScrollInner.clientWidth - containerWidth;
       if (maxScrollLeft <= 0) return;
@@ -691,12 +712,47 @@
         } else {
           timelineState._fetchingDuration = null;
         }
+        // Update DOM loading banner
+        if (timelineState._loadingBanner) {
+          var bannerText = timelineState._fetchingDuration
+            ? 'Loading ' + timelineState._fetchingDuration + ' of older spans\u2026'
+            : 'Loading spans\u2026';
+          timelineState._loadingBanner.textContent = bannerText;
+          timelineState._loadingBanner.style.display = '';
+        }
         _render();
       });
       window.RFTraceViewer.on('delta-fetch-end', function () {
         timelineState.isFetchingOlderSpans = false;
         timelineState._fetchingDuration = null;
+        // Hide DOM loading banner
+        if (timelineState._loadingBanner) {
+          timelineState._loadingBanner.style.display = 'none';
+        }
         _render();
+
+        // Auto-locate: if spans are sub-pixel (view too zoomed out to see
+        // anything useful), automatically zoom to the latest cluster.
+        // This makes presets like 24h immediately useful — data loads in the
+        // background, then the view snaps to where the action is.
+        if (timelineState.flatSpans.length > 0 && !timelineState._userInteracted) {
+          var viewRange = timelineState.viewEnd - timelineState.viewStart;
+          var canvasWidth = timelineState.canvas
+            ? timelineState.canvas.width / (window.devicePixelRatio || 1) : 900;
+          var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
+          // Check if the average span would be < 1px wide
+          var dataRange = timelineState.maxTime - timelineState.minTime;
+          var pxPerSec = timelineWidth / Math.max(viewRange, 1);
+          var avgSpanDuration = dataRange / Math.max(timelineState.flatSpans.length, 1);
+          if (avgSpanDuration * pxPerSec < 1) {
+            console.log('[Timeline] Auto-locate: spans are sub-pixel, running _locateRecent');
+            _locateRecent();
+            if (timelineState._syncSlider) timelineState._syncSlider();
+            if (timelineState._syncHScroll) timelineState._syncHScroll();
+            _render();
+            _renderHeader();
+          }
+        }
       });
     }
 
@@ -748,7 +804,7 @@
     // When a preset is active (e.g. "15m"), treat it as a rolling window:
     // always slide viewEnd to now and viewStart to (now - presetDuration).
     // This keeps the timeline advancing in real time.
-    if (timelineState._activePreset) {
+    if (timelineState._activePreset && !timelineState._userInteracted) {
       var presetSec = timelineState._activePreset;
       timelineState.viewEnd = nowSec;
       timelineState.viewStart = nowSec - presetSec;
@@ -1329,6 +1385,8 @@
         timelineState.viewStart = newStart;
         timelineState.viewEnd = newEnd;
         _navDebouncePush({ viewStart: timelineState.viewStart, viewEnd: timelineState.viewEnd, zoom: timelineState.zoom, serviceFilter: '' });
+        timelineState._userInteracted = true;
+        timelineState._locateRecentPending = false;
         _applyZoom();
         return;
       }
@@ -1367,6 +1425,8 @@
       timelineState.zoom = (totalRange > 0 && actualRange > 0) ? totalRange / actualRange : 1;
       if (timelineState._syncSlider) timelineState._syncSlider();
       _navDebouncePush({ viewStart: timelineState.viewStart, viewEnd: timelineState.viewEnd, zoom: timelineState.zoom, serviceFilter: '' });
+      timelineState._userInteracted = true;
+      timelineState._locateRecentPending = false;
       _applyZoom();
     }, { passive: false });
 
@@ -1614,6 +1674,8 @@
             zoom: timelineState.zoom,
             serviceFilter: ''
           });
+          timelineState._userInteracted = true;
+          timelineState._locateRecentPending = false;
         }
 
         // Clear selection
@@ -2462,26 +2524,7 @@
       ctx.fillStyle = markerColor;
       ctx.fillText(labelText, labelX, labelY);
 
-      // Show inline loading indicator below the label when delta fetch is in progress
-      if (timelineState.isFetchingOlderSpans) {
-        ctx.font = '9px sans-serif';
-        ctx.fillStyle = _css('--status-delayed', '#e65100');
-        var fetchText = timelineState._fetchingDuration
-          ? 'Loading ' + timelineState._fetchingDuration + ' more\u2026'
-          : 'Fetching older spans\u2026';
-        var fetchY = labelY + 12;
-        if (ctx.textAlign === 'right') {
-          ctx.fillText(fetchText, labelX, fetchY);
-        } else {
-          ctx.fillText(fetchText, labelX, fetchY);
-        }
-      } else if (timelineState._markerPendingFetch) {
-        // Settle delay: show hint that fetch will start soon
-        ctx.font = '9px sans-serif';
-        ctx.fillStyle = _css('--status-delayed', '#e65100');
-        var pendingY = labelY + 12;
-        ctx.fillText('Loading shortly\u2026', labelX, pendingY);
-      }
+      // Loading indicator is now a DOM banner (timelineState._loadingBanner)
 
       // Show contextual hint during active drag
       if (timelineState.isDraggingMarker) {
@@ -2999,7 +3042,23 @@
     // _processSpans resets viewStart/viewEnd to full range; we must fix that
     // before any render happens.
     var _shouldAutoZoom = false;
-    if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
+    // When user has manually interacted (zoom, pan, Locate Recent),
+    // preserve their exact view — don't let poll updates move the camera.
+    if (timelineState._locateRecentPending) {
+      // Locate Recent was clicked during pagination — re-run it now that
+      // we have more data so it targets the true latest cluster.
+      _locateRecent();
+      console.log('[Timeline] updateData: _locateRecentPending, re-ran _locateRecent → view ' +
+        _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
+    } else if (timelineState._userInteracted) {
+      timelineState.zoom = savedZoom;
+      timelineState.viewStart = savedViewStart;
+      timelineState.viewEnd = savedViewEnd;
+      if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+      if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+      console.log('[Timeline] updateData: _userInteracted=true, preserving view ' +
+        _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+    } else if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
       // First data load: if a preset is active, use the rolling window (now - preset → now)
       // so new spans that just arrived are visible. Otherwise keep the saved view.
       if (timelineState._activePreset) {
@@ -3025,7 +3084,21 @@
       // After pruning, the data range can shrink so the old view points at empty space.
       var viewOverlapsData = timelineState.flatSpans.length > 0 &&
         savedViewEnd > timelineState.minTime && savedViewStart < timelineState.maxTime;
-      if (!viewOverlapsData && timelineState.flatSpans.length > 0) {
+      if (timelineState.flatSpans.length === 0 && timelineState._activePreset) {
+        // No spans at all but a preset is active — keep the rolling window
+        // (now - preset → now) so the time axis shows the correct range.
+        var nowSecEmpty = Date.now() / 1000;
+        var presetSecEmpty = timelineState._activePreset;
+        timelineState.viewEnd = nowSecEmpty;
+        timelineState.viewStart = nowSecEmpty - presetSecEmpty;
+        var trEmpty = timelineState.viewEnd - timelineState.viewStart;
+        timelineState.zoom = trEmpty > 0 ? (trEmpty / trEmpty) : 1; // zoom = 1 for exact preset
+        // Ensure min/max encompass the view so the axis renders correctly
+        if (timelineState.viewStart < timelineState.minTime) timelineState.minTime = timelineState.viewStart;
+        if (timelineState.viewEnd > timelineState.maxTime) timelineState.maxTime = timelineState.viewEnd;
+        console.log('[Timeline] updateData: empty data with preset, view ' +
+          _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
+      } else if (!viewOverlapsData && timelineState.flatSpans.length > 0) {
         // Saved view is completely outside the current data.
         // If a preset is active, snap to the rolling window so spans are visible.
         // Otherwise keep the saved view — user can click "Locate Recent".
@@ -3181,6 +3254,9 @@
       serviceFilter: ''
     });
 
+    timelineState._userInteracted = true;
+    timelineState._locateRecentPending = false;
+
     // Re-render
     if (timelineState._syncSlider) timelineState._syncSlider();
     if (timelineState._syncHScroll) timelineState._syncHScroll();
@@ -3249,6 +3325,9 @@
       zoom: timelineState.zoom,
       serviceFilter: ''
     });
+
+    timelineState._userInteracted = false;
+    timelineState._locateRecentPending = false;
 
     // Highlight active preset
     timelineState._activePreset = durationSeconds;
@@ -3427,10 +3506,37 @@
     timelineState.viewStart = viewStart;
     timelineState.viewEnd = viewEnd;
     timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
+
+    // Auto-scroll vertically to the first visible span in the new view range.
+    // When multiple test runs exist, later runs are assigned higher lanes.
+    // Without this, zooming to a later cluster shows empty space at the top.
+    var minLane = Infinity;
+    var workers = Object.keys(timelineState.workers);
+    for (var wi = 0; wi < workers.length; wi++) {
+      var wSpans = timelineState.workers[workers[wi]];
+      for (var si = 0; si < wSpans.length; si++) {
+        var s = wSpans[si];
+        if (s.startTime < viewEnd && s.endTime > viewStart) {
+          var lane = s.lane !== undefined ? s.lane : s.depth;
+          if (lane < minLane) minLane = lane;
+        }
+      }
+    }
+    if (minLane !== Infinity && minLane > 2) {
+      // Scroll so the first visible lane is near the top (with a small margin)
+      timelineState.panY = -((minLane - 1) * timelineState.rowHeight);
+    }
+
     console.log('[Timeline] Locate Recent: cluster=' +
       Math.round(clusterRange) + 's (' + new Date(clusterStart * 1000).toISOString().substr(11, 8) +
       ' - ' + new Date(clusterEnd * 1000).toISOString().substr(11, 8) +
-      '), view=' + Math.round(viewRange) + 's, zoom=' + timelineState.zoom.toFixed(1) + 'x');
+      '), view=' + Math.round(viewRange) + 's, zoom=' + timelineState.zoom.toFixed(1) + 'x' +
+      ', minLane=' + minLane + ', panY=' + timelineState.panY);
+    _clearActivePreset();
+    // Don't set _userInteracted here — Locate Recent should be re-applied
+    // as more data pages arrive so it always targets the true latest cluster.
+    // Only manual zoom/pan/drag sets the flag.
+    timelineState._locateRecentPending = true;
   }
 
   /**

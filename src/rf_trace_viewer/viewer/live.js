@@ -470,8 +470,18 @@
 
               // If page was full (10k), there may be more — advance watermark and fetch next
               if (pageSize >= 10000) {
-                // Advance watermark to lastSeenNs (updated by _ingestSigNozSpans)
-                pageWatermark = lastSeenNs;
+                // Compute page-local max end_time_ns for watermark advancement.
+                // We must NOT use the global lastSeenNs because it may have been
+                // set to a future value by lookback initialization or polling,
+                // which would cause pagination to skip over data.
+                var pageMaxEndNs = pageWatermark;
+                for (var pi = 0; pi < data.spans.length; pi++) {
+                  var pSpan = data.spans[pi];
+                  var pEnd = (pSpan.start_time_ns || 0) + (pSpan.duration_ns || 0);
+                  if (pEnd > pageMaxEndNs) pageMaxEndNs = pEnd;
+                }
+                console.log('[live] Delta fetch pagination: old watermark=' + pageWatermark + ' new watermark=' + pageMaxEndNs);
+                pageWatermark = pageMaxEndNs;
                 fetchNextPage();
               } else {
                 console.log('[live] Delta fetch done: ' + totalFetched + ' spans total (last page < 10k)');
@@ -832,9 +842,17 @@
         if (newStart < oldStart) {
           _deltaFetch(newStart, oldStart);
         } else if (prunedCount > 0) {
-          // Window moved forward with no new fetch needed — rebuild
-          // to reflect pruned spans in the model and filter counters.
-          _rebuildAndRender();
+          if (allSpans.length === 0) {
+            // All spans pruned (e.g. 7d → 15m with no recent data).
+            // Reset watermark so polling fetches from the new window start.
+            lastSeenNs = Math.max(0, _loadWindowState.activeWindowStart * 1e9);
+            console.log('[live] Pruned to 0 spans — resetting lastSeenNs to ' + lastSeenNs + ' and re-fetching');
+            _deltaFetch(_loadWindowState.activeWindowStart, Date.now() / 1000);
+          } else {
+            // Window moved forward with no new fetch needed — rebuild
+            // to reflect pruned spans in the model and filter counters.
+            _rebuildAndRender();
+          }
         }
 
         // Emit active-window-start so Timeline can sync marker/overlay position
