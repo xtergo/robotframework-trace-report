@@ -2037,6 +2037,89 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .flow-status-skip { background: var(--status-skip-bg); color: var(--status-skip); }
 .rf-trace-viewer .flow-status-not-run { background: var(--status-not-run-bg); color: var(--status-not-run); }
 
+/* ── Indented keyword column ── */
+.rf-trace-viewer .flow-col-keyword {
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Indent guides (vertical lines per depth level) ── */
+.rf-trace-viewer .flow-indent-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-color);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* ── Keyword name (after badge) ── */
+.rf-trace-viewer .flow-kw-name {
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+/* ── Inline keyword arguments ── */
+.rf-trace-viewer .flow-kw-args {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-left: 6px;
+}
+
+/* ── Sticky suite and test headers ── */
+.rf-trace-viewer .flow-suite-header,
+.rf-trace-viewer .flow-test-header {
+  position: sticky;
+  z-index: 2;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .flow-suite-header { top: 0; }
+.rf-trace-viewer .flow-test-header { top: 32px; }
+
+.rf-trace-viewer .flow-suite-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.rf-trace-viewer .flow-suite-source {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-left: 8px;
+}
+
+.rf-trace-viewer .flow-test-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* ── SETUP / TEARDOWN row tint ── */
+.rf-trace-viewer .flow-row-setup {
+  background: rgba(46, 125, 50, 0.04);
+}
+
+.rf-trace-viewer .flow-row-teardown {
+  background: rgba(46, 125, 50, 0.04);
+}
+
+.rf-trace-viewer.theme-dark .flow-row-setup {
+  background: rgba(102, 187, 106, 0.06);
+}
+
+.rf-trace-viewer.theme-dark .flow-row-teardown {
+  background: rgba(102, 187, 106, 0.06);
+}
+
+/* ── FAIL row left border accent ── */
+.rf-trace-viewer .flow-row-fail {
+  border-left: 3px solid var(--status-fail);
+}
+
 /* ── Print styles for flow table ── */
 @media print {
   .rf-trace-viewer .flow-table-section {
