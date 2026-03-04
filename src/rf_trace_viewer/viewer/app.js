@@ -1292,7 +1292,7 @@
 
     var flowTableSection = document.createElement('section');
     flowTableSection.className = 'flow-table-section';
-    flowTableSection.style.height = '200px';
+    flowTableSection.style.height = '320px';
     centerColumn.appendChild(flowTableSection);
 
     (function () {

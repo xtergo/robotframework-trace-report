@@ -2,46 +2,70 @@
 (function () {
   'use strict';
 
+  // Module-level state preserved across re-inits (live mode calls initFlowTable repeatedly)
+  var _pinnedTestId = null;
+  var _pinned = false;
+  var _showOnlyFailed = false;
+  var _flowState = null;
+  var _listenerRegistered = false;
+
   window.initFlowTable = function (container, data) {
     if (!container || !data) return;
+
+    // If pinned, just update the data reference but don't touch the UI
+    if (_pinned && _pinnedTestId && _flowState) {
+      _flowState.data = data;
+      return;
+    }
+
+    // Reuse existing state if same container, just update data
+    if (_flowState && _flowState.container === container) {
+      _flowState.data = data;
+      // Don't clear the current view — the navigate-to-span listener handles updates
+      return;
+    }
+
     var state = {
       container: container,
       data: data,
       currentTestId: null,
       highlightSpanId: null,
       pinned: false,
-      showOnlyFailed: false,
+      showOnlyFailed: _showOnlyFailed,
       rows: []
     };
+    _flowState = state;
     _renderEmpty(state);
-    if (window.RFTraceViewer && window.RFTraceViewer.on) {
+    if (!_listenerRegistered && window.RFTraceViewer && window.RFTraceViewer.on) {
+      _listenerRegistered = true;
       window.RFTraceViewer.on('navigate-to-span', function (evt) {
-        if (!evt || !evt.spanId || state.pinned) return;
-        var suites = data.suites || [];
+        var s = _flowState;
+        if (!s || !evt || !evt.spanId || s.pinned) return;
+        var suites = s.data.suites || [];
         var spanId = evt.spanId;
         var test = _findTestById(suites, spanId);
         if (test) {
-          state.currentTestId = test.id;
-          state.highlightSpanId = null;
-          state.rows = _flattenKeywords(test);
-          _renderTable(state);
+          s.currentTestId = test.id;
+          s.highlightSpanId = null;
+          s.rows = _flattenKeywords(test);
+          _renderTable(s);
           return;
         }
         var pt = _findTestContainingSpan(suites, spanId);
         if (pt) {
-          if (state.currentTestId !== pt.id) {
-            state.rows = _flattenKeywords(pt);
+          if (s.currentTestId !== pt.id) {
+            s.rows = _flattenKeywords(pt);
           }
-          state.currentTestId = pt.id;
-          state.highlightSpanId = spanId;
-          _renderTable(state);
-          _scrollToHighlighted(state);
+          s.currentTestId = pt.id;
+          s.highlightSpanId = spanId;
+          _renderTable(s);
+          _scrollToHighlighted(s);
           return;
         }
-        state.currentTestId = null;
-        state.highlightSpanId = null;
-        state.rows = [];
-        _renderEmpty(state);
+        s.currentTestId = null;
+        s.highlightSpanId = null;
+        s.rows = [];
+        _renderEmpty(s);
       });
     }
   };
@@ -137,6 +161,12 @@
       : 'Pin to keep this flow while navigating elsewhere';
     pinBtn.addEventListener('click', function () {
       state.pinned = !state.pinned;
+      _pinned = state.pinned;
+      if (state.pinned) {
+        _pinnedTestId = state.currentTestId;
+      } else {
+        _pinnedTestId = null;
+      }
       _renderTable(state);
     });
     controls.appendChild(pinBtn);
@@ -147,6 +177,7 @@
     filterBtn.setAttribute('aria-label', 'Toggle show only failed steps');
     filterBtn.addEventListener('click', function () {
       state.showOnlyFailed = !state.showOnlyFailed;
+      _showOnlyFailed = state.showOnlyFailed;
       _renderTable(state);
     });
     controls.appendChild(filterBtn);
