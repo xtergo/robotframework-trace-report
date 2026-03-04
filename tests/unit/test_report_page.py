@@ -843,3 +843,289 @@ def test_filter_never_adds_elements(test_list):
     tests = [make_full_test(name, status) for name, status in test_list]
     result = filter_tests(tests, "a", None)
     assert len(result) <= len(tests)
+
+
+# ===========================================================================
+# 7. Keyword Drill-Down helpers
+# ===========================================================================
+
+# Log level ordering (mirrors JS LOG_LEVELS)
+LOG_LEVELS = {"TRACE": 0, "DEBUG": 1, "INFO": 2, "WARN": 3, "ERROR": 4}
+
+
+def flatten_keywords_for_report(test):
+    """Python reference of _flattenKeywordsForReport() from report-page.js.
+
+    DFS flattening of keyword tree, capturing events for inline log display.
+    """
+    rows = []
+    stack = []
+    kws = test.get("keywords", [])
+    for kw in reversed(kws):
+        stack.append({"kw": kw, "depth": 0})
+    while stack:
+        e = stack.pop()
+        kw = e["kw"]
+        rows.append(
+            {
+                "name": kw.get("name", ""),
+                "args": kw.get("args", ""),
+                "status": kw.get("status", ""),
+                "duration": kw.get("elapsed_time", 0),
+                "id": kw.get("id", ""),
+                "keyword_type": kw.get("keyword_type", "KEYWORD"),
+                "depth": e["depth"],
+                "events": kw.get("events", []),
+            }
+        )
+        children = kw.get("children", [])
+        for ch in reversed(children):
+            stack.append({"kw": ch, "depth": e["depth"] + 1})
+    return rows
+
+
+def filter_log_by_level(events, min_level):
+    """Python reference of _filterLogByLevel() from report-page.js."""
+    threshold = LOG_LEVELS.get(min_level, LOG_LEVELS["INFO"])
+    result = []
+    for evt in events:
+        evt_level = (evt.get("level") or "INFO").upper()
+        evt_val = LOG_LEVELS.get(evt_level, LOG_LEVELS["INFO"])
+        if evt_val >= threshold:
+            result.append(evt)
+    return result
+
+
+def find_auto_expand_path(test):
+    """Python reference of _findAutoExpandPath() from report-page.js.
+
+    Returns a set of keyword IDs on the failed path.
+    """
+    fail_ids = set()
+    kws = test.get("keywords", [])
+    while kws:
+        failed_kw = None
+        for kw in kws:
+            if kw.get("status") == "FAIL":
+                failed_kw = kw
+                break
+        if not failed_kw:
+            break
+        fail_ids.add(failed_kw.get("id", ""))
+        kws = failed_kw.get("children", [])
+    return fail_ids
+
+
+# ---------------------------------------------------------------------------
+# 7a. Keyword tree flattening produces correct depth levels
+# ---------------------------------------------------------------------------
+
+
+def _make_kw(name, kw_type="KEYWORD", status="PASS", children=None, events=None, elapsed_time=0):
+    """Helper to create keyword dicts with events and elapsed_time."""
+    kw = {
+        "name": name,
+        "keyword_type": kw_type,
+        "id": f"kw-{name}",
+        "status": status,
+        "children": children or [],
+        "events": events or [],
+        "elapsed_time": elapsed_time,
+    }
+    return kw
+
+
+def test_flatten_keywords_correct_depth():
+    """Flattening a nested keyword tree produces correct depth levels.
+
+    **Validates: Requirements 7.1**
+    """
+    test = {
+        "name": "Test1",
+        "id": "t1",
+        "keywords": [
+            _make_kw(
+                "Setup",
+                kw_type="SETUP",
+                children=[
+                    _make_kw("Open Browser"),
+                ],
+            ),
+            _make_kw(
+                "Login",
+                children=[
+                    _make_kw(
+                        "Enter Credentials",
+                        children=[
+                            _make_kw("Input Text"),
+                        ],
+                    ),
+                ],
+            ),
+            _make_kw("Teardown", kw_type="TEARDOWN"),
+        ],
+    }
+    rows = flatten_keywords_for_report(test)
+
+    assert len(rows) == 6
+    # Root keywords at depth 0
+    assert rows[0]["name"] == "Setup"
+    assert rows[0]["depth"] == 0
+    assert rows[1]["name"] == "Open Browser"
+    assert rows[1]["depth"] == 1
+    assert rows[2]["name"] == "Login"
+    assert rows[2]["depth"] == 0
+    assert rows[3]["name"] == "Enter Credentials"
+    assert rows[3]["depth"] == 1
+    assert rows[4]["name"] == "Input Text"
+    assert rows[4]["depth"] == 2
+    assert rows[5]["name"] == "Teardown"
+    assert rows[5]["depth"] == 0
+
+
+def test_flatten_keywords_captures_events():
+    """Flattening captures events array for inline log display.
+
+    **Validates: Requirements 7.1**
+    """
+    events = [
+        {"level": "INFO", "message": "Clicking button", "timestamp": "09:15:02"},
+        {"level": "DEBUG", "message": "Found element", "timestamp": "09:15:02"},
+    ]
+    test = {
+        "name": "Test1",
+        "id": "t1",
+        "keywords": [_make_kw("Click", events=events)],
+    }
+    rows = flatten_keywords_for_report(test)
+    assert len(rows) == 1
+    assert rows[0]["events"] == events
+
+
+def test_flatten_keywords_empty():
+    """Flattening a test with no keywords returns empty list.
+
+    **Validates: Requirements 7.1**
+    """
+    test = {"name": "Empty", "id": "t0", "keywords": []}
+    rows = flatten_keywords_for_report(test)
+    assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# 7b. Log level filter hides messages below threshold
+# ---------------------------------------------------------------------------
+
+
+def test_log_level_filter_default_info():
+    """Default INFO filter shows INFO, WARN, ERROR but hides TRACE, DEBUG.
+
+    **Validates: Requirements 7.4**
+    """
+    events = [
+        {"level": "TRACE", "message": "trace msg"},
+        {"level": "DEBUG", "message": "debug msg"},
+        {"level": "INFO", "message": "info msg"},
+        {"level": "WARN", "message": "warn msg"},
+        {"level": "ERROR", "message": "error msg"},
+    ]
+    result = filter_log_by_level(events, "INFO")
+    assert len(result) == 3
+    levels = [e["level"] for e in result]
+    assert levels == ["INFO", "WARN", "ERROR"]
+
+
+def test_log_level_filter_trace_shows_all():
+    """TRACE filter shows all messages.
+
+    **Validates: Requirements 7.4**
+    """
+    events = [
+        {"level": "TRACE", "message": "t"},
+        {"level": "DEBUG", "message": "d"},
+        {"level": "INFO", "message": "i"},
+    ]
+    result = filter_log_by_level(events, "TRACE")
+    assert len(result) == 3
+
+
+def test_log_level_filter_error_shows_only_error():
+    """ERROR filter shows only ERROR messages.
+
+    **Validates: Requirements 7.4**
+    """
+    events = [
+        {"level": "INFO", "message": "i"},
+        {"level": "WARN", "message": "w"},
+        {"level": "ERROR", "message": "e"},
+    ]
+    result = filter_log_by_level(events, "ERROR")
+    assert len(result) == 1
+    assert result[0]["level"] == "ERROR"
+
+
+def test_log_level_filter_empty_events():
+    """Filtering empty events returns empty list.
+
+    **Validates: Requirements 7.4**
+    """
+    assert filter_log_by_level([], "INFO") == []
+
+
+# ---------------------------------------------------------------------------
+# 7c. Failed chains are auto-expanded
+# ---------------------------------------------------------------------------
+
+
+def test_auto_expand_failed_chains():
+    """Auto-expand path includes all keywords on the fail chain.
+
+    **Validates: Requirements 7.6**
+    """
+    test = {
+        "name": "Failing Test",
+        "id": "t-fail",
+        "keywords": [
+            _make_kw("Setup", kw_type="SETUP"),
+            _make_kw(
+                "Main Keyword",
+                status="FAIL",
+                children=[
+                    _make_kw("Sub Pass"),
+                    _make_kw(
+                        "Sub Fail",
+                        status="FAIL",
+                        children=[
+                            _make_kw("Deepest Fail", status="FAIL"),
+                        ],
+                    ),
+                ],
+            ),
+            _make_kw("Teardown", kw_type="TEARDOWN"),
+        ],
+    }
+    fail_ids = find_auto_expand_path(test)
+    assert "kw-Main Keyword" in fail_ids
+    assert "kw-Sub Fail" in fail_ids
+    assert "kw-Deepest Fail" in fail_ids
+    # Non-failed keywords should not be in the path
+    assert "kw-Setup" not in fail_ids
+    assert "kw-Sub Pass" not in fail_ids
+    assert "kw-Teardown" not in fail_ids
+
+
+def test_auto_expand_no_failures():
+    """Auto-expand path is empty when no keywords fail.
+
+    **Validates: Requirements 7.6**
+    """
+    test = {
+        "name": "Passing Test",
+        "id": "t-pass",
+        "keywords": [
+            _make_kw("Step 1"),
+            _make_kw("Step 2"),
+        ],
+    }
+    fail_ids = find_auto_expand_path(test)
+    assert len(fail_ids) == 0

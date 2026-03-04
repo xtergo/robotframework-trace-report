@@ -325,6 +325,273 @@
     BREAK: 'BRK', GROUP: 'GRP', ERROR: 'ERR'
   };
 
+  // ── Log level ordering ──
+  var LOG_LEVELS = { TRACE: 0, DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 };
+
+  /**
+   * Flatten keywords for report drill-down using DFS (same approach as flow-table.js).
+   * Also captures events array for inline log messages.
+   * @param {Object} test - An RFTest object with keywords array
+   * @returns {Array} Flat array of {name, args, status, duration, id, keyword_type, depth, events}
+   */
+  function _flattenKeywordsForReport(test) {
+    var rows = [];
+    var stack = [];
+    var kws = test.keywords || [];
+    for (var i = kws.length - 1; i >= 0; i--) {
+      stack.push({ kw: kws[i], depth: 0 });
+    }
+    while (stack.length) {
+      var e = stack.pop();
+      var kw = e.kw;
+      rows.push({
+        name: kw.name || '',
+        args: kw.args || '',
+        status: kw.status || '',
+        duration: kw.elapsed_time || 0,
+        id: kw.id || '',
+        keyword_type: kw.keyword_type || 'KEYWORD',
+        depth: e.depth,
+        events: kw.events || []
+      });
+      var ch = kw.children || [];
+      for (var c = ch.length - 1; c >= 0; c--) {
+        stack.push({ kw: ch[c], depth: e.depth + 1 });
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Filter log events by minimum level.
+   * @param {Array} events - Array of event objects with level property
+   * @param {string} minLevel - Minimum level to show (TRACE/DEBUG/INFO/WARN/ERROR)
+   * @returns {Array} Filtered events at or above minLevel
+   */
+  function _filterLogByLevel(events, minLevel) {
+    var threshold = LOG_LEVELS[minLevel] !== undefined ? LOG_LEVELS[minLevel] : LOG_LEVELS.INFO;
+    var result = [];
+    for (var i = 0; i < events.length; i++) {
+      var evtLevel = (events[i].level || 'INFO').toUpperCase();
+      var evtVal = LOG_LEVELS[evtLevel] !== undefined ? LOG_LEVELS[evtLevel] : LOG_LEVELS.INFO;
+      if (evtVal >= threshold) {
+        result.push(events[i]);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Find the set of keyword IDs on the failed path for auto-expand.
+   * Returns an object mapping keyword IDs to true for keywords on the fail chain.
+   * @param {Object} test - An RFTest object with keywords array
+   * @returns {Object} Map of keyword ID → true for keywords on the fail path
+   */
+  function _findAutoExpandPath(test) {
+    var failIds = {};
+    var kws = test.keywords || [];
+    while (kws.length) {
+      var failedKw = null;
+      for (var i = 0; i < kws.length; i++) {
+        if (kws[i].status === 'FAIL') {
+          failedKw = kws[i];
+          break;
+        }
+      }
+      if (!failedKw) break;
+      failIds[failedKw.id || ''] = true;
+      kws = failedKw.children || [];
+    }
+    return failIds;
+  }
+
+  /**
+   * Find a test by ID in the suite tree.
+   * @param {Array} suites - Array of suite objects
+   * @param {string} testId - Test ID to find
+   * @returns {Object|null} The test object or null
+   */
+  function _findTestInSuites(suites, testId) {
+    var stack = suites.slice();
+    while (stack.length) {
+      var node = stack.pop();
+      var children = node.children || [];
+      for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        if (child.keywords !== undefined && child.id === testId) {
+          return child;
+        }
+        if (child.children !== undefined) {
+          stack.push(child);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Render the keyword drill-down content for an expanded test row.
+   * Shows indented keyword tree with type badges, log messages, and Explorer links.
+   * @param {string} testId - The test ID to render drill-down for
+   * @returns {HTMLElement} The drill-down content element
+   */
+  function _renderKeywordDrillDown(testId) {
+    var content = document.createElement('div');
+    content.className = 'drill-down-content';
+
+    var test = _findTestInSuites(_suites, testId);
+    if (!test) return content;
+
+    // ── Toolbar with log level filter and Explorer link ──
+    var toolbar = document.createElement('div');
+    toolbar.className = 'drill-down-toolbar';
+
+    var levelLabel = document.createElement('label');
+    levelLabel.className = 'drill-down-level-label';
+    levelLabel.textContent = 'Log level: ';
+
+    var levelSelect = document.createElement('select');
+    levelSelect.className = 'drill-down-level-select';
+    var levels = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
+    for (var li = 0; li < levels.length; li++) {
+      var opt = document.createElement('option');
+      opt.value = levels[li];
+      opt.textContent = levels[li];
+      if (levels[li] === _state.logLevel) opt.selected = true;
+      levelSelect.appendChild(opt);
+    }
+    levelSelect.addEventListener('change', function () {
+      _state.logLevel = levelSelect.value;
+      // Re-render just the keyword rows
+      renderKeywordRows();
+    });
+    levelLabel.appendChild(levelSelect);
+    toolbar.appendChild(levelLabel);
+
+    // Explorer link for the whole test
+    var testLink = document.createElement('a');
+    testLink.className = 'explorer-link';
+    testLink.href = '#';
+    testLink.textContent = '\u2192 Open in Explorer';
+    testLink.title = 'Open test in Explorer';
+    testLink.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      _navigateToExplorer(test.id);
+    });
+    toolbar.appendChild(testLink);
+
+    content.appendChild(toolbar);
+
+    // ── Keyword rows container ──
+    var kwContainer = document.createElement('div');
+    kwContainer.className = 'drill-down-kw-container';
+    content.appendChild(kwContainer);
+
+    function renderKeywordRows() {
+      kwContainer.innerHTML = '';
+      var rows = _flattenKeywordsForReport(test);
+      var failPath = _findAutoExpandPath(test);
+
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
+        var isFail = (row.status || '').toUpperCase() === 'FAIL';
+        var isOnFailPath = failPath[row.id] === true;
+
+        // Keyword row
+        var kwRow = document.createElement('div');
+        kwRow.className = 'drill-down-kw-row' + (isFail ? ' kw-fail' : '') + (isOnFailPath ? ' kw-fail-path' : '');
+        kwRow.style.paddingLeft = (row.depth * 20 + 8) + 'px';
+
+        // Indent guides
+        for (var g = 0; g < row.depth; g++) {
+          var guide = document.createElement('span');
+          guide.className = 'flow-indent-guide';
+          guide.style.left = (g * 20 + 4) + 'px';
+          kwRow.appendChild(guide);
+        }
+
+        // Type badge
+        var badge = document.createElement('span');
+        badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
+        badge.textContent = BADGE_LABELS[kwType] || kwType;
+        kwRow.appendChild(badge);
+
+        // Name
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'drill-down-kw-name';
+        nameSpan.textContent = row.name;
+        kwRow.appendChild(nameSpan);
+
+        // Args (inline, truncated)
+        if (row.args) {
+          var argsSpan = document.createElement('span');
+          argsSpan.className = 'flow-kw-args';
+          var argsText = row.args;
+          argsSpan.textContent = argsText.length > 60 ? argsText.substring(0, 57) + '...' : argsText;
+          if (argsText.length > 60) argsSpan.title = argsText;
+          kwRow.appendChild(argsSpan);
+        }
+
+        // Status
+        var statusSpan = document.createElement('span');
+        statusSpan.className = 'drill-down-kw-status status-' + (row.status || '').toLowerCase();
+        statusSpan.textContent = (row.status || '').toUpperCase();
+        kwRow.appendChild(statusSpan);
+
+        // Duration
+        var durSpan = document.createElement('span');
+        durSpan.className = 'drill-down-kw-duration';
+        durSpan.textContent = _formatDuration((row.duration || 0) * 1000);
+        kwRow.appendChild(durSpan);
+
+        // Make keyword clickable → Explorer link
+        (function (spanId) {
+          kwRow.style.cursor = 'pointer';
+          kwRow.addEventListener('click', function (e) {
+            e.stopPropagation();
+            _navigateToExplorer(spanId);
+          });
+        })(row.id);
+
+        kwContainer.appendChild(kwRow);
+
+        // ── Inline log messages (filtered by level) ──
+        var filteredEvents = _filterLogByLevel(row.events, _state.logLevel);
+        for (var ev = 0; ev < filteredEvents.length; ev++) {
+          var evt = filteredEvents[ev];
+          var logEntry = document.createElement('div');
+          logEntry.className = 'drill-down-log-entry';
+          logEntry.style.paddingLeft = ((row.depth + 1) * 20 + 8) + 'px';
+
+          var levelBadge = document.createElement('span');
+          var evtLevel = (evt.level || 'INFO').toUpperCase();
+          levelBadge.className = 'drill-down-log-level log-level-' + evtLevel.toLowerCase();
+          levelBadge.textContent = evtLevel;
+          logEntry.appendChild(levelBadge);
+
+          if (evt.timestamp) {
+            var tsSpan = document.createElement('span');
+            tsSpan.className = 'drill-down-log-timestamp';
+            tsSpan.textContent = evt.timestamp;
+            logEntry.appendChild(tsSpan);
+          }
+
+          var msgSpan = document.createElement('span');
+          msgSpan.className = 'drill-down-log-message';
+          msgSpan.textContent = evt.message || '';
+          logEntry.appendChild(msgSpan);
+
+          kwContainer.appendChild(logEntry);
+        }
+      }
+    }
+
+    renderKeywordRows();
+    return content;
+  }
+
   /**
    * DFS walk from test root to deepest FAIL keyword.
    * Returns array of {name, type, id, error} objects representing the fail chain.
@@ -884,73 +1151,97 @@
     var sorted = _sortTests(filtered, _state.sortColumn, _state.sortAsc);
 
     for (var i = 0; i < sorted.length; i++) {
-      var test = sorted[i];
-      var tr = document.createElement('tr');
-      tr.className = 'report-test-row';
-      var statusUpper = (test.status || '').toUpperCase();
-      if (statusUpper === 'FAIL') tr.classList.add('row-fail');
-      else if (statusUpper === 'PASS') tr.classList.add('row-pass');
-      else if (statusUpper === 'SKIP' || statusUpper === 'NOT_RUN') tr.classList.add('row-skip');
+      (function (test) {
+        var testId = test.id || '';
+        var isExpanded = _state.expandedTests[testId] === true;
+        var tr = document.createElement('tr');
+        tr.className = 'report-test-row';
+        var statusUpper = (test.status || '').toUpperCase();
+        if (statusUpper === 'FAIL') tr.classList.add('row-fail');
+        else if (statusUpper === 'PASS') tr.classList.add('row-pass');
+        else if (statusUpper === 'SKIP' || statusUpper === 'NOT_RUN') tr.classList.add('row-skip');
+        if (isExpanded) tr.classList.add('expanded');
 
-      // Make row clickable → navigate to Explorer
-      tr.setAttribute('data-span-id', test.id || '');
-      tr.style.cursor = 'pointer';
-      tr.addEventListener('click', (function (spanId) {
-        return function () {
-          _navigateToExplorer(spanId);
-        };
-      })(test.id));
+        // Click row → toggle drill-down expansion
+        tr.setAttribute('data-span-id', testId);
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', function () {
+          if (_state.expandedTests[testId]) {
+            delete _state.expandedTests[testId];
+          } else {
+            _state.expandedTests[testId] = true;
+          }
+          _rebuildTbody(table, allTests, selectedSuite, showDoc);
+        });
 
-      // Name (with suite path prefix)
-      var tdName = document.createElement('td');
-      tdName.className = 'report-test-name-cell';
-      var suitePath = _findTestSuitePath(selectedSuite, test.id, '');
-      if (suitePath) {
-        var pathSpan = document.createElement('span');
-        pathSpan.className = 'report-suite-path';
-        pathSpan.textContent = suitePath + ' > ';
-        tdName.appendChild(pathSpan);
-      }
-      var nameSpan = document.createElement('span');
-      nameSpan.textContent = test.name || '';
-      tdName.appendChild(nameSpan);
-      tr.appendChild(tdName);
+        // Name (with expand icon and suite path prefix)
+        var tdName = document.createElement('td');
+        tdName.className = 'report-test-name-cell';
 
-      // Documentation (toggleable, hidden by default)
-      var tdDoc = document.createElement('td');
-      tdDoc.className = 'report-test-doc-cell';
-      if (!showDoc) tdDoc.classList.add('hidden');
-      tdDoc.textContent = test.doc || '';
-      tr.appendChild(tdDoc);
+        var expandIcon = document.createElement('span');
+        expandIcon.className = 'drill-down-expand-icon';
+        expandIcon.textContent = isExpanded ? '\u25BC ' : '\u25B6 ';
+        tdName.appendChild(expandIcon);
 
-      // Status
-      var tdStatus = document.createElement('td');
-      tdStatus.className = 'report-test-status-cell status-' + statusUpper.toLowerCase();
-      tdStatus.textContent = statusUpper;
-      tr.appendChild(tdStatus);
+        var suitePath = _findTestSuitePath(selectedSuite, testId, '');
+        if (suitePath) {
+          var pathSpan = document.createElement('span');
+          pathSpan.className = 'report-suite-path';
+          pathSpan.textContent = suitePath + ' > ';
+          tdName.appendChild(pathSpan);
+        }
+        var nameSpan = document.createElement('span');
+        nameSpan.textContent = test.name || '';
+        tdName.appendChild(nameSpan);
+        tr.appendChild(tdName);
 
-      // Tags
-      var tdTags = document.createElement('td');
-      tdTags.className = 'report-test-tags-cell';
-      tdTags.textContent = (test.tags || []).join(', ');
-      tr.appendChild(tdTags);
+        // Documentation (toggleable, hidden by default)
+        var tdDoc = document.createElement('td');
+        tdDoc.className = 'report-test-doc-cell';
+        if (!showDoc) tdDoc.classList.add('hidden');
+        tdDoc.textContent = test.doc || '';
+        tr.appendChild(tdDoc);
 
-      // Duration
-      var tdDuration = document.createElement('td');
-      tdDuration.className = 'report-test-duration-cell';
-      var durationMs = (test.elapsed_time || 0) * 1000;
-      tdDuration.textContent = _formatDuration(durationMs);
-      tr.appendChild(tdDuration);
+        // Status
+        var tdStatus = document.createElement('td');
+        tdStatus.className = 'report-test-status-cell status-' + statusUpper.toLowerCase();
+        tdStatus.textContent = statusUpper;
+        tr.appendChild(tdStatus);
 
-      // Message
-      var tdMsg = document.createElement('td');
-      tdMsg.className = 'report-test-message-cell';
-      var msg = test.status_message || '';
-      tdMsg.textContent = msg.length > 80 ? msg.substring(0, 77) + '\u2026' : msg;
-      if (msg.length > 80) tdMsg.title = msg;
-      tr.appendChild(tdMsg);
+        // Tags
+        var tdTags = document.createElement('td');
+        tdTags.className = 'report-test-tags-cell';
+        tdTags.textContent = (test.tags || []).join(', ');
+        tr.appendChild(tdTags);
 
-      tbody.appendChild(tr);
+        // Duration
+        var tdDuration = document.createElement('td');
+        tdDuration.className = 'report-test-duration-cell';
+        var durationMs = (test.elapsed_time || 0) * 1000;
+        tdDuration.textContent = _formatDuration(durationMs);
+        tr.appendChild(tdDuration);
+
+        // Message
+        var tdMsg = document.createElement('td');
+        tdMsg.className = 'report-test-message-cell';
+        var msg = test.status_message || '';
+        tdMsg.textContent = msg.length > 80 ? msg.substring(0, 77) + '\u2026' : msg;
+        if (msg.length > 80) tdMsg.title = msg;
+        tr.appendChild(tdMsg);
+
+        tbody.appendChild(tr);
+
+        // ── Drill-down row (if expanded) ──
+        if (isExpanded) {
+          var drillTr = document.createElement('tr');
+          drillTr.className = 'drill-down-row';
+          var drillTd = document.createElement('td');
+          drillTd.setAttribute('colspan', '6');
+          drillTd.appendChild(_renderKeywordDrillDown(testId));
+          drillTr.appendChild(drillTd);
+          tbody.appendChild(drillTr);
+        }
+      })(sorted[i]);
     }
   }
 
@@ -996,6 +1287,10 @@
     collectExecutionErrors: _collectExecutionErrors,
     sortTests: _sortTests,
     filterTests: _filterTests,
-    findTestSuitePath: _findTestSuitePath
+    findTestSuitePath: _findTestSuitePath,
+    flattenKeywordsForReport: _flattenKeywordsForReport,
+    filterLogByLevel: _filterLogByLevel,
+    findAutoExpandPath: _findAutoExpandPath,
+    findTestInSuites: _findTestInSuites
   };
 })();

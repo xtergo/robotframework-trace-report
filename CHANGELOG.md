@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Test row click behavior changed from navigating to Explorer to toggling inline keyword drill-down expansion (Explorer link available in drill-down toolbar)
 - Renamed "Overview" tab to "Explorer" with backward compatibility for old `view=overview` deep links
 - Header title tooltip now reads "Go to Explorer"
 - Default view in deep links is now `explorer` (old `overview` links auto-redirect)
@@ -22,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error messages moved from column to tooltip on FAIL rows
 
 ### Added
+- Keyword Drill-Down on Report page: expand test rows inline to see keyword execution tree with type badges, indentation, args, status, duration, and Explorer links for each keyword
+- Inline log messages under keywords with level badge (TRACE/DEBUG/INFO/WARN/ERROR) and timestamp, filtered by log level selector (default INFO)
+- Auto-expand failed keyword chains when test row is expanded
+- Drill-Down CSS (`.drill-down-row`, `.drill-down-toolbar`, `.drill-down-kw-row`, `.drill-down-log-entry`, `.drill-down-log-level`, `.drill-down-expand-icon`)
 - Test Results Table on Report page: sortable columns (Name, Documentation, Status, Tags, Duration, Message), default sort FAIL-first then duration descending, text filter (debounced 200ms) on name/tags/message, tag filter integration with clear badge, clickable rows navigate to Explorer via `_navigateToExplorer(spanId)`
 - Test Results Table CSS (`.report-test-table`, `.report-search-input`, `.report-filter-bar`, `.report-tag-filter-badge`, row status coloring)
 - Failure Triage section on Report page: failure entries with test name, failed keyword chain breadcrumb, error message, duration, and Explorer link to deepest failed keyword
