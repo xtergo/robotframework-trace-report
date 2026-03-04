@@ -3405,3 +3405,183 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
+
+/* ── Summary Dashboard ── */
+.rf-trace-viewer .suite-selector {
+  margin-bottom: 16px;
+}
+
+.rf-trace-viewer .suite-selector-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rf-trace-viewer .suite-selector-dropdown {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rf-trace-viewer .summary-dashboard {
+  margin-bottom: 24px;
+}
+
+.rf-trace-viewer .summary-status-banner {
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.rf-trace-viewer .summary-status-banner.status-pass {
+  background: var(--overall-pass-bg);
+  color: var(--status-pass);
+}
+
+.rf-trace-viewer .summary-status-banner.status-fail {
+  background: var(--overall-fail-bg);
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .summary-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.rf-trace-viewer .summary-card {
+  flex: 1;
+  min-width: 100px;
+  padding: 16px;
+  border-radius: 8px;
+  text-align: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .summary-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.rf-trace-viewer .summary-card-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rf-trace-viewer .summary-card.card-pass .summary-card-value {
+  color: var(--status-pass);
+}
+
+.rf-trace-viewer .summary-card.card-fail .summary-card-value {
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .summary-card.card-skip .summary-card-value {
+  color: var(--status-skip);
+}
+
+/* ── Suite Info ── */
+.rf-trace-viewer .suite-info {
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.rf-trace-viewer .suite-info-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.rf-trace-viewer .suite-info-source {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: monospace;
+  margin-bottom: 6px;
+}
+
+.rf-trace-viewer .suite-info-doc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-style: italic;
+}
+
+.rf-trace-viewer .suite-info-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.rf-trace-viewer .suite-metadata-pair {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+/* ── Per-Suite Breakdown Table ── */
+.rf-trace-viewer .suite-breakdown {
+  margin-top: 4px;
+}
+
+.rf-trace-viewer .suite-breakdown-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.rf-trace-viewer .suite-breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rf-trace-viewer .suite-breakdown-table th {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.rf-trace-viewer .suite-breakdown-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .suite-breakdown-table .num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-trace-viewer .suite-breakdown-table tbody tr:hover {
+  background: var(--hover-bg);
+}

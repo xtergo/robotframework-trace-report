@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error messages moved from column to tooltip on FAIL rows
 
 ### Added
+- Summary Dashboard on Report page: overall status banner (pass/fail), stat cards (total, pass, fail, skip, duration), suite header with name/source/doc/metadata, per-suite breakdown table
+- Suite selector dropdown for multi-suite traces (hidden for single-suite)
+- Summary Dashboard CSS (`.summary-dashboard`, `.summary-card`, `.suite-info`, `.suite-breakdown-table`, `.suite-selector`)
 - Report page scaffold (`report-page.js`) with IIFE structure, public API (`initReportPage`, `updateReportPage`), and shared helpers (`_collectAllTests`, `_navigateToExplorer`)
 - Base Report page CSS (`.report-page` container, `.explorer-link` styling)
 - Initial project structure and documentation
