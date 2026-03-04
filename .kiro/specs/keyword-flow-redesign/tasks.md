@@ -204,7 +204,7 @@ Every task follows this completion sequence:
     - _Requirements: 7.1, 7.4, 7.6_
   - [x] 7.6 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [-] 8. Implement Tag Statistics and Keyword Insights
+- [x] 8. Implement Tag Statistics and Keyword Insights
   - [x] 8.1 Implement `_renderTagStatistics()`
     - Aggregate per-tag pass/fail/skip counts via `_aggregateTagStats(tests)`
     - Sortable table: tag name, total, pass, fail, skip
@@ -224,20 +224,20 @@ Every task follows this completion sequence:
     - Unit test: `_aggregateTagStats()` produces correct per-tag counts
     - Unit test: `_aggregateKeywordStats()` computes correct min/max/avg
     - _Requirements: 8.2, 9.2_
-  - [-] 8.5 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
+  - [x] 8.5 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [ ] 9. Implement Expand/Collapse controls for Keyword Drill-Down (low priority)
-  - [ ] 9.1 Add "Expand All", "Collapse All", and "Expand Failed" buttons
+- [x] 9. Implement Expand/Collapse controls for Keyword Drill-Down (low priority)
+  - [x] 9.1 Add "Expand All", "Collapse All", and "Expand Failed" buttons
     - Render compact toolbar within the expanded drill-down section
     - "Expand All" expands entire keyword tree
     - "Collapse All" collapses all keyword nodes
     - "Expand Failed" expands only failed keyword chains
     - _Requirements: 12.1, 12.2, 12.3_
-  - [ ] 9.2 Add regression tests for expand/collapse controls
+  - [x] 9.2 Add regression tests for expand/collapse controls
     - Unit test: expand all sets all nodes to expanded state
     - Unit test: expand failed only expands nodes on the fail path
     - _Requirements: 12.1, 12.2_
-  - [ ] 9.3 Run `make lint && make test-unit`, commit
+  - [x] 9.3 Run `make lint && make test-unit`, commit
 
 - [ ] 10. Implement Report page deep link support
   - [ ] 10.1 Extend `deep-link.js` with Report page state encoding

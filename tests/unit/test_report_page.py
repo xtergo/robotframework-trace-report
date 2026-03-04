@@ -862,10 +862,11 @@ def flatten_keywords_for_report(test):
     stack = []
     kws = test.get("keywords", [])
     for kw in reversed(kws):
-        stack.append({"kw": kw, "depth": 0})
+        stack.append({"kw": kw, "depth": 0, "parentId": None})
     while stack:
         e = stack.pop()
         kw = e["kw"]
+        children = kw.get("children", [])
         rows.append(
             {
                 "name": kw.get("name", ""),
@@ -876,11 +877,13 @@ def flatten_keywords_for_report(test):
                 "keyword_type": kw.get("keyword_type", "KEYWORD"),
                 "depth": e["depth"],
                 "events": kw.get("events", []),
+                "hasChildren": len(children) > 0,
+                "parentId": e["parentId"],
             }
         )
-        children = kw.get("children", [])
+        kw_id = kw.get("id", "")
         for ch in reversed(children):
-            stack.append({"kw": ch, "depth": e["depth"] + 1})
+            stack.append({"kw": ch, "depth": e["depth"] + 1, "parentId": kw_id})
     return rows
 
 
@@ -1129,6 +1132,176 @@ def test_auto_expand_no_failures():
     }
     fail_ids = find_auto_expand_path(test)
     assert len(fail_ids) == 0
+
+
+# ===========================================================================
+# 9. Expand/Collapse controls for Keyword Drill-Down
+# ===========================================================================
+
+
+def _build_expanded_nodes(rows, initial_value=True):
+    """Build expand state map: keyword ID → bool for rows with children."""
+    return {r["id"]: initial_value for r in rows if r["hasChildren"]}
+
+
+def _visible_rows(rows, expanded_nodes):
+    """Return rows visible given the expanded_nodes state.
+
+    A row is hidden if any of its ancestors is collapsed.
+    """
+    visible = []
+    for idx, row in enumerate(rows):
+        if row["parentId"] is None:
+            visible.append(row)
+            continue
+        # Walk up the parent chain
+        hidden = False
+        current_parent = row["parentId"]
+        for p in range(idx - 1, -1, -1):
+            if rows[p]["id"] == current_parent:
+                if not expanded_nodes.get(rows[p]["id"], True):
+                    hidden = True
+                    break
+                current_parent = rows[p]["parentId"]
+                if current_parent is None:
+                    break
+        if not hidden:
+            visible.append(row)
+    return visible
+
+
+def test_expand_all_sets_all_nodes_expanded():
+    """Expand All sets all parent nodes to expanded state.
+
+    **Validates: Requirements 12.1**
+    """
+    test = {
+        "name": "Test1",
+        "id": "t1",
+        "keywords": [
+            _make_kw(
+                "Parent",
+                children=[
+                    _make_kw("Child1"),
+                    _make_kw(
+                        "Child2",
+                        children=[_make_kw("Grandchild")],
+                    ),
+                ],
+            ),
+            _make_kw("Leaf"),
+        ],
+    }
+    rows = flatten_keywords_for_report(test)
+    # Start collapsed
+    expanded = _build_expanded_nodes(rows, initial_value=False)
+    # Expand All
+    for k in expanded:
+        expanded[k] = True
+    visible = _visible_rows(rows, expanded)
+    assert len(visible) == len(rows)
+    assert all(expanded[k] for k in expanded)
+
+
+def test_collapse_all_hides_children():
+    """Collapse All hides all children of parent nodes.
+
+    **Validates: Requirements 12.1**
+    """
+    test = {
+        "name": "Test1",
+        "id": "t1",
+        "keywords": [
+            _make_kw(
+                "Parent",
+                children=[
+                    _make_kw("Child1"),
+                    _make_kw(
+                        "Child2",
+                        children=[_make_kw("Grandchild")],
+                    ),
+                ],
+            ),
+            _make_kw("Leaf"),
+        ],
+    }
+    rows = flatten_keywords_for_report(test)
+    # Collapse All
+    expanded = _build_expanded_nodes(rows, initial_value=False)
+    visible = _visible_rows(rows, expanded)
+    # Only root-level rows should be visible (Parent and Leaf)
+    assert len(visible) == 2
+    assert visible[0]["name"] == "Parent"
+    assert visible[1]["name"] == "Leaf"
+
+
+def test_expand_failed_only_expands_fail_path():
+    """Expand Failed only expands nodes on the fail path.
+
+    **Validates: Requirements 12.2**
+    """
+    test = {
+        "name": "Test1",
+        "id": "t1",
+        "keywords": [
+            _make_kw(
+                "Pass Parent",
+                children=[
+                    _make_kw("Pass Child"),
+                ],
+            ),
+            _make_kw(
+                "Fail Parent",
+                status="FAIL",
+                children=[
+                    _make_kw("Fail Child", status="FAIL"),
+                    _make_kw("Pass Sibling"),
+                ],
+            ),
+        ],
+    }
+    rows = flatten_keywords_for_report(test)
+    fail_path = find_auto_expand_path(test)
+    # Expand Failed: only expand nodes on the fail path
+    expanded = {r["id"]: (r["id"] in fail_path) for r in rows if r["hasChildren"]}
+    visible = _visible_rows(rows, expanded)
+    visible_names = [r["name"] for r in visible]
+    # Root keywords always visible
+    assert "Pass Parent" in visible_names
+    assert "Fail Parent" in visible_names
+    # Children of Fail Parent visible (it's expanded)
+    assert "Fail Child" in visible_names
+    assert "Pass Sibling" in visible_names
+    # Children of Pass Parent hidden (it's collapsed)
+    assert "Pass Child" not in visible_names
+
+
+def test_flatten_includes_has_children_and_parent_id():
+    """Flattened rows include hasChildren and parentId fields.
+
+    **Validates: Requirements 12.1, 12.2**
+    """
+    test = {
+        "name": "Test1",
+        "id": "t1",
+        "keywords": [
+            _make_kw(
+                "Parent",
+                children=[_make_kw("Child")],
+            ),
+            _make_kw("Leaf"),
+        ],
+    }
+    rows = flatten_keywords_for_report(test)
+    parent_row = rows[0]
+    child_row = rows[1]
+    leaf_row = rows[2]
+    assert parent_row["hasChildren"] is True
+    assert parent_row["parentId"] is None
+    assert child_row["hasChildren"] is False
+    assert child_row["parentId"] == "kw-Parent"
+    assert leaf_row["hasChildren"] is False
+    assert leaf_row["parentId"] is None
 
 
 # ===========================================================================

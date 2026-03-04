@@ -3919,6 +3919,38 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   background: var(--bg-secondary);
   border-radius: 4px;
   font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.rf-trace-viewer .drill-down-btn {
+  background: var(--bg-primary, #0d1117);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .drill-down-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.rf-trace-viewer .drill-down-chevron {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 11px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.rf-trace-viewer .drill-down-chevron:hover {
+  color: var(--text-primary);
 }
 
 .rf-trace-viewer .drill-down-level-label {

@@ -765,11 +765,12 @@
     var stack = [];
     var kws = test.keywords || [];
     for (var i = kws.length - 1; i >= 0; i--) {
-      stack.push({ kw: kws[i], depth: 0 });
+      stack.push({ kw: kws[i], depth: 0, parentId: null });
     }
     while (stack.length) {
       var e = stack.pop();
       var kw = e.kw;
+      var ch = kw.children || [];
       rows.push({
         name: kw.name || '',
         args: kw.args || '',
@@ -778,11 +779,13 @@
         id: kw.id || '',
         keyword_type: kw.keyword_type || 'KEYWORD',
         depth: e.depth,
-        events: kw.events || []
+        events: kw.events || [],
+        hasChildren: ch.length > 0,
+        parentId: e.parentId
       });
-      var ch = kw.children || [];
+      var kwId = kw.id || '';
       for (var c = ch.length - 1; c >= 0; c--) {
-        stack.push({ kw: ch[c], depth: e.depth + 1 });
+        stack.push({ kw: ch[c], depth: e.depth + 1, parentId: kwId });
       }
     }
     return rows;
@@ -894,6 +897,25 @@
     levelLabel.appendChild(levelSelect);
     toolbar.appendChild(levelLabel);
 
+    // ── Expand/Collapse controls ──
+    var btnExpandAll = document.createElement('button');
+    btnExpandAll.className = 'drill-down-btn';
+    btnExpandAll.textContent = 'Expand All';
+    btnExpandAll.title = 'Expand all keyword nodes';
+    toolbar.appendChild(btnExpandAll);
+
+    var btnCollapseAll = document.createElement('button');
+    btnCollapseAll.className = 'drill-down-btn';
+    btnCollapseAll.textContent = 'Collapse All';
+    btnCollapseAll.title = 'Collapse all keyword nodes';
+    toolbar.appendChild(btnCollapseAll);
+
+    var btnExpandFailed = document.createElement('button');
+    btnExpandFailed.className = 'drill-down-btn';
+    btnExpandFailed.textContent = 'Expand Failed';
+    btnExpandFailed.title = 'Expand only failed keyword chains';
+    toolbar.appendChild(btnExpandFailed);
+
     // Explorer link for the whole test
     var testLink = document.createElement('a');
     testLink.className = 'explorer-link';
@@ -909,21 +931,77 @@
 
     content.appendChild(toolbar);
 
+    // ── Expand/collapse state: map of keyword ID → boolean (true = expanded) ──
+    var expandedNodes = {};
+
+    // Initialize: expand all by default (matches previous behavior)
+    var allRows = _flattenKeywordsForReport(test);
+    var failPath = _findAutoExpandPath(test);
+    for (var ri = 0; ri < allRows.length; ri++) {
+      if (allRows[ri].hasChildren) {
+        expandedNodes[allRows[ri].id] = true;
+      }
+    }
+
+    btnExpandAll.addEventListener('click', function (e) {
+      e.stopPropagation();
+      for (var k in expandedNodes) {
+        expandedNodes[k] = true;
+      }
+      renderKeywordRows();
+    });
+
+    btnCollapseAll.addEventListener('click', function (e) {
+      e.stopPropagation();
+      for (var k in expandedNodes) {
+        expandedNodes[k] = false;
+      }
+      renderKeywordRows();
+    });
+
+    btnExpandFailed.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var fp = _findAutoExpandPath(test);
+      for (var k in expandedNodes) {
+        expandedNodes[k] = fp[k] === true;
+      }
+      renderKeywordRows();
+    });
+
     // ── Keyword rows container ──
     var kwContainer = document.createElement('div');
     kwContainer.className = 'drill-down-kw-container';
     content.appendChild(kwContainer);
 
+    function _isAncestorCollapsed(row, rows, idx) {
+      // Walk up the parent chain to see if any ancestor is collapsed
+      var currentParentId = row.parentId;
+      // Build a quick lookup from id → row for parents
+      for (var p = idx - 1; p >= 0; p--) {
+        if (rows[p].id === currentParentId) {
+          if (expandedNodes[rows[p].id] === false) return true;
+          currentParentId = rows[p].parentId;
+          if (!currentParentId) break;
+        }
+      }
+      return false;
+    }
+
     function renderKeywordRows() {
       kwContainer.innerHTML = '';
       var rows = _flattenKeywordsForReport(test);
-      var failPath = _findAutoExpandPath(test);
+      var fp = _findAutoExpandPath(test);
 
       for (var r = 0; r < rows.length; r++) {
         var row = rows[r];
+
+        // Skip rows whose parent (or any ancestor) is collapsed
+        if (row.parentId && _isAncestorCollapsed(row, rows, r)) continue;
+
         var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
         var isFail = (row.status || '').toUpperCase() === 'FAIL';
-        var isOnFailPath = failPath[row.id] === true;
+        var isOnFailPath = fp[row.id] === true;
+        var isExpanded = expandedNodes[row.id] === true;
 
         // Keyword row
         var kwRow = document.createElement('div');
@@ -936,6 +1014,22 @@
           guide.className = 'flow-indent-guide';
           guide.style.left = (g * 20 + 4) + 'px';
           kwRow.appendChild(guide);
+        }
+
+        // Toggle chevron for parent keywords
+        if (row.hasChildren) {
+          var chevron = document.createElement('span');
+          chevron.className = 'drill-down-chevron' + (isExpanded ? ' chevron-expanded' : '');
+          chevron.textContent = isExpanded ? '\u25BE' : '\u25B8';
+          chevron.title = isExpanded ? 'Collapse' : 'Expand';
+          (function (kwId, chevronEl) {
+            chevronEl.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              expandedNodes[kwId] = !expandedNodes[kwId];
+              renderKeywordRows();
+            });
+          })(row.id, chevron);
+          kwRow.appendChild(chevron);
         }
 
         // Type badge
@@ -983,33 +1077,35 @@
 
         kwContainer.appendChild(kwRow);
 
-        // ── Inline log messages (filtered by level) ──
-        var filteredEvents = _filterLogByLevel(row.events, _state.logLevel);
-        for (var ev = 0; ev < filteredEvents.length; ev++) {
-          var evt = filteredEvents[ev];
-          var logEntry = document.createElement('div');
-          logEntry.className = 'drill-down-log-entry';
-          logEntry.style.paddingLeft = ((row.depth + 1) * 20 + 8) + 'px';
+        // ── Inline log messages (filtered by level) — only when expanded ──
+        if (!row.hasChildren || isExpanded) {
+          var filteredEvents = _filterLogByLevel(row.events, _state.logLevel);
+          for (var ev = 0; ev < filteredEvents.length; ev++) {
+            var evt = filteredEvents[ev];
+            var logEntry = document.createElement('div');
+            logEntry.className = 'drill-down-log-entry';
+            logEntry.style.paddingLeft = ((row.depth + 1) * 20 + 8) + 'px';
 
-          var levelBadge = document.createElement('span');
-          var evtLevel = (evt.level || 'INFO').toUpperCase();
-          levelBadge.className = 'drill-down-log-level log-level-' + evtLevel.toLowerCase();
-          levelBadge.textContent = evtLevel;
-          logEntry.appendChild(levelBadge);
+            var levelBadge = document.createElement('span');
+            var evtLevel = (evt.level || 'INFO').toUpperCase();
+            levelBadge.className = 'drill-down-log-level log-level-' + evtLevel.toLowerCase();
+            levelBadge.textContent = evtLevel;
+            logEntry.appendChild(levelBadge);
 
-          if (evt.timestamp) {
-            var tsSpan = document.createElement('span');
-            tsSpan.className = 'drill-down-log-timestamp';
-            tsSpan.textContent = evt.timestamp;
-            logEntry.appendChild(tsSpan);
+            if (evt.timestamp) {
+              var tsSpan = document.createElement('span');
+              tsSpan.className = 'drill-down-log-timestamp';
+              tsSpan.textContent = evt.timestamp;
+              logEntry.appendChild(tsSpan);
+            }
+
+            var msgSpan = document.createElement('span');
+            msgSpan.className = 'drill-down-log-message';
+            msgSpan.textContent = evt.message || '';
+            logEntry.appendChild(msgSpan);
+
+            kwContainer.appendChild(logEntry);
           }
-
-          var msgSpan = document.createElement('span');
-          msgSpan.className = 'drill-down-log-message';
-          msgSpan.textContent = evt.message || '';
-          logEntry.appendChild(msgSpan);
-
-          kwContainer.appendChild(logEntry);
         }
       }
     }

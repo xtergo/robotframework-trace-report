@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Expand/Collapse controls for keyword drill-down: "Expand All", "Collapse All", and "Expand Failed" buttons in drill-down toolbar
+- Collapsible keyword tree nodes with chevron toggles in drill-down view
+
 ### Changed
 - Test row click behavior changed from navigating to Explorer to toggling inline keyword drill-down expansion (Explorer link available in drill-down toolbar)
 - Renamed "Overview" tab to "Explorer" with backward compatibility for old `view=overview` deep links
