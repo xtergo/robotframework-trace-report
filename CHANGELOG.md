@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed "Overview" tab to "Explorer" with backward compatibility for old `view=overview` deep links
 - Header title tooltip now reads "Go to Explorer"
 - Default view in deep links is now `explorer` (old `overview` links auto-redirect)
+- Flow table redesigned with code-like indentation and 4-column layout (Keyword, Line, Status, Duration)
+  - Type badges for all 18 keyword types (KW, SU, TD, FOR, ITR, WHL, IF, EIF, ELS, TRY, EXC, FIN, RET, VAR, CNT, BRK, GRP, ERR)
+  - Indent guides (vertical lines) for visual call hierarchy
+  - Sticky suite and test headers with source file and status badge
+  - SETUP/TEARDOWN rows have subtle background tinting
+  - FAIL rows have a distinct left border accent
+  - Arguments shown inline after keyword name (truncated with tooltip for long values)
+  - Error messages moved from column to tooltip on FAIL rows
 
 ### Added
 - Initial project structure and documentation

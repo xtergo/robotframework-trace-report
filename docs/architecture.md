@@ -229,7 +229,7 @@ The viewer is a vanilla JavaScript application embedded in the generated HTML re
 | `search.js` | Search and filter — text search, status filter, tag filter, duration filter, time range filter |
 | `deep-link.js` | Deep linking — encodes/decodes viewer state in URL hash for shareable links |
 | `theme.js` | Theme management — light/dark mode toggle, system preference detection, CSS custom properties |
-| `flow-table.js` | Execution flow table — tabular view of test execution sequence |
+| `flow-table.js` | Execution flow table — code-like indented keyword view with type badges, sticky suite/test headers, and 4-column layout (Keyword, Line, Status, Duration) |
 | `live.js` | Live mode — polling loop, incremental data fetching, NDJSON parsing in browser |
 | `app.js` | Main application — initialization, event bus, view coordination, service health dashboard |
 | `style.css` | Styles — light and dark themes via CSS custom properties, responsive layout |
