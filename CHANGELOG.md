@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error messages moved from column to tooltip on FAIL rows
 
 ### Added
+- Test Results Table on Report page: sortable columns (Name, Documentation, Status, Tags, Duration, Message), default sort FAIL-first then duration descending, text filter (debounced 200ms) on name/tags/message, tag filter integration with clear badge, clickable rows navigate to Explorer via `_navigateToExplorer(spanId)`
+- Test Results Table CSS (`.report-test-table`, `.report-search-input`, `.report-filter-bar`, `.report-tag-filter-badge`, row status coloring)
 - Failure Triage section on Report page: failure entries with test name, failed keyword chain breadcrumb, error message, duration, and Explorer link to deepest failed keyword
 - Execution Errors collapsible subsection: collects WARN/ERROR log messages across the run with level badge, timestamp, message, and Explorer link (collapsed by default)
 - Failure Triage CSS (`.failure-triage`, `.failure-entry`, `.failure-breadcrumb`, `.execution-errors`, `.error-level-badge`)

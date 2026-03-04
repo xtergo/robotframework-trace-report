@@ -586,9 +586,377 @@
     return section;
   }
 
+  // ── Sort & Filter helpers ──
+
+  /**
+   * Sort tests by the given column and direction.
+   * Default sort: FAIL first, then duration descending.
+   * @param {Array} tests - Array of test objects
+   * @param {string} column - Column key to sort by
+   * @param {boolean} asc - True for ascending, false for descending
+   * @returns {Array} Sorted copy of the tests array
+   */
+  function _sortTests(tests, column, asc) {
+    var sorted = tests.slice();
+    var statusOrder = { FAIL: 0, ERROR: 1, SKIP: 2, NOT_RUN: 3, PASS: 4 };
+    sorted.sort(function (a, b) {
+      var av, bv;
+      switch (column) {
+        case 'name':
+          av = (a.name || '').toLowerCase();
+          bv = (b.name || '').toLowerCase();
+          return asc ? (av < bv ? -1 : av > bv ? 1 : 0) : (bv < av ? -1 : bv > av ? 1 : 0);
+        case 'doc':
+          av = (a.doc || '').toLowerCase();
+          bv = (b.doc || '').toLowerCase();
+          return asc ? (av < bv ? -1 : av > bv ? 1 : 0) : (bv < av ? -1 : bv > av ? 1 : 0);
+        case 'status':
+          av = statusOrder[(a.status || '').toUpperCase()] !== undefined ? statusOrder[(a.status || '').toUpperCase()] : 99;
+          bv = statusOrder[(b.status || '').toUpperCase()] !== undefined ? statusOrder[(b.status || '').toUpperCase()] : 99;
+          if (av !== bv) return asc ? bv - av : av - bv;
+          // Secondary sort: duration descending
+          var aDur = (a.elapsed_time || 0);
+          var bDur = (b.elapsed_time || 0);
+          return bDur - aDur;
+        case 'tags':
+          av = (a.tags || []).join(', ').toLowerCase();
+          bv = (b.tags || []).join(', ').toLowerCase();
+          return asc ? (av < bv ? -1 : av > bv ? 1 : 0) : (bv < av ? -1 : bv > av ? 1 : 0);
+        case 'duration':
+          av = a.elapsed_time || 0;
+          bv = b.elapsed_time || 0;
+          return asc ? av - bv : bv - av;
+        case 'message':
+          av = (a.status_message || '').toLowerCase();
+          bv = (b.status_message || '').toLowerCase();
+          return asc ? (av < bv ? -1 : av > bv ? 1 : 0) : (bv < av ? -1 : bv > av ? 1 : 0);
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }
+
+  /**
+   * Filter tests by text query and optional tag filter.
+   * Matches against name, tags, and status_message.
+   * @param {Array} tests - Array of test objects
+   * @param {string} text - Text filter (case-insensitive)
+   * @param {string|null} tagFilter - If set, only include tests with this tag
+   * @returns {Array} Filtered array of tests
+   */
+  function _filterTests(tests, text, tagFilter) {
+    var result = tests;
+    if (tagFilter) {
+      result = [];
+      for (var i = 0; i < tests.length; i++) {
+        var tags = tests[i].tags || [];
+        for (var t = 0; t < tags.length; t++) {
+          if (tags[t] === tagFilter) {
+            result.push(tests[i]);
+            break;
+          }
+        }
+      }
+    }
+    if (!text) return result;
+    var lower = text.toLowerCase();
+    var filtered = [];
+    for (var j = 0; j < result.length; j++) {
+      var test = result[j];
+      var name = (test.name || '').toLowerCase();
+      var tagStr = (test.tags || []).join(' ').toLowerCase();
+      var msg = (test.status_message || '').toLowerCase();
+      if (name.indexOf(lower) !== -1 || tagStr.indexOf(lower) !== -1 || msg.indexOf(lower) !== -1) {
+        filtered.push(test);
+      }
+    }
+    return filtered;
+  }
+
+  /**
+   * Find the suite path prefix for a test (walks suite tree).
+   * @param {Object} suite - Root suite to search
+   * @param {string} testId - Test ID to find
+   * @param {string} prefix - Current path prefix
+   * @returns {string|null} Suite path prefix or null if not found
+   */
+  function _findTestSuitePath(suite, testId, prefix) {
+    var currentPath = prefix ? prefix + ' > ' + (suite.name || '') : (suite.name || '');
+    var children = suite.children || [];
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (child.keywords !== undefined) {
+        // It's a test
+        if (child.id === testId) return currentPath;
+      } else if (child.children !== undefined) {
+        var found = _findTestSuitePath(child, testId, currentPath);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Render the test results table with sortable columns.
+   * Columns: Name (with suite path prefix), Documentation (hidden by default),
+   * Status, Tags, Duration, Message.
+   * @returns {HTMLElement} The test results section element
+   */
+  function _renderTestResultsTable() {
+    var section = document.createElement('div');
+    section.className = 'report-test-results';
+
+    var selectedSuite = _findSuiteById(_selectedSuiteId);
+    if (!selectedSuite) return section;
+
+    var allTests = _collectAllTests(selectedSuite);
+
+    // ── Search input ──
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'report-search-input';
+    searchInput.placeholder = 'Filter tests\u2026';
+    searchInput.value = _state.textFilter || '';
+
+    // Tag filter indicator
+    var filterBar = document.createElement('div');
+    filterBar.className = 'report-filter-bar';
+    filterBar.appendChild(searchInput);
+
+    if (_state.tagFilter) {
+      var tagBadge = document.createElement('span');
+      tagBadge.className = 'report-tag-filter-badge';
+      tagBadge.textContent = 'Tag: ' + _state.tagFilter + ' \u00D7';
+      tagBadge.title = 'Click to clear tag filter';
+      tagBadge.style.cursor = 'pointer';
+      tagBadge.addEventListener('click', function () {
+        _state.tagFilter = null;
+        _render();
+      });
+      filterBar.appendChild(tagBadge);
+    }
+
+    section.appendChild(filterBar);
+
+    // Debounced text filter
+    var debounceTimer = null;
+    searchInput.addEventListener('input', function () {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function () {
+        _state.textFilter = searchInput.value;
+        _rebuildTbody(table, allTests, selectedSuite, showDoc);
+      }, 200);
+    });
+
+    // ── Section title ──
+    var title = document.createElement('h3');
+    title.className = 'report-test-results-title';
+    title.textContent = 'Test Results (' + allTests.length + ')';
+    section.appendChild(title);
+
+    // ── Table ──
+    var showDoc = false;
+    var table = document.createElement('table');
+    table.className = 'report-test-table';
+
+    // Column definitions
+    var columns = [
+      { key: 'name', label: 'Name' },
+      { key: 'doc', label: 'Documentation', toggleable: true, hidden: true },
+      { key: 'status', label: 'Status' },
+      { key: 'tags', label: 'Tags' },
+      { key: 'duration', label: 'Duration' },
+      { key: 'message', label: 'Message' }
+    ];
+
+    var thead = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+
+    for (var c = 0; c < columns.length; c++) {
+      (function (col) {
+        var th = document.createElement('th');
+        th.setAttribute('data-sort', col.key);
+        th.textContent = col.label;
+
+        if (col.toggleable) {
+          th.classList.add('toggleable');
+          if (col.hidden) th.classList.add('hidden');
+        }
+
+        // Sort indicator
+        if (_state.sortColumn === col.key) {
+          th.textContent += _state.sortAsc ? ' \u25B2' : ' \u25BC';
+          th.classList.add('sorted');
+        }
+
+        th.addEventListener('click', function (e) {
+          // If toggleable and hidden, toggle visibility instead of sorting
+          if (col.toggleable && col.hidden) {
+            col.hidden = false;
+            showDoc = true;
+            _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
+            return;
+          }
+          if (_state.sortColumn === col.key) {
+            _state.sortAsc = !_state.sortAsc;
+          } else {
+            _state.sortColumn = col.key;
+            _state.sortAsc = true;
+          }
+          _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
+        });
+
+        headerRow.appendChild(th);
+      })(columns[c]);
+    }
+
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Build tbody
+    var tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    _rebuildTbody(table, allTests, selectedSuite, showDoc);
+
+    section.appendChild(table);
+    return section;
+  }
+
+  /**
+   * Rebuild the full table (thead + tbody) after column visibility changes.
+   */
+  function _rebuildTable(table, columns, allTests, selectedSuite, showDoc) {
+    // Rebuild thead
+    var thead = table.querySelector('thead');
+    thead.innerHTML = '';
+    var headerRow = document.createElement('tr');
+
+    for (var c = 0; c < columns.length; c++) {
+      (function (col) {
+        var th = document.createElement('th');
+        th.setAttribute('data-sort', col.key);
+        th.textContent = col.label;
+
+        if (col.toggleable) {
+          th.classList.add('toggleable');
+          if (col.hidden) th.classList.add('hidden');
+        }
+
+        if (_state.sortColumn === col.key) {
+          th.textContent += _state.sortAsc ? ' \u25B2' : ' \u25BC';
+          th.classList.add('sorted');
+        }
+
+        th.addEventListener('click', function () {
+          if (col.toggleable && col.hidden) {
+            col.hidden = false;
+            showDoc = true;
+            _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
+            return;
+          }
+          if (_state.sortColumn === col.key) {
+            _state.sortAsc = !_state.sortAsc;
+          } else {
+            _state.sortColumn = col.key;
+            _state.sortAsc = true;
+          }
+          _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
+        });
+
+        headerRow.appendChild(th);
+      })(columns[c]);
+    }
+
+    thead.appendChild(headerRow);
+    _rebuildTbody(table, allTests, selectedSuite, showDoc);
+  }
+
+  /**
+   * Rebuild just the tbody after sort/filter changes.
+   */
+  function _rebuildTbody(table, allTests, selectedSuite, showDoc) {
+    var tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    var filtered = _filterTests(allTests, _state.textFilter, _state.tagFilter);
+    var sorted = _sortTests(filtered, _state.sortColumn, _state.sortAsc);
+
+    for (var i = 0; i < sorted.length; i++) {
+      var test = sorted[i];
+      var tr = document.createElement('tr');
+      tr.className = 'report-test-row';
+      var statusUpper = (test.status || '').toUpperCase();
+      if (statusUpper === 'FAIL') tr.classList.add('row-fail');
+      else if (statusUpper === 'PASS') tr.classList.add('row-pass');
+      else if (statusUpper === 'SKIP' || statusUpper === 'NOT_RUN') tr.classList.add('row-skip');
+
+      // Make row clickable → navigate to Explorer
+      tr.setAttribute('data-span-id', test.id || '');
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', (function (spanId) {
+        return function () {
+          _navigateToExplorer(spanId);
+        };
+      })(test.id));
+
+      // Name (with suite path prefix)
+      var tdName = document.createElement('td');
+      tdName.className = 'report-test-name-cell';
+      var suitePath = _findTestSuitePath(selectedSuite, test.id, '');
+      if (suitePath) {
+        var pathSpan = document.createElement('span');
+        pathSpan.className = 'report-suite-path';
+        pathSpan.textContent = suitePath + ' > ';
+        tdName.appendChild(pathSpan);
+      }
+      var nameSpan = document.createElement('span');
+      nameSpan.textContent = test.name || '';
+      tdName.appendChild(nameSpan);
+      tr.appendChild(tdName);
+
+      // Documentation (toggleable, hidden by default)
+      var tdDoc = document.createElement('td');
+      tdDoc.className = 'report-test-doc-cell';
+      if (!showDoc) tdDoc.classList.add('hidden');
+      tdDoc.textContent = test.doc || '';
+      tr.appendChild(tdDoc);
+
+      // Status
+      var tdStatus = document.createElement('td');
+      tdStatus.className = 'report-test-status-cell status-' + statusUpper.toLowerCase();
+      tdStatus.textContent = statusUpper;
+      tr.appendChild(tdStatus);
+
+      // Tags
+      var tdTags = document.createElement('td');
+      tdTags.className = 'report-test-tags-cell';
+      tdTags.textContent = (test.tags || []).join(', ');
+      tr.appendChild(tdTags);
+
+      // Duration
+      var tdDuration = document.createElement('td');
+      tdDuration.className = 'report-test-duration-cell';
+      var durationMs = (test.elapsed_time || 0) * 1000;
+      tdDuration.textContent = _formatDuration(durationMs);
+      tr.appendChild(tdDuration);
+
+      // Message
+      var tdMsg = document.createElement('td');
+      tdMsg.className = 'report-test-message-cell';
+      var msg = test.status_message || '';
+      tdMsg.textContent = msg.length > 80 ? msg.substring(0, 77) + '\u2026' : msg;
+      if (msg.length > 80) tdMsg.title = msg;
+      tr.appendChild(tdMsg);
+
+      tbody.appendChild(tr);
+    }
+  }
+
   /**
    * Render the Report page content.
-   * Calls section renderers in order: suite selector, summary dashboard, failure triage.
+   * Calls section renderers in order: suite selector, summary dashboard, failure triage, test results.
    */
   function _render() {
     if (!_container) return;
@@ -609,6 +977,12 @@
     if (triage) {
       _container.appendChild(triage);
     }
+
+    // Test results table
+    var testTable = _renderTestResultsTable();
+    if (testTable) {
+      _container.appendChild(testTable);
+    }
   }
 
   // Expose helpers for testing (attached to a namespace)
@@ -619,6 +993,9 @@
     findSuiteById: function (suiteId) { return _findSuiteById(suiteId); },
     findFailedChain: _findFailedChain,
     buildBreadcrumb: _buildBreadcrumb,
-    collectExecutionErrors: _collectExecutionErrors
+    collectExecutionErrors: _collectExecutionErrors,
+    sortTests: _sortTests,
+    filterTests: _filterTests,
+    findTestSuitePath: _findTestSuitePath
   };
 })();

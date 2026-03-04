@@ -543,3 +543,303 @@ def test_breadcrumb_various_types():
         "[FOR] For Loop",
         "[TD] Teardown",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _sortTests() from report-page.js
+# ---------------------------------------------------------------------------
+
+STATUS_ORDER = {"FAIL": 0, "ERROR": 1, "SKIP": 2, "NOT_RUN": 3, "PASS": 4}
+
+
+def sort_tests(tests, column, asc):
+    """Python reference of _sortTests() from report-page.js.
+
+    Sorts tests by the given column and direction.
+    For status column: FAIL first when ascending (lower order value = higher priority),
+    with secondary sort by duration descending.
+    """
+    import functools
+
+    def cmp_fn(a, b):
+        if column == "name":
+            av = (a.get("name") or "").lower()
+            bv = (b.get("name") or "").lower()
+            c = (av > bv) - (av < bv)
+            return c if asc else -c
+        elif column == "doc":
+            av = (a.get("doc") or "").lower()
+            bv = (b.get("doc") or "").lower()
+            c = (av > bv) - (av < bv)
+            return c if asc else -c
+        elif column == "status":
+            sa = (a.get("status") or "").upper()
+            sb = (b.get("status") or "").upper()
+            av = STATUS_ORDER.get(sa, 99)
+            bv = STATUS_ORDER.get(sb, 99)
+            if av != bv:
+                return (bv - av) if asc else (av - bv)
+            # Secondary: duration descending (always)
+            ad = a.get("elapsed_time") or 0
+            bd = b.get("elapsed_time") or 0
+            return -1 if bd < ad else (1 if bd > ad else 0)
+        elif column == "tags":
+            av = ", ".join(a.get("tags") or []).lower()
+            bv = ", ".join(b.get("tags") or []).lower()
+            c = (av > bv) - (av < bv)
+            return c if asc else -c
+        elif column == "duration":
+            av = a.get("elapsed_time") or 0
+            bv = b.get("elapsed_time") or 0
+            return (av - bv) if asc else (bv - av)
+        elif column == "message":
+            av = (a.get("status_message") or "").lower()
+            bv = (b.get("status_message") or "").lower()
+            c = (av > bv) - (av < bv)
+            return c if asc else -c
+        return 0
+
+    return sorted(tests, key=functools.cmp_to_key(cmp_fn))
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _filterTests() from report-page.js
+# ---------------------------------------------------------------------------
+
+
+def filter_tests(tests, text, tag_filter):
+    """Python reference of _filterTests() from report-page.js.
+
+    Filters tests by text query (name + tags + message) and optional tag filter.
+    """
+    result = tests
+    if tag_filter:
+        result = [t for t in result if tag_filter in (t.get("tags") or [])]
+    if not text:
+        return result
+    lower = text.lower()
+    filtered = []
+    for t in result:
+        name = (t.get("name") or "").lower()
+        tag_str = " ".join(t.get("tags") or []).lower()
+        msg = (t.get("status_message") or "").lower()
+        if lower in name or lower in tag_str or lower in msg:
+            filtered.append(t)
+    return filtered
+
+
+# ---------------------------------------------------------------------------
+# Test helper: create test with full fields
+# ---------------------------------------------------------------------------
+
+
+def make_full_test(name, status, elapsed_time=0, tags=None, status_message=None, doc=None):
+    """Create a test object with all fields used by sort/filter."""
+    t = make_test(name, status)
+    t["elapsed_time"] = elapsed_time
+    t["tags"] = tags or []
+    t["status_message"] = status_message or ""
+    t["doc"] = doc or ""
+    return t
+
+
+# ---------------------------------------------------------------------------
+# 6. sort by status puts FAIL first
+# ---------------------------------------------------------------------------
+
+
+def test_sort_by_status_fail_first():
+    """Default sort (status, descending) puts FAIL tests before PASS.
+
+    **Validates: Requirements 5.3, 5.5**
+    """
+    tests = [
+        make_full_test("Pass Test", "PASS", elapsed_time=1.0),
+        make_full_test("Fail Test", "FAIL", elapsed_time=2.0),
+        make_full_test("Skip Test", "SKIP", elapsed_time=0.5),
+    ]
+    sorted_tests = sort_tests(tests, "status", False)
+    statuses = [t["status"] for t in sorted_tests]
+    assert statuses[0] == "FAIL"
+    assert statuses[-1] == "PASS"
+
+
+def test_sort_by_status_secondary_duration():
+    """When multiple tests have same status, secondary sort is duration descending.
+
+    **Validates: Requirements 5.3, 5.5**
+    """
+    tests = [
+        make_full_test("Fast Fail", "FAIL", elapsed_time=1.0),
+        make_full_test("Slow Fail", "FAIL", elapsed_time=5.0),
+        make_full_test("Mid Fail", "FAIL", elapsed_time=3.0),
+    ]
+    sorted_tests = sort_tests(tests, "status", False)
+    durations = [t["elapsed_time"] for t in sorted_tests]
+    # All FAIL, so secondary sort by duration descending
+    assert durations == [5.0, 3.0, 1.0]
+
+
+def test_sort_by_name_ascending():
+    """Sort by name ascending produces alphabetical order.
+
+    **Validates: Requirements 5.3**
+    """
+    tests = [
+        make_full_test("Charlie", "PASS"),
+        make_full_test("Alpha", "PASS"),
+        make_full_test("Bravo", "PASS"),
+    ]
+    sorted_tests = sort_tests(tests, "name", True)
+    names = [t["name"] for t in sorted_tests]
+    assert names == ["Alpha", "Bravo", "Charlie"]
+
+
+def test_sort_by_duration_descending():
+    """Sort by duration descending puts slowest first.
+
+    **Validates: Requirements 5.3**
+    """
+    tests = [
+        make_full_test("Fast", "PASS", elapsed_time=0.1),
+        make_full_test("Slow", "PASS", elapsed_time=10.0),
+        make_full_test("Medium", "PASS", elapsed_time=2.5),
+    ]
+    sorted_tests = sort_tests(tests, "duration", False)
+    names = [t["name"] for t in sorted_tests]
+    assert names == ["Slow", "Medium", "Fast"]
+
+
+# ---------------------------------------------------------------------------
+# 7. text filter narrows visible rows correctly
+# ---------------------------------------------------------------------------
+
+
+def test_filter_by_text_name():
+    """Text filter matches against test name.
+
+    **Validates: Requirements 5.7**
+    """
+    tests = [
+        make_full_test("Login Test", "PASS"),
+        make_full_test("Logout Test", "PASS"),
+        make_full_test("Dashboard Test", "PASS"),
+    ]
+    result = filter_tests(tests, "login", None)
+    assert len(result) == 1
+    assert result[0]["name"] == "Login Test"
+
+
+def test_filter_by_text_tags():
+    """Text filter matches against tags.
+
+    **Validates: Requirements 5.7**
+    """
+    tests = [
+        make_full_test("T1", "PASS", tags=["smoke", "auth"]),
+        make_full_test("T2", "PASS", tags=["regression"]),
+        make_full_test("T3", "PASS", tags=["smoke"]),
+    ]
+    result = filter_tests(tests, "smoke", None)
+    assert len(result) == 2
+    assert {t["name"] for t in result} == {"T1", "T3"}
+
+
+def test_filter_by_text_message():
+    """Text filter matches against status_message.
+
+    **Validates: Requirements 5.7**
+    """
+    tests = [
+        make_full_test("T1", "FAIL", status_message="Element not found"),
+        make_full_test("T2", "FAIL", status_message="Timeout exceeded"),
+    ]
+    result = filter_tests(tests, "timeout", None)
+    assert len(result) == 1
+    assert result[0]["name"] == "T2"
+
+
+def test_filter_by_tag_filter():
+    """Tag filter shows only tests with the specified tag.
+
+    **Validates: Requirements 5.7**
+    """
+    tests = [
+        make_full_test("T1", "PASS", tags=["smoke", "auth"]),
+        make_full_test("T2", "PASS", tags=["regression"]),
+        make_full_test("T3", "FAIL", tags=["smoke"]),
+    ]
+    result = filter_tests(tests, "", "smoke")
+    assert len(result) == 2
+    assert {t["name"] for t in result} == {"T1", "T3"}
+
+
+def test_filter_combined_text_and_tag():
+    """Text filter and tag filter work together.
+
+    **Validates: Requirements 5.7**
+    """
+    tests = [
+        make_full_test("Login Test", "PASS", tags=["smoke"]),
+        make_full_test("Logout Test", "PASS", tags=["smoke"]),
+        make_full_test("Login Admin", "PASS", tags=["admin"]),
+    ]
+    result = filter_tests(tests, "login", "smoke")
+    assert len(result) == 1
+    assert result[0]["name"] == "Login Test"
+
+
+def test_filter_empty_text_returns_all():
+    """Empty text filter returns all tests (no tag filter).
+
+    **Validates: Requirements 5.7**
+    """
+    tests = [
+        make_full_test("T1", "PASS"),
+        make_full_test("T2", "FAIL"),
+    ]
+    result = filter_tests(tests, "", None)
+    assert len(result) == 2
+
+
+@given(
+    test_list=st.lists(
+        st.tuples(
+            st.text(min_size=1, max_size=20),
+            test_status_st,
+            st.floats(min_value=0, max_value=100),
+        ),
+        min_size=0,
+        max_size=15,
+    )
+)
+def test_sort_preserves_all_elements(test_list):
+    """Sorting never loses or duplicates tests.
+
+    **Validates: Requirements 5.3, 5.5**
+    """
+    tests = [make_full_test(name, status, elapsed_time=dur) for name, status, dur in test_list]
+    for col in ["name", "status", "duration", "tags", "message"]:
+        for asc in [True, False]:
+            sorted_t = sort_tests(tests, col, asc)
+            assert len(sorted_t) == len(tests)
+
+
+@given(
+    test_list=st.lists(
+        st.tuples(
+            st.text(min_size=1, max_size=20),
+            test_status_st,
+        ),
+        min_size=0,
+        max_size=15,
+    )
+)
+def test_filter_never_adds_elements(test_list):
+    """Filtering never produces more results than the input.
+
+    **Validates: Requirements 5.7**
+    """
+    tests = [make_full_test(name, status) for name, status in test_list]
+    result = filter_tests(tests, "a", None)
+    assert len(result) <= len(tests)

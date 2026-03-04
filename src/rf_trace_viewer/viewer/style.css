@@ -3744,3 +3744,156 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   word-break: break-word;
   flex: 1;
 }
+/* ── Test Results Table ── */
+.rf-trace-viewer .report-test-results {
+  margin-bottom: 24px;
+}
+
+.rf-trace-viewer .report-test-results-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px 0;
+}
+
+.rf-trace-viewer .report-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rf-trace-viewer .report-search-input {
+  flex: 1;
+  max-width: 360px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.rf-trace-viewer .report-search-input:focus {
+  border-color: var(--focus-outline);
+}
+
+.rf-trace-viewer .report-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.rf-trace-viewer .report-tag-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--focus-outline);
+  color: #fff;
+}
+
+.rf-trace-viewer .report-test-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rf-trace-viewer .report-test-table th {
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border-color);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.rf-trace-viewer .report-test-table th:hover {
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .report-test-table th.sorted {
+  color: var(--focus-outline);
+}
+
+.rf-trace-viewer .report-test-table th.hidden {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+}
+
+.rf-trace-viewer .report-test-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .report-test-table td.hidden {
+  display: none;
+}
+
+.rf-trace-viewer .report-test-row {
+  transition: background 0.1s;
+}
+
+.rf-trace-viewer .report-test-row:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .report-test-row.row-fail {
+  border-left: 3px solid var(--status-fail);
+}
+
+.rf-trace-viewer .report-test-row.row-fail .report-test-status-cell {
+  color: var(--status-fail);
+  font-weight: 600;
+}
+
+.rf-trace-viewer .report-test-row.row-pass .report-test-status-cell {
+  color: var(--status-pass);
+}
+
+.rf-trace-viewer .report-test-row.row-skip .report-test-status-cell {
+  color: var(--status-skip);
+}
+
+.rf-trace-viewer .report-suite-path {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.rf-trace-viewer .report-test-doc-cell {
+  color: var(--text-secondary);
+  font-style: italic;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .report-test-tags-cell {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.rf-trace-viewer .report-test-duration-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .report-test-message-cell {
+  color: var(--text-secondary);
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
