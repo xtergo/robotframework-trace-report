@@ -112,6 +112,27 @@
     return null;
   }
 
+  function _findTestAndSuite(suites, testId) {
+    var stack = [];
+    for (var i = 0; i < suites.length; i++) {
+      stack.push({ item: suites[i], parentSuite: null });
+    }
+    while (stack.length) {
+      var entry = stack.pop();
+      var item = entry.item;
+      var suite = item.children !== undefined ? item : entry.parentSuite;
+      if (item.keywords !== undefined && item.id === testId) {
+        return { test: item, suite: suite };
+      }
+      if (item.children) {
+        for (var c = 0; c < item.children.length; c++) {
+          stack.push({ item: item.children[c], parentSuite: item });
+        }
+      }
+    }
+    return { test: null, suite: null };
+  }
+
   function _findTestContainingSpan(suites, spanId) {
     var s = suites.slice();
     while (s.length) {
@@ -161,6 +182,12 @@
     return rows;
   }
 
+  function _extractFilename(sourcePath) {
+    if (!sourcePath) return '';
+    var parts = sourcePath.replace(/\\/g, '/').split('/');
+    return parts[parts.length - 1] || sourcePath;
+  }
+
   function _renderTable(state) {
     state.container.innerHTML = '';
     var header = document.createElement('div');
@@ -206,6 +233,38 @@
     header.appendChild(controls);
     state.container.appendChild(header);
 
+    // Sticky suite and test headers (rendered above the table)
+    var suites = (state.data && state.data.suites) || [];
+    var result = _findTestAndSuite(suites, state.currentTestId);
+    if (result.suite) {
+      var suiteHeader = document.createElement('div');
+      suiteHeader.className = 'flow-suite-header';
+      var suiteName = document.createElement('span');
+      suiteName.className = 'flow-suite-name';
+      suiteName.textContent = result.suite.name || '';
+      suiteHeader.appendChild(suiteName);
+      var suiteSource = document.createElement('span');
+      suiteSource.className = 'flow-suite-source';
+      suiteSource.textContent = _extractFilename(result.suite.source);
+      suiteSource.title = result.suite.source || '';
+      suiteHeader.appendChild(suiteSource);
+      state.container.appendChild(suiteHeader);
+    }
+    if (result.test) {
+      var testHeader = document.createElement('div');
+      testHeader.className = 'flow-test-header';
+      var testName = document.createElement('span');
+      testName.className = 'flow-test-name';
+      testName.textContent = result.test.name || '';
+      testHeader.appendChild(testName);
+      var statusBadge = document.createElement('span');
+      var testStatus = (result.test.status || '').toLowerCase().replace(/\s+/g, '-');
+      statusBadge.className = 'flow-status-badge flow-status-' + testStatus;
+      statusBadge.textContent = result.test.status || '';
+      testHeader.appendChild(statusBadge);
+      state.container.appendChild(testHeader);
+    }
+
     var visibleRows = state.rows;
     if (state.showOnlyFailed) {
       visibleRows = [];
@@ -234,7 +293,7 @@
     table.className = 'flow-table';
     var thead = document.createElement('thead');
     var headRow = document.createElement('tr');
-    var cols = ['Type','Keyword','Args','Source','Line','Status','Duration','Error'];
+    var cols = ['Keyword', 'Line', 'Status', 'Duration'];
     for (var h = 0; h < cols.length; h++) {
       var th = document.createElement('th');
       th.textContent = cols[h];
