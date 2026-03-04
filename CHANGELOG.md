@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed "Overview" tab to "Explorer" with backward compatibility for old `view=overview` deep links
+- Header title tooltip now reads "Go to Explorer"
+- Default view in deep links is now `explorer` (old `overview` links auto-redirect)
+
 ### Added
 - Initial project structure and documentation
 - Architecture design document

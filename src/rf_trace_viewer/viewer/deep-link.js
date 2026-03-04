@@ -33,7 +33,7 @@
 
     // Active view tab
     var activeTab = _getActiveTab();
-    if (activeTab && activeTab !== 'overview') {
+    if (activeTab && activeTab !== 'explorer') {
       parts.push('view=' + encodeURIComponent(activeTab));
     }
 
@@ -131,10 +131,13 @@
     }
 
     var state = {
-      view: params.view || 'overview',
+      view: params.view || 'explorer',
       span: params.span || null,
       filterState: {}
     };
+
+    // Backward compat: old 'overview' deep links map to 'explorer'
+    if (state.view === 'overview') state.view = 'explorer';
 
     // Text search
     if (params.search) {
@@ -242,7 +245,7 @@
       }
 
       // Restore active view tab
-      if (state.view && state.view !== 'overview') {
+      if (state.view && state.view !== 'explorer') {
         var tabBtn = document.querySelector('.tab-btn[data-tab="' + state.view + '"]');
         if (tabBtn) tabBtn.click();
       }

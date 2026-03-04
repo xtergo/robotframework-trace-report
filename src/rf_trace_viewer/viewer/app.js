@@ -512,9 +512,9 @@
     var title = document.createElement('h1');
     title.textContent = data.title || 'RF Trace Report';
     title.style.cursor = 'pointer';
-    title.setAttribute('title', 'Go to Overview');
+    title.setAttribute('title', 'Go to Explorer');
     title.addEventListener('click', function () {
-      _switchTab('overview');
+      _switchTab('explorer');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     // Version badge — inside h1 for baseline alignment
@@ -1201,7 +1201,7 @@
     tabNav.className = 'tab-nav';
     
     var tabs = [
-      { id: 'overview', label: 'Overview' },
+      { id: 'explorer', label: 'Explorer' },
       { id: 'statistics', label: 'Statistics' }
     ];
     
@@ -1210,7 +1210,7 @@
       tabBtn.className = 'tab-btn';
       tabBtn.textContent = tab.label;
       tabBtn.setAttribute('data-tab', tab.id);
-      if (tab.id === 'overview') {
+      if (tab.id === 'explorer') {
         tabBtn.classList.add('active');
       }
       tabBtn.addEventListener('click', function() {
@@ -1226,10 +1226,10 @@
     tabContent.className = 'tab-content';
     root.appendChild(tabContent);
 
-    // Overview tab (timeline + tree + filters, no stats)
-    var overviewTab = document.createElement('div');
-    overviewTab.className = 'tab-pane active';
-    overviewTab.setAttribute('data-tab-pane', 'overview');
+    // Explorer tab (timeline + tree + filters, no stats)
+    var explorerTab = document.createElement('div');
+    explorerTab.className = 'tab-pane active';
+    explorerTab.setAttribute('data-tab-pane', 'explorer');
     
     var body = document.createElement('div');
     body.className = 'viewer-body';
@@ -1348,7 +1348,7 @@
 
     body.appendChild(centerColumn);
     body.appendChild(filterSidebar);
-    overviewTab.appendChild(body);
+    explorerTab.appendChild(body);
 
     // Statistics tab (overall stats + suite breakdown + keyword stats)
     var statisticsTab = document.createElement('div');
@@ -1368,7 +1368,7 @@
     
     statisticsTab.appendChild(statsBody);
     
-    tabContent.appendChild(overviewTab);
+    tabContent.appendChild(explorerTab);
     tabContent.appendChild(statisticsTab);
 
     // Initialize views
@@ -1487,6 +1487,9 @@
 
   /** Switch between tabs. */
   function _switchTab(tabId) {
+    // Backward compatibility: map old tab IDs to new ones
+    if (tabId === 'overview') tabId = 'explorer';
+
     // Update tab buttons
     var tabBtns = document.querySelectorAll('.tab-btn');
     tabBtns.forEach(function(btn) {

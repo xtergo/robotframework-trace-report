@@ -21,7 +21,7 @@ from hypothesis import strategies as st
 # ---------------------------------------------------------------------------
 # Default values (matching deep-link.js)
 # ---------------------------------------------------------------------------
-DEFAULT_VIEW = "overview"
+DEFAULT_VIEW = "explorer"
 DEFAULT_TEST_STATUSES = ["FAIL", "PASS", "SKIP"]  # sorted
 DEFAULT_KW_STATUSES = ["FAIL", "NOT_RUN", "PASS"]  # sorted
 
@@ -127,10 +127,14 @@ def decode_hash(hash_str):
                 params[key] = val
 
     state = {
-        "view": params.get("view", "overview"),
+        "view": params.get("view", "explorer"),
         "span": params.get("span") or None,
         "filterState": {},
     }
+
+    # Backward compat: old 'overview' deep links map to 'explorer'
+    if state["view"] == "overview":
+        state["view"] = "explorer"
 
     fs = state["filterState"]
 
@@ -200,7 +204,7 @@ _hex_id = st.text(
 
 # View tab names
 _view_names = st.sampled_from(
-    ["overview", "tree", "timeline", "stats", "keywords", "flaky", "compare"]
+    ["explorer", "tree", "timeline", "stats", "keywords", "flaky", "compare"]
 )
 
 # Status values for test statuses
@@ -283,7 +287,7 @@ def _normalize_decoded_state(decoded, original):
     """
     fs_dec = decoded.get("filterState", {})
 
-    # view: if original was 'overview', encode omits it, decode defaults to 'overview' — match
+    # view: if original was 'explorer', encode omits it, decode defaults to 'explorer' — match
     # span: if original was None, encode omits it, decode defaults to None — match
 
     # testStatuses: if original equals default, encode omits, decode won't have key
@@ -453,9 +457,9 @@ def test_encode_omits_defaults(state):
     """
     hash_str = encode_hash(state)
 
-    # If view is 'overview' (default), 'view=' should not appear
-    if state["view"] == "overview":
-        assert "view=" not in hash_str, "Default view 'overview' should be omitted from hash"
+    # If view is 'explorer' (default), 'view=' should not appear
+    if state["view"] == "explorer":
+        assert "view=" not in hash_str, "Default view 'explorer' should be omitted from hash"
 
     # If span is None, 'span=' should not appear
     if state["span"] is None:
@@ -493,7 +497,7 @@ def test_decode_empty_hash():
     **Validates: Requirements 20.3**
     """
     state = decode_hash("")
-    assert state["view"] == "overview"
+    assert state["view"] == "explorer"
     assert state["span"] is None
     assert state["filterState"]["scopeToTestContext"] is True
 
@@ -515,7 +519,7 @@ def test_round_trip_all_defaults():
     **Validates: Requirements 20.1, 20.2**
     """
     state = {
-        "view": "overview",
+        "view": "explorer",
         "span": None,
         "filterState": {
             "text": "",
@@ -541,7 +545,7 @@ def test_round_trip_special_characters_in_search():
     **Validates: Requirements 20.1, 20.2, 20.3**
     """
     state = {
-        "view": "overview",
+        "view": "explorer",
         "span": None,
         "filterState": {
             "text": "hello world/test+foo",
@@ -599,7 +603,7 @@ def test_scope_false_encoded():
     **Validates: Requirements 20.1**
     """
     state = {
-        "view": "overview",
+        "view": "explorer",
         "span": None,
         "filterState": {
             "scopeToTestContext": False,
@@ -610,3 +614,55 @@ def test_scope_false_encoded():
 
     decoded = decode_hash(hash_str)
     assert decoded["filterState"]["scopeToTestContext"] is False
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility tests for Overview → Explorer rename (Req 1.1, 1.2)
+# ---------------------------------------------------------------------------
+
+
+def test_decode_overview_hash_maps_to_explorer():
+    """Old 'view=overview' deep links decode to 'explorer' for backward compat.
+
+    **Validates: Requirements 1.2**
+    """
+    state = decode_hash("view=overview&span=abc123")
+    assert state["view"] == "explorer", f"Expected 'explorer' but got {state['view']!r}"
+    assert state["span"] == "abc123"
+
+
+def test_decode_no_view_param_defaults_to_explorer():
+    """When no view= param is present, the default view is 'explorer'.
+
+    **Validates: Requirements 1.1, 1.2**
+    """
+    state = decode_hash("span=abc123")
+    assert state["view"] == "explorer"
+
+
+def test_encode_explorer_is_default_omitted():
+    """The 'explorer' view is the default and should be omitted from the hash.
+
+    **Validates: Requirements 1.2**
+    """
+    state = {
+        "view": "explorer",
+        "span": None,
+        "filterState": {},
+    }
+    hash_str = encode_hash(state)
+    assert "view=" not in hash_str, "Default view 'explorer' should be omitted from hash"
+
+
+def test_overview_round_trip_becomes_explorer():
+    """Encoding 'overview' (via backward compat) and decoding produces 'explorer'.
+
+    **Validates: Requirements 1.2**
+    """
+    # Simulate an old deep link with view=overview
+    decoded = decode_hash("view=overview")
+    assert decoded["view"] == "explorer"
+
+    # Re-encoding should omit view= since explorer is the default
+    hash_str = encode_hash(decoded)
+    assert "view=" not in hash_str
