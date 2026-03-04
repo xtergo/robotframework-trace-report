@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error messages moved from column to tooltip on FAIL rows
 
 ### Added
+- Failure Triage section on Report page: failure entries with test name, failed keyword chain breadcrumb, error message, duration, and Explorer link to deepest failed keyword
+- Execution Errors collapsible subsection: collects WARN/ERROR log messages across the run with level badge, timestamp, message, and Explorer link (collapsed by default)
+- Failure Triage CSS (`.failure-triage`, `.failure-entry`, `.failure-breadcrumb`, `.execution-errors`, `.error-level-badge`)
 - Summary Dashboard on Report page: overall status banner (pass/fail), stat cards (total, pass, fail, skip, duration), suite header with name/source/doc/metadata, per-suite breakdown table
 - Suite selector dropdown for multi-suite traces (hidden for single-suite)
 - Summary Dashboard CSS (`.summary-dashboard`, `.summary-card`, `.suite-info`, `.suite-breakdown-table`, `.suite-selector`)

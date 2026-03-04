@@ -317,9 +317,278 @@
     return dashboard;
   }
 
+  // Badge labels for keyword types (same as flow-table.js)
+  var BADGE_LABELS = {
+    KEYWORD: 'KW', SETUP: 'SU', TEARDOWN: 'TD', FOR: 'FOR', ITERATION: 'ITR',
+    WHILE: 'WHL', IF: 'IF', ELSE_IF: 'EIF', ELSE: 'ELS', TRY: 'TRY',
+    EXCEPT: 'EXC', FINALLY: 'FIN', RETURN: 'RET', VAR: 'VAR', CONTINUE: 'CNT',
+    BREAK: 'BRK', GROUP: 'GRP', ERROR: 'ERR'
+  };
+
+  /**
+   * DFS walk from test root to deepest FAIL keyword.
+   * Returns array of {name, type, id, error} objects representing the fail chain.
+   * @param {Object} test - An RFTest object with keywords array
+   * @returns {Array} Chain of {name, type, id, error} from test to deepest FAIL keyword
+   */
+  function _findFailedChain(test) {
+    var chain = [{ name: test.name, type: 'TEST', id: test.id }];
+    var kws = test.keywords || [];
+    while (kws.length) {
+      var failedKw = null;
+      for (var i = 0; i < kws.length; i++) {
+        if (kws[i].status === 'FAIL') { failedKw = kws[i]; break; }
+      }
+      if (!failedKw) break;
+      chain.push({
+        name: failedKw.name,
+        type: failedKw.keyword_type,
+        id: failedKw.id,
+        error: failedKw.status_message
+      });
+      kws = failedKw.children || [];
+    }
+    return chain;
+  }
+
+  /**
+   * Build a breadcrumb DOM element from a failed chain array.
+   * Renders as: Test > [TYPE] Keyword > [TYPE] SubKeyword
+   * Reuses .flow-type-badge CSS classes for type badges.
+   * @param {Array} chain - Array of {name, type, id, error} objects
+   * @returns {HTMLElement} The breadcrumb div element
+   */
+  function _buildBreadcrumb(chain) {
+    var div = document.createElement('div');
+    div.className = 'failure-breadcrumb';
+    for (var i = 0; i < chain.length; i++) {
+      if (i > 0) {
+        var sep = document.createElement('span');
+        sep.className = 'failure-breadcrumb-sep';
+        sep.textContent = ' \u203A ';
+        div.appendChild(sep);
+      }
+      var entry = chain[i];
+      // Add type badge for non-TEST entries
+      if (entry.type && entry.type !== 'TEST') {
+        var badge = document.createElement('span');
+        var kwType = entry.type.toUpperCase();
+        badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
+        badge.textContent = BADGE_LABELS[kwType] || kwType;
+        div.appendChild(badge);
+      }
+      var nameSpan = document.createElement('span');
+      nameSpan.textContent = entry.name || '';
+      div.appendChild(nameSpan);
+    }
+    return div;
+  }
+
+  /**
+   * Collect WARN/ERROR log messages across all suites.
+   * Walks all tests and their keyword trees to find events with level WARN or ERROR.
+   * @param {Array} suites - Array of RFSuite objects
+   * @returns {Array} Array of {level, timestamp, message, keywordId, keywordName} objects
+   */
+  function _collectExecutionErrors(suites) {
+    var errors = [];
+    function walkKeywords(kws) {
+      for (var i = 0; i < kws.length; i++) {
+        var kw = kws[i];
+        var events = kw.events || [];
+        for (var e = 0; e < events.length; e++) {
+          var evt = events[e];
+          if (evt.level === 'WARN' || evt.level === 'ERROR') {
+            errors.push({
+              level: evt.level,
+              timestamp: evt.timestamp || '',
+              message: evt.message || '',
+              keywordId: kw.id,
+              keywordName: kw.name
+            });
+          }
+        }
+        if (kw.children && kw.children.length) {
+          walkKeywords(kw.children);
+        }
+      }
+    }
+    for (var s = 0; s < suites.length; s++) {
+      var tests = _collectAllTests(suites[s]);
+      for (var t = 0; t < tests.length; t++) {
+        walkKeywords(tests[t].keywords || []);
+      }
+    }
+    return errors;
+  }
+
+  /**
+   * Render the Failure Triage section.
+   * Includes failure entries (when failures exist) and execution errors subsection.
+   * Section is expanded by default; execution errors collapsed when no errors exist.
+   * @returns {HTMLElement|null} The failure triage element or null if no failures/errors
+   */
+  function _renderFailureTriage() {
+    var selectedSuite = _findSuiteById(_selectedSuiteId);
+    if (!selectedSuite) return null;
+
+    var allTests = _collectAllTests(selectedSuite);
+    var failedTests = [];
+    for (var i = 0; i < allTests.length; i++) {
+      if (allTests[i].status === 'FAIL') {
+        failedTests.push(allTests[i]);
+      }
+    }
+
+    var execErrors = _collectExecutionErrors(_suites);
+    if (failedTests.length === 0 && execErrors.length === 0) return null;
+
+    var section = document.createElement('div');
+    section.className = 'failure-triage';
+
+    // ── Failures subsection ──
+    if (failedTests.length > 0) {
+      var header = document.createElement('h3');
+      header.className = 'failure-triage-title';
+      header.textContent = 'Failures (' + failedTests.length + ')';
+      section.appendChild(header);
+
+      for (var f = 0; f < failedTests.length; f++) {
+        var test = failedTests[f];
+        var chain = _findFailedChain(test);
+        var lastLink = chain[chain.length - 1];
+
+        var entry = document.createElement('div');
+        entry.className = 'failure-entry';
+
+        // Test name
+        var nameEl = document.createElement('div');
+        nameEl.className = 'failure-test-name';
+        nameEl.textContent = '\u2717 ' + test.name;
+        entry.appendChild(nameEl);
+
+        // Breadcrumb
+        var breadcrumb = _buildBreadcrumb(chain);
+        entry.appendChild(breadcrumb);
+
+        // Error message
+        if (lastLink && lastLink.error) {
+          var errorEl = document.createElement('div');
+          errorEl.className = 'failure-error-msg';
+          errorEl.textContent = '"' + lastLink.error + '"';
+          entry.appendChild(errorEl);
+        }
+
+        // Duration + Explorer link
+        var footerEl = document.createElement('div');
+        footerEl.className = 'failure-entry-footer';
+
+        var durationMs = (test.elapsed_time || 0) * 1000;
+        var durSpan = document.createElement('span');
+        durSpan.className = 'failure-duration';
+        durSpan.textContent = 'Duration: ' + _formatDuration(durationMs);
+        footerEl.appendChild(durSpan);
+
+        // Explorer link to the deepest failed keyword
+        var linkSpanId = lastLink ? lastLink.id : test.id;
+        if (linkSpanId) {
+          var link = document.createElement('a');
+          link.className = 'explorer-link';
+          link.setAttribute('data-span-id', linkSpanId);
+          link.textContent = '\u2192 Open in Explorer';
+          link.title = 'Open in Explorer';
+          link.href = '#';
+          link.addEventListener('click', (function (sid) {
+            return function (e) {
+              e.preventDefault();
+              _navigateToExplorer(sid);
+            };
+          })(linkSpanId));
+          footerEl.appendChild(link);
+        }
+
+        entry.appendChild(footerEl);
+        section.appendChild(entry);
+      }
+    }
+
+    // ── Execution Errors subsection ──
+    if (execErrors.length > 0) {
+      var errSection = document.createElement('div');
+      errSection.className = 'execution-errors';
+
+      var errHeader = document.createElement('div');
+      errHeader.className = 'execution-errors-header';
+
+      var errToggle = document.createElement('button');
+      errToggle.className = 'execution-errors-toggle';
+      errToggle.textContent = 'Execution Errors (' + execErrors.length + ')';
+
+      var errBody = document.createElement('div');
+      errBody.className = 'execution-errors-body';
+      // Collapsed by default
+      errBody.style.display = 'none';
+
+      errToggle.addEventListener('click', function () {
+        var isHidden = errBody.style.display === 'none';
+        errBody.style.display = isHidden ? 'block' : 'none';
+        errToggle.classList.toggle('expanded', isHidden);
+      });
+
+      errHeader.appendChild(errToggle);
+      errSection.appendChild(errHeader);
+
+      for (var ei = 0; ei < execErrors.length; ei++) {
+        var err = execErrors[ei];
+        var errEntry = document.createElement('div');
+        errEntry.className = 'execution-error-entry';
+
+        var levelBadge = document.createElement('span');
+        levelBadge.className = 'error-level-badge error-level-' + err.level.toLowerCase();
+        levelBadge.textContent = err.level;
+        errEntry.appendChild(levelBadge);
+
+        if (err.timestamp) {
+          var tsSpan = document.createElement('span');
+          tsSpan.className = 'execution-error-timestamp';
+          tsSpan.textContent = err.timestamp;
+          errEntry.appendChild(tsSpan);
+        }
+
+        var msgSpan = document.createElement('span');
+        msgSpan.className = 'execution-error-message';
+        msgSpan.textContent = err.message;
+        errEntry.appendChild(msgSpan);
+
+        if (err.keywordId) {
+          var errLink = document.createElement('a');
+          errLink.className = 'explorer-link';
+          errLink.setAttribute('data-span-id', err.keywordId);
+          errLink.textContent = '\u2192 Explorer';
+          errLink.title = 'Open in Explorer';
+          errLink.href = '#';
+          errLink.addEventListener('click', (function (sid) {
+            return function (e) {
+              e.preventDefault();
+              _navigateToExplorer(sid);
+            };
+          })(err.keywordId));
+          errEntry.appendChild(errLink);
+        }
+
+        errBody.appendChild(errEntry);
+      }
+
+      errSection.appendChild(errBody);
+      section.appendChild(errSection);
+    }
+
+    return section;
+  }
+
   /**
    * Render the Report page content.
-   * Calls section renderers in order: suite selector, summary dashboard.
+   * Calls section renderers in order: suite selector, summary dashboard, failure triage.
    */
   function _render() {
     if (!_container) return;
@@ -334,6 +603,12 @@
     // Summary dashboard
     var dashboard = _renderSummaryDashboard();
     _container.appendChild(dashboard);
+
+    // Failure triage (above test results)
+    var triage = _renderFailureTriage();
+    if (triage) {
+      _container.appendChild(triage);
+    }
   }
 
   // Expose helpers for testing (attached to a namespace)
@@ -341,6 +616,9 @@
     collectAllTests: _collectAllTests,
     navigateToExplorer: _navigateToExplorer,
     formatDuration: _formatDuration,
-    findSuiteById: function (suiteId) { return _findSuiteById(suiteId); }
+    findSuiteById: function (suiteId) { return _findSuiteById(suiteId); },
+    findFailedChain: _findFailedChain,
+    buildBreadcrumb: _buildBreadcrumb,
+    collectExecutionErrors: _collectExecutionErrors
   };
 })();

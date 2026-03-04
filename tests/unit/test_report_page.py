@@ -308,3 +308,238 @@ def test_format_duration_negative():
     **Validates: Requirements 4.2**
     """
     assert format_duration(-100) == "0s"
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _findFailedChain(test) from report-page.js
+# ---------------------------------------------------------------------------
+
+# Badge labels matching the JS BADGE_LABELS map
+BADGE_LABELS = {
+    "KEYWORD": "KW",
+    "SETUP": "SU",
+    "TEARDOWN": "TD",
+    "FOR": "FOR",
+    "ITERATION": "ITR",
+    "WHILE": "WHL",
+    "IF": "IF",
+    "ELSE_IF": "EIF",
+    "ELSE": "ELS",
+    "TRY": "TRY",
+    "EXCEPT": "EXC",
+    "FINALLY": "FIN",
+    "RETURN": "RET",
+    "VAR": "VAR",
+    "CONTINUE": "CNT",
+    "BREAK": "BRK",
+    "GROUP": "GRP",
+    "ERROR": "ERR",
+}
+
+
+def make_keyword(
+    name, keyword_type="KEYWORD", status="PASS", children=None, status_message=None, kw_id=None
+):
+    """Create a minimal keyword object for testing."""
+    kw = {
+        "name": name,
+        "keyword_type": keyword_type,
+        "id": kw_id or f"kw-{name}",
+        "status": status,
+        "children": children or [],
+    }
+    if status_message:
+        kw["status_message"] = status_message
+    return kw
+
+
+def find_failed_chain(test):
+    """Python reference of _findFailedChain() from report-page.js.
+
+    DFS walk from test root to deepest FAIL keyword.
+    Returns array of {name, type, id, error} dicts.
+    """
+    chain = [{"name": test["name"], "type": "TEST", "id": test.get("id")}]
+    kws = test.get("keywords", [])
+    while kws:
+        failed_kw = None
+        for kw in kws:
+            if kw.get("status") == "FAIL":
+                failed_kw = kw
+                break
+        if not failed_kw:
+            break
+        chain.append(
+            {
+                "name": failed_kw["name"],
+                "type": failed_kw.get("keyword_type"),
+                "id": failed_kw.get("id"),
+                "error": failed_kw.get("status_message"),
+            }
+        )
+        kws = failed_kw.get("children", [])
+    return chain
+
+
+def build_breadcrumb_segments(chain):
+    """Python reference of _buildBreadcrumb() from report-page.js.
+
+    Returns a list of path segment strings representing the breadcrumb.
+    For TEST entries: just the name.
+    For keyword entries: [BADGE] name.
+    """
+    segments = []
+    for entry in chain:
+        entry_type = (entry.get("type") or "").upper()
+        if entry_type == "TEST":
+            segments.append(entry["name"])
+        else:
+            badge = BADGE_LABELS.get(entry_type, entry_type)
+            segments.append(f"[{badge}] {entry['name']}")
+    return segments
+
+
+# ---------------------------------------------------------------------------
+# 4. _findFailedChain() returns correct chain for nested failures
+# ---------------------------------------------------------------------------
+
+
+def test_find_failed_chain_simple():
+    """Single failed keyword returns chain of [TEST, KW].
+
+    **Validates: Requirements 6.3**
+    """
+    test = make_test("Login Test", "FAIL")
+    test["keywords"] = [
+        make_keyword("Open Browser", status="PASS"),
+        make_keyword("Click Login", status="FAIL", status_message="Element not found"),
+    ]
+    chain = find_failed_chain(test)
+    assert len(chain) == 2
+    assert chain[0]["type"] == "TEST"
+    assert chain[0]["name"] == "Login Test"
+    assert chain[1]["type"] == "KEYWORD"
+    assert chain[1]["name"] == "Click Login"
+    assert chain[1]["error"] == "Element not found"
+
+
+def test_find_failed_chain_nested():
+    """Nested failed keywords returns full chain to deepest FAIL.
+
+    **Validates: Requirements 6.3**
+    """
+    test = make_test("Auth Test", "FAIL")
+    test["keywords"] = [
+        make_keyword(
+            "Setup",
+            keyword_type="SETUP",
+            status="FAIL",
+            status_message="Setup failed",
+            children=[
+                make_keyword("Open Browser", status="PASS"),
+                make_keyword(
+                    "Login",
+                    status="FAIL",
+                    status_message="Invalid credentials",
+                    children=[
+                        make_keyword(
+                            "Input Text", status="FAIL", status_message="Element not found"
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    ]
+    chain = find_failed_chain(test)
+    assert len(chain) == 4
+    assert chain[0]["name"] == "Auth Test"
+    assert chain[1]["name"] == "Setup"
+    assert chain[1]["type"] == "SETUP"
+    assert chain[2]["name"] == "Login"
+    assert chain[3]["name"] == "Input Text"
+    assert chain[3]["error"] == "Element not found"
+
+
+def test_find_failed_chain_no_failures():
+    """All-pass test returns chain with only the test entry.
+
+    **Validates: Requirements 6.3**
+    """
+    test = make_test("Pass Test", "PASS")
+    test["keywords"] = [
+        make_keyword("Step 1", status="PASS"),
+        make_keyword("Step 2", status="PASS"),
+    ]
+    chain = find_failed_chain(test)
+    assert len(chain) == 1
+    assert chain[0]["type"] == "TEST"
+
+
+def test_find_failed_chain_no_keywords():
+    """Test with no keywords returns chain with only the test entry.
+
+    **Validates: Requirements 6.3**
+    """
+    test = make_test("Empty Test", "FAIL")
+    test["keywords"] = []
+    chain = find_failed_chain(test)
+    assert len(chain) == 1
+    assert chain[0]["name"] == "Empty Test"
+
+
+# ---------------------------------------------------------------------------
+# 5. Breadcrumb renders expected path segments
+# ---------------------------------------------------------------------------
+
+
+def test_breadcrumb_simple_chain():
+    """Breadcrumb for a simple chain produces correct segments.
+
+    **Validates: Requirements 6.3**
+    """
+    chain = [
+        {"name": "My Test", "type": "TEST", "id": "t-1"},
+        {"name": "Click Button", "type": "KEYWORD", "id": "kw-1", "error": "Not found"},
+    ]
+    segments = build_breadcrumb_segments(chain)
+    assert segments == ["My Test", "[KW] Click Button"]
+
+
+def test_breadcrumb_nested_chain():
+    """Breadcrumb for a nested chain shows all segments with type badges.
+
+    **Validates: Requirements 6.3**
+    """
+    chain = [
+        {"name": "Auth Test", "type": "TEST", "id": "t-1"},
+        {"name": "Setup Browser", "type": "SETUP", "id": "kw-1", "error": None},
+        {"name": "Login", "type": "KEYWORD", "id": "kw-2", "error": None},
+        {"name": "Input Text", "type": "KEYWORD", "id": "kw-3", "error": "Element not found"},
+    ]
+    segments = build_breadcrumb_segments(chain)
+    assert segments == [
+        "Auth Test",
+        "[SU] Setup Browser",
+        "[KW] Login",
+        "[KW] Input Text",
+    ]
+
+
+def test_breadcrumb_various_types():
+    """Breadcrumb correctly maps various keyword types to badge labels.
+
+    **Validates: Requirements 6.3**
+    """
+    chain = [
+        {"name": "Test", "type": "TEST", "id": "t-1"},
+        {"name": "Try Block", "type": "TRY", "id": "kw-1", "error": None},
+        {"name": "For Loop", "type": "FOR", "id": "kw-2", "error": None},
+        {"name": "Teardown", "type": "TEARDOWN", "id": "kw-3", "error": "Cleanup failed"},
+    ]
+    segments = build_breadcrumb_segments(chain)
+    assert segments == [
+        "Test",
+        "[TRY] Try Block",
+        "[FOR] For Loop",
+        "[TD] Teardown",
+    ]
