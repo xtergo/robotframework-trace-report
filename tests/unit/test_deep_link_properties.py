@@ -136,6 +136,10 @@ def decode_hash(hash_str):
     if state["view"] == "overview":
         state["view"] = "explorer"
 
+    # Backward compat: old 'statistics' deep links map to 'report'
+    if state["view"] == "statistics":
+        state["view"] = "report"
+
     fs = state["filterState"]
 
     # Text search
@@ -666,3 +670,31 @@ def test_overview_round_trip_becomes_explorer():
     # Re-encoding should omit view= since explorer is the default
     hash_str = encode_hash(decoded)
     assert "view=" not in hash_str
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility tests for Statistics → Report rename (Req 13.3)
+# ---------------------------------------------------------------------------
+
+
+def test_decode_statistics_hash_maps_to_report():
+    """Old 'view=statistics' deep links decode to 'report' for backward compat.
+
+    **Validates: Requirements 13.3**
+    """
+    state = decode_hash("view=statistics&span=xyz789")
+    assert state["view"] == "report", f"Expected 'report' but got {state['view']!r}"
+    assert state["span"] == "xyz789"
+
+
+def test_statistics_round_trip_becomes_report():
+    """Encoding 'statistics' (via backward compat) and decoding produces 'report'.
+
+    **Validates: Requirements 13.3**
+    """
+    decoded = decode_hash("view=statistics")
+    assert decoded["view"] == "report"
+
+    # Re-encoding should include view=report since it's not the default
+    hash_str = encode_hash(decoded)
+    assert "view=report" in hash_str

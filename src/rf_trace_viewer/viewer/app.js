@@ -1202,7 +1202,7 @@
     
     var tabs = [
       { id: 'explorer', label: 'Explorer' },
-      { id: 'statistics', label: 'Statistics' }
+      { id: 'report', label: 'Report' }
     ];
     
     tabs.forEach(function(tab) {
@@ -1350,26 +1350,16 @@
     body.appendChild(filterSidebar);
     explorerTab.appendChild(body);
 
-    // Statistics tab (overall stats + suite breakdown + keyword stats)
-    var statisticsTab = document.createElement('div');
-    statisticsTab.className = 'tab-pane';
-    statisticsTab.setAttribute('data-tab-pane', 'statistics');
-    
-    var statsBody = document.createElement('div');
-    statsBody.className = 'statistics-body';
-    
-    var statsPanel = document.createElement('aside');
-    statsPanel.className = 'panel-stats';
-    statsBody.appendChild(statsPanel);
-    
-    var keywordStatsSection = document.createElement('section');
-    keywordStatsSection.className = 'keyword-stats-section';
-    statsBody.appendChild(keywordStatsSection);
-    
-    statisticsTab.appendChild(statsBody);
+    // Report tab (consolidated test report view)
+    var reportTab = document.createElement('div');
+    reportTab.className = 'tab-pane';
+    reportTab.setAttribute('data-tab-pane', 'report');
+    var reportContainer = document.createElement('div');
+    reportContainer.className = 'report-page';
+    reportTab.appendChild(reportContainer);
     
     tabContent.appendChild(explorerTab);
-    tabContent.appendChild(statisticsTab);
+    tabContent.appendChild(reportTab);
 
     // Initialize views
     _initializeViews(data);
@@ -1447,16 +1437,12 @@
       renderTree(treePanel, data);
     }
 
-    // Initialize stats view
-    var statsPanel = document.querySelector('.panel-stats');
-    if (statsPanel && typeof renderStats === 'function') {
-      renderStats(statsPanel, data.statistics || {});
-    }
-
-    // Initialize keyword stats view
-    var keywordStatsSection = document.querySelector('.keyword-stats-section');
-    if (keywordStatsSection && typeof renderKeywordStats === 'function') {
-      renderKeywordStats(keywordStatsSection, data);
+    // Initialize Report page
+    if (typeof window.initReportPage === 'function') {
+      var reportContainer = document.querySelector('.report-page');
+      if (reportContainer) {
+        window.initReportPage(reportContainer, data);
+      }
     }
 
     // Initialize flow table view
@@ -1489,6 +1475,7 @@
   function _switchTab(tabId) {
     // Backward compatibility: map old tab IDs to new ones
     if (tabId === 'overview') tabId = 'explorer';
+    if (tabId === 'statistics') tabId = 'report';
 
     // Update tab buttons
     var tabBtns = document.querySelectorAll('.tab-btn');

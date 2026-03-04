@@ -3366,3 +3366,42 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   max-height: calc(100vh - 60px);
   overflow-y: auto;
 }
+
+/* ── Report Page ── */
+.rf-trace-viewer .report-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 24px;
+}
+
+.rf-trace-viewer .report-placeholder {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.rf-trace-viewer .explorer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--focus-outline);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rf-trace-viewer .explorer-link:hover {
+  background: var(--hover-bg);
+  text-decoration: underline;
+}
+
+.rf-trace-viewer .explorer-link:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}

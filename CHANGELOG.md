@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed "Overview" tab to "Explorer" with backward compatibility for old `view=overview` deep links
 - Header title tooltip now reads "Go to Explorer"
 - Default view in deep links is now `explorer` (old `overview` links auto-redirect)
+- Statistics tab replaced by Report tab with backward compatibility for old `view=statistics` deep links
 - Flow table redesigned with code-like indentation and 4-column layout (Keyword, Line, Status, Duration)
   - Type badges for all 18 keyword types (KW, SU, TD, FOR, ITR, WHL, IF, EIF, ELS, TRY, EXC, FIN, RET, VAR, CNT, BRK, GRP, ERR)
   - Indent guides (vertical lines) for visual call hierarchy
@@ -21,7 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error messages moved from column to tooltip on FAIL rows
 
 ### Added
+- Report page scaffold (`report-page.js`) with IIFE structure, public API (`initReportPage`, `updateReportPage`), and shared helpers (`_collectAllTests`, `_navigateToExplorer`)
+- Base Report page CSS (`.report-page` container, `.explorer-link` styling)
 - Initial project structure and documentation
+
+### Removed
+- `stats.js` — functionality absorbed into `report-page.js`
+- Statistics tab — replaced by Report tab (content consolidated on Report page)
 - Architecture design document
 - Development roadmap (TODO.md)
 - Timeline Gantt chart with zoom and pan capabilities

@@ -139,6 +139,9 @@
     // Backward compat: old 'overview' deep links map to 'explorer'
     if (state.view === 'overview') state.view = 'explorer';
 
+    // Backward compat: old 'statistics' deep links map to 'report'
+    if (state.view === 'statistics') state.view = 'report';
+
     // Text search
     if (params.search) {
       state.filterState.text = params.search;

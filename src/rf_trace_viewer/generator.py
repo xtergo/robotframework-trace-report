@@ -19,14 +19,14 @@ from rf_trace_viewer.rf_model import (
 
 # Order matters: flatpickr.min.js must load first (defines window.flatpickr),
 # date-range-picker.js before timeline.js (defines DateRangePicker),
-# stats.js, tree.js, timeline.js, keyword-stats.js, and search.js define functions used by app.js
+# tree.js, timeline.js, keyword-stats.js, report-page.js, and search.js define functions used by app.js
 _JS_FILES = (
     "flatpickr.min.js",
-    "stats.js",
     "tree.js",
     "date-range-picker.js",
     "timeline.js",
     "keyword-stats.js",
+    "report-page.js",
     "search.js",
     "deep-link.js",
     "theme.js",

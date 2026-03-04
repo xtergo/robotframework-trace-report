@@ -302,6 +302,48 @@ class TestEmbedViewerAssets:
         assert js_content is not None
         assert css_content is not None
 
+    def test_js_files_include_report_page_exclude_stats(self):
+        """JS_FILES should include report-page.js and exclude stats.js.
+
+        **Validates: Requirements 13.1, 13.2**
+        """
+        from rf_trace_viewer.generator import _JS_FILES
+
+        assert "report-page.js" in _JS_FILES, "report-page.js missing from _JS_FILES"
+        assert "stats.js" not in _JS_FILES, "stats.js should be removed from _JS_FILES"
+        # keyword-stats.js should still be present (reused by report-page.js)
+        assert "keyword-stats.js" in _JS_FILES, "keyword-stats.js should remain in _JS_FILES"
+
+    def test_generated_html_includes_report_page_js(self):
+        """Generated HTML should embed report-page.js content and not stats.js.
+
+        **Validates: Requirements 13.1, 13.2**
+        """
+        js_content, _ = embed_viewer_assets()
+        # report-page.js defines initReportPage
+        assert "initReportPage" in js_content, "report-page.js content not found in embedded JS"
+        # stats.js defined renderStats — should no longer be present
+        assert (
+            "function renderStats" not in js_content
+        ), "stats.js content (renderStats) should not be in embedded JS"
+
+    def test_embedded_js_has_explorer_report_tab_order(self):
+        """Embedded JS should define tabs as Explorer, Report (in that order).
+
+        **Validates: Requirements 4.1**
+        """
+        js_content, _ = embed_viewer_assets()
+        # app.js defines the tab array — verify explorer comes before report
+        explorer_idx = js_content.find("id: 'explorer'")
+        report_idx = js_content.find("id: 'report'")
+        assert explorer_idx != -1, "Explorer tab not found in embedded JS"
+        assert report_idx != -1, "Report tab not found in embedded JS"
+        assert explorer_idx < report_idx, "Explorer tab should come before Report tab"
+        # Statistics tab should not be present
+        assert (
+            "id: 'statistics'" not in js_content
+        ), "Statistics tab should be removed from tab array"
+
 
 class TestHTMLEscaping:
     """Test HTML escaping in generated reports."""

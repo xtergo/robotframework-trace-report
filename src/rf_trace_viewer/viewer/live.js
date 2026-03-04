@@ -1839,10 +1839,9 @@
       renderTree(treePanel, model);
     }
 
-    // Stats
-    var statsPanel = document.querySelector('.panel-stats');
-    if (statsPanel && typeof renderStats === 'function') {
-      renderStats(statsPanel, model.statistics || {});
+    // Report page
+    if (typeof window.updateReportPage === 'function') {
+      window.updateReportPage(model);
     }
 
     // Timeline — init once with real data, then use incremental updates.
@@ -1863,11 +1862,7 @@
       }
     }
 
-    // Keyword stats
-    var keywordStatsSection = document.querySelector('.keyword-stats-section');
-    if (keywordStatsSection && typeof renderKeywordStats === 'function') {
-      renderKeywordStats(keywordStatsSection, model);
-    }
+    // Keyword stats — now rendered inside Report page via updateReportPage()
 
     // Search / filter — always re-init in live mode when data changes.
     var filterContent = document.querySelector('.panel-filter .filter-content');
