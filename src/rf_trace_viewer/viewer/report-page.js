@@ -164,6 +164,432 @@
   }
 
   /**
+   * Aggregate per-tag pass/fail/skip counts from a list of tests.
+   * @param {Array} tests - Flat array of RFTest objects
+   * @returns {Object} Map of tag → {pass, fail, skip, total}
+   */
+  function _aggregateTagStats(tests) {
+    var tagMap = {};
+    for (var i = 0; i < tests.length; i++) {
+      var tags = tests[i].tags || [];
+      var status = (tests[i].status || '').toLowerCase();
+      for (var t = 0; t < tags.length; t++) {
+        if (!tagMap[tags[t]]) {
+          tagMap[tags[t]] = { pass: 0, fail: 0, skip: 0, total: 0 };
+        }
+        if (status === 'pass' || status === 'fail' || status === 'skip') {
+          tagMap[tags[t]][status]++;
+        }
+        tagMap[tags[t]].total++;
+      }
+    }
+    return tagMap;
+  }
+
+  /**
+   * Aggregate keyword statistics from a flat array of tests.
+   * Walks all tests → all keywords recursively (DFS), groups by name,
+   * and computes count, min/max/avg/total duration plus first span ID.
+   * Duration values are in elapsed_time (seconds in the data model).
+   * @param {Array} tests - Flat array of RFTest objects
+   * @returns {Array} Array of {keyword, count, minDuration, maxDuration, avgDuration, totalDuration, firstSpanId}
+   *                  where durations are in seconds (matching elapsed_time).
+   * Requirements: 9.1, 9.2
+   */
+  function _aggregateKeywordStats(tests) {
+    var kwMap = {};
+    var stack = [];
+    for (var i = 0; i < tests.length; i++) {
+      var kws = tests[i].keywords || [];
+      for (var k = 0; k < kws.length; k++) {
+        stack.push(kws[k]);
+      }
+    }
+    while (stack.length > 0) {
+      var kw = stack.pop();
+      var name = kw.name;
+      if (name) {
+        var dur = kw.elapsed_time || 0;
+        if (!kwMap[name]) {
+          kwMap[name] = {
+            count: 0,
+            minDuration: Infinity,
+            maxDuration: -Infinity,
+            totalDuration: 0,
+            firstSpanId: kw.id || ''
+          };
+        }
+        kwMap[name].count++;
+        if (dur < kwMap[name].minDuration) kwMap[name].minDuration = dur;
+        if (dur > kwMap[name].maxDuration) kwMap[name].maxDuration = dur;
+        kwMap[name].totalDuration += dur;
+      }
+      var children = kw.children || [];
+      for (var c = 0; c < children.length; c++) {
+        stack.push(children[c]);
+      }
+    }
+
+    var result = [];
+    for (var key in kwMap) {
+      if (kwMap.hasOwnProperty(key)) {
+        var entry = kwMap[key];
+        result.push({
+          keyword: key,
+          count: entry.count,
+          minDuration: entry.count > 0 ? entry.minDuration : 0,
+          maxDuration: entry.count > 0 ? entry.maxDuration : 0,
+          avgDuration: entry.count > 0 ? entry.totalDuration / entry.count : 0,
+          totalDuration: entry.totalDuration,
+          firstSpanId: entry.firstSpanId
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Format a duration in milliseconds for the Keyword Insights table.
+   * Matches the format used in keyword-stats.js:
+   *   < 0.01ms → "< 0.01"
+   *   < 1000ms → ms with 2 decimal places (e.g. "5.23")
+   *   < 60000ms → seconds with 2 decimal places + "s" (e.g. "1.23s")
+   *   >= 60000ms → "Nm Ns" format
+   * @param {number} ms - Duration in milliseconds
+   * @returns {string} Formatted duration string
+   */
+  function _formatKwDuration(ms) {
+    if (ms < 0.01) {
+      return '< 0.01';
+    } else if (ms < 1000) {
+      return ms.toFixed(2);
+    } else if (ms < 60000) {
+      return (ms / 1000).toFixed(2) + 's';
+    } else {
+      var mins = Math.floor(ms / 60000);
+      var secs = ((ms % 60000) / 1000).toFixed(1);
+      return mins + 'm ' + secs + 's';
+    }
+  }
+
+  /**
+   * Render the Tag Statistics section.
+   * Sortable table showing per-tag pass/fail/skip counts.
+   * Clicking a tag row sets _state.tagFilter and re-renders.
+   * Requirements: 8.1, 8.2, 8.3, 8.4
+   */
+  function _renderTagStatistics() {
+    var section = document.createElement('div');
+    section.className = 'report-tag-statistics';
+
+    var selectedSuite = _findSuiteById(_selectedSuiteId);
+    if (!selectedSuite) return section;
+
+    var allTests = _collectAllTests(selectedSuite);
+    var tagMap = _aggregateTagStats(allTests);
+    var tagNames = [];
+    for (var key in tagMap) {
+      if (tagMap.hasOwnProperty(key)) {
+        tagNames.push(key);
+      }
+    }
+
+    if (tagNames.length === 0) return section;
+
+    // Section title
+    var title = document.createElement('h3');
+    title.className = 'report-section-title';
+    title.textContent = 'Tag Statistics';
+    section.appendChild(title);
+
+    // Local sort state for this table
+    var sortCol = 'tag';
+    var sortAsc = true;
+
+    var table = document.createElement('table');
+    table.className = 'report-tag-table';
+
+    var columns = [
+      { key: 'tag', label: 'Tag' },
+      { key: 'total', label: 'Total' },
+      { key: 'pass', label: 'Pass' },
+      { key: 'fail', label: 'Fail' },
+      { key: 'skip', label: 'Skip' }
+    ];
+
+    function buildTable() {
+      table.innerHTML = '';
+
+      // Sort tag names
+      var sorted = tagNames.slice();
+      sorted.sort(function (a, b) {
+        var va, vb;
+        if (sortCol === 'tag') {
+          va = a.toLowerCase();
+          vb = b.toLowerCase();
+          if (va < vb) return sortAsc ? -1 : 1;
+          if (va > vb) return sortAsc ? 1 : -1;
+          return 0;
+        }
+        va = tagMap[a][sortCol];
+        vb = tagMap[b][sortCol];
+        return sortAsc ? va - vb : vb - va;
+      });
+
+      // Thead
+      var thead = document.createElement('thead');
+      var headerRow = document.createElement('tr');
+      for (var c = 0; c < columns.length; c++) {
+        (function (col) {
+          var th = document.createElement('th');
+          th.setAttribute('data-sort', col.key);
+          th.textContent = col.label;
+          if (sortCol === col.key) {
+            th.textContent += sortAsc ? ' \u25B2' : ' \u25BC';
+            th.classList.add('sorted');
+          }
+          th.style.cursor = 'pointer';
+          th.addEventListener('click', function () {
+            if (sortCol === col.key) {
+              sortAsc = !sortAsc;
+            } else {
+              sortCol = col.key;
+              sortAsc = true;
+            }
+            buildTable();
+          });
+          headerRow.appendChild(th);
+        })(columns[c]);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Tbody
+      var tbody = document.createElement('tbody');
+      for (var i = 0; i < sorted.length; i++) {
+        (function (tag) {
+          var stats = tagMap[tag];
+          var tr = document.createElement('tr');
+          tr.style.cursor = 'pointer';
+          tr.title = 'Filter tests by tag: ' + tag;
+
+          if (_state.tagFilter === tag) {
+            tr.classList.add('active-tag');
+          }
+
+          tr.addEventListener('click', function () {
+            _state.tagFilter = (_state.tagFilter === tag) ? null : tag;
+            _render();
+          });
+
+          var tdTag = document.createElement('td');
+          tdTag.textContent = tag;
+          tr.appendChild(tdTag);
+
+          var tdTotal = document.createElement('td');
+          tdTotal.textContent = stats.total;
+          tr.appendChild(tdTotal);
+
+          var tdPass = document.createElement('td');
+          tdPass.textContent = stats.pass;
+          tr.appendChild(tdPass);
+
+          var tdFail = document.createElement('td');
+          tdFail.textContent = stats.fail;
+          if (stats.fail > 0) tdFail.classList.add('count-fail');
+          tr.appendChild(tdFail);
+
+          var tdSkip = document.createElement('td');
+          tdSkip.textContent = stats.skip;
+          tr.appendChild(tdSkip);
+
+          tbody.appendChild(tr);
+        })(sorted[i]);
+      }
+      table.appendChild(tbody);
+    }
+
+    buildTable();
+    section.appendChild(table);
+    return section;
+  }
+
+  /**
+   * Render the Keyword Insights section.
+   * Aggregates keywords by name, shows sortable table with count, min, max, avg, total.
+   * Includes text filter for keyword name search.
+   * Click keyword row → Explorer_Link to first occurrence.
+   * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
+   */
+  function _renderKeywordInsights() {
+    var section = document.createElement('div');
+    section.className = 'report-keyword-insights';
+
+    var selectedSuite = _findSuiteById(_selectedSuiteId);
+    if (!selectedSuite) return section;
+
+    var allTests = _collectAllTests(selectedSuite);
+    var kwStats = _aggregateKeywordStats(allTests);
+
+    if (kwStats.length === 0) return section;
+
+    // Section title
+    var title = document.createElement('h3');
+    title.className = 'report-section-title';
+    title.textContent = 'Keyword Insights';
+    section.appendChild(title);
+
+    // Text filter input
+    var filterInput = document.createElement('input');
+    filterInput.type = 'text';
+    filterInput.className = 'report-keyword-filter';
+    filterInput.placeholder = 'Filter keywords\u2026';
+    section.appendChild(filterInput);
+
+    // Local sort state — default: totalDuration descending
+    var sortCol = 'totalDuration';
+    var sortAsc = false;
+    var filterText = '';
+    var debounceTimer = null;
+
+    var table = document.createElement('table');
+    table.className = 'report-keyword-table';
+
+    var columns = [
+      { key: 'keyword', label: 'Keyword' },
+      { key: 'count', label: 'Count' },
+      { key: 'minDuration', label: 'Min (ms)' },
+      { key: 'maxDuration', label: 'Max (ms)' },
+      { key: 'avgDuration', label: 'Avg (ms)' },
+      { key: 'totalDuration', label: 'Total (ms)' }
+    ];
+
+    function buildKwTable() {
+      table.innerHTML = '';
+
+      // Filter by keyword name
+      var filtered = kwStats;
+      if (filterText) {
+        var lower = filterText.toLowerCase();
+        filtered = [];
+        for (var f = 0; f < kwStats.length; f++) {
+          if (kwStats[f].keyword.toLowerCase().indexOf(lower) !== -1) {
+            filtered.push(kwStats[f]);
+          }
+        }
+      }
+
+      // Sort
+      var sorted = filtered.slice();
+      sorted.sort(function (a, b) {
+        var va, vb;
+        if (sortCol === 'keyword') {
+          va = a.keyword.toLowerCase();
+          vb = b.keyword.toLowerCase();
+          if (va < vb) return sortAsc ? -1 : 1;
+          if (va > vb) return sortAsc ? 1 : -1;
+          return 0;
+        }
+        va = a[sortCol];
+        vb = b[sortCol];
+        return sortAsc ? va - vb : vb - va;
+      });
+
+      // Thead
+      var thead = document.createElement('thead');
+      var headerRow = document.createElement('tr');
+      for (var c = 0; c < columns.length; c++) {
+        (function (col) {
+          var th = document.createElement('th');
+          th.setAttribute('data-sort', col.key);
+          th.textContent = col.label;
+          if (sortCol === col.key) {
+            th.textContent += sortAsc ? ' \u25B2' : ' \u25BC';
+            th.classList.add('sorted');
+          }
+          th.style.cursor = 'pointer';
+          th.addEventListener('click', function () {
+            if (sortCol === col.key) {
+              sortAsc = !sortAsc;
+            } else {
+              sortCol = col.key;
+              sortAsc = false;
+            }
+            buildKwTable();
+          });
+          headerRow.appendChild(th);
+        })(columns[c]);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Tbody
+      var tbody = document.createElement('tbody');
+      for (var i = 0; i < sorted.length; i++) {
+        (function (stat) {
+          var tr = document.createElement('tr');
+          tr.style.cursor = 'pointer';
+          tr.title = 'Open first occurrence in Explorer';
+
+          tr.addEventListener('click', function () {
+            if (stat.firstSpanId) {
+              _navigateToExplorer(stat.firstSpanId);
+            }
+          });
+
+          // Keyword name
+          var tdName = document.createElement('td');
+          tdName.textContent = stat.keyword;
+          tdName.title = stat.keyword;
+          tr.appendChild(tdName);
+
+          // Count
+          var tdCount = document.createElement('td');
+          tdCount.textContent = stat.count;
+          tr.appendChild(tdCount);
+
+          // Min — convert seconds to ms for display
+          var tdMin = document.createElement('td');
+          tdMin.textContent = _formatKwDuration(stat.minDuration * 1000);
+          tr.appendChild(tdMin);
+
+          // Max
+          var tdMax = document.createElement('td');
+          tdMax.textContent = _formatKwDuration(stat.maxDuration * 1000);
+          tr.appendChild(tdMax);
+
+          // Avg
+          var tdAvg = document.createElement('td');
+          tdAvg.textContent = _formatKwDuration(stat.avgDuration * 1000);
+          tr.appendChild(tdAvg);
+
+          // Total
+          var tdTotal = document.createElement('td');
+          tdTotal.textContent = _formatKwDuration(stat.totalDuration * 1000);
+          tr.appendChild(tdTotal);
+
+          tbody.appendChild(tr);
+        })(sorted[i]);
+      }
+      table.appendChild(tbody);
+    }
+
+    // Debounced filter input handler
+    filterInput.addEventListener('input', function () {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function () {
+        filterText = filterInput.value;
+        buildKwTable();
+      }, 200);
+    });
+
+    buildKwTable();
+    section.appendChild(table);
+    return section;
+  }
+
+
+  /**
    * Render the summary dashboard section.
    * Includes: overall status banner, stat cards, suite header, per-suite breakdown.
    * @returns {HTMLElement} The summary dashboard element
@@ -1274,6 +1700,22 @@
     if (testTable) {
       _container.appendChild(testTable);
     }
+
+    // Bottom panels container (tag statistics + keyword insights)
+    var bottomPanels = document.createElement('div');
+    bottomPanels.className = 'report-bottom-panels';
+
+    var tagStats = _renderTagStatistics();
+    if (tagStats) {
+      bottomPanels.appendChild(tagStats);
+    }
+
+    var kwInsights = _renderKeywordInsights();
+    if (kwInsights) {
+      bottomPanels.appendChild(kwInsights);
+    }
+
+    _container.appendChild(bottomPanels);
   }
 
   // Expose helpers for testing (attached to a namespace)
@@ -1291,6 +1733,9 @@
     flattenKeywordsForReport: _flattenKeywordsForReport,
     filterLogByLevel: _filterLogByLevel,
     findAutoExpandPath: _findAutoExpandPath,
-    findTestInSuites: _findTestInSuites
+    findTestInSuites: _findTestInSuites,
+    aggregateTagStats: _aggregateTagStats,
+    aggregateKeywordStats: _aggregateKeywordStats,
+    formatKwDuration: _formatKwDuration
   };
 })();
