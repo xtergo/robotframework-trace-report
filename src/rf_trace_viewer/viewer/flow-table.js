@@ -9,6 +9,28 @@
   var _flowState = null;
   var _listenerRegistered = false;
 
+  // Abbreviated badge labels for all 18 keyword types
+  var BADGE_LABELS = {
+    KEYWORD: 'KW',
+    SETUP: 'SU',
+    TEARDOWN: 'TD',
+    FOR: 'FOR',
+    ITERATION: 'ITR',
+    WHILE: 'WHL',
+    IF: 'IF',
+    ELSE_IF: 'EIF',
+    ELSE: 'ELS',
+    TRY: 'TRY',
+    EXCEPT: 'EXC',
+    FINALLY: 'FIN',
+    RETURN: 'RET',
+    VAR: 'VAR',
+    CONTINUE: 'CNT',
+    BREAK: 'BRK',
+    GROUP: 'GRP',
+    ERROR: 'ERR'
+  };
+
   window.initFlowTable = function (container, data) {
     if (!container || !data) return;
 

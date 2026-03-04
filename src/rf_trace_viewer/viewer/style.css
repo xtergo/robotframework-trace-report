@@ -1973,21 +1973,54 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   letter-spacing: 0.3px;
 }
 
+/* Blue (default) */
 .rf-trace-viewer .flow-type-keyword { background: var(--bg-tertiary); color: var(--text-secondary); }
-.rf-trace-viewer .flow-type-setup { background: #e3f2fd; color: #1565c0; }
-.rf-trace-viewer .flow-type-teardown { background: #fce4ec; color: #ad1457; }
+/* Green family */
+.rf-trace-viewer .flow-type-setup { background: #e8f5e9; color: #2e7d32; }
+.rf-trace-viewer .flow-type-teardown { background: #c8e6c9; color: #1b5e20; }
+/* Purple family */
 .rf-trace-viewer .flow-type-for { background: #e8eaf6; color: #283593; }
+.rf-trace-viewer .flow-type-iteration { background: #ede7f6; color: #4527a0; }
+.rf-trace-viewer .flow-type-while { background: #e8eaf6; color: #283593; }
+/* Orange family */
 .rf-trace-viewer .flow-type-if { background: #fff3e0; color: #e65100; }
+.rf-trace-viewer .flow-type-else_if { background: #fff8e1; color: #ef6c00; }
+.rf-trace-viewer .flow-type-else { background: #fff8e1; color: #ef6c00; }
+/* Teal family */
 .rf-trace-viewer .flow-type-try { background: #e0f2f1; color: #00695c; }
-.rf-trace-viewer .flow-type-while { background: #f3e5f5; color: #6a1b9a; }
+.rf-trace-viewer .flow-type-except { background: #e0f7fa; color: #00838f; }
+.rf-trace-viewer .flow-type-finally { background: #e0f7fa; color: #00838f; }
+/* Gray family */
+.rf-trace-viewer .flow-type-return { background: var(--bg-tertiary); color: var(--text-muted); }
+.rf-trace-viewer .flow-type-var { background: var(--bg-tertiary); color: var(--text-muted); }
+.rf-trace-viewer .flow-type-continue { background: var(--bg-tertiary); color: var(--text-muted); }
+.rf-trace-viewer .flow-type-break { background: var(--bg-tertiary); color: var(--text-muted); }
+/* Indigo */
+.rf-trace-viewer .flow-type-group { background: #e8eaf6; color: #1a237e; }
+/* Red */
+.rf-trace-viewer .flow-type-error { background: #ffebee; color: #c62828; }
 
 /* Dark mode type badges */
-.rf-trace-viewer.theme-dark .flow-type-setup { background: #0d2137; color: #42a5f5; }
-.rf-trace-viewer.theme-dark .flow-type-teardown { background: #370d1a; color: #f48fb1; }
+/* Green family */
+.rf-trace-viewer.theme-dark .flow-type-setup { background: #1b3a1b; color: #66bb6a; }
+.rf-trace-viewer.theme-dark .flow-type-teardown { background: #14301a; color: #4caf50; }
+/* Purple family */
 .rf-trace-viewer.theme-dark .flow-type-for { background: #141730; color: #7986cb; }
+.rf-trace-viewer.theme-dark .flow-type-iteration { background: #1a1530; color: #9575cd; }
+.rf-trace-viewer.theme-dark .flow-type-while { background: #141730; color: #7986cb; }
+/* Orange family */
 .rf-trace-viewer.theme-dark .flow-type-if { background: #331a00; color: #ffb74d; }
+.rf-trace-viewer.theme-dark .flow-type-else_if { background: #332200; color: #ffc107; }
+.rf-trace-viewer.theme-dark .flow-type-else { background: #332200; color: #ffc107; }
+/* Teal family */
 .rf-trace-viewer.theme-dark .flow-type-try { background: #0a2924; color: #4db6ac; }
-.rf-trace-viewer.theme-dark .flow-type-while { background: #250d30; color: #ba68c8; }
+.rf-trace-viewer.theme-dark .flow-type-except { background: #0a2a30; color: #4dd0e1; }
+.rf-trace-viewer.theme-dark .flow-type-finally { background: #0a2a30; color: #4dd0e1; }
+/* Gray family — uses theme variables, no dark override needed */
+/* Indigo */
+.rf-trace-viewer.theme-dark .flow-type-group { background: #141730; color: #9fa8da; }
+/* Red */
+.rf-trace-viewer.theme-dark .flow-type-error { background: #3a1b1b; color: #ef5350; }
 
 /* Status badges */
 .rf-trace-viewer .flow-status-badge {
