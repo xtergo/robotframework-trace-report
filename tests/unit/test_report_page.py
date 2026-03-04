@@ -1129,3 +1129,300 @@ def test_auto_expand_no_failures():
     }
     fail_ids = find_auto_expand_path(test)
     assert len(fail_ids) == 0
+
+
+# ===========================================================================
+# 8. Tag Statistics and Keyword Insights helpers
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _aggregateTagStats(tests) from report-page.js
+# ---------------------------------------------------------------------------
+def aggregate_tag_stats(tests):
+    """Python reference of _aggregateTagStats() from report-page.js."""
+    tag_map = {}
+    for test in tests:
+        tags = test.get("tags", [])
+        status = (test.get("status") or "").lower()
+        for tag in tags:
+            if tag not in tag_map:
+                tag_map[tag] = {"pass": 0, "fail": 0, "skip": 0, "total": 0}
+            if status in ("pass", "fail", "skip"):
+                tag_map[tag][status] += 1
+            tag_map[tag]["total"] += 1
+    return tag_map
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _aggregateKeywordStats(tests) from report-page.js
+# ---------------------------------------------------------------------------
+def aggregate_keyword_stats(tests):
+    """Python reference of _aggregateKeywordStats() from report-page.js."""
+    kw_map = {}
+    stack = []
+    for test in tests:
+        for kw in test.get("keywords", []):
+            stack.append(kw)
+    while stack:
+        kw = stack.pop()
+        name = kw.get("name")
+        if name:
+            dur = kw.get("elapsed_time", 0)
+            if name not in kw_map:
+                kw_map[name] = {
+                    "count": 0,
+                    "min_duration": float("inf"),
+                    "max_duration": float("-inf"),
+                    "total_duration": 0,
+                    "first_span_id": kw.get("id", ""),
+                }
+            kw_map[name]["count"] += 1
+            if dur < kw_map[name]["min_duration"]:
+                kw_map[name]["min_duration"] = dur
+            if dur > kw_map[name]["max_duration"]:
+                kw_map[name]["max_duration"] = dur
+            kw_map[name]["total_duration"] += dur
+        for child in kw.get("children", []):
+            stack.append(child)
+
+    result = []
+    for keyword, entry in kw_map.items():
+        count = entry["count"]
+        result.append(
+            {
+                "keyword": keyword,
+                "count": count,
+                "min_duration": entry["min_duration"] if count > 0 else 0,
+                "max_duration": entry["max_duration"] if count > 0 else 0,
+                "avg_duration": entry["total_duration"] / count if count > 0 else 0,
+                "total_duration": entry["total_duration"],
+                "first_span_id": entry["first_span_id"],
+            }
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 8a. _aggregateTagStats() produces correct per-tag counts
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_tag_stats_basic():
+    """Tests with overlapping tags produce correct per-tag counts.
+
+    **Validates: Requirements 8.2**
+    """
+    tests = [
+        make_full_test("T1", "PASS", tags=["smoke", "auth"]),
+        make_full_test("T2", "FAIL", tags=["smoke"]),
+        make_full_test("T3", "SKIP", tags=["auth"]),
+    ]
+    result = aggregate_tag_stats(tests)
+    assert result["smoke"] == {"pass": 1, "fail": 1, "skip": 0, "total": 2}
+    assert result["auth"] == {"pass": 1, "fail": 0, "skip": 1, "total": 2}
+
+
+def test_aggregate_tag_stats_empty():
+    """No tests returns empty dict.
+
+    **Validates: Requirements 8.2**
+    """
+    assert aggregate_tag_stats([]) == {}
+
+
+def test_aggregate_tag_stats_no_tags():
+    """Tests without tags produce empty dict.
+
+    **Validates: Requirements 8.2**
+    """
+    tests = [
+        make_full_test("T1", "PASS"),
+        make_full_test("T2", "FAIL"),
+    ]
+    assert aggregate_tag_stats(tests) == {}
+
+
+def test_aggregate_tag_stats_unknown_status():
+    """Tests with unknown status increment total but not pass/fail/skip.
+
+    **Validates: Requirements 8.2**
+    """
+    tests = [
+        make_full_test("T1", "NOT_RUN", tags=["smoke"]),
+        make_full_test("T2", "PASS", tags=["smoke"]),
+    ]
+    result = aggregate_tag_stats(tests)
+    assert result["smoke"]["total"] == 2
+    assert result["smoke"]["pass"] == 1
+    assert result["smoke"]["fail"] == 0
+    assert result["smoke"]["skip"] == 0
+
+
+# Hypothesis strategy: generate tests with random tags and statuses
+_tag_st = st.sampled_from(["smoke", "auth", "regression", "api", "ui"])
+_tagged_test_st = st.lists(
+    st.tuples(
+        st.text(min_size=1, max_size=10),
+        test_status_st,
+        st.lists(_tag_st, min_size=0, max_size=4),
+    ),
+    min_size=0,
+    max_size=15,
+)
+
+
+@given(test_data=_tagged_test_st)
+def test_aggregate_tag_stats_total_property(test_data):
+    """For any list of tests, every tag's total equals pass + fail + skip + unknown count.
+
+    The JS iterates over each tag occurrence (including duplicates within a test),
+    so we count per-occurrence, not per-unique-test.
+
+    **Validates: Requirements 8.2**
+    """
+    tests = [make_full_test(name, status, tags=list(tags)) for name, status, tags in test_data]
+    result = aggregate_tag_stats(tests)
+    for tag, counts in result.items():
+        known = counts["pass"] + counts["fail"] + counts["skip"]
+        assert known <= counts["total"]
+        # Count tag occurrences (not unique tests) with known vs unknown status
+        known_occ = 0
+        unknown_occ = 0
+        for t in tests:
+            s = (t.get("status") or "").lower()
+            occ = (t.get("tags") or []).count(tag)
+            if s in ("pass", "fail", "skip"):
+                known_occ += occ
+            else:
+                unknown_occ += occ
+        assert counts["total"] == known_occ + unknown_occ
+        assert known == known_occ
+
+
+# ---------------------------------------------------------------------------
+# 8b. _aggregateKeywordStats() computes correct min/max/avg
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_keyword_stats_basic():
+    """Two tests with keywords produce correct count/min/max/avg/total.
+
+    **Validates: Requirements 9.2**
+    """
+    tests = [
+        {
+            "name": "T1",
+            "id": "t1",
+            "keywords": [
+                _make_kw("Click", elapsed_time=100),
+                _make_kw("Wait", elapsed_time=500),
+            ],
+        },
+        {
+            "name": "T2",
+            "id": "t2",
+            "keywords": [
+                _make_kw("Click", elapsed_time=200),
+            ],
+        },
+    ]
+    result = aggregate_keyword_stats(tests)
+    by_name = {r["keyword"]: r for r in result}
+
+    assert "Click" in by_name
+    assert by_name["Click"]["count"] == 2
+    assert by_name["Click"]["min_duration"] == 100
+    assert by_name["Click"]["max_duration"] == 200
+    assert by_name["Click"]["avg_duration"] == 150.0
+    assert by_name["Click"]["total_duration"] == 300
+
+    assert "Wait" in by_name
+    assert by_name["Wait"]["count"] == 1
+    assert by_name["Wait"]["min_duration"] == 500
+    assert by_name["Wait"]["max_duration"] == 500
+    assert by_name["Wait"]["avg_duration"] == 500.0
+
+
+def test_aggregate_keyword_stats_nested():
+    """Keywords with children are aggregated recursively.
+
+    **Validates: Requirements 9.2**
+    """
+    tests = [
+        {
+            "name": "T1",
+            "id": "t1",
+            "keywords": [
+                _make_kw(
+                    "Parent",
+                    elapsed_time=1000,
+                    children=[
+                        _make_kw("Child", elapsed_time=300),
+                        _make_kw(
+                            "Child",
+                            elapsed_time=700,
+                            children=[
+                                _make_kw("GrandChild", elapsed_time=100),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        },
+    ]
+    result = aggregate_keyword_stats(tests)
+    by_name = {r["keyword"]: r for r in result}
+
+    assert by_name["Parent"]["count"] == 1
+    assert by_name["Child"]["count"] == 2
+    assert by_name["Child"]["min_duration"] == 300
+    assert by_name["Child"]["max_duration"] == 700
+    assert by_name["Child"]["avg_duration"] == 500.0
+    assert by_name["GrandChild"]["count"] == 1
+    assert by_name["GrandChild"]["min_duration"] == 100
+
+
+def test_aggregate_keyword_stats_empty():
+    """No tests returns empty list.
+
+    **Validates: Requirements 9.2**
+    """
+    assert aggregate_keyword_stats([]) == []
+
+
+# Hypothesis strategy: generate tests with keywords
+_kw_name_st = st.sampled_from(["Click", "Wait", "Log", "Input", "Verify"])
+_kw_dur_st = st.floats(min_value=0, max_value=10000, allow_nan=False, allow_infinity=False)
+_kw_st = st.fixed_dictionaries(
+    {
+        "name": _kw_name_st,
+        "id": st.just("kw-gen"),
+        "elapsed_time": _kw_dur_st,
+        "children": st.just([]),
+    }
+)
+_kw_test_list_st = st.lists(
+    st.fixed_dictionaries(
+        {
+            "name": st.text(min_size=1, max_size=10),
+            "id": st.text(min_size=1, max_size=5),
+            "keywords": st.lists(_kw_st, min_size=0, max_size=5),
+        }
+    ),
+    min_size=0,
+    max_size=10,
+)
+
+
+@given(test_data=_kw_test_list_st)
+def test_aggregate_keyword_stats_avg_property(test_data):
+    """For any list of tests, every keyword's avg equals total / count.
+
+    **Validates: Requirements 9.2**
+    """
+    result = aggregate_keyword_stats(test_data)
+    for entry in result:
+        if entry["count"] > 0:
+            expected_avg = entry["total_duration"] / entry["count"]
+            assert abs(entry["avg_duration"] - expected_avg) < 1e-9
