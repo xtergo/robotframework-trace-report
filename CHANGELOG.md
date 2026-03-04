@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error messages moved from column to tooltip on FAIL rows
 
 ### Added
+- Tag Statistics section on Report page: per-tag pass/fail/skip counts in sortable table, click tag to filter test results table
+- Keyword Insights section on Report page: keyword aggregation (count, min/max/avg/total duration), sortable table with text filter, click row navigates to Explorer
+- Bottom panels CSS (`.report-bottom-panels` two-column grid, `.report-tag-table`, `.report-keyword-table`, `.report-keyword-filter`, `.active-tag`, `.count-fail`)
 - Keyword Drill-Down on Report page: expand test rows inline to see keyword execution tree with type badges, indentation, args, status, duration, and Explorer links for each keyword
 - Inline log messages under keywords with level badge (TRACE/DEBUG/INFO/WARN/ERROR) and timestamp, filtered by log level selector (default INFO)
 - Auto-expand failed keyword chains when test row is expanded

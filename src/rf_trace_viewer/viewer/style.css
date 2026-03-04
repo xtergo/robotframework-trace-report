@@ -4070,3 +4070,113 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   background: var(--bg-secondary);
   border-bottom-color: transparent;
 }
+
+/* ── Bottom panels: Tag Statistics + Keyword Insights ── */
+
+.rf-trace-viewer .report-bottom-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.rf-trace-viewer .report-tag-statistics,
+.rf-trace-viewer .report-keyword-insights {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.rf-trace-viewer .report-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .report-tag-table,
+.rf-trace-viewer .report-keyword-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rf-trace-viewer .report-tag-table th,
+.rf-trace-viewer .report-keyword-table th {
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 10px;
+  border-bottom: 2px solid var(--border-color);
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+
+.rf-trace-viewer .report-tag-table th:hover,
+.rf-trace-viewer .report-keyword-table th:hover {
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .report-tag-table td,
+.rf-trace-viewer .report-keyword-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .report-tag-table tbody tr,
+.rf-trace-viewer .report-keyword-table tbody tr {
+  transition: background 0.1s;
+}
+
+.rf-trace-viewer .report-tag-table tbody tr:hover,
+.rf-trace-viewer .report-keyword-table tbody tr:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .report-tag-table tbody tr {
+  cursor: pointer;
+}
+
+/* Numeric columns right-aligned */
+.rf-trace-viewer .report-tag-table td:nth-child(n+2),
+.rf-trace-viewer .report-tag-table th:nth-child(n+2),
+.rf-trace-viewer .report-keyword-table td:nth-child(n+2),
+.rf-trace-viewer .report-keyword-table th:nth-child(n+2) {
+  text-align: right;
+}
+
+.rf-trace-viewer .report-keyword-filter {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.rf-trace-viewer .report-keyword-filter:focus {
+  border-color: var(--focus-outline);
+}
+
+.rf-trace-viewer .report-keyword-filter::placeholder {
+  color: var(--text-muted);
+}
+
+.rf-trace-viewer .active-tag {
+  background: var(--hover-bg);
+  font-weight: 600;
+}
+
+.rf-trace-viewer .count-fail {
+  color: var(--status-fail);
+  font-weight: 600;
+}

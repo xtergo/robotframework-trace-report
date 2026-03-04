@@ -69,7 +69,7 @@ Every task follows this completion sequence:
     - _Requirements: 2.1, 2.2, 3.1_
   - [x] 2.7 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [-] 3. Scaffold Report page, wire into app.js, remove Statistics tab
+- [x] 3. Scaffold Report page, wire into app.js, remove Statistics tab
   - [x] 3.1 Create `report-page.js` with IIFE structure and public API
     - Create `src/rf_trace_viewer/viewer/report-page.js`
     - Implement IIFE with `_container`, `_suites`, `_selectedSuiteId`, `_state` variables
@@ -104,127 +104,127 @@ Every task follows this completion sequence:
     - Unit test: `view=statistics` hash decodes to report
     - Unit test: generated HTML includes `report-page.js` and excludes `stats.js`
     - _Requirements: 4.1, 13.1, 13.3_
-  - [-] 3.8 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
+  - [x] 3.8 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [ ] 4. Implement Summary Dashboard on Report page
-  - [ ] 4.1 Implement `_renderSummaryDashboard()`
+- [x] 4. Implement Summary Dashboard on Report page
+  - [x] 4.1 Implement `_renderSummaryDashboard()`
     - Overall status banner (green/red based on fail count)
     - Stat cards: total, pass, fail, skip, duration
     - Suite header: name, source path, documentation, metadata key-value pairs
     - Per-suite breakdown table with pass/fail/skip counts per suite
     - _Requirements: 4.2, 4.3, 4.4, 4.5_
-  - [ ] 4.2 Implement `_renderSuiteSelector()` for multi-suite traces
+  - [x] 4.2 Implement `_renderSuiteSelector()` for multi-suite traces
     - Render `<select>` dropdown when multiple suites exist
     - Single-suite traces show suite directly without selector
     - On change: update `_selectedSuiteId`, re-render all sections
     - _Requirements: 4.3_
-  - [ ] 4.3 Add Summary Dashboard CSS to `style.css`
+  - [x] 4.3 Add Summary Dashboard CSS to `style.css`
     - `.summary-dashboard` flex layout, `.summary-card` styling
     - Suite header and per-suite breakdown table styles
     - _Requirements: 4.2, 4.5_
-  - [ ] 4.4 Add regression tests for summary dashboard
+  - [x] 4.4 Add regression tests for summary dashboard
     - Unit test: `_collectAllTests()` flattens nested suites correctly
     - Unit test: summary stats match expected pass/fail/skip counts
     - _Requirements: 4.2, 4.5_
-  - [ ] 4.5 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
+  - [x] 4.5 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [ ] 5. Implement Failure Triage section
-  - [ ] 5.1 Implement `_findFailedChain(test)` and `_buildBreadcrumb(chain)`
+- [x] 5. Implement Failure Triage section
+  - [x] 5.1 Implement `_findFailedChain(test)` and `_buildBreadcrumb(chain)`
     - DFS walk from test root to deepest FAIL keyword
     - Return array of `{name, type, id, error}` objects
     - Render breadcrumb as `Suite > Test > [TYPE] Keyword` with type badges
     - _Requirements: 6.3_
-  - [ ] 5.2 Implement `_renderFailureTriage()`
+  - [x] 5.2 Implement `_renderFailureTriage()`
     - Render "Failures" section above test results when failures exist
     - Each entry: test name, failed keyword name/type, error message, duration
     - Each entry includes breadcrumb path and Explorer_Link to failed span
     - Section expanded by default
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.6_
-  - [ ] 5.3 Implement Execution Errors subsection
+  - [x] 5.3 Implement Execution Errors subsection
     - Collect WARN/ERROR log messages across the run via `_collectExecutionErrors(suites)`
     - Render collapsible section with level badge, timestamp, message, Explorer_Link
     - Collapsed by default when no errors exist
     - _Requirements: 6.5, 6.6_
-  - [ ] 5.4 Add Failure Triage CSS to `style.css`
+  - [x] 5.4 Add Failure Triage CSS to `style.css`
     - `.failure-triage` section with fail border, `.failure-entry`, `.failure-breadcrumb`
     - Execution errors collapsible styling
     - _Requirements: 6.1_
-  - [ ] 5.5 Add regression tests for failure triage
+  - [x] 5.5 Add regression tests for failure triage
     - Unit test: `_findFailedChain()` returns correct chain for nested failures
     - Unit test: breadcrumb renders expected path segments
     - _Requirements: 6.3_
-  - [ ] 5.6 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
+  - [x] 5.6 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [ ] 6. Implement Test Results Table
-  - [ ] 6.1 Implement `_renderTestResultsTable()` with sortable columns
+- [x] 6. Implement Test Results Table
+  - [x] 6.1 Implement `_renderTestResultsTable()` with sortable columns
     - Columns: Name (with suite path prefix), Documentation (hidden by default, toggleable), Status, Tags, Duration, Message
     - Click column header → toggle sort asc/desc, re-render tbody
     - Default sort: FAIL first, then duration descending
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
-  - [ ] 6.2 Implement text filter and tag filter
+  - [x] 6.2 Implement text filter and tag filter
     - Search input above table, debounced at 200ms, filters on name + tags + message
     - `_state.tagFilter` integration: when set, show only tests with that tag
     - _Requirements: 5.7_
-  - [ ] 6.3 Implement test row click → Explorer_Link navigation
+  - [x] 6.3 Implement test row click → Explorer_Link navigation
     - Click test row → `_navigateToExplorer(spanId)` → switch to Explorer tab, emit `navigate-to-span`
     - _Requirements: 5.6_
-  - [ ] 6.4 Add Test Results Table CSS to `style.css`
+  - [x] 6.4 Add Test Results Table CSS to `style.css`
     - `.report-test-table` with sortable headers, row hover, status coloring
     - `.report-search-input` styling
     - _Requirements: 5.1_
-  - [ ] 6.5 Add regression tests for test results table
+  - [x] 6.5 Add regression tests for test results table
     - Unit test: sort by status puts FAIL first
     - Unit test: text filter narrows visible rows correctly
     - _Requirements: 5.3, 5.5, 5.7_
-  - [ ] 6.6 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
+  - [x] 6.6 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [ ] 7. Implement Keyword Drill-Down
-  - [ ] 7.1 Implement `_renderKeywordDrillDown(testId)` with inline keyword tree
+- [x] 7. Implement Keyword Drill-Down
+  - [x] 7.1 Implement `_renderKeywordDrillDown(testId)` with inline keyword tree
     - Expand test row → insert `<tr class="drill-down-row">` with `<td colspan="6">`
     - Flatten keywords using same logic as Flow_Table, reuse `.flow-type-badge` and `.flow-indent-guide` CSS
     - Show: type badge, name, args, status, duration with depth indentation
     - Each keyword clickable as Explorer_Link
     - _Requirements: 7.1, 7.2, 7.5_
-  - [ ] 7.2 Implement inline log messages and log level filter
+  - [x] 7.2 Implement inline log messages and log level filter
     - Render `kw.events` inline under parent keyword with level badge and timestamp
     - Add `<select>` log level filter (TRACE/DEBUG/INFO/WARN/ERROR, default INFO)
     - _Requirements: 7.3, 7.4_
-  - [ ] 7.3 Implement auto-expand failed chains
+  - [x] 7.3 Implement auto-expand failed chains
     - When test row is expanded, auto-expand the failed keyword path
     - Track expanded state in `_state.expandedTests`
     - _Requirements: 7.6_
-  - [ ] 7.4 Add Drill-Down CSS to `style.css`
+  - [x] 7.4 Add Drill-Down CSS to `style.css`
     - `.drill-down-row td` background, `.drill-down-toolbar` styling
     - Log message inline styles, level badge colors
     - _Requirements: 7.1_
-  - [ ] 7.5 Add regression tests for keyword drill-down
+  - [x] 7.5 Add regression tests for keyword drill-down
     - Unit test: keyword tree flattening produces correct depth levels
     - Unit test: log level filter hides messages below threshold
     - Unit test: failed chains are auto-expanded
     - _Requirements: 7.1, 7.4, 7.6_
-  - [ ] 7.6 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
+  - [x] 7.6 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
-- [ ] 8. Implement Tag Statistics and Keyword Insights
-  - [ ] 8.1 Implement `_renderTagStatistics()`
+- [-] 8. Implement Tag Statistics and Keyword Insights
+  - [x] 8.1 Implement `_renderTagStatistics()`
     - Aggregate per-tag pass/fail/skip counts via `_aggregateTagStats(tests)`
     - Sortable table: tag name, total, pass, fail, skip
     - Click tag row → set `_state.tagFilter`, re-render test results table
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
-  - [ ] 8.2 Implement `_renderKeywordInsights()`
+  - [x] 8.2 Implement `_renderKeywordInsights()`
     - Aggregate keywords by name via `_aggregateKeywordStats(tests)`: count, min, max, avg, total duration
     - Reuse aggregation logic from `keyword-stats.js`
     - Sortable table, text filter for keyword name search
     - Click keyword row → Explorer_Link to first occurrence
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
-  - [ ] 8.3 Add bottom panels CSS to `style.css`
+  - [x] 8.3 Add bottom panels CSS to `style.css`
     - `.report-bottom-panels` two-column grid layout
     - Tag stats and keyword insights table styles
     - _Requirements: 8.1, 9.1_
-  - [ ] 8.4 Add regression tests for tag stats and keyword insights
+  - [x] 8.4 Add regression tests for tag stats and keyword insights
     - Unit test: `_aggregateTagStats()` produces correct per-tag counts
     - Unit test: `_aggregateKeywordStats()` computes correct min/max/avg
     - _Requirements: 8.2, 9.2_
-  - [ ] 8.5 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
+  - [-] 8.5 Update docs and CHANGELOG, run `make lint && make test-unit`, commit
 
 - [ ] 9. Implement Expand/Collapse controls for Keyword Drill-Down (low priority)
   - [ ] 9.1 Add "Expand All", "Collapse All", and "Expand Failed" buttons
