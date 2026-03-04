@@ -319,6 +319,9 @@
       var tr = document.createElement('tr');
       tr.className = 'flow-table-row';
       if (row.status === 'FAIL') tr.classList.add('flow-row-fail');
+      var kwTypeUpper = (row.keyword_type || '').toUpperCase();
+      if (kwTypeUpper === 'SETUP') tr.classList.add('flow-row-setup');
+      if (kwTypeUpper === 'TEARDOWN') tr.classList.add('flow-row-teardown');
       if (hlId && row.id === hlId) tr.classList.add('flow-row-highlight');
       if (row.id) {
         tr.setAttribute('data-span-id', row.id);
