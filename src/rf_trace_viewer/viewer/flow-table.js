@@ -257,68 +257,87 @@
   }
 
   function _createRow(row, hlId) {
-    var tr = document.createElement('tr');
-    tr.className = 'flow-table-row';
-    if (row.status === 'FAIL') tr.classList.add('flow-row-fail');
-    if (hlId && row.id === hlId) tr.classList.add('flow-row-highlight');
-    if (row.id) {
-      tr.setAttribute('data-span-id', row.id);
-      tr.style.cursor = 'pointer';
-      tr.addEventListener('click', function () {
-        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-          window.RFTraceViewer.emit('navigate-to-span', { spanId: row.id, source: 'flow-table' });
-        }
-      });
+      var tr = document.createElement('tr');
+      tr.className = 'flow-table-row';
+      if (row.status === 'FAIL') tr.classList.add('flow-row-fail');
+      if (hlId && row.id === hlId) tr.classList.add('flow-row-highlight');
+      if (row.id) {
+        tr.setAttribute('data-span-id', row.id);
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', function () {
+          if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+            window.RFTraceViewer.emit('navigate-to-span', { spanId: row.id, source: 'flow-table' });
+          }
+        });
+      }
+
+      // Error tooltip on FAIL rows
+      if (row.status === 'FAIL' && row.error) {
+        tr.title = row.error;
+      }
+
+      // Combined Keyword column (badge + indent + name + args)
+      var tdKw = document.createElement('td');
+      tdKw.className = 'flow-col-keyword';
+      tdKw.style.paddingLeft = (row.depth * 20 + 8) + 'px';
+
+      // Indent guides
+      for (var g = 0; g < row.depth; g++) {
+        var guide = document.createElement('span');
+        guide.className = 'flow-indent-guide';
+        guide.style.left = (g * 20 + 4) + 'px';
+        tdKw.appendChild(guide);
+      }
+
+      // Type badge (abbreviated)
+      var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
+      var badge = document.createElement('span');
+      badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
+      badge.textContent = BADGE_LABELS[kwType] || kwType;
+      tdKw.appendChild(badge);
+
+      // Name
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'flow-kw-name';
+      nameSpan.textContent = row.name;
+      tdKw.appendChild(nameSpan);
+
+      // Args (inline, truncated at 60 chars)
+      if (row.args) {
+        var argsSpan = document.createElement('span');
+        argsSpan.className = 'flow-kw-args';
+        argsSpan.textContent = row.args.length > 60 ? row.args.substring(0, 57) + '...' : row.args;
+        argsSpan.title = row.args;
+        tdKw.appendChild(argsSpan);
+      }
+
+      tr.appendChild(tdKw);
+
+      // Line column
+      var tdL = document.createElement('td');
+      tdL.className = 'flow-col-line';
+      tdL.textContent = row.lineno > 0 ? row.lineno : '';
+      tr.appendChild(tdL);
+
+      // Status column
+      var tdSt = document.createElement('td');
+      tdSt.className = 'flow-col-status';
+      var sb = document.createElement('span');
+      sb.className = 'flow-status-badge';
+      sb.classList.add('flow-status-' + (row.status || '').toLowerCase().replace(/\s+/g, '-'));
+      sb.textContent = row.status;
+      tdSt.appendChild(sb);
+      tr.appendChild(tdSt);
+
+      // Duration column
+      var tdD = document.createElement('td');
+      tdD.className = 'flow-col-duration';
+      tdD.textContent = _formatDuration(row.duration);
+      tr.appendChild(tdD);
+
+      return tr;
     }
 
-    var tdType = document.createElement('td');
-    tdType.className = 'flow-col-type';
-    var badge = document.createElement('span');
-    badge.className = 'flow-type-badge';
-    var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
-    badge.classList.add('flow-type-' + kwType.toLowerCase());
-    badge.textContent = kwType;
-    tdType.appendChild(badge);
-    tr.appendChild(tdType);
-
-    var tdN = document.createElement('td');
-    tdN.className = 'flow-col-name'; tdN.textContent = row.name; tdN.title = row.name;
-    tr.appendChild(tdN);
-
-    var tdA = document.createElement('td');
-    tdA.className = 'flow-col-args'; tdA.textContent = row.args; tdA.title = row.args;
-    tr.appendChild(tdA);
-
-    var tdS = document.createElement('td');
-    tdS.className = 'flow-col-source';
-    tdS.textContent = row.source ? row.source.split(/[/\\]/).pop() : '';
-    tdS.title = row.source;
-    tr.appendChild(tdS);
-
-    var tdL = document.createElement('td');
-    tdL.className = 'flow-col-line';
-    tdL.textContent = row.lineno > 0 ? row.lineno : '';
-    tr.appendChild(tdL);
-
-    var tdSt = document.createElement('td');
-    tdSt.className = 'flow-col-status';
-    var sb = document.createElement('span');
-    sb.className = 'flow-status-badge';
-    sb.classList.add('flow-status-' + (row.status || '').toLowerCase().replace(/\s+/g, '-'));
-    sb.textContent = row.status;
-    tdSt.appendChild(sb);
-    tr.appendChild(tdSt);
-
-    var tdD = document.createElement('td');
-    tdD.className = 'flow-col-duration'; tdD.textContent = _formatDuration(row.duration);
-    tr.appendChild(tdD);
-
-    var tdE = document.createElement('td');
-    tdE.className = 'flow-col-error';
-    if (row.error) { tdE.textContent = row.error; tdE.title = row.error; }
-    tr.appendChild(tdE);
-    return tr;
-  }
 
   function _formatDuration(seconds) {
     if (typeof seconds !== 'number' || seconds <= 0) return '';
