@@ -1,5 +1,19 @@
 /* RF Trace Viewer — Expandable Tree View Renderer */
 
+/** Format duration from milliseconds to human-readable string. */
+function formatDuration(ms) {
+  if (typeof ms !== 'number' || ms <= 0) return '0ms';
+  if (ms < 1000) return ms.toFixed(0) + 'ms';
+  var secs = ms / 1000;
+  if (secs < 60) return secs.toFixed(1) + 's';
+  var mins = Math.floor(secs / 60);
+  var remSecs = (secs % 60).toFixed(0);
+  if (mins < 60) return mins + 'm ' + remSecs + 's';
+  var hrs = Math.floor(mins / 60);
+  var remMins = mins % 60;
+  return hrs + 'h ' + remMins + 'm ' + remSecs + 's';
+}
+
 // Store original model for re-rendering on filter changes
 var _originalModel = null;
 var _treeContainer = null;
