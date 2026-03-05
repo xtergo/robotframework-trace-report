@@ -3555,6 +3555,46 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-weight: 500;
 }
 
+/* ── Report Sub-Tabs (pill-style) ── */
+.rf-trace-viewer .report-sub-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 24px;
+  margin-bottom: 16px;
+  width: fit-content;
+}
+
+.rf-trace-viewer .report-sub-tab {
+  padding: 7px 18px;
+  border: none;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .report-sub-tab:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .report-sub-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.rf-trace-viewer .report-tab-content {
+  min-height: 200px;
+}
+
 /* ── Test Results — Unified List ── */
 .rf-trace-viewer .report-test-results {
   margin-bottom: 24px;

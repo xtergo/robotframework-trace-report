@@ -23,7 +23,8 @@
     tagFilter: null,
     statusFilter: null,
     expandedTests: {},
-    logLevel: 'INFO'
+    logLevel: 'INFO',
+    activeTab: 'results'
   };
 
   /**
@@ -1696,33 +1697,69 @@
     var dashboard = _renderSummaryDashboard();
     _container.appendChild(dashboard);
 
-    // Suite selector (only for multi-suite traces) — inline after hero
-    var selector = _renderSuiteSelector();
-    if (selector) {
-      _container.appendChild(selector);
+    // ── Sub-tab navigation (pill-style) ──
+    var tabBar = document.createElement('nav');
+    tabBar.className = 'report-sub-tabs';
+
+    var tabs = [
+      { id: 'results', label: 'Test Results' },
+      { id: 'tags', label: 'Tags' },
+      { id: 'keywords', label: 'Keywords' }
+    ];
+
+    var tabBtns = [];
+    var contentArea = document.createElement('div');
+    contentArea.className = 'report-tab-content';
+
+    function renderTabContent(tabId) {
+      contentArea.innerHTML = '';
+      for (var b = 0; b < tabBtns.length; b++) {
+        tabBtns[b].classList.toggle('active', tabBtns[b].getAttribute('data-tab') === tabId);
+      }
+      _state.activeTab = tabId;
+
+      if (tabId === 'results') {
+        // Suite selector (only for multi-suite traces)
+        var selector = _renderSuiteSelector();
+        if (selector) {
+          contentArea.appendChild(selector);
+        }
+        var testList = _renderTestResultsTable();
+        if (testList) {
+          contentArea.appendChild(testList);
+        }
+      } else if (tabId === 'tags') {
+        var tagStats = _renderTagStatistics();
+        if (tagStats) {
+          contentArea.appendChild(tagStats);
+        }
+      } else if (tabId === 'keywords') {
+        var kwInsights = _renderKeywordInsights();
+        if (kwInsights) {
+          contentArea.appendChild(kwInsights);
+        }
+      }
     }
 
-    // Unified test list (search + status pills + expandable rows)
-    var testList = _renderTestResultsTable();
-    if (testList) {
-      _container.appendChild(testList);
+    for (var ti = 0; ti < tabs.length; ti++) {
+      (function (tab) {
+        var btn = document.createElement('button');
+        btn.className = 'report-sub-tab' + (tab.id === _state.activeTab ? ' active' : '');
+        btn.setAttribute('data-tab', tab.id);
+        btn.textContent = tab.label;
+        btn.addEventListener('click', function () {
+          renderTabContent(tab.id);
+        });
+        tabBar.appendChild(btn);
+        tabBtns.push(btn);
+      })(tabs[ti]);
     }
 
-    // Bottom panels container (tag statistics + keyword insights)
-    var bottomPanels = document.createElement('div');
-    bottomPanels.className = 'report-bottom-panels';
+    _container.appendChild(tabBar);
+    _container.appendChild(contentArea);
 
-    var tagStats = _renderTagStatistics();
-    if (tagStats) {
-      bottomPanels.appendChild(tagStats);
-    }
-
-    var kwInsights = _renderKeywordInsights();
-    if (kwInsights) {
-      bottomPanels.appendChild(kwInsights);
-    }
-
-    _container.appendChild(bottomPanels);
+    // Render the active tab content
+    renderTabContent(_state.activeTab);
   }
 
   // Expose helpers for testing (attached to a namespace)
