@@ -3435,13 +3435,11 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 /* ── Hero Section ── */
 .rf-trace-viewer .report-hero {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 20px 24px;
+  padding: 16px 20px;
   border-radius: 10px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  margin-bottom: 16px;
 }
 
 .rf-trace-viewer .report-hero.hero-pass {
@@ -3452,122 +3450,107 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-left: 5px solid var(--status-fail);
 }
 
+.rf-trace-viewer .hero-top-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .rf-trace-viewer .report-verdict {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .rf-trace-viewer .verdict-icon {
-  font-size: 28px;
+  font-size: 22px;
   line-height: 1;
 }
 
-.rf-trace-viewer .hero-pass .verdict-icon {
-  color: var(--status-pass);
-}
-
-.rf-trace-viewer .hero-fail .verdict-icon {
-  color: var(--status-fail);
-}
+.rf-trace-viewer .hero-pass .verdict-icon { color: var(--status-pass); }
+.rf-trace-viewer .hero-fail .verdict-icon { color: var(--status-fail); }
 
 .rf-trace-viewer .verdict-text {
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 1px;
 }
 
-.rf-trace-viewer .hero-pass .verdict-text {
-  color: var(--status-pass);
-}
+.rf-trace-viewer .hero-pass .verdict-text { color: var(--status-pass); }
+.rf-trace-viewer .hero-fail .verdict-text { color: var(--status-fail); }
 
-.rf-trace-viewer .hero-fail .verdict-text {
-  color: var(--status-fail);
-}
-
-.rf-trace-viewer .report-stat-pills {
+/* Inline stat chips */
+.rf-trace-viewer .hero-stat-chips {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  gap: 6px;
   flex-wrap: wrap;
-  flex: 1;
-  justify-content: flex-end;
-}
-
-.rf-trace-viewer .report-stat-pill {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 64px;
-}
-
-.rf-trace-viewer .pill-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-}
-
-.rf-trace-viewer .pill-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.rf-trace-viewer .pill-pass .pill-value { color: var(--status-pass); }
-.rf-trace-viewer .pill-fail .pill-value { color: var(--status-fail); }
-.rf-trace-viewer .pill-skip .pill-value { color: var(--status-skip); }
-.rf-trace-viewer .pill-duration .pill-value { font-size: 16px; }
-
-/* ── Pass-rate meter (HTML5 <meter>) ── */
-.rf-trace-viewer .report-pass-meter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 8px;
-}
-
-.rf-trace-viewer .pass-rate-meter {
-  flex: 1;
-  height: 8px;
-  border-radius: 4px;
-  border: none;
-  background: var(--bg-tertiary);
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.rf-trace-viewer .pass-rate-meter::-webkit-meter-bar {
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-  border: none;
-}
-
-.rf-trace-viewer .pass-rate-meter::-webkit-meter-optimum-value {
-  background: var(--status-pass);
-  border-radius: 4px;
-}
-
-.rf-trace-viewer .pass-rate-meter::-webkit-meter-suboptimum-value {
-  background: var(--status-skip);
-  border-radius: 4px;
-}
-
-.rf-trace-viewer .pass-rate-meter::-webkit-meter-even-less-good-value {
-  background: var(--status-fail);
-  border-radius: 4px;
-}
-
-.rf-trace-viewer .pass-rate-meter::-moz-meter-bar {
-  border-radius: 4px;
-}
-
-.rf-trace-viewer .pass-rate-label {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
+}
+
+.rf-trace-viewer .hero-stat-chip {
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .chip-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .chip-pass .chip-value { color: var(--status-pass); }
+.rf-trace-viewer .chip-fail .chip-value { color: var(--status-fail); }
+.rf-trace-viewer .chip-skip .chip-value { color: var(--status-skip); }
+
+.rf-trace-viewer .chip-sep {
+  color: var(--text-muted);
+  font-weight: 300;
+  font-size: 16px;
+}
+
+.rf-trace-viewer .chip-duration {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 4px;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+/* Stacked ratio bar */
+.rf-trace-viewer .hero-ratio-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.rf-trace-viewer .hero-ratio-bar {
+  flex: 1;
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+}
+
+.rf-trace-viewer .ratio-segment {
+  height: 100%;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+
+.rf-trace-viewer .ratio-pass { background: var(--status-pass); }
+.rf-trace-viewer .ratio-fail { background: var(--status-fail); }
+.rf-trace-viewer .ratio-skip { background: var(--status-skip); }
+
+.rf-trace-viewer .hero-rate-label {
+  font-size: 12px;
+  color: var(--text-muted);
   white-space: nowrap;
   font-weight: 500;
 }
