@@ -21,6 +21,7 @@
     sortAsc: false,
     textFilter: '',
     tagFilter: null,
+    statusFilter: null,
     expandedTests: {},
     logLevel: 'INFO'
   };
@@ -600,145 +601,73 @@
 
     var stats = _statistics || { total_tests: 0, passed: 0, failed: 0, skipped: 0, total_duration_ms: 0, suite_stats: [] };
 
-    // ── Overall status banner ──
-    var banner = document.createElement('div');
-    banner.className = 'summary-status-banner ' + (stats.failed > 0 ? 'status-fail' : 'status-pass');
-    banner.textContent = stats.failed > 0 ? 'FAIL' : 'PASS';
-    dashboard.appendChild(banner);
+    // ── Hero section: verdict + stats in one row ──
+    var hero = document.createElement('div');
+    hero.className = 'report-hero' + (stats.failed > 0 ? ' hero-fail' : ' hero-pass');
 
-    // ── Stat cards ──
-    var cardsRow = document.createElement('div');
-    cardsRow.className = 'summary-cards';
+    // Verdict badge
+    var verdict = document.createElement('div');
+    verdict.className = 'report-verdict';
+    var verdictIcon = document.createElement('span');
+    verdictIcon.className = 'verdict-icon';
+    verdictIcon.textContent = stats.failed > 0 ? '\u2717' : '\u2713';
+    verdict.appendChild(verdictIcon);
+    var verdictText = document.createElement('span');
+    verdictText.className = 'verdict-text';
+    verdictText.textContent = stats.failed > 0 ? 'FAILED' : 'PASSED';
+    verdict.appendChild(verdictText);
+    hero.appendChild(verdict);
 
-    var cards = [
+    // Stat pills row
+    var pills = document.createElement('div');
+    pills.className = 'report-stat-pills';
+
+    var pillData = [
       { label: 'Total', value: stats.total_tests, cls: '' },
-      { label: 'Passed', value: stats.passed, cls: 'card-pass' },
-      { label: 'Failed', value: stats.failed, cls: 'card-fail' },
-      { label: 'Skipped', value: stats.skipped, cls: 'card-skip' },
-      { label: 'Duration', value: _formatDuration(stats.total_duration_ms), cls: '' }
+      { label: 'Pass', value: stats.passed, cls: 'pill-pass' },
+      { label: 'Fail', value: stats.failed, cls: 'pill-fail' },
+      { label: 'Skip', value: stats.skipped, cls: 'pill-skip' },
+      { label: 'Duration', value: _formatDuration(stats.total_duration_ms), cls: 'pill-duration' }
     ];
 
-    for (var i = 0; i < cards.length; i++) {
-      var card = document.createElement('div');
-      card.className = 'summary-card' + (cards[i].cls ? ' ' + cards[i].cls : '');
-
-      var valEl = document.createElement('div');
-      valEl.className = 'summary-card-value';
-      valEl.textContent = cards[i].value;
-      card.appendChild(valEl);
-
-      var lblEl = document.createElement('div');
-      lblEl.className = 'summary-card-label';
-      lblEl.textContent = cards[i].label;
-      card.appendChild(lblEl);
-
-      cardsRow.appendChild(card);
+    for (var i = 0; i < pillData.length; i++) {
+      var pill = document.createElement('div');
+      pill.className = 'report-stat-pill' + (pillData[i].cls ? ' ' + pillData[i].cls : '');
+      var pVal = document.createElement('span');
+      pVal.className = 'pill-value';
+      pVal.textContent = pillData[i].value;
+      pill.appendChild(pVal);
+      var pLbl = document.createElement('span');
+      pLbl.className = 'pill-label';
+      pLbl.textContent = pillData[i].label;
+      pill.appendChild(pLbl);
+      pills.appendChild(pill);
     }
-    dashboard.appendChild(cardsRow);
+    hero.appendChild(pills);
 
-    // ── Suite header ──
-    var selectedSuite = _findSuiteById(_selectedSuiteId);
-    if (selectedSuite) {
-      var suiteInfo = document.createElement('div');
-      suiteInfo.className = 'suite-info';
-
-      var nameEl = document.createElement('div');
-      nameEl.className = 'suite-info-name';
-      nameEl.textContent = selectedSuite.name || '';
-      suiteInfo.appendChild(nameEl);
-
-      if (selectedSuite.source) {
-        var sourceEl = document.createElement('div');
-        sourceEl.className = 'suite-info-source';
-        sourceEl.textContent = selectedSuite.source;
-        suiteInfo.appendChild(sourceEl);
-      }
-
-      if (selectedSuite.doc) {
-        var docEl = document.createElement('div');
-        docEl.className = 'suite-info-doc';
-        docEl.textContent = selectedSuite.doc;
-        suiteInfo.appendChild(docEl);
-      }
-
-      if (selectedSuite.metadata && typeof selectedSuite.metadata === 'object') {
-        var keys = Object.keys(selectedSuite.metadata);
-        if (keys.length > 0) {
-          var metaEl = document.createElement('div');
-          metaEl.className = 'suite-info-metadata';
-          for (var m = 0; m < keys.length; m++) {
-            var pair = document.createElement('span');
-            pair.className = 'suite-metadata-pair';
-            pair.textContent = keys[m] + '=' + selectedSuite.metadata[keys[m]];
-            metaEl.appendChild(pair);
-          }
-          suiteInfo.appendChild(metaEl);
-        }
-      }
-
-      dashboard.appendChild(suiteInfo);
+    // ── Pass-rate meter (HTML5 <meter>) ──
+    if (stats.total_tests > 0) {
+      var meterWrap = document.createElement('div');
+      meterWrap.className = 'report-pass-meter';
+      var passRate = stats.passed / stats.total_tests;
+      var meter = document.createElement('meter');
+      meter.className = 'pass-rate-meter';
+      meter.min = 0;
+      meter.max = 1;
+      meter.low = 0.5;
+      meter.high = 0.9;
+      meter.optimum = 1;
+      meter.value = passRate;
+      meter.title = Math.round(passRate * 100) + '% pass rate';
+      meterWrap.appendChild(meter);
+      var meterLabel = document.createElement('span');
+      meterLabel.className = 'pass-rate-label';
+      meterLabel.textContent = Math.round(passRate * 100) + '% pass rate';
+      meterWrap.appendChild(meterLabel);
+      hero.appendChild(meterWrap);
     }
 
-    // ── Per-suite breakdown table ──
-    var suiteStats = stats.suite_stats || [];
-    if (suiteStats.length > 0) {
-      var breakdownSection = document.createElement('div');
-      breakdownSection.className = 'suite-breakdown';
-
-      var breakdownTitle = document.createElement('h3');
-      breakdownTitle.className = 'suite-breakdown-title';
-      breakdownTitle.textContent = 'Per-Suite Breakdown';
-      breakdownSection.appendChild(breakdownTitle);
-
-      var table = document.createElement('table');
-      table.className = 'suite-breakdown-table';
-
-      var thead = document.createElement('thead');
-      var headerRow = document.createElement('tr');
-      var headers = ['Suite', 'Total', 'Pass', 'Fail', 'Skip'];
-      for (var h = 0; h < headers.length; h++) {
-        var th = document.createElement('th');
-        th.textContent = headers[h];
-        headerRow.appendChild(th);
-      }
-      thead.appendChild(headerRow);
-      table.appendChild(thead);
-
-      var tbody = document.createElement('tbody');
-      for (var s = 0; s < suiteStats.length; s++) {
-        var ss = suiteStats[s];
-        var tr = document.createElement('tr');
-
-        var tdName = document.createElement('td');
-        tdName.textContent = ss.suite_name || '';
-        tr.appendChild(tdName);
-
-        var tdTotal = document.createElement('td');
-        tdTotal.className = 'num-cell';
-        tdTotal.textContent = ss.total || 0;
-        tr.appendChild(tdTotal);
-
-        var tdPass = document.createElement('td');
-        tdPass.className = 'num-cell';
-        tdPass.textContent = ss.passed || 0;
-        tr.appendChild(tdPass);
-
-        var tdFail = document.createElement('td');
-        tdFail.className = 'num-cell';
-        tdFail.textContent = ss.failed || 0;
-        tr.appendChild(tdFail);
-
-        var tdSkip = document.createElement('td');
-        tdSkip.className = 'num-cell';
-        tdSkip.textContent = ss.skipped || 0;
-        tr.appendChild(tdSkip);
-
-        tbody.appendChild(tr);
-      }
-      table.appendChild(tbody);
-      breakdownSection.appendChild(table);
-      dashboard.appendChild(breakdownSection);
-    }
+    dashboard.appendChild(hero);
 
     return dashboard;
   }
@@ -1501,18 +1430,54 @@
 
     var allTests = _collectAllTests(selectedSuite);
 
-    // ── Search input ──
+    // ── Toolbar: search + status filter pills ──
+    var toolbar = document.createElement('div');
+    toolbar.className = 'report-test-toolbar';
+
     var searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.className = 'report-search-input';
-    searchInput.placeholder = 'Filter tests\u2026';
+    searchInput.placeholder = 'Search tests\u2026';
     searchInput.value = _state.textFilter || '';
+    toolbar.appendChild(searchInput);
 
-    // Tag filter indicator
-    var filterBar = document.createElement('div');
-    filterBar.className = 'report-filter-bar';
-    filterBar.appendChild(searchInput);
+    // Status filter pills
+    var pillBar = document.createElement('div');
+    pillBar.className = 'report-status-pills';
+    var statusFilters = ['All', 'Fail', 'Pass', 'Skip'];
+    var statusPillEls = [];
+    for (var pi = 0; pi < statusFilters.length; pi++) {
+      (function (sf) {
+        var pill = document.createElement('button');
+        pill.className = 'report-status-pill' + ((_state.statusFilter || 'All') === sf ? ' active' : '');
+        pill.setAttribute('data-status', sf);
 
+        // Count for each status
+        var count = 0;
+        if (sf === 'All') {
+          count = allTests.length;
+        } else {
+          for (var ci = 0; ci < allTests.length; ci++) {
+            if ((allTests[ci].status || '').toUpperCase() === sf.toUpperCase()) count++;
+          }
+        }
+        pill.textContent = sf + ' (' + count + ')';
+        pill.addEventListener('click', function () {
+          _state.statusFilter = sf === 'All' ? null : sf.toUpperCase();
+          rebuildList();
+          // Update active pill
+          for (var sp = 0; sp < statusPillEls.length; sp++) {
+            statusPillEls[sp].classList.remove('active');
+          }
+          pill.classList.add('active');
+        });
+        pillBar.appendChild(pill);
+        statusPillEls.push(pill);
+      })(statusFilters[pi]);
+    }
+    toolbar.appendChild(pillBar);
+
+    // Tag filter badge
     if (_state.tagFilter) {
       var tagBadge = document.createElement('span');
       tagBadge.className = 'report-tag-filter-badge';
@@ -1523,10 +1488,149 @@
         _state.tagFilter = null;
         _render();
       });
-      filterBar.appendChild(tagBadge);
+      toolbar.appendChild(tagBadge);
     }
 
-    section.appendChild(filterBar);
+    section.appendChild(toolbar);
+
+    // ── Test list container ──
+    var listContainer = document.createElement('div');
+    listContainer.className = 'report-test-list';
+    section.appendChild(listContainer);
+
+    // Sort controls row
+    var sortBar = document.createElement('div');
+    sortBar.className = 'report-sort-bar';
+    var sortCols = [
+      { key: 'name', label: 'Name', flex: '1' },
+      { key: 'status', label: 'Status', flex: '0 0 70px' },
+      { key: 'duration', label: 'Duration', flex: '0 0 90px' }
+    ];
+    for (var sc = 0; sc < sortCols.length; sc++) {
+      (function (col) {
+        var sortBtn = document.createElement('span');
+        sortBtn.className = 'report-sort-col';
+        sortBtn.style.flex = col.flex;
+        sortBtn.textContent = col.label;
+        if (_state.sortColumn === col.key) {
+          sortBtn.textContent += _state.sortAsc ? ' \u25B2' : ' \u25BC';
+          sortBtn.classList.add('sorted');
+        }
+        sortBtn.style.cursor = 'pointer';
+        sortBtn.addEventListener('click', function () {
+          if (_state.sortColumn === col.key) {
+            _state.sortAsc = !_state.sortAsc;
+          } else {
+            _state.sortColumn = col.key;
+            _state.sortAsc = col.key === 'name';
+          }
+          rebuildList();
+        });
+        sortBar.appendChild(sortBtn);
+      })(sortCols[sc]);
+    }
+    listContainer.appendChild(sortBar);
+
+    var rowsContainer = document.createElement('div');
+    rowsContainer.className = 'report-test-rows';
+    listContainer.appendChild(rowsContainer);
+
+    function rebuildList() {
+      rowsContainer.innerHTML = '';
+
+      // Filter
+      var filtered = _filterTests(allTests, _state.textFilter, _state.tagFilter);
+      if (_state.statusFilter) {
+        var sf = _state.statusFilter;
+        var statusFiltered = [];
+        for (var fi = 0; fi < filtered.length; fi++) {
+          if ((filtered[fi].status || '').toUpperCase() === sf) statusFiltered.push(filtered[fi]);
+        }
+        filtered = statusFiltered;
+      }
+
+      // Sort
+      var sorted = _sortTests(filtered, _state.sortColumn, _state.sortAsc);
+
+      // Count label
+      var countLabel = document.createElement('div');
+      countLabel.className = 'report-test-count';
+      countLabel.textContent = sorted.length + ' of ' + allTests.length + ' tests';
+      rowsContainer.appendChild(countLabel);
+
+      for (var i = 0; i < sorted.length; i++) {
+        (function (test, idx) {
+          var testStatus = (test.status || '').toUpperCase();
+          var isFail = testStatus === 'FAIL';
+          var isSkip = testStatus === 'SKIP';
+
+          // Use <details>/<summary> for native expand/collapse
+          var details = document.createElement('details');
+          details.className = 'report-test-row' + (isFail ? ' row-fail' : '') + (isSkip ? ' row-skip' : '');
+
+          var summary = document.createElement('summary');
+          summary.className = 'report-test-summary';
+
+          // Status indicator
+          var statusDot = document.createElement('span');
+          statusDot.className = 'report-status-dot status-' + testStatus.toLowerCase();
+          statusDot.textContent = isFail ? '\u2717' : isSkip ? '\u2298' : '\u2713';
+          summary.appendChild(statusDot);
+
+          // Name
+          var nameEl = document.createElement('span');
+          nameEl.className = 'report-test-name';
+          nameEl.textContent = test.name || '';
+          nameEl.title = test.name || '';
+          summary.appendChild(nameEl);
+
+          // Error message preview for failures
+          if (isFail) {
+            var chain = _findFailedChain(test);
+            var lastLink = chain.length > 0 ? chain[chain.length - 1] : null;
+            if (lastLink && lastLink.error) {
+              var errPreview = document.createElement('span');
+              errPreview.className = 'report-test-error';
+              errPreview.textContent = lastLink.error;
+              errPreview.title = lastLink.error;
+              summary.appendChild(errPreview);
+            }
+          }
+
+          // Duration
+          var durEl = document.createElement('span');
+          durEl.className = 'report-test-dur';
+          durEl.textContent = _formatDuration((test.elapsed_time || 0) * 1000);
+          summary.appendChild(durEl);
+
+          details.appendChild(summary);
+
+          // Lazy-render drill-down on first open
+          var drillRendered = false;
+          details.addEventListener('toggle', function () {
+            if (details.open && !drillRendered) {
+              drillRendered = true;
+              var drillDown = document.createElement('div');
+              drillDown.className = 'report-drill-down';
+              drillDown.appendChild(_renderKeywordDrillDown(test.id));
+              details.appendChild(drillDown);
+            }
+          });
+
+          // Auto-expand if test was previously expanded
+          if (_state.expandedTests && _state.expandedTests[test.id]) {
+            details.open = true;
+            drillRendered = true;
+            var drillDown = document.createElement('div');
+            drillDown.className = 'report-drill-down';
+            drillDown.appendChild(_renderKeywordDrillDown(test.id));
+            details.appendChild(drillDown);
+          }
+
+          rowsContainer.appendChild(details);
+        })(sorted[i], i);
+      }
+    }
 
     // Debounced text filter
     var debounceTimer = null;
@@ -1534,237 +1638,12 @@
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(function () {
         _state.textFilter = searchInput.value;
-        _rebuildTbody(table, allTests, selectedSuite, showDoc);
+        rebuildList();
       }, 200);
     });
 
-    // ── Section title ──
-    var title = document.createElement('h3');
-    title.className = 'report-test-results-title';
-    title.textContent = 'Test Results (' + allTests.length + ')';
-    section.appendChild(title);
-
-    // ── Table ──
-    var showDoc = false;
-    var table = document.createElement('table');
-    table.className = 'report-test-table';
-
-    // Column definitions
-    var columns = [
-      { key: 'name', label: 'Name' },
-      { key: 'doc', label: 'Documentation', toggleable: true, hidden: true },
-      { key: 'status', label: 'Status' },
-      { key: 'tags', label: 'Tags' },
-      { key: 'duration', label: 'Duration' },
-      { key: 'message', label: 'Message' }
-    ];
-
-    var thead = document.createElement('thead');
-    var headerRow = document.createElement('tr');
-
-    for (var c = 0; c < columns.length; c++) {
-      (function (col) {
-        var th = document.createElement('th');
-        th.setAttribute('data-sort', col.key);
-        th.textContent = col.label;
-
-        if (col.toggleable) {
-          th.classList.add('toggleable');
-          if (col.hidden) th.classList.add('hidden');
-        }
-
-        // Sort indicator
-        if (_state.sortColumn === col.key) {
-          th.textContent += _state.sortAsc ? ' \u25B2' : ' \u25BC';
-          th.classList.add('sorted');
-        }
-
-        th.addEventListener('click', function (e) {
-          // If toggleable and hidden, toggle visibility instead of sorting
-          if (col.toggleable && col.hidden) {
-            col.hidden = false;
-            showDoc = true;
-            _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
-            return;
-          }
-          if (_state.sortColumn === col.key) {
-            _state.sortAsc = !_state.sortAsc;
-          } else {
-            _state.sortColumn = col.key;
-            _state.sortAsc = true;
-          }
-          _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
-        });
-
-        headerRow.appendChild(th);
-      })(columns[c]);
-    }
-
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    // Build tbody
-    var tbody = document.createElement('tbody');
-    table.appendChild(tbody);
-    _rebuildTbody(table, allTests, selectedSuite, showDoc);
-
-    section.appendChild(table);
+    rebuildList();
     return section;
-  }
-
-  /**
-   * Rebuild the full table (thead + tbody) after column visibility changes.
-   */
-  function _rebuildTable(table, columns, allTests, selectedSuite, showDoc) {
-    // Rebuild thead
-    var thead = table.querySelector('thead');
-    thead.innerHTML = '';
-    var headerRow = document.createElement('tr');
-
-    for (var c = 0; c < columns.length; c++) {
-      (function (col) {
-        var th = document.createElement('th');
-        th.setAttribute('data-sort', col.key);
-        th.textContent = col.label;
-
-        if (col.toggleable) {
-          th.classList.add('toggleable');
-          if (col.hidden) th.classList.add('hidden');
-        }
-
-        if (_state.sortColumn === col.key) {
-          th.textContent += _state.sortAsc ? ' \u25B2' : ' \u25BC';
-          th.classList.add('sorted');
-        }
-
-        th.addEventListener('click', function () {
-          if (col.toggleable && col.hidden) {
-            col.hidden = false;
-            showDoc = true;
-            _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
-            return;
-          }
-          if (_state.sortColumn === col.key) {
-            _state.sortAsc = !_state.sortAsc;
-          } else {
-            _state.sortColumn = col.key;
-            _state.sortAsc = true;
-          }
-          _rebuildTable(table, columns, allTests, selectedSuite, showDoc);
-        });
-
-        headerRow.appendChild(th);
-      })(columns[c]);
-    }
-
-    thead.appendChild(headerRow);
-    _rebuildTbody(table, allTests, selectedSuite, showDoc);
-  }
-
-  /**
-   * Rebuild just the tbody after sort/filter changes.
-   */
-  function _rebuildTbody(table, allTests, selectedSuite, showDoc) {
-    var tbody = table.querySelector('tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    var filtered = _filterTests(allTests, _state.textFilter, _state.tagFilter);
-    var sorted = _sortTests(filtered, _state.sortColumn, _state.sortAsc);
-
-    for (var i = 0; i < sorted.length; i++) {
-      (function (test) {
-        var testId = test.id || '';
-        var isExpanded = _state.expandedTests[testId] === true;
-        var tr = document.createElement('tr');
-        tr.className = 'report-test-row';
-        var statusUpper = (test.status || '').toUpperCase();
-        if (statusUpper === 'FAIL') tr.classList.add('row-fail');
-        else if (statusUpper === 'PASS') tr.classList.add('row-pass');
-        else if (statusUpper === 'SKIP' || statusUpper === 'NOT_RUN') tr.classList.add('row-skip');
-        if (isExpanded) tr.classList.add('expanded');
-
-        // Click row → toggle drill-down expansion
-        tr.setAttribute('data-span-id', testId);
-        tr.style.cursor = 'pointer';
-        tr.addEventListener('click', function () {
-          if (_state.expandedTests[testId]) {
-            delete _state.expandedTests[testId];
-          } else {
-            _state.expandedTests[testId] = true;
-          }
-          _rebuildTbody(table, allTests, selectedSuite, showDoc);
-        });
-
-        // Name (with expand icon and suite path prefix)
-        var tdName = document.createElement('td');
-        tdName.className = 'report-test-name-cell';
-
-        var expandIcon = document.createElement('span');
-        expandIcon.className = 'drill-down-expand-icon';
-        expandIcon.textContent = isExpanded ? '\u25BC ' : '\u25B6 ';
-        tdName.appendChild(expandIcon);
-
-        var suitePath = _findTestSuitePath(selectedSuite, testId, '');
-        if (suitePath) {
-          var pathSpan = document.createElement('span');
-          pathSpan.className = 'report-suite-path';
-          pathSpan.textContent = suitePath + ' > ';
-          tdName.appendChild(pathSpan);
-        }
-        var nameSpan = document.createElement('span');
-        nameSpan.textContent = test.name || '';
-        tdName.appendChild(nameSpan);
-        tr.appendChild(tdName);
-
-        // Documentation (toggleable, hidden by default)
-        var tdDoc = document.createElement('td');
-        tdDoc.className = 'report-test-doc-cell';
-        if (!showDoc) tdDoc.classList.add('hidden');
-        tdDoc.textContent = test.doc || '';
-        tr.appendChild(tdDoc);
-
-        // Status
-        var tdStatus = document.createElement('td');
-        tdStatus.className = 'report-test-status-cell status-' + statusUpper.toLowerCase();
-        tdStatus.textContent = statusUpper;
-        tr.appendChild(tdStatus);
-
-        // Tags
-        var tdTags = document.createElement('td');
-        tdTags.className = 'report-test-tags-cell';
-        tdTags.textContent = (test.tags || []).join(', ');
-        tr.appendChild(tdTags);
-
-        // Duration
-        var tdDuration = document.createElement('td');
-        tdDuration.className = 'report-test-duration-cell';
-        var durationMs = (test.elapsed_time || 0) * 1000;
-        tdDuration.textContent = _formatDuration(durationMs);
-        tr.appendChild(tdDuration);
-
-        // Message
-        var tdMsg = document.createElement('td');
-        tdMsg.className = 'report-test-message-cell';
-        var msg = test.status_message || '';
-        tdMsg.textContent = msg.length > 80 ? msg.substring(0, 77) + '\u2026' : msg;
-        if (msg.length > 80) tdMsg.title = msg;
-        tr.appendChild(tdMsg);
-
-        tbody.appendChild(tr);
-
-        // ── Drill-down row (if expanded) ──
-        if (isExpanded) {
-          var drillTr = document.createElement('tr');
-          drillTr.className = 'drill-down-row';
-          var drillTd = document.createElement('td');
-          drillTd.setAttribute('colspan', '6');
-          drillTd.appendChild(_renderKeywordDrillDown(testId));
-          drillTr.appendChild(drillTd);
-          tbody.appendChild(drillTr);
-        }
-      })(sorted[i]);
-    }
   }
 
   /**
@@ -1775,26 +1654,20 @@
     if (!_container) return;
     _container.innerHTML = '';
 
-    // Suite selector (only for multi-suite traces)
+    // Summary dashboard (hero + stats)
+    var dashboard = _renderSummaryDashboard();
+    _container.appendChild(dashboard);
+
+    // Suite selector (only for multi-suite traces) — inline after hero
     var selector = _renderSuiteSelector();
     if (selector) {
       _container.appendChild(selector);
     }
 
-    // Summary dashboard
-    var dashboard = _renderSummaryDashboard();
-    _container.appendChild(dashboard);
-
-    // Failure triage (above test results)
-    var triage = _renderFailureTriage();
-    if (triage) {
-      _container.appendChild(triage);
-    }
-
-    // Test results table
-    var testTable = _renderTestResultsTable();
-    if (testTable) {
-      _container.appendChild(testTable);
+    // Unified test list (search + status pills + expandable rows)
+    var testList = _renderTestResultsTable();
+    if (testList) {
+      _container.appendChild(testList);
     }
 
     // Bottom panels container (tag statistics + keyword insights)

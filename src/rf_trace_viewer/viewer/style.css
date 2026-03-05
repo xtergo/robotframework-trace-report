@@ -3408,11 +3408,11 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 /* ── Summary Dashboard ── */
 .rf-trace-viewer .suite-selector {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .rf-trace-viewer .suite-selector-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -3430,345 +3430,166 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 }
 
 .rf-trace-viewer .summary-dashboard {
-  margin-bottom: 24px;
-}
-
-.rf-trace-viewer .summary-status-banner {
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 16px;
-}
-
-.rf-trace-viewer .summary-status-banner.status-pass {
-  background: var(--overall-pass-bg);
-  color: var(--status-pass);
-}
-
-.rf-trace-viewer .summary-status-banner.status-fail {
-  background: var(--overall-fail-bg);
-  color: var(--status-fail);
-}
-
-.rf-trace-viewer .summary-cards {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
   margin-bottom: 20px;
 }
 
-.rf-trace-viewer .summary-card {
-  flex: 1;
-  min-width: 100px;
-  padding: 16px;
-  border-radius: 8px;
-  text-align: center;
-  background: var(--bg-secondary);
+/* ── Hero Section ── */
+.rf-trace-viewer .report-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 24px;
+  border-radius: 10px;
   border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
-.rf-trace-viewer .summary-card-value {
-  font-size: 24px;
+.rf-trace-viewer .report-hero.hero-pass {
+  border-left: 5px solid var(--status-pass);
+}
+
+.rf-trace-viewer .report-hero.hero-fail {
+  border-left: 5px solid var(--status-fail);
+}
+
+.rf-trace-viewer .report-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .verdict-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.rf-trace-viewer .hero-pass .verdict-icon {
+  color: var(--status-pass);
+}
+
+.rf-trace-viewer .hero-fail .verdict-icon {
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .verdict-text {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.rf-trace-viewer .hero-pass .verdict-text {
+  color: var(--status-pass);
+}
+
+.rf-trace-viewer .hero-fail .verdict-text {
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .report-stat-pills {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.rf-trace-viewer .report-stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+
+.rf-trace-viewer .pill-value {
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
-.rf-trace-viewer .summary-card-label {
-  font-size: 12px;
+.rf-trace-viewer .pill-label {
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.rf-trace-viewer .summary-card.card-pass .summary-card-value {
-  color: var(--status-pass);
-}
+.rf-trace-viewer .pill-pass .pill-value { color: var(--status-pass); }
+.rf-trace-viewer .pill-fail .pill-value { color: var(--status-fail); }
+.rf-trace-viewer .pill-skip .pill-value { color: var(--status-skip); }
+.rf-trace-viewer .pill-duration .pill-value { font-size: 16px; }
 
-.rf-trace-viewer .summary-card.card-fail .summary-card-value {
-  color: var(--status-fail);
-}
-
-.rf-trace-viewer .summary-card.card-skip .summary-card-value {
-  color: var(--status-skip);
-}
-
-/* ── Suite Info ── */
-.rf-trace-viewer .suite-info {
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  margin-bottom: 20px;
-}
-
-.rf-trace-viewer .suite-info-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.rf-trace-viewer .suite-info-source {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-family: monospace;
-  margin-bottom: 6px;
-}
-
-.rf-trace-viewer .suite-info-doc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
-  font-style: italic;
-}
-
-.rf-trace-viewer .suite-info-metadata {
+/* ── Pass-rate meter (HTML5 <meter>) ── */
+.rf-trace-viewer .report-pass-meter {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin-top: 6px;
-}
-
-.rf-trace-viewer .suite-metadata-pair {
-  font-size: 12px;
-  color: var(--text-secondary);
-  background: var(--bg-tertiary);
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-family: monospace;
-}
-
-/* ── Per-Suite Breakdown Table ── */
-.rf-trace-viewer .suite-breakdown {
-  margin-top: 4px;
-}
-
-.rf-trace-viewer .suite-breakdown-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 8px 0;
-}
-
-.rf-trace-viewer .suite-breakdown-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+  margin-top: 8px;
 }
 
-.rf-trace-viewer .suite-breakdown-table th {
-  text-align: left;
-  padding: 6px 12px;
-  border-bottom: 2px solid var(--border-color);
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.rf-trace-viewer .suite-breakdown-table td {
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
-}
-
-.rf-trace-viewer .suite-breakdown-table .num-cell {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.rf-trace-viewer .suite-breakdown-table tbody tr:hover {
-  background: var(--hover-bg);
-}
-
-/* ── Failure Triage Section ── */
-.rf-trace-viewer .failure-triage {
-  margin-bottom: 24px;
-  border: 1px solid var(--status-fail);
-  border-left: 4px solid var(--status-fail);
-  border-radius: 8px;
-  padding: 16px;
-  background: var(--bg-primary);
-}
-
-.rf-trace-viewer .failure-triage-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--status-fail);
-  margin: 0 0 12px 0;
-}
-
-.rf-trace-viewer .failure-entry {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.rf-trace-viewer .failure-entry:last-child {
-  border-bottom: none;
-}
-
-.rf-trace-viewer .failure-test-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--status-fail);
-  margin-bottom: 4px;
-}
-
-.rf-trace-viewer .failure-breadcrumb {
-  font-size: 0.85em;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px;
-}
-
-.rf-trace-viewer .failure-breadcrumb-sep {
-  color: var(--text-muted);
-  margin: 0 2px;
-}
-
-.rf-trace-viewer .failure-breadcrumb .flow-type-badge {
-  margin-right: 3px;
-}
-
-.rf-trace-viewer .failure-error-msg {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-family: monospace;
-  background: var(--status-fail-bg);
-  padding: 6px 10px;
-  border-radius: 4px;
-  margin-bottom: 6px;
-  word-break: break-word;
-}
-
-.rf-trace-viewer .failure-entry-footer {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.rf-trace-viewer .failure-duration {
-  color: var(--text-secondary);
-}
-
-/* ── Execution Errors Collapsible Section ── */
-.rf-trace-viewer .execution-errors {
-  margin-top: 16px;
-  border-top: 1px solid var(--border-color);
-  padding-top: 12px;
-}
-
-.rf-trace-viewer .execution-errors-header {
-  margin-bottom: 8px;
-}
-
-.rf-trace-viewer .execution-errors-toggle {
-  background: none;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.rf-trace-viewer .execution-errors-toggle:hover {
-  background: var(--hover-bg);
-}
-
-.rf-trace-viewer .execution-errors-toggle::before {
-  content: '\25B6';
-  display: inline-block;
-  margin-right: 6px;
-  font-size: 10px;
-  transition: transform 0.15s;
-}
-
-.rf-trace-viewer .execution-errors-toggle.expanded::before {
-  transform: rotate(90deg);
-}
-
-.rf-trace-viewer .execution-error-entry {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 13px;
-}
-
-.rf-trace-viewer .execution-error-entry:last-child {
-  border-bottom: none;
-}
-
-.rf-trace-viewer .error-level-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.rf-trace-viewer .error-level-warn {
-  background: var(--status-skip-bg);
-  color: var(--status-skip);
-}
-
-.rf-trace-viewer .error-level-error {
-  background: var(--status-fail-bg);
-  color: var(--status-fail);
-}
-
-.rf-trace-viewer .execution-error-timestamp {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-family: monospace;
-  flex-shrink: 0;
-}
-
-.rf-trace-viewer .execution-error-message {
-  color: var(--text-primary);
-  word-break: break-word;
+.rf-trace-viewer .pass-rate-meter {
   flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  border: none;
+  background: var(--bg-tertiary);
+  appearance: none;
+  -webkit-appearance: none;
 }
-/* ── Test Results Table ── */
+
+.rf-trace-viewer .pass-rate-meter::-webkit-meter-bar {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  border: none;
+}
+
+.rf-trace-viewer .pass-rate-meter::-webkit-meter-optimum-value {
+  background: var(--status-pass);
+  border-radius: 4px;
+}
+
+.rf-trace-viewer .pass-rate-meter::-webkit-meter-suboptimum-value {
+  background: var(--status-skip);
+  border-radius: 4px;
+}
+
+.rf-trace-viewer .pass-rate-meter::-webkit-meter-even-less-good-value {
+  background: var(--status-fail);
+  border-radius: 4px;
+}
+
+.rf-trace-viewer .pass-rate-meter::-moz-meter-bar {
+  border-radius: 4px;
+}
+
+.rf-trace-viewer .pass-rate-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* ── Test Results — Unified List ── */
 .rf-trace-viewer .report-test-results {
   margin-bottom: 24px;
 }
 
-.rf-trace-viewer .report-test-results-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 12px 0;
-}
-
-.rf-trace-viewer .report-filter-bar {
+.rf-trace-viewer .report-test-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .rf-trace-viewer .report-search-input {
-  flex: 1;
-  max-width: 360px;
-  padding: 6px 10px;
+  flex: 0 1 280px;
+  padding: 7px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 13px;
@@ -3784,118 +3605,176 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: var(--text-muted);
 }
 
+.rf-trace-viewer .report-status-pills {
+  display: flex;
+  gap: 4px;
+}
+
+.rf-trace-viewer .report-status-pill {
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .report-status-pill:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .report-status-pill.active {
+  background: var(--focus-outline);
+  color: #fff;
+  border-color: var(--focus-outline);
+}
+
 .rf-trace-viewer .report-tag-filter-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  border-radius: 3px;
+  border-radius: 14px;
   font-size: 12px;
   font-weight: 600;
   background: var(--focus-outline);
   color: #fff;
 }
 
-.rf-trace-viewer .report-test-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.rf-trace-viewer .report-test-list {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.rf-trace-viewer .report-test-table th {
-  cursor: pointer;
-  user-select: none;
+.rf-trace-viewer .report-sort-bar {
+  display: flex;
+  align-items: center;
   padding: 8px 12px;
-  border-bottom: 2px solid var(--border-color);
-  text-align: left;
-  font-size: 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-  transition: color 0.15s;
+  letter-spacing: 0.4px;
+  user-select: none;
 }
 
-.rf-trace-viewer .report-test-table th:hover {
+.rf-trace-viewer .report-sort-col {
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.rf-trace-viewer .report-sort-col:hover {
   color: var(--text-primary);
+  background: var(--hover-bg);
 }
 
-.rf-trace-viewer .report-test-table th.sorted {
+.rf-trace-viewer .report-sort-col.sorted {
   color: var(--focus-outline);
 }
 
-.rf-trace-viewer .report-test-table th.hidden {
-  color: var(--text-muted);
-  font-style: italic;
-  opacity: 0.6;
-}
-
-.rf-trace-viewer .report-test-table td {
+.rf-trace-viewer .report-test-count {
   padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
   border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
-}
-
-.rf-trace-viewer .report-test-table td.hidden {
-  display: none;
+  background: var(--bg-primary);
 }
 
 .rf-trace-viewer .report-test-row {
-  transition: background 0.1s;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
 }
 
-.rf-trace-viewer .report-test-row:hover {
+.rf-trace-viewer .report-test-row:last-child {
+  border-bottom: none;
+}
+
+.rf-trace-viewer .report-test-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  list-style: none;
+}
+
+.rf-trace-viewer .report-test-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rf-trace-viewer .report-test-summary::marker {
+  content: '';
+}
+
+.rf-trace-viewer .report-test-summary:hover {
   background: var(--hover-bg);
+}
+
+.rf-trace-viewer .report-test-row[open] > .report-test-summary {
+  background: var(--bg-secondary);
+  border-bottom-color: transparent;
 }
 
 .rf-trace-viewer .report-test-row.row-fail {
   border-left: 3px solid var(--status-fail);
 }
 
-.rf-trace-viewer .report-test-row.row-fail .report-test-status-cell {
-  color: var(--status-fail);
-  font-weight: 600;
+.rf-trace-viewer .report-test-row.row-skip {
+  opacity: 0.7;
 }
 
-.rf-trace-viewer .report-test-row.row-pass .report-test-status-cell {
-  color: var(--status-pass);
+.rf-trace-viewer .report-status-dot {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-size: 14px;
 }
 
-.rf-trace-viewer .report-test-row.row-skip .report-test-status-cell {
-  color: var(--status-skip);
-}
+.rf-trace-viewer .report-status-dot.status-pass { color: var(--status-pass); }
+.rf-trace-viewer .report-status-dot.status-fail { color: var(--status-fail); }
+.rf-trace-viewer .report-status-dot.status-skip { color: var(--status-skip); }
 
-.rf-trace-viewer .report-suite-path {
-  color: var(--text-muted);
-  font-size: 0.9em;
-}
-
-.rf-trace-viewer .report-test-doc-cell {
-  color: var(--text-secondary);
-  font-style: italic;
-  max-width: 200px;
+.rf-trace-viewer .report-test-name {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-primary);
 }
 
-.rf-trace-viewer .report-test-tags-cell {
+.rf-trace-viewer .report-test-error {
+  flex: 0 1 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--status-fail);
+  opacity: 0.8;
+  font-family: monospace;
+}
+
+.rf-trace-viewer .report-test-dur {
+  flex: 0 0 80px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   font-size: 12px;
 }
 
-.rf-trace-viewer .report-test-duration-cell {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.rf-trace-viewer .report-test-message-cell {
-  color: var(--text-secondary);
-  max-width: 250px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.rf-trace-viewer .report-drill-down {
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  padding: 8px 12px 8px 40px;
 }
 
 /* ── Keyword Drill-Down (Task 7) ── */
@@ -4096,11 +3975,6 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-size: 10px;
   color: var(--text-muted);
   flex-shrink: 0;
-}
-
-.rf-trace-viewer .report-test-row.expanded {
-  background: var(--bg-secondary);
-  border-bottom-color: transparent;
 }
 
 /* ── Bottom panels: Tag Statistics + Keyword Insights ── */

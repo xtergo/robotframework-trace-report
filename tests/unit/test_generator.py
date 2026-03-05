@@ -327,18 +327,18 @@ class TestEmbedViewerAssets:
             "function renderStats" not in js_content
         ), "stats.js content (renderStats) should not be in embedded JS"
 
-    def test_embedded_js_has_explorer_report_tab_order(self):
-        """Embedded JS should define tabs as Explorer, Report (in that order).
+    def test_embedded_js_has_report_explorer_tab_order(self):
+        """Embedded JS should define tabs as Report, Explorer (Report is default).
 
         **Validates: Requirements 4.1**
         """
         js_content, _ = embed_viewer_assets()
-        # app.js defines the tab array — verify explorer comes before report
+        # app.js defines the tab array — verify report comes before explorer
         explorer_idx = js_content.find("id: 'explorer'")
         report_idx = js_content.find("id: 'report'")
         assert explorer_idx != -1, "Explorer tab not found in embedded JS"
         assert report_idx != -1, "Report tab not found in embedded JS"
-        assert explorer_idx < report_idx, "Explorer tab should come before Report tab"
+        assert report_idx < explorer_idx, "Report tab should come before Explorer tab"
         # Statistics tab should not be present
         assert (
             "id: 'statistics'" not in js_content
