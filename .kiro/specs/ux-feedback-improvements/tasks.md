@@ -23,8 +23,8 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Keep `☀` (U+2600) for dark mode
     - _Requirements: 10.1, 10.2, 10.3_
 
-- [ ] 2. Filter panel enhancements (Explorer page)
-  - [ ] 2.1 Add per-section reset buttons to filter panel
+- [x] 2. Filter panel enhancements (Explorer page)
+  - [x] 2.1 Add per-section reset buttons to filter panel
     - In `src/rf_trace_viewer/viewer/search.js`, after each `_build*` section, attach a small reset button (×)
     - Create `_updateSectionResetButtons()` helper called after every filter change to show/hide each button by comparing current state to defaults
     - Default values: text=`''`, test statuses=`['PASS','FAIL','SKIP']`, kw statuses=`['PASS','FAIL','NOT_RUN']`, tags=`[]`, suites=`[]`, keyword types=`[]`, duration min/max=`null`, execution ID=`''`, scope toggle=`true`
@@ -32,17 +32,17 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Existing "Clear All" button continues to reset all filters
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [ ] 2.2 Stack duration range inputs vertically
+  - [x] 2.2 Stack duration range inputs vertically
     - In `src/rf_trace_viewer/viewer/search.js` → `_buildDurationFilter`, replace inline `' — '` separator with a "to" label between stacked inputs
     - In `src/rf_trace_viewer/viewer/style.css`, add `flex-direction: column` to `.filter-range-container` and `width: 100%` to each input
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 2.3 Add CSS for reset buttons and vertical stacking
+  - [x] 2.3 Add CSS for reset buttons and vertical stacking
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for `.filter-section-reset` button (small ×, positioned top-right of section, hidden by default)
     - Add styles for vertical duration range layout
     - _Requirements: 3.1, 3.4, 4.1_
 
-- [ ] 3. Checkpoint — Verify Explorer page changes
+- [x] 3. Checkpoint — Verify Explorer page changes
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Report page multi-select tags and keyword filtering

@@ -260,6 +260,169 @@
   /**
    * Build the filter UI.
    */
+  // Default filter values for section reset comparison
+  var _sectionDefaults = {
+    'text': { fields: ['text'], values: [''] },
+    'test-status': { fields: ['testStatuses'], values: [['PASS', 'FAIL', 'SKIP']] },
+    'scope-toggle': { fields: ['scopeToTestContext'], values: [true] },
+    'kw-status': { fields: ['kwStatuses'], values: [['PASS', 'FAIL', 'NOT_RUN']] },
+    'tags': { fields: ['tags'], values: [[]] },
+    'suites': { fields: ['suites'], values: [[]] },
+    'keyword-types': { fields: ['keywordTypes'], values: [[]] },
+    'execution-id': { fields: ['executionId'], values: [''] },
+    'duration': { fields: ['durationMin', 'durationMax'], values: [null, null] }
+  };
+
+  /**
+   * Check if a filter section differs from its default value.
+   */
+  function _sectionIsNonDefault(sectionId) {
+    var def = _sectionDefaults[sectionId];
+    if (!def) return false;
+    for (var i = 0; i < def.fields.length; i++) {
+      var current = filterState[def.fields[i]];
+      var defaultVal = def.values[i];
+      if (Array.isArray(defaultVal)) {
+        if (!Array.isArray(current)) return true;
+        if (current.length !== defaultVal.length) return true;
+        for (var j = 0; j < defaultVal.length; j++) {
+          if (current.indexOf(defaultVal[j]) === -1) return true;
+        }
+        for (var k = 0; k < current.length; k++) {
+          if (defaultVal.indexOf(current[k]) === -1) return true;
+        }
+      } else {
+        if (current !== defaultVal) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Attach a reset button (×) to a filter section element.
+   */
+  function _attachSectionResetButton(sectionEl, sectionId) {
+    var btn = document.createElement('button');
+    btn.className = 'filter-section-reset';
+    btn.setAttribute('data-filter-section', sectionId);
+    btn.setAttribute('aria-label', 'Reset this filter');
+    btn.textContent = '\u00D7';
+    btn.style.display = 'none';
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      _resetSection(sectionId);
+    });
+    sectionEl.appendChild(btn);
+  }
+
+  /**
+   * Reset a single filter section to its default value and update the DOM.
+   */
+  function _resetSection(sectionId) {
+    switch (sectionId) {
+      case 'text':
+        filterState.text = '';
+        var textInput = document.getElementById('filter-text-input');
+        if (textInput) textInput.value = '';
+        break;
+
+      case 'test-status':
+        filterState.testStatuses = ['PASS', 'FAIL', 'SKIP'];
+        var tsSection = document.querySelector('[data-filter-section="test-status"]');
+        if (tsSection) {
+          var cbs = tsSection.querySelectorAll('input[type="checkbox"]');
+          for (var i = 0; i < cbs.length; i++) { cbs[i].checked = true; }
+        }
+        break;
+
+      case 'scope-toggle':
+        filterState.scopeToTestContext = true;
+        var scopeCb = document.getElementById('filter-scope-toggle');
+        if (scopeCb) scopeCb.checked = true;
+        localStorage.setItem('rf-trace-scope-to-test-context', '1');
+        break;
+
+      case 'kw-status':
+        filterState.kwStatuses = ['PASS', 'FAIL', 'NOT_RUN'];
+        var kwSection = document.querySelector('[data-filter-section="kw-status"]');
+        if (kwSection) {
+          var kwCbs = kwSection.querySelectorAll('input[type="checkbox"]');
+          for (var i = 0; i < kwCbs.length; i++) { kwCbs[i].checked = true; }
+        }
+        break;
+
+      case 'tags':
+        filterState.tags = [];
+        var tagSection = document.querySelector('[data-filter-section="tags"]');
+        if (tagSection) {
+          var tagSelect = tagSection.querySelector('.filter-multiselect');
+          if (tagSelect) {
+            for (var i = 0; i < tagSelect.options.length; i++) {
+              tagSelect.options[i].selected = false;
+            }
+          }
+        }
+        break;
+
+      case 'suites':
+        filterState.suites = [];
+        var suiteSection = document.querySelector('[data-filter-section="suites"]');
+        if (suiteSection) {
+          var suiteSelect = suiteSection.querySelector('.filter-multiselect');
+          if (suiteSelect) {
+            for (var i = 0; i < suiteSelect.options.length; i++) {
+              suiteSelect.options[i].selected = false;
+            }
+          }
+        }
+        break;
+
+      case 'keyword-types':
+        filterState.keywordTypes = [];
+        var kwTypeSection = document.querySelector('[data-filter-section="keyword-types"]');
+        if (kwTypeSection) {
+          var kwTypeSelect = kwTypeSection.querySelector('.filter-multiselect');
+          if (kwTypeSelect) {
+            for (var i = 0; i < kwTypeSelect.options.length; i++) {
+              kwTypeSelect.options[i].selected = false;
+            }
+          }
+        }
+        break;
+
+      case 'execution-id':
+        filterState.executionId = '';
+        var execInput = document.getElementById('filter-execution-input');
+        if (execInput) execInput.value = '';
+        _setLiveExecutionFilter('');
+        break;
+
+      case 'duration':
+        filterState.durationMin = null;
+        filterState.durationMax = null;
+        var durSection = document.querySelector('[data-filter-section="duration"]');
+        if (durSection) {
+          var durInputs = durSection.querySelectorAll('.filter-range-input');
+          for (var i = 0; i < durInputs.length; i++) { durInputs[i].value = ''; }
+        }
+        break;
+    }
+    _applyFilters();
+  }
+
+  /**
+   * Show/hide per-section reset buttons based on whether each section
+   * differs from its default value.
+   */
+  function _updateSectionResetButtons() {
+    var buttons = document.querySelectorAll('.filter-section-reset');
+    for (var i = 0; i < buttons.length; i++) {
+      var sectionId = buttons[i].getAttribute('data-filter-section');
+      buttons[i].style.display = _sectionIsNonDefault(sectionId) ? '' : 'none';
+    }
+  }
+
   function _buildFilterUI(container) {
     container.innerHTML = '';
     if (!container.classList.contains('filter-panel')) {
@@ -291,28 +454,43 @@
 
     // Text search
     var searchSection = _buildTextSearch();
+    searchSection.setAttribute('data-filter-section', 'text');
+    searchSection.style.position = 'relative';
+    _attachSectionResetButton(searchSection, 'text');
     container.appendChild(searchSection);
 
     // Test status filters
     var testStatusSection = _buildTestStatusFilters();
+    testStatusSection.setAttribute('data-filter-section', 'test-status');
+    testStatusSection.style.position = 'relative';
+    _attachSectionResetButton(testStatusSection, 'test-status');
     container.appendChild(testStatusSection);
 
     container.appendChild(_buildAndIndicator());
 
     // Scope toggle (between test status and keyword status)
     var scopeToggleSection = _buildScopeToggle();
+    scopeToggleSection.setAttribute('data-filter-section', 'scope-toggle');
+    scopeToggleSection.style.position = 'relative';
+    _attachSectionResetButton(scopeToggleSection, 'scope-toggle');
     container.appendChild(scopeToggleSection);
 
     container.appendChild(_buildAndIndicator());
 
     // Keyword status filters
     var kwStatusSection = _buildKwStatusFilters();
+    kwStatusSection.setAttribute('data-filter-section', 'kw-status');
+    kwStatusSection.style.position = 'relative';
+    _attachSectionResetButton(kwStatusSection, 'kw-status');
     container.appendChild(kwStatusSection);
 
     // Tag filters
     if (availableOptions.tags.length > 0) {
       container.appendChild(_buildAndIndicator());
       var tagSection = _buildTagFilters();
+      tagSection.setAttribute('data-filter-section', 'tags');
+      tagSection.style.position = 'relative';
+      _attachSectionResetButton(tagSection, 'tags');
       container.appendChild(tagSection);
     }
 
@@ -320,6 +498,9 @@
     if (availableOptions.suites.length > 0) {
       container.appendChild(_buildAndIndicator());
       var suiteSection = _buildSuiteFilters();
+      suiteSection.setAttribute('data-filter-section', 'suites');
+      suiteSection.style.position = 'relative';
+      _attachSectionResetButton(suiteSection, 'suites');
       container.appendChild(suiteSection);
     }
 
@@ -327,17 +508,26 @@
 
     // Keyword type filters
     var kwTypeSection = _buildKeywordTypeFilters();
+    kwTypeSection.setAttribute('data-filter-section', 'keyword-types');
+    kwTypeSection.style.position = 'relative';
+    _attachSectionResetButton(kwTypeSection, 'keyword-types');
     container.appendChild(kwTypeSection);
 
     // Execution ID filter (searchable combo-box, server-side filtering)
     container.appendChild(_buildAndIndicator());
     var execSection = _buildExecutionFilter();
+    execSection.setAttribute('data-filter-section', 'execution-id');
+    execSection.style.position = 'relative';
+    _attachSectionResetButton(execSection, 'execution-id');
     container.appendChild(execSection);
 
     container.appendChild(_buildAndIndicator());
 
     // Duration range filter
     var durationSection = _buildDurationFilter();
+    durationSection.setAttribute('data-filter-section', 'duration');
+    durationSection.style.position = 'relative';
+    _attachSectionResetButton(durationSection, 'duration');
     container.appendChild(durationSection);
 
     // Time range display (read-only, set by timeline)
@@ -851,8 +1041,9 @@
     });
     rangeContainer.appendChild(minInput);
 
-    var separator = document.createElement('span');
-    separator.textContent = ' — ';
+    var separator = document.createElement('label');
+    separator.className = 'filter-range-separator';
+    separator.textContent = 'to';
     rangeContainer.appendChild(separator);
 
     var maxInput = document.createElement('input');
@@ -1120,6 +1311,7 @@
     _updateResultCountDisplay();
     _updateTimeRangeDisplay();
     _updateFilterSummaryBar();
+    _updateSectionResetButtons();
 
     // Req 9.6: emit filter-changed with updated resultCounts and filteredSpans
     // after any recalculation (including time-range-triggered ones).

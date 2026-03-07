@@ -1077,6 +1077,36 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: var(--text-secondary);
 }
 
+/* Per-section reset button (×) */
+.rf-trace-viewer .filter-section-reset {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rf-trace-viewer .filter-section-reset:hover {
+  background: var(--status-fail-bg);
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .filter-section-reset:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 1px;
+}
+
 .rf-trace-viewer .filter-text-input {
   width: 100%;
   padding: 8px 10px;
@@ -1134,13 +1164,14 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 .rf-trace-viewer .filter-range-container {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .rf-trace-viewer .filter-range-input {
-  flex: 1;
+  width: 100%;
   padding: 6px 8px;
+  box-sizing: border-box;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -1151,6 +1182,12 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .filter-range-input:focus {
   outline: 2px solid var(--focus-outline);
   outline-offset: 0;
+}
+
+.rf-trace-viewer .filter-range-separator {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .rf-trace-viewer .filter-time-range-display {
