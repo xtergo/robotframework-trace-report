@@ -4185,3 +4185,98 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .report-filter-badge-remove:hover {
   background: rgba(255, 255, 255, 0.5);
 }
+
+/* ── Suite filter dropdown ── */
+.rf-trace-viewer .report-suite-filter-dropdown {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+/* ── View mode toggle ── */
+.rf-trace-viewer .report-view-toggle {
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.rf-trace-viewer .report-view-toggle:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Suite-grouped view ── */
+.rf-trace-viewer .report-suite-group {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.rf-trace-viewer .report-suite-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  list-style: none;
+}
+
+.rf-trace-viewer .report-suite-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rf-trace-viewer .report-suite-group > summary::before {
+  content: '\25B6';
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.rf-trace-viewer .report-suite-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.rf-trace-viewer .report-suite-group-name {
+  flex: 1;
+}
+
+.rf-trace-viewer .report-suite-group-counts {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.rf-trace-viewer .report-suite-group-counts .count-pass {
+  color: var(--status-pass);
+}
+
+.rf-trace-viewer .report-suite-group-counts .count-fail {
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .report-suite-group-counts .count-skip {
+  color: var(--status-skip);
+}
+
+.rf-trace-viewer .report-suite-group .report-test-row {
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+}
+
+.rf-trace-viewer .report-suite-group .report-test-row:last-child {
+  border-bottom: none;
+}

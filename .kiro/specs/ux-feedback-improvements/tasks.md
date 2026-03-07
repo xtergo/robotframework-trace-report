@@ -80,8 +80,8 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for `.report-filter-badge` with remove button
     - _Requirements: 5.4, 6.4_
 
-- [ ] 5. Report page suite filter and suite-grouped view
-  - [ ] 5.1 Add suite filter to Report page toolbar
+- [x] 5. Report page suite filter and suite-grouped view
+  - [x] 5.1 Add suite filter to Report page toolbar
     - In `src/rf_trace_viewer/viewer/report-page.js`, add `_state.suiteFilter` (string or null)
     - Render a suite filter dropdown in the toolbar alongside status pills and tag badges
     - Update `_filterTests` to filter by suite when active
@@ -90,7 +90,7 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Hide suite filter for single-suite traces
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 5.2 Add suite-grouped view toggle
+  - [x] 5.2 Add suite-grouped view toggle
     - In `src/rf_trace_viewer/viewer/report-page.js`, add `_state.viewMode = 'flat'`
     - Add toggle button in Test Results sub-tab toolbar to switch between "Flat" and "Suite-grouped"
     - In suite-grouped mode, render suite names as `<details>` elements with summary showing suite name + pass/fail/skip counts
@@ -117,11 +117,11 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Generate suites with random test statuses, verify header pass/fail/skip counts match computed values after filtering
     - **Validates: Requirements 9.2, 9.4**
 
-  - [ ] 5.6 Add CSS for suite filter and suite-grouped view
+  - [x] 5.6 Add CSS for suite filter and suite-grouped view
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for suite filter dropdown, suite group headers, and view mode toggle
     - _Requirements: 8.1, 9.1, 9.2_
 
-- [ ] 6. Checkpoint — Verify Report page filter changes
+- [x] 6. Checkpoint — Verify Report page filter changes
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 7. Timestamps and metadata display

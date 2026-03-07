@@ -23,6 +23,8 @@
     tagFilters: [],
     keywordFilters: [],
     statusFilter: null,
+    suiteFilter: null,
+    viewMode: 'flat',
     expandedTests: {},
     logLevel: 'INFO',
     activeTab: 'results'
@@ -77,6 +79,19 @@
         _state.tagFilters = cleanedTags;
       }
     }
+    // Remove stale suite filter
+    if (_state.suiteFilter) {
+      var sfSuite = _findSuiteById(_selectedSuiteId);
+      if (sfSuite) {
+        var sfTests = _collectAllTestsWithSuite(sfSuite);
+        var sfNames = _getUniqueSuiteNames(sfTests);
+        var sfFound = false;
+        for (var sfi = 0; sfi < sfNames.length; sfi++) {
+          if (sfNames[sfi] === _state.suiteFilter) { sfFound = true; break; }
+        }
+        if (!sfFound) _state.suiteFilter = null;
+      }
+    }
     _render();
   };
 
@@ -102,6 +117,48 @@
       }
     }
     return tests;
+  }
+
+  /**
+   * Collect all tests from a suite tree, annotating each with _suiteName.
+   * @param {Object} suite - An RFSuite object with children array
+   * @returns {Array} Flat array of RFTest objects with _suiteName set
+   */
+  function _collectAllTestsWithSuite(suite) {
+    var tests = [];
+    var children = suite.children || [];
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (child.keywords !== undefined) {
+        child._suiteName = suite.name;
+        tests.push(child);
+      } else if (child.children !== undefined) {
+        var nested = _collectAllTestsWithSuite(child);
+        for (var j = 0; j < nested.length; j++) {
+          tests.push(nested[j]);
+        }
+      }
+    }
+    return tests;
+  }
+
+  /**
+   * Extract unique suite names from tests that have _suiteName set.
+   * @param {Array} tests - Array of test objects
+   * @returns {Array} Sorted array of unique suite name strings
+   */
+  function _getUniqueSuiteNames(tests) {
+    var seen = {};
+    var names = [];
+    for (var i = 0; i < tests.length; i++) {
+      var sn = tests[i]._suiteName;
+      if (sn && !seen[sn]) {
+        seen[sn] = true;
+        names.push(sn);
+      }
+    }
+    names.sort();
+    return names;
   }
 
   /**
@@ -1449,8 +1506,17 @@
    * @param {Array} keywordFilters - Array of keyword names; OR logic
    * @returns {Array} Filtered array of tests
    */
-  function _filterTests(tests, text, tagFilters, keywordFilters) {
+  function _filterTests(tests, text, tagFilters, keywordFilters, suiteFilter) {
     var result = tests;
+
+    // Suite filter: show only tests from the selected suite
+    if (suiteFilter) {
+      var suiteFiltered = [];
+      for (var si = 0; si < result.length; si++) {
+        if (result[si]._suiteName === suiteFilter) suiteFiltered.push(result[si]);
+      }
+      result = suiteFiltered;
+    }
 
     // Tag filter: OR logic — show tests with at least one selected tag
     if (tagFilters && tagFilters.length > 0) {
@@ -1544,7 +1610,9 @@
     var selectedSuite = _findSuiteById(_selectedSuiteId);
     if (!selectedSuite) return section;
 
-    var allTests = _collectAllTests(selectedSuite);
+    var allTests = _collectAllTestsWithSuite(selectedSuite);
+    var uniqueSuiteNames = _getUniqueSuiteNames(allTests);
+    var hasMultipleSuites = uniqueSuiteNames.length > 1;
 
     // ── Toolbar: search + status filter pills ──
     var toolbar = document.createElement('div');
@@ -1647,6 +1715,49 @@
       })(_state.keywordFilters[kbi]);
     }
 
+    // Suite filter dropdown (only for multi-suite traces)
+    if (hasMultipleSuites) {
+      var suiteSelect = document.createElement('select');
+      suiteSelect.className = 'report-suite-filter-dropdown';
+      var allOpt = document.createElement('option');
+      allOpt.value = '';
+      allOpt.textContent = 'All Suites';
+      suiteSelect.appendChild(allOpt);
+      for (var sni = 0; sni < uniqueSuiteNames.length; sni++) {
+        var snOpt = document.createElement('option');
+        snOpt.value = uniqueSuiteNames[sni];
+        snOpt.textContent = uniqueSuiteNames[sni];
+        if (_state.suiteFilter === uniqueSuiteNames[sni]) snOpt.selected = true;
+        suiteSelect.appendChild(snOpt);
+      }
+      suiteSelect.addEventListener('change', function () {
+        _state.suiteFilter = suiteSelect.value || null;
+        rebuildList();
+      });
+      toolbar.appendChild(suiteSelect);
+    }
+
+    // Suite filter badge
+    if (_state.suiteFilter) {
+      var suiteBadge = document.createElement('span');
+      suiteBadge.className = 'report-filter-badge';
+      var suiteBadgeText = document.createElement('span');
+      suiteBadgeText.textContent = 'Suite: ' + _state.suiteFilter;
+      suiteBadge.appendChild(suiteBadgeText);
+      var suiteRemoveBtn = document.createElement('button');
+      suiteRemoveBtn.className = 'report-filter-badge-remove';
+      suiteRemoveBtn.textContent = '\u00D7';
+      suiteRemoveBtn.title = 'Remove suite filter';
+      suiteRemoveBtn.setAttribute('aria-label', 'Remove suite filter');
+      suiteRemoveBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _state.suiteFilter = null;
+        _render();
+      });
+      suiteBadge.appendChild(suiteRemoveBtn);
+      toolbar.appendChild(suiteBadge);
+    }
+
     section.appendChild(toolbar);
 
     // ── Test list container ──
@@ -1687,15 +1798,92 @@
     }
     listContainer.appendChild(sortBar);
 
+    // View mode toggle (only for multi-suite traces)
+    if (hasMultipleSuites) {
+      var viewToggle = document.createElement('button');
+      viewToggle.className = 'report-view-toggle';
+      viewToggle.textContent = _state.viewMode === 'flat' ? 'Suite-grouped' : 'Flat list';
+      viewToggle.addEventListener('click', function () {
+        _state.viewMode = _state.viewMode === 'flat' ? 'suite-grouped' : 'flat';
+        viewToggle.textContent = _state.viewMode === 'flat' ? 'Suite-grouped' : 'Flat list';
+        rebuildList();
+      });
+      listContainer.appendChild(viewToggle);
+    }
+
     var rowsContainer = document.createElement('div');
     rowsContainer.className = 'report-test-rows';
     listContainer.appendChild(rowsContainer);
+
+    function _renderTestRow(test, container) {
+      var testStatus = (test.status || '').toUpperCase();
+      var isFail = testStatus === 'FAIL';
+      var isSkip = testStatus === 'SKIP';
+
+      var details = document.createElement('details');
+      details.className = 'report-test-row' + (isFail ? ' row-fail' : '') + (isSkip ? ' row-skip' : '');
+
+      var summary = document.createElement('summary');
+      summary.className = 'report-test-summary';
+
+      var statusDot = document.createElement('span');
+      statusDot.className = 'report-status-dot status-' + testStatus.toLowerCase();
+      statusDot.textContent = isFail ? '\u2717' : isSkip ? '\u2298' : '\u2713';
+      summary.appendChild(statusDot);
+
+      var nameEl = document.createElement('span');
+      nameEl.className = 'report-test-name';
+      nameEl.textContent = test.name || '';
+      nameEl.title = test.name || '';
+      summary.appendChild(nameEl);
+
+      if (isFail) {
+        var chain = _findFailedChain(test);
+        var lastLink = chain.length > 0 ? chain[chain.length - 1] : null;
+        if (lastLink && lastLink.error) {
+          var errPreview = document.createElement('span');
+          errPreview.className = 'report-test-error';
+          errPreview.textContent = lastLink.error;
+          errPreview.title = lastLink.error;
+          summary.appendChild(errPreview);
+        }
+      }
+
+      var durEl = document.createElement('span');
+      durEl.className = 'report-test-dur';
+      durEl.textContent = _formatDuration((test.elapsed_time || 0) * 1000);
+      summary.appendChild(durEl);
+
+      details.appendChild(summary);
+
+      var drillRendered = false;
+      details.addEventListener('toggle', function () {
+        if (details.open && !drillRendered) {
+          drillRendered = true;
+          var drillDown = document.createElement('div');
+          drillDown.className = 'report-drill-down';
+          drillDown.appendChild(_renderKeywordDrillDown(test.id));
+          details.appendChild(drillDown);
+        }
+      });
+
+      if (_state.expandedTests && _state.expandedTests[test.id]) {
+        details.open = true;
+        drillRendered = true;
+        var drillDown = document.createElement('div');
+        drillDown.className = 'report-drill-down';
+        drillDown.appendChild(_renderKeywordDrillDown(test.id));
+        details.appendChild(drillDown);
+      }
+
+      container.appendChild(details);
+    }
 
     function rebuildList() {
       rowsContainer.innerHTML = '';
 
       // Filter
-      var filtered = _filterTests(allTests, _state.textFilter, _state.tagFilters, _state.keywordFilters);
+      var filtered = _filterTests(allTests, _state.textFilter, _state.tagFilters, _state.keywordFilters, _state.suiteFilter);
       if (_state.statusFilter) {
         var sf = _state.statusFilter;
         var statusFiltered = [];
@@ -1714,77 +1902,78 @@
       countLabel.textContent = sorted.length + ' of ' + allTests.length + ' tests';
       rowsContainer.appendChild(countLabel);
 
-      for (var i = 0; i < sorted.length; i++) {
-        (function (test, idx) {
-          var testStatus = (test.status || '').toUpperCase();
-          var isFail = testStatus === 'FAIL';
-          var isSkip = testStatus === 'SKIP';
+      if (_state.viewMode === 'suite-grouped' && hasMultipleSuites) {
+        // Group tests by _suiteName
+        var groups = {};
+        var groupOrder = [];
+        for (var gi = 0; gi < sorted.length; gi++) {
+          var sn = sorted[gi]._suiteName || 'Unknown';
+          if (!groups[sn]) {
+            groups[sn] = [];
+            groupOrder.push(sn);
+          }
+          groups[sn].push(sorted[gi]);
+        }
 
-          // Use <details>/<summary> for native expand/collapse
-          var details = document.createElement('details');
-          details.className = 'report-test-row' + (isFail ? ' row-fail' : '') + (isSkip ? ' row-skip' : '');
+        for (var go = 0; go < groupOrder.length; go++) {
+          var groupName = groupOrder[go];
+          var groupTests = groups[groupName];
 
-          var summary = document.createElement('summary');
-          summary.className = 'report-test-summary';
-
-          // Status indicator
-          var statusDot = document.createElement('span');
-          statusDot.className = 'report-status-dot status-' + testStatus.toLowerCase();
-          statusDot.textContent = isFail ? '\u2717' : isSkip ? '\u2298' : '\u2713';
-          summary.appendChild(statusDot);
-
-          // Name
-          var nameEl = document.createElement('span');
-          nameEl.className = 'report-test-name';
-          nameEl.textContent = test.name || '';
-          nameEl.title = test.name || '';
-          summary.appendChild(nameEl);
-
-          // Error message preview for failures
-          if (isFail) {
-            var chain = _findFailedChain(test);
-            var lastLink = chain.length > 0 ? chain[chain.length - 1] : null;
-            if (lastLink && lastLink.error) {
-              var errPreview = document.createElement('span');
-              errPreview.className = 'report-test-error';
-              errPreview.textContent = lastLink.error;
-              errPreview.title = lastLink.error;
-              summary.appendChild(errPreview);
-            }
+          // Compute pass/fail/skip counts
+          var passCount = 0;
+          var failCount = 0;
+          var skipCount = 0;
+          for (var gc = 0; gc < groupTests.length; gc++) {
+            var gs = (groupTests[gc].status || '').toUpperCase();
+            if (gs === 'PASS') passCount++;
+            else if (gs === 'FAIL') failCount++;
+            else if (gs === 'SKIP') skipCount++;
           }
 
-          // Duration
-          var durEl = document.createElement('span');
-          durEl.className = 'report-test-dur';
-          durEl.textContent = _formatDuration((test.elapsed_time || 0) * 1000);
-          summary.appendChild(durEl);
+          var groupDetails = document.createElement('details');
+          groupDetails.className = 'report-suite-group';
+          groupDetails.open = true;
 
-          details.appendChild(summary);
+          var groupSummary = document.createElement('summary');
+          groupSummary.className = 'report-suite-group-header';
 
-          // Lazy-render drill-down on first open
-          var drillRendered = false;
-          details.addEventListener('toggle', function () {
-            if (details.open && !drillRendered) {
-              drillRendered = true;
-              var drillDown = document.createElement('div');
-              drillDown.className = 'report-drill-down';
-              drillDown.appendChild(_renderKeywordDrillDown(test.id));
-              details.appendChild(drillDown);
-            }
-          });
+          var groupNameEl = document.createElement('span');
+          groupNameEl.className = 'report-suite-group-name';
+          groupNameEl.textContent = groupName;
+          groupSummary.appendChild(groupNameEl);
 
-          // Auto-expand if test was previously expanded
-          if (_state.expandedTests && _state.expandedTests[test.id]) {
-            details.open = true;
-            drillRendered = true;
-            var drillDown = document.createElement('div');
-            drillDown.className = 'report-drill-down';
-            drillDown.appendChild(_renderKeywordDrillDown(test.id));
-            details.appendChild(drillDown);
+          var countsEl = document.createElement('span');
+          countsEl.className = 'report-suite-group-counts';
+
+          var passEl = document.createElement('span');
+          passEl.className = 'count-pass';
+          passEl.textContent = passCount + ' pass';
+          countsEl.appendChild(passEl);
+
+          var failEl = document.createElement('span');
+          failEl.className = 'count-fail';
+          failEl.textContent = failCount + ' fail';
+          countsEl.appendChild(failEl);
+
+          var skipEl = document.createElement('span');
+          skipEl.className = 'count-skip';
+          skipEl.textContent = skipCount + ' skip';
+          countsEl.appendChild(skipEl);
+
+          groupSummary.appendChild(countsEl);
+          groupDetails.appendChild(groupSummary);
+
+          for (var gt = 0; gt < groupTests.length; gt++) {
+            _renderTestRow(groupTests[gt], groupDetails);
           }
 
-          rowsContainer.appendChild(details);
-        })(sorted[i], i);
+          rowsContainer.appendChild(groupDetails);
+        }
+      } else {
+        // Flat view
+        for (var i = 0; i < sorted.length; i++) {
+          _renderTestRow(sorted[i], rowsContainer);
+        }
       }
     }
 
@@ -1898,6 +2087,8 @@
     aggregateTagStats: _aggregateTagStats,
     aggregateKeywordStats: _aggregateKeywordStats,
     formatKwDuration: _formatKwDuration,
-    getState: function () { return _state; }
+    getState: function () { return _state; },
+    collectAllTestsWithSuite: _collectAllTestsWithSuite,
+    getUniqueSuiteNames: _getUniqueSuiteNames
   };
 })();
