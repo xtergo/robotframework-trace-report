@@ -838,8 +838,17 @@
         var span = document.createElement('span');
         if (colorClass) span.className = colorClass;
         span.textContent = value;
+        if (value === 0 && (colorClass === 'metrics-fail' || colorClass === 'metrics-skip')) {
+          span.style.opacity = '0.4';
+        }
         container.appendChild(span);
-        container.appendChild(document.createTextNode(' ' + label));
+        var lbl = document.createElement('span');
+        lbl.className = 'metrics-dim';
+        lbl.textContent = ' ' + label;
+        if (value === 0 && (colorClass === 'metrics-fail' || colorClass === 'metrics-skip')) {
+          lbl.style.opacity = '0.4';
+        }
+        container.appendChild(lbl);
       }
 
       function addSep(container) {
@@ -861,9 +870,17 @@
       addSep(metricsLine);
       addMetric(metricsLine, stats.skipped, 'skipped', 'metrics-skip');
       addSep(metricsLine);
-      metricsLine.appendChild(document.createTextNode('Duration ' + _formatDuration(stats.total_duration_ms)));
+      var durLabel = document.createElement('span');
+      durLabel.className = 'metrics-dim';
+      durLabel.textContent = 'Duration ';
+      metricsLine.appendChild(durLabel);
+      metricsLine.appendChild(document.createTextNode(_formatDuration(stats.total_duration_ms)));
       addSep(metricsLine);
-      metricsLine.appendChild(document.createTextNode('Pass rate ' + passRate + '%'));
+      var rateLabel = document.createElement('span');
+      rateLabel.className = 'metrics-dim';
+      rateLabel.textContent = 'Pass rate ';
+      metricsLine.appendChild(rateLabel);
+      metricsLine.appendChild(document.createTextNode(passRate + '%'));
 
       hero.appendChild(metricsLine);
 
@@ -2169,8 +2186,12 @@
       })(tabs[ti]);
     }
 
-    _container.appendChild(tabBar);
-    _container.appendChild(contentArea);
+    // Wrap tabs + content in a controls panel
+    var controlsPanel = document.createElement('div');
+    controlsPanel.className = 'report-controls-panel';
+    controlsPanel.appendChild(tabBar);
+    controlsPanel.appendChild(contentArea);
+    _container.appendChild(controlsPanel);
 
     // Render the active tab content
     renderTabContent(_state.activeTab);

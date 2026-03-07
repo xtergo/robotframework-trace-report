@@ -230,49 +230,53 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
 - [x] 11. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Run Verdict Header Redesign
-  - [x] 12.1 Replace hero-top-row and ratio bar with Run Verdict Header in report-page.js
-    - In `src/rf_trace_viewer/viewer/report-page.js` → `_renderSummaryDashboard`, remove the `hero-top-row` (verdict badge + stat chips) and the `hero-ratio-bar-wrap` (ratio bar + pass-rate label)
-    - Add verdict determination logic with SKIPPED support: `failed > 0` → FAILED/❌, `passed === 0 && skipped > 0` → SKIPPED/⚠️, else → PASSED/✅
-    - Build `run-verdict-header` div containing `verdict-icon` span, `verdict-label` span ("Test Run:"), and `verdict-word` span (verdict text)
-    - Apply verdict-specific CSS class (`verdict-pass`, `verdict-fail`, `verdict-skip`) to the header div
-    - Update hero class logic to include `hero-skip` when all tests are skipped
-    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.14_
+- [x] 12. UX Polish — Report Page Visual Refinements (3 rounds)
+  - [x] 12.1 UX Polish Round 1 — Report page CSS tweaks (13 items)
+    - Appended "UX Polish Overrides" CSS block to end of `src/rf_trace_viewer/viewer/style.css`
+    - Reduced hero→metadata gap (`report-hero` margin-bottom 10px)
+    - Metadata row lighter text with border-bottom separator and spacing
+    - Stronger active tab fill (background: `var(--focus-outline)`, white text, subtle shadow)
+    - More tab→selector spacing (margin-bottom 22px)
+    - Tighter toolbar gap (8px)
+    - Dimmed inactive filter chips (opacity 0.6)
+    - Reduced suite-group label weight (font-weight 500, font-size 12px)
+    - Stronger row hover (background: `var(--bg-tertiary)`)
+    - Full error message contrast (opacity 1)
+    - Visible Status column header (font-weight 700)
+    - Subtle row hover on test rows (rgba overlay)
+    - More header→table spacing (margin-top 8px)
 
-  - [x] 12.2 Add Metrics Summary Line below verdict header in report-page.js
-    - In `src/rf_trace_viewer/viewer/report-page.js` → `_renderSummaryDashboard`, build `metrics-summary-line` div after the `run-verdict-header`
-    - Compute pass rate as `Math.round(passed / total_tests * 100)` (0 when `total_tests` is 0)
-    - Format as pipe-separated string: "N tests | N passed | N failed | N skipped | Duration Xs | Pass rate N%"
-    - Use existing `_formatDuration` helper for duration formatting
-    - Ensure metrics update on live polling (already handled by re-render cycle)
-    - _Requirements: 16.7, 16.8, 16.9, 16.10, 16.13_
+  - [x] 12.2 UX Polish Round 2 — Controls panel wrapper + 15 CSS rules
+    - In `src/rf_trace_viewer/viewer/report-page.js` → `_render()`, wrapped `tabBar` + `contentArea` inside a `.report-controls-panel` div
+    - In `_renderSummaryDashboard` → `addMetric()`, added `opacity: 0.4` on zero fail/skip metric values
+    - Appended "Controls Panel + UX Polish Round 2" CSS block to `style.css`:
+      - Panel wrapper with subtle background, border, border-radius, padding
+      - Reduced tab bottom gap inside panel
+      - Thin divider between tabs and search/filter row
+      - Dimmed inactive tabs (opacity 0.55)
+      - Dimmed inactive filter chips (opacity 0.5)
+      - Increased search placeholder contrast
+      - Bottom spacing between panel and results table
+      - Matching border-radius on results table
+      - Stronger row hover
+      - Dimmed duration column (opacity 0.65)
+      - Lighter PASSED header gradient vs FAILED
+      - Suite selector tighter with tabs
+      - Toolbar items aligned on same horizontal grid
+      - Removed min-height from tab content inside panel
 
-  - [x] 12.3 Add CSS for Run Verdict Header and Metrics Summary Line
-    - In `src/rf_trace_viewer/viewer/style.css`, add `.run-verdict-header` (flex, align-items center, gap 8px)
-    - Add `.verdict-icon` (font-size 28px, line-height 1)
-    - Add `.verdict-label` and `.verdict-word` (font-size 24px, font-weight 700)
-    - Add `.verdict-pass .verdict-word` (color: var(--status-pass)), `.verdict-fail .verdict-word` (color: var(--status-fail)), `.verdict-skip .verdict-word` (color: var(--status-skip))
-    - Add `.report-hero.hero-skip` (border-left: 5px solid var(--status-skip))
-    - Add `.metrics-summary-line` (margin-top 8px, font-size 14px, color var(--text-secondary), font-variant-numeric tabular-nums)
-    - _Requirements: 16.2, 16.3, 16.4, 16.5, 16.11, 16.12, 16.14_
+  - [x] 12.3 UX Polish Round 3 — Fine-tuning (5 items)
+    - Appended "UX Polish Round 3" CSS block to `style.css`
+    - Reduced metadata row→panel gap (margin-bottom 6px)
+    - More top padding inside control panel (padding-top 14px)
+    - Suite dropdown left-aligned with search field (padding-left/margin-left 0)
+    - Dimmed inactive filter chips further (opacity 0.45)
+    - Stronger table row hover using `color-mix(in srgb, ...)`
 
-  - [ ]* 12.4 Write property test for verdict determination logic
-    - **Property 15: Verdict determination correctness**
-    - **Validates: Requirements 16.1, 16.3, 16.4, 16.5, 16.6**
-    - Create `tests/unit/test_report_verdict.py`
-    - Generate random statistics with non-negative `passed`, `failed`, `skipped` counts using Hypothesis
-    - Verify: `failed > 0` → ("FAILED", "verdict-fail", "❌"); `failed == 0 and passed == 0 and skipped > 0` → ("SKIPPED", "verdict-skip", "⚠️"); otherwise → ("PASSED", "verdict-pass", "✅")
-    - Verify output always contains "Test Run:" prefix
+  - [x] 12.4 Regenerated preview HTML files
+    - Regenerated `test-reports/diverse-suite-preview.html` and `test-reports/pabot-preview.html` to reflect all CSS/JS changes
 
-  - [ ]* 12.5 Write property test for metrics summary line completeness
-    - **Property 16: Metrics summary line completeness**
-    - **Validates: Requirements 16.8, 16.9**
-    - Add to `tests/unit/test_report_verdict.py`
-    - Generate random statistics with non-negative `total_tests`, `passed`, `failed`, `skipped`, `total_duration_ms` using Hypothesis
-    - Verify the formatted metrics string contains all six values: total count, passed count, failed count, skipped count, duration, and pass rate percentage
-    - Verify pass rate is `round(passed / total_tests * 100)` when `total_tests > 0`, else 0
-
-- [ ] 13. Final checkpoint — Ensure all tests pass
+- [x] 13. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

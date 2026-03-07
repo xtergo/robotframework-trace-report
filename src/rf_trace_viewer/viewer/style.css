@@ -3486,7 +3486,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 .rf-trace-viewer .report-hero.hero-fail {
   border-left: 5px solid var(--status-fail);
-  background: linear-gradient(to right, rgba(198, 40, 40, 0.08), transparent 70%);
+  background: linear-gradient(to right, rgba(198, 40, 40, 0.035), transparent 70%);
 }
 
 .rf-trace-viewer .report-hero.hero-skip {
@@ -3500,7 +3500,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 }
 
 .rf-trace-viewer.theme-dark .report-hero.hero-fail {
-  background: linear-gradient(to right, rgba(239, 83, 80, 0.08), transparent 70%);
+  background: linear-gradient(to right, rgba(239, 83, 80, 0.045), transparent 70%);
 }
 
 .rf-trace-viewer.theme-dark .report-hero.hero-skip {
@@ -3525,8 +3525,8 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 }
 
 .rf-trace-viewer .run-verdict-header .verdict-word {
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 30px;
+  font-weight: 900;
   letter-spacing: 0.5px;
 }
 
@@ -3535,7 +3535,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .verdict-skip .verdict-word { color: var(--status-skip); }
 
 .rf-trace-viewer .metrics-summary-line {
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -3545,6 +3545,10 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .metrics-fail,
 .rf-trace-viewer .metrics-skip {
   font-weight: 600;
+}
+
+.rf-trace-viewer .metrics-dim {
+  opacity: 0.7;
 }
 
 .rf-trace-viewer .hero-top-row {
@@ -3620,7 +3624,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 /* Stacked ratio bar */
 .rf-trace-viewer .hero-ratio-bar-wrap {
-  margin: 8px 0;
+  margin: 20px 0 16px 0;
   padding: 2px 0;
 }
 
@@ -4513,4 +4517,223 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   .rf-trace-viewer .search-dropdown {
     min-width: 220px;
   }
+}
+
+/* ── UX Polish Overrides ── */
+
+/* 1. Reduce vertical gap between verdict card and metadata row (~4-6px less) */
+.rf-trace-viewer .report-hero {
+  margin-bottom: 10px;
+}
+
+/* 2. Metadata row: lighter text for contrast as metadata */
+.rf-trace-viewer .report-metadata-row {
+  margin-top: 4px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.rf-trace-viewer .report-metadata-label {
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.rf-trace-viewer .report-metadata-value {
+  color: var(--text-secondary);
+}
+
+/* 3. Separator / extra spacing between metadata row and tabs */
+/* (handled by metadata-row border-bottom + margin-bottom above) */
+
+/* 4. Active tab: stronger fill and brighter text */
+.rf-trace-viewer .report-sub-tab.active {
+  background: var(--focus-outline);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 5. More space between tabs and suite selector (~6px extra) */
+.rf-trace-viewer .report-sub-tabs {
+  margin-bottom: 22px;
+}
+
+/* 6. Tighter horizontal rhythm for toolbar (suite dropdown, search, chips) */
+.rf-trace-viewer .report-test-toolbar {
+  gap: 8px;
+}
+
+/* 7. Dim inactive filter chips so active one pops */
+.rf-trace-viewer .report-status-pill:not(.active) {
+  opacity: 0.6;
+}
+
+.rf-trace-viewer .report-status-pill:not(.active):hover {
+  opacity: 1;
+}
+
+/* 8. Reduce suite-grouped label visual weight */
+.rf-trace-viewer .report-suite-group > summary {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 9. Stronger row hover highlight for interactivity feel */
+.rf-trace-viewer .report-test-summary:hover {
+  background: var(--bg-tertiary);
+}
+
+/* 10. Increase error message contrast (remove opacity fade) */
+.rf-trace-viewer .report-test-error {
+  opacity: 1;
+}
+
+/* 11. Status column header more visible */
+.rf-trace-viewer .report-sort-col:nth-child(3) {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+/* 12. Subtle hover on test rows to signal clickability */
+.rf-trace-viewer .report-test-row:hover {
+  background: rgba(128, 128, 128, 0.04);
+}
+
+/* 13. More spacing between header card and table container */
+.rf-trace-viewer .report-test-results {
+  margin-top: 8px;
+}
+
+/* ── Controls Panel + UX Polish Round 2 ── */
+
+/* 1. Panel wrapper: subtle background, padding, aligned edges */
+.rf-trace-viewer .report-controls-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 16px 4px;
+  margin-bottom: 10px;
+}
+
+/* 2. Tabs row: reduce bottom gap so tabs feel grouped with content below */
+.rf-trace-viewer .report-controls-panel .report-sub-tabs {
+  margin-bottom: 8px;
+}
+
+/* 3. Thin divider between tabs row and search/filter row */
+.rf-trace-viewer .report-controls-panel .report-tab-content {
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+
+/* 4. Dim inactive tabs more to emphasize active */
+.rf-trace-viewer .report-sub-tab:not(.active) {
+  opacity: 0.55;
+}
+
+.rf-trace-viewer .report-sub-tab:not(.active):hover {
+  opacity: 1;
+}
+
+/* 5. Dim inactive filter chips more */
+.rf-trace-viewer .report-status-pill:not(.active) {
+  opacity: 0.5;
+}
+
+.rf-trace-viewer .report-status-pill:not(.active):hover {
+  opacity: 1;
+}
+
+/* 6. Increase search placeholder contrast */
+.rf-trace-viewer .report-search-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+/* 7. Bottom spacing between panel and results table */
+.rf-trace-viewer .report-controls-panel + .report-test-results,
+.rf-trace-viewer .report-controls-panel .report-test-results {
+  margin-top: 10px;
+}
+
+/* 8. Panel edges align with results table (same border-radius) */
+.rf-trace-viewer .report-test-results {
+  border-radius: 8px;
+}
+
+/* 9. Stronger row hover highlight */
+.rf-trace-viewer .report-test-summary:hover {
+  background: var(--bg-tertiary);
+}
+
+/* 10. Dim duration column so name/status stay primary */
+.rf-trace-viewer .report-test-dur {
+  opacity: 0.65;
+}
+
+/* 11. Dim zero fail/skip values in fully passing runs */
+.rf-trace-viewer .metrics-summary-line .metrics-fail,
+.rf-trace-viewer .metrics-summary-line .metrics-skip {
+  /* JS sets the text; when value is "0" we can't target by content in CSS,
+     so we use a general approach: the fail/skip colors already distinguish them.
+     We dim them via a dedicated class added in JS below. */
+}
+
+/* 12. Lighter PASSED header gradient (reduce visual weight vs FAILED) */
+.rf-trace-viewer .report-hero.hero-pass {
+  background: linear-gradient(to right, rgba(46, 125, 50, 0.05), transparent 60%);
+}
+
+.rf-trace-viewer.theme-dark .report-hero.hero-pass {
+  background: linear-gradient(to right, rgba(102, 187, 106, 0.05), transparent 60%);
+}
+
+/* 13. Suite selector tighter with tabs */
+.rf-trace-viewer .report-controls-panel .suite-selector {
+  margin-bottom: 4px;
+}
+
+/* 14. Toolbar items on same horizontal grid */
+.rf-trace-viewer .report-controls-panel .report-test-toolbar {
+  gap: 8px;
+  align-items: center;
+}
+
+/* 15. Min-height removed from tab content inside panel */
+.rf-trace-viewer .report-controls-panel .report-tab-content {
+  min-height: 0;
+}
+
+/* ── UX Polish Round 3 ── */
+
+/* 1. Reduce gap between metadata row and control panel */
+.rf-trace-viewer .report-metadata-row {
+  margin-bottom: 6px;
+}
+
+/* 2. More top padding inside control panel */
+.rf-trace-viewer .report-controls-panel {
+  padding-top: 14px;
+}
+
+/* 3. Suite dropdown left-aligned with search field */
+.rf-trace-viewer .report-controls-panel .suite-selector {
+  padding-left: 0;
+  margin-left: 0;
+}
+
+/* 4. Dim inactive filter chips more */
+.rf-trace-viewer .report-status-pill:not(.active) {
+  opacity: 0.45;
+}
+
+.rf-trace-viewer .report-status-pill:not(.active):hover {
+  opacity: 1;
+}
+
+/* 5. Stronger table row hover */
+.rf-trace-viewer .report-test-summary:hover {
+  background: color-mix(in srgb, var(--bg-tertiary) 80%, var(--hover-bg));
 }
