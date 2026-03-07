@@ -351,8 +351,8 @@
     function _toggleLayoutMode() {
       if (timelineState.layoutMode === 'baseline') {
         timelineState.layoutMode = 'compact';
-        compactBtn.textContent = 'Reset layout';
-        compactBtn.setAttribute('aria-label', 'Reset layout');
+        compactBtn.textContent = 'Expand to baseline';
+        compactBtn.setAttribute('aria-label', 'Expand to baseline');
         // Save original lanes and apply compact packing
         _compactLanes(timelineState.workers);
       } else {
@@ -454,6 +454,13 @@
     });
     timelineState._dateRangePicker = dateRangePicker;
     timelineState._calendarBtn = calendarBtn;
+
+    // Hide time presets and calendar in offline mode (Req 14)
+    if (!window.__RF_TRACE_LIVE__) {
+      presetGroup.style.display = 'none';
+      calendarBtn.style.display = 'none';
+      sepPresets.style.display = 'none';
+    }
 
     // Separator
     var sep1 = document.createElement('span');

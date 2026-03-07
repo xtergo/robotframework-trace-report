@@ -198,14 +198,14 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for `.global-search-bar`, `.search-dropdown`, `.search-result-group`
     - _Requirements: 12.1, 12.2_
 
-- [ ] 9. Timeline polish
-  - [ ] 9.1 Hide time preset buttons in offline mode
+- [x] 9. Timeline polish
+  - [x] 9.1 Hide time preset buttons in offline mode
     - In `src/rf_trace_viewer/viewer/timeline.js`, after creating preset group and calendar button, check `!window.__RF_TRACE_LIVE__`
     - If falsy, set `display: 'none'` on `presetGroup`, `calendarBtn`, and `sepPresets`
     - Ensure no empty gap in zoom bar layout
     - _Requirements: 14.1, 14.2, 14.3, 14.4_
 
-  - [ ] 9.2 Fix compact button toggle wording
+  - [x] 9.2 Fix compact button toggle wording
     - In `src/rf_trace_viewer/viewer/timeline.js` → `_toggleLayoutMode`, change compact mode text from `'Reset layout'` to `'Expand to baseline'`
     - Set matching `aria-label` on the button in both states
     - In `_handleFilterChanged`, ensure button text reverts to `'Compact visible spans'` when layout resets
