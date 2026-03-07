@@ -4150,3 +4150,38 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: var(--status-fail);
   font-weight: 600;
 }
+
+/* ── Report filter badges (multi-select tags & keyword filters) ── */
+.rf-trace-viewer .report-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--focus-outline);
+  color: #fff;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .report-filter-badge-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rf-trace-viewer .report-filter-badge-remove:hover {
+  background: rgba(255, 255, 255, 0.5);
+}

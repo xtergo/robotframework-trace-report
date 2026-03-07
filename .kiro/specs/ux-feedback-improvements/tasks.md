@@ -45,8 +45,8 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
 - [x] 3. Checkpoint — Verify Explorer page changes
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Report page multi-select tags and keyword filtering
-  - [ ] 4.1 Convert tag filter to multi-select
+- [x] 4. Report page multi-select tags and keyword filtering
+  - [x] 4.1 Convert tag filter to multi-select
     - In `src/rf_trace_viewer/viewer/report-page.js`, change `_state.tagFilter` (string) to `_state.tagFilters` (array)
     - Update `_renderTagStatistics` so clicking a tag row toggles its presence in the array
     - Update `_filterTests` to use OR logic: show tests with at least one selected tag
@@ -54,7 +54,7 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - When the last tag is removed, show all tests
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-  - [ ] 4.2 Add keyword filtering on Report page
+  - [x] 4.2 Add keyword filtering on Report page
     - In `src/rf_trace_viewer/viewer/report-page.js`, add `_state.keywordFilters = []`
     - Update `_renderKeywordInsights` so clicking a keyword row toggles it in the filter set (instead of navigating to Explorer)
     - Extend `_filterTests` to also filter by keyword name (OR logic)
@@ -76,7 +76,7 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Generate random keyword names and filter sets, verify toggle changes set size by exactly one
     - **Validates: Requirements 6.1, 6.3**
 
-  - [ ] 4.5 Add CSS for filter badges
+  - [x] 4.5 Add CSS for filter badges
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for `.report-filter-badge` with remove button
     - _Requirements: 5.4, 6.4_
 

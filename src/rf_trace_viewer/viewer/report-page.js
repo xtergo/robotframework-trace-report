@@ -20,7 +20,8 @@
     sortColumn: 'status',
     sortAsc: false,
     textFilter: '',
-    tagFilter: null,
+    tagFilters: [],
+    keywordFilters: [],
     statusFilter: null,
     expandedTests: {},
     logLevel: 'INFO',
@@ -57,6 +58,23 @@
       }
       if (!found) {
         _selectedSuiteId = _suites.length > 0 ? (_suites[0].id || null) : null;
+      }
+    }
+    // Remove stale tag/keyword filters that no longer exist in data
+    if (_state.tagFilters.length > 0 || _state.keywordFilters.length > 0) {
+      var selectedSuite = _findSuiteById(_selectedSuiteId);
+      if (selectedSuite) {
+        var allTests = _collectAllTests(selectedSuite);
+        var validTags = {};
+        for (var ti = 0; ti < allTests.length; ti++) {
+          var tags = allTests[ti].tags || [];
+          for (var tg = 0; tg < tags.length; tg++) { validTags[tags[tg]] = true; }
+        }
+        var cleanedTags = [];
+        for (var ct = 0; ct < _state.tagFilters.length; ct++) {
+          if (validTags[_state.tagFilters[ct]]) cleanedTags.push(_state.tagFilters[ct]);
+        }
+        _state.tagFilters = cleanedTags;
       }
     }
     _render();
@@ -279,7 +297,7 @@
   /**
    * Render the Tag Statistics section.
    * Sortable table showing per-tag pass/fail/skip counts.
-   * Clicking a tag row sets _state.tagFilter and re-renders.
+   * Clicking a tag row toggles its presence in _state.tagFilters array and re-renders.
    * Requirements: 8.1, 8.2, 8.3, 8.4
    */
   function _renderTagStatistics() {
@@ -377,12 +395,24 @@
           tr.style.cursor = 'pointer';
           tr.title = 'Filter tests by tag: ' + tag;
 
-          if (_state.tagFilter === tag) {
+          var isActive = false;
+          for (var ai = 0; ai < _state.tagFilters.length; ai++) {
+            if (_state.tagFilters[ai] === tag) { isActive = true; break; }
+          }
+          if (isActive) {
             tr.classList.add('active-tag');
           }
 
           tr.addEventListener('click', function () {
-            _state.tagFilter = (_state.tagFilter === tag) ? null : tag;
+            var idx = -1;
+            for (var fi = 0; fi < _state.tagFilters.length; fi++) {
+              if (_state.tagFilters[fi] === tag) { idx = fi; break; }
+            }
+            if (idx !== -1) {
+              _state.tagFilters.splice(idx, 1);
+            } else {
+              _state.tagFilters.push(tag);
+            }
             _render();
           });
 
@@ -422,7 +452,7 @@
    * Render the Keyword Insights section.
    * Aggregates keywords by name, shows sortable table with count, min, max, avg, total.
    * Includes text filter for keyword name search.
-   * Click keyword row → Explorer_Link to first occurrence.
+   * Click keyword row → toggles keyword filter (instead of navigating to Explorer).
    * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
    */
   function _renderKeywordInsights() {
@@ -533,12 +563,27 @@
         (function (stat) {
           var tr = document.createElement('tr');
           tr.style.cursor = 'pointer';
-          tr.title = 'Open first occurrence in Explorer';
+          tr.title = 'Toggle keyword filter: ' + stat.keyword;
+
+          var kwActive = false;
+          for (var ki = 0; ki < _state.keywordFilters.length; ki++) {
+            if (_state.keywordFilters[ki] === stat.keyword) { kwActive = true; break; }
+          }
+          if (kwActive) {
+            tr.classList.add('active-tag');
+          }
 
           tr.addEventListener('click', function () {
-            if (stat.firstSpanId) {
-              _navigateToExplorer(stat.firstSpanId);
+            var idx = -1;
+            for (var fi = 0; fi < _state.keywordFilters.length; fi++) {
+              if (_state.keywordFilters[fi] === stat.keyword) { idx = fi; break; }
             }
+            if (idx !== -1) {
+              _state.keywordFilters.splice(idx, 1);
+            } else {
+              _state.keywordFilters.push(stat.keyword);
+            }
+            _render();
           });
 
           // Keyword name
@@ -1397,37 +1442,67 @@
   }
 
   /**
-   * Filter tests by text query and optional tag filter.
-   * Matches against name, tags, and status_message.
+   * Filter tests by text query, tag filters (OR logic), and keyword filters (OR logic).
    * @param {Array} tests - Array of test objects
    * @param {string} text - Text filter (case-insensitive)
-   * @param {string|null} tagFilter - If set, only include tests with this tag
+   * @param {Array} tagFilters - Array of tag names; OR logic (show tests with at least one)
+   * @param {Array} keywordFilters - Array of keyword names; OR logic
    * @returns {Array} Filtered array of tests
    */
-  function _filterTests(tests, text, tagFilter) {
+  function _filterTests(tests, text, tagFilters, keywordFilters) {
     var result = tests;
-    if (tagFilter) {
-      result = [];
-      for (var i = 0; i < tests.length; i++) {
-        var tags = tests[i].tags || [];
+
+    // Tag filter: OR logic — show tests with at least one selected tag
+    if (tagFilters && tagFilters.length > 0) {
+      var tagFiltered = [];
+      for (var i = 0; i < result.length; i++) {
+        var tags = result[i].tags || [];
+        var hasMatch = false;
         for (var t = 0; t < tags.length; t++) {
-          if (tags[t] === tagFilter) {
-            result.push(tests[i]);
-            break;
+          for (var tf = 0; tf < tagFilters.length; tf++) {
+            if (tags[t] === tagFilters[tf]) { hasMatch = true; break; }
+          }
+          if (hasMatch) break;
+        }
+        if (hasMatch) tagFiltered.push(result[i]);
+      }
+      result = tagFiltered;
+    }
+
+    // Keyword filter: OR logic — show tests containing at least one selected keyword
+    if (keywordFilters && keywordFilters.length > 0) {
+      var kwFiltered = [];
+      for (var ki = 0; ki < result.length; ki++) {
+        var test = result[ki];
+        var kwMatch = false;
+        // Walk keyword tree with a stack
+        var stack = (test.keywords || []).slice();
+        while (stack.length > 0 && !kwMatch) {
+          var kw = stack.pop();
+          for (var kf = 0; kf < keywordFilters.length; kf++) {
+            if (kw.name === keywordFilters[kf]) { kwMatch = true; break; }
+          }
+          var children = kw.children || [];
+          for (var ci = 0; ci < children.length; ci++) {
+            stack.push(children[ci]);
           }
         }
+        if (kwMatch) kwFiltered.push(test);
       }
+      result = kwFiltered;
     }
+
+    // Text filter
     if (!text) return result;
     var lower = text.toLowerCase();
     var filtered = [];
     for (var j = 0; j < result.length; j++) {
-      var test = result[j];
-      var name = (test.name || '').toLowerCase();
-      var tagStr = (test.tags || []).join(' ').toLowerCase();
-      var msg = (test.status_message || '').toLowerCase();
+      var tst = result[j];
+      var name = (tst.name || '').toLowerCase();
+      var tagStr = (tst.tags || []).join(' ').toLowerCase();
+      var msg = (tst.status_message || '').toLowerCase();
       if (name.indexOf(lower) !== -1 || tagStr.indexOf(lower) !== -1 || msg.indexOf(lower) !== -1) {
-        filtered.push(test);
+        filtered.push(tst);
       }
     }
     return filtered;
@@ -1518,18 +1593,58 @@
     }
     toolbar.appendChild(pillBar);
 
-    // Tag filter badge
-    if (_state.tagFilter) {
-      var tagBadge = document.createElement('span');
-      tagBadge.className = 'report-tag-filter-badge';
-      tagBadge.textContent = 'Tag: ' + _state.tagFilter + ' \u00D7';
-      tagBadge.title = 'Click to clear tag filter';
-      tagBadge.style.cursor = 'pointer';
-      tagBadge.addEventListener('click', function () {
-        _state.tagFilter = null;
-        _render();
-      });
-      toolbar.appendChild(tagBadge);
+    // Tag filter badges (one per active tag)
+    for (var tbi = 0; tbi < _state.tagFilters.length; tbi++) {
+      (function (tag) {
+        var tagBadge = document.createElement('span');
+        tagBadge.className = 'report-filter-badge';
+        var badgeText = document.createElement('span');
+        badgeText.textContent = 'Tag: ' + tag;
+        tagBadge.appendChild(badgeText);
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'report-filter-badge-remove';
+        removeBtn.textContent = '\u00D7';
+        removeBtn.title = 'Remove tag filter: ' + tag;
+        removeBtn.setAttribute('aria-label', 'Remove tag filter: ' + tag);
+        removeBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var idx = -1;
+          for (var ri = 0; ri < _state.tagFilters.length; ri++) {
+            if (_state.tagFilters[ri] === tag) { idx = ri; break; }
+          }
+          if (idx !== -1) _state.tagFilters.splice(idx, 1);
+          _render();
+        });
+        tagBadge.appendChild(removeBtn);
+        toolbar.appendChild(tagBadge);
+      })(_state.tagFilters[tbi]);
+    }
+
+    // Keyword filter badges (one per active keyword)
+    for (var kbi = 0; kbi < _state.keywordFilters.length; kbi++) {
+      (function (kw) {
+        var kwBadge = document.createElement('span');
+        kwBadge.className = 'report-filter-badge';
+        var badgeText = document.createElement('span');
+        badgeText.textContent = 'KW: ' + kw;
+        kwBadge.appendChild(badgeText);
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'report-filter-badge-remove';
+        removeBtn.textContent = '\u00D7';
+        removeBtn.title = 'Remove keyword filter: ' + kw;
+        removeBtn.setAttribute('aria-label', 'Remove keyword filter: ' + kw);
+        removeBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var idx = -1;
+          for (var ri = 0; ri < _state.keywordFilters.length; ri++) {
+            if (_state.keywordFilters[ri] === kw) { idx = ri; break; }
+          }
+          if (idx !== -1) _state.keywordFilters.splice(idx, 1);
+          _render();
+        });
+        kwBadge.appendChild(removeBtn);
+        toolbar.appendChild(kwBadge);
+      })(_state.keywordFilters[kbi]);
     }
 
     section.appendChild(toolbar);
@@ -1580,7 +1695,7 @@
       rowsContainer.innerHTML = '';
 
       // Filter
-      var filtered = _filterTests(allTests, _state.textFilter, _state.tagFilter);
+      var filtered = _filterTests(allTests, _state.textFilter, _state.tagFilters, _state.keywordFilters);
       if (_state.statusFilter) {
         var sf = _state.statusFilter;
         var statusFiltered = [];
@@ -1782,6 +1897,7 @@
     findTestInSuites: _findTestInSuites,
     aggregateTagStats: _aggregateTagStats,
     aggregateKeywordStats: _aggregateKeywordStats,
-    formatKwDuration: _formatKwDuration
+    formatKwDuration: _formatKwDuration,
+    getState: function () { return _state; }
   };
 })();
