@@ -731,113 +731,180 @@
    * @returns {HTMLElement} The summary dashboard element
    */
   function _renderSummaryDashboard() {
-    var dashboard = document.createElement('div');
-    dashboard.className = 'summary-dashboard';
+      var dashboard = document.createElement('div');
+      dashboard.className = 'summary-dashboard';
 
-    var stats = _statistics || { total_tests: 0, passed: 0, failed: 0, skipped: 0, total_duration_ms: 0, suite_stats: [] };
+      var stats = _statistics || { total_tests: 0, passed: 0, failed: 0, skipped: 0, total_duration_ms: 0, suite_stats: [] };
 
-    // ── Hero section: Run Verdict Header + Metrics Summary Line ──
-    var verdictWord, verdictClass, verdictIcon;
-    if (stats.failed > 0) {
-      verdictWord = 'FAILED';
-      verdictClass = 'verdict-fail';
-      verdictIcon = '\u274C';
-    } else if (stats.passed === 0 && stats.skipped > 0) {
-      verdictWord = 'SKIPPED';
-      verdictClass = 'verdict-skip';
-      verdictIcon = '\u26A0\uFE0F';
-    } else {
-      verdictWord = 'PASSED';
-      verdictClass = 'verdict-pass';
-      verdictIcon = '\u2705';
-    }
-
-    var heroClass = 'report-hero';
-    if (stats.failed > 0) {
-      heroClass += ' hero-fail';
-    } else if (stats.passed === 0 && stats.skipped > 0) {
-      heroClass += ' hero-skip';
-    } else {
-      heroClass += ' hero-pass';
-    }
-
-    var hero = document.createElement('div');
-    hero.className = heroClass;
-
-    // Run Verdict Header
-    var verdictHeader = document.createElement('div');
-    verdictHeader.className = 'run-verdict-header ' + verdictClass;
-
-    var vIcon = document.createElement('span');
-    vIcon.className = 'verdict-icon';
-    vIcon.textContent = verdictIcon;
-    verdictHeader.appendChild(vIcon);
-
-    var vLabel = document.createElement('span');
-    vLabel.className = 'verdict-label';
-    vLabel.textContent = 'Test Run:';
-    verdictHeader.appendChild(vLabel);
-
-    var vWord = document.createElement('span');
-    vWord.className = 'verdict-word';
-    vWord.textContent = verdictWord;
-    verdictHeader.appendChild(vWord);
-
-    hero.appendChild(verdictHeader);
-
-    // Metrics Summary Line
-    var passRate = stats.total_tests > 0
-      ? Math.round(stats.passed / stats.total_tests * 100)
-      : 0;
-    var metricsText = stats.total_tests + ' tests | '
-      + stats.passed + ' passed | '
-      + stats.failed + ' failed | '
-      + stats.skipped + ' skipped | '
-      + 'Duration ' + _formatDuration(stats.total_duration_ms) + ' | '
-      + 'Pass rate ' + passRate + '%';
-
-    var metricsLine = document.createElement('div');
-    metricsLine.className = 'metrics-summary-line';
-    metricsLine.textContent = metricsText;
-    hero.appendChild(metricsLine);
-
-    dashboard.appendChild(hero);
-
-    // ── Execution metadata row ──
-    var metaItems = [];
-    if (_runData) {
-      var runStart = _formatTimestamp(_runData.start_time);
-      if (runStart !== 'N/A') metaItems.push({ label: 'Start', value: runStart });
-      var runEnd = _formatTimestamp(_runData.end_time);
-      if (runEnd !== 'N/A') metaItems.push({ label: 'End', value: runEnd });
-      if (_runData.rf_version && _runData.rf_version !== '') {
-        metaItems.push({ label: 'RF Version', value: _runData.rf_version });
+      // ── Hero section: Run Verdict Header + Ratio Bar + Metrics Summary Line ──
+      var verdictWord, verdictClass;
+      if (stats.failed > 0) {
+        verdictWord = 'FAILED';
+        verdictClass = 'verdict-fail';
+      } else if (stats.passed === 0 && stats.skipped > 0) {
+        verdictWord = 'SKIPPED';
+        verdictClass = 'verdict-skip';
+      } else {
+        verdictWord = 'PASSED';
+        verdictClass = 'verdict-pass';
       }
-      if (_runData.executor && _runData.executor !== '') {
-        metaItems.push({ label: 'Executor', value: _runData.executor });
+
+      var heroClass = 'report-hero';
+      if (stats.failed > 0) {
+        heroClass += ' hero-fail';
+      } else if (stats.passed === 0 && stats.skipped > 0) {
+        heroClass += ' hero-skip';
+      } else {
+        heroClass += ' hero-pass';
       }
-    }
-    if (metaItems.length > 0) {
-      var metaRow = document.createElement('div');
-      metaRow.className = 'report-metadata-row';
-      for (var mi = 0; mi < metaItems.length; mi++) {
-        var metaItem = document.createElement('span');
-        metaItem.className = 'report-metadata-item';
-        var metaLabel = document.createElement('span');
-        metaLabel.className = 'report-metadata-label';
-        metaLabel.textContent = metaItems[mi].label + ':';
-        metaItem.appendChild(metaLabel);
-        var metaValue = document.createElement('span');
-        metaValue.className = 'report-metadata-value';
-        metaValue.textContent = ' ' + metaItems[mi].value;
-        metaItem.appendChild(metaValue);
-        metaRow.appendChild(metaItem);
+
+      var hero = document.createElement('div');
+      hero.className = heroClass;
+
+      // Run Verdict Header (no emoji icon)
+      var verdictHeader = document.createElement('div');
+      verdictHeader.className = 'run-verdict-header ' + verdictClass;
+
+      var vLabel = document.createElement('span');
+      vLabel.className = 'verdict-label';
+      vLabel.textContent = 'Test Run:';
+      verdictHeader.appendChild(vLabel);
+
+      var vWord = document.createElement('span');
+      vWord.className = 'verdict-word';
+      vWord.textContent = verdictWord;
+      verdictHeader.appendChild(vWord);
+
+      hero.appendChild(verdictHeader);
+
+      // Ratio bar (pass/fail/skip distribution)
+      if (stats.total_tests > 0) {
+        var barWrap = document.createElement('div');
+        barWrap.className = 'hero-ratio-bar-wrap';
+
+        var bar = document.createElement('div');
+        bar.className = 'hero-ratio-bar';
+
+        var passPct = (stats.passed / stats.total_tests * 100);
+        var failPct = (stats.failed / stats.total_tests * 100);
+        var skipPct = (stats.skipped / stats.total_tests * 100);
+
+        if (stats.passed > 0) {
+          var passSegment = document.createElement('div');
+          passSegment.className = 'ratio-segment ratio-pass';
+          passSegment.style.width = passPct + '%';
+          passSegment.title = stats.passed + ' passed (' + Math.round(passPct) + '%)';
+          passSegment.style.cursor = 'pointer';
+          passSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'PASS' ? null : 'PASS';
+            _render();
+          });
+          bar.appendChild(passSegment);
+        }
+        if (stats.failed > 0) {
+          var failSegment = document.createElement('div');
+          failSegment.className = 'ratio-segment ratio-fail';
+          failSegment.style.width = failPct + '%';
+          failSegment.title = stats.failed + ' failed (' + Math.round(failPct) + '%)';
+          failSegment.style.cursor = 'pointer';
+          failSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'FAIL' ? null : 'FAIL';
+            _render();
+          });
+          bar.appendChild(failSegment);
+        }
+        if (stats.skipped > 0) {
+          var skipSegment = document.createElement('div');
+          skipSegment.className = 'ratio-segment ratio-skip';
+          skipSegment.style.width = skipPct + '%';
+          skipSegment.title = stats.skipped + ' skipped (' + Math.round(skipPct) + '%)';
+          skipSegment.style.cursor = 'pointer';
+          skipSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'SKIP' ? null : 'SKIP';
+            _render();
+          });
+          bar.appendChild(skipSegment);
+        }
+
+        barWrap.appendChild(bar);
+        hero.appendChild(barWrap);
       }
-      dashboard.appendChild(metaRow);
+
+      // Metrics Summary Line with individually colored spans
+      var metricsLine = document.createElement('div');
+      metricsLine.className = 'metrics-summary-line';
+
+      function addMetric(container, value, label, colorClass) {
+        var span = document.createElement('span');
+        if (colorClass) span.className = colorClass;
+        span.textContent = value;
+        container.appendChild(span);
+        container.appendChild(document.createTextNode(' ' + label));
+      }
+
+      function addSep(container) {
+        var sep = document.createElement('span');
+        sep.className = 'metrics-sep';
+        sep.textContent = ' | ';
+        container.appendChild(sep);
+      }
+
+      var passRate = stats.total_tests > 0
+        ? Math.round(stats.passed / stats.total_tests * 100)
+        : 0;
+
+      addMetric(metricsLine, stats.total_tests, 'tests', '');
+      addSep(metricsLine);
+      addMetric(metricsLine, stats.passed, 'passed', 'metrics-pass');
+      addSep(metricsLine);
+      addMetric(metricsLine, stats.failed, 'failed', 'metrics-fail');
+      addSep(metricsLine);
+      addMetric(metricsLine, stats.skipped, 'skipped', 'metrics-skip');
+      addSep(metricsLine);
+      metricsLine.appendChild(document.createTextNode('Duration ' + _formatDuration(stats.total_duration_ms)));
+      addSep(metricsLine);
+      metricsLine.appendChild(document.createTextNode('Pass rate ' + passRate + '%'));
+
+      hero.appendChild(metricsLine);
+
+      dashboard.appendChild(hero);
+
+      // ── Execution metadata row ──
+      var metaItems = [];
+      if (_runData) {
+        var runStart = _formatTimestamp(_runData.start_time);
+        if (runStart !== 'N/A') metaItems.push({ label: 'Start', value: runStart });
+        var runEnd = _formatTimestamp(_runData.end_time);
+        if (runEnd !== 'N/A') metaItems.push({ label: 'End', value: runEnd });
+        if (_runData.rf_version && _runData.rf_version !== '') {
+          metaItems.push({ label: 'RF Version', value: _runData.rf_version });
+        }
+        if (_runData.executor && _runData.executor !== '') {
+          metaItems.push({ label: 'Executor', value: _runData.executor });
+        }
+      }
+      if (metaItems.length > 0) {
+        var metaRow = document.createElement('div');
+        metaRow.className = 'report-metadata-row';
+        for (var mi = 0; mi < metaItems.length; mi++) {
+          var metaItem = document.createElement('span');
+          metaItem.className = 'report-metadata-item';
+          var metaLabel = document.createElement('span');
+          metaLabel.className = 'report-metadata-label';
+          metaLabel.textContent = metaItems[mi].label + ':';
+          metaItem.appendChild(metaLabel);
+          var metaValue = document.createElement('span');
+          metaValue.className = 'report-metadata-value';
+          metaValue.textContent = ' ' + metaItems[mi].value;
+          metaItem.appendChild(metaValue);
+          metaRow.appendChild(metaItem);
+        }
+        dashboard.appendChild(metaRow);
+      }
+
+      return dashboard;
     }
 
-    return dashboard;
-  }
 
   // Badge labels for keyword types (same as flow-table.js)
   var BADGE_LABELS = {
