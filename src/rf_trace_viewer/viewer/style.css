@@ -3369,7 +3369,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 /* ── Report Page ── */
 .rf-trace-viewer .report-page {
-  max-width: 1200px;
+  width: clamp(800px, 92vw, 1800px);
   margin: 0 auto;
   padding: 16px 24px;
 }
@@ -3598,6 +3598,10 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 /* ── Test Results — Unified List ── */
 .rf-trace-viewer .report-test-results {
   margin-bottom: 24px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
 }
 
 .rf-trace-viewer .report-test-toolbar {

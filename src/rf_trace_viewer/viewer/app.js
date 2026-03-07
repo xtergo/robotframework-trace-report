@@ -829,7 +829,7 @@
 
     var toggleBtn = document.createElement('button');
     toggleBtn.className = 'theme-toggle-icon';
-    toggleBtn.textContent = theme === 'dark' ? '\u2600' : '\u263e';
+    toggleBtn.textContent = theme === 'dark' ? '\u2600' : '\ud83c\udf19';
     toggleBtn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
     toggleBtn.addEventListener('click', function () {
       var newTheme;
@@ -840,7 +840,7 @@
         newTheme = isDark ? 'light' : 'dark';
         _applyTheme(root, newTheme);
       }
-      toggleBtn.textContent = newTheme === 'dark' ? '\u2600' : '\u263e';
+      toggleBtn.textContent = newTheme === 'dark' ? '\u2600' : '\ud83c\udf19';
       toggleBtn.setAttribute('aria-label', newTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
     });
     header.appendChild(toggleBtn);
@@ -1330,12 +1330,12 @@
     })();
 
     var filterSidebar = document.createElement('aside');
-    filterSidebar.className = 'panel-filter collapsed';
+    filterSidebar.className = 'panel-filter';
 
     var filterToggle = document.createElement('button');
     filterToggle.className = 'filter-toggle-btn';
     filterToggle.setAttribute('aria-label', 'Toggle filters panel');
-    filterToggle.textContent = '\u25c0 Filters';
+    filterToggle.textContent = '\u25b6 Filters';
     filterToggle.addEventListener('click', function () {
       var isCollapsed = filterSidebar.classList.toggle('collapsed');
       filterToggle.textContent = isCollapsed ? '\u25c0 Filters' : '\u25b6 Filters';
@@ -1358,8 +1358,8 @@
     reportContainer.className = 'report-page';
     reportTab.appendChild(reportContainer);
     
-    tabContent.appendChild(explorerTab);
     tabContent.appendChild(reportTab);
+    tabContent.appendChild(explorerTab);
 
     // Initialize views
     _initializeViews(data);
@@ -1377,7 +1377,15 @@
 
       // Highlight in timeline (unless the event came from timeline)
       if (source !== 'timeline' && typeof window.highlightSpanInTimeline === 'function') {
-        window.highlightSpanInTimeline(data.spanId);
+        // Auto-compact when navigating from the report page
+        if (source === 'report' && typeof window.triggerTimelineCompact === 'function') {
+          window.triggerTimelineCompact();
+          setTimeout(function () {
+            window.highlightSpanInTimeline(data.spanId);
+          }, 60);
+        } else {
+          window.highlightSpanInTimeline(data.spanId);
+        }
       }
 
       // Highlight in keyword stats (unless the event came from keyword-stats)

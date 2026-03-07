@@ -92,14 +92,16 @@
    */
   function _navigateToExplorer(spanId) {
     if (!spanId) return;
-    // Emit navigate-to-span event
-    if (typeof window.RFTraceViewer !== 'undefined' &&
-        typeof window.RFTraceViewer.emit === 'function') {
-      window.RFTraceViewer.emit('navigate-to-span', { spanId: spanId, source: 'report' });
-    }
-    // Switch to Explorer tab
+    // Switch to Explorer tab first so the timeline canvas is visible
     var switchBtn = document.querySelector('[data-tab="explorer"]');
     if (switchBtn) switchBtn.click();
+    // Emit navigate-to-span after tab is visible so canvas is properly sized
+    setTimeout(function () {
+      if (typeof window.RFTraceViewer !== 'undefined' &&
+          typeof window.RFTraceViewer.emit === 'function') {
+        window.RFTraceViewer.emit('navigate-to-span', { spanId: spanId, source: 'report' });
+      }
+    }, 100);
   }
 
   /**

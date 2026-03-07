@@ -2879,6 +2879,15 @@
   }
 
   /**
+   * Public API: Switch to compact layout if not already active.
+   */
+  window.triggerTimelineCompact = function () {
+    if (timelineState.layoutMode !== 'compact' && timelineState._compactBtn) {
+      timelineState._compactBtn.click();
+    }
+  };
+
+  /**
    * Public API: Highlight a span by ID (called from tree view).
    */
   window.highlightSpanInTimeline = function (spanId) {

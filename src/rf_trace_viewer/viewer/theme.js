@@ -73,7 +73,7 @@
         // Update toggle button icon if it exists
         var btn = document.querySelector('.theme-toggle-icon');
         if (btn) {
-          btn.textContent = currentTheme === 'dark' ? '\u2600' : '\u263e';
+          btn.textContent = currentTheme === 'dark' ? '\u2600' : '\ud83c\udf19';
           btn.setAttribute('aria-label', currentTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
         }
       };
