@@ -3592,6 +3592,33 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-weight: 500;
 }
 
+.rf-trace-viewer .report-metadata-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.rf-trace-viewer .report-metadata-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rf-trace-viewer .report-metadata-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.rf-trace-viewer .report-metadata-value {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Report Sub-Tabs (pill-style) ── */
 .rf-trace-viewer .report-sub-tabs {
   display: flex;
@@ -3833,6 +3860,17 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.rf-trace-viewer .report-test-timestamp {
+  flex: 0 0 150px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rf-trace-viewer .report-drill-down {

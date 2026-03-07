@@ -15,6 +15,7 @@
   var _container = null;
   var _suites = [];
   var _statistics = null;
+  var _runData = null;
   var _selectedSuiteId = null;
   var _state = {
     sortColumn: 'status',
@@ -40,6 +41,7 @@
     if (!_container) return;
     _suites = (data && data.suites) || [];
     _statistics = (data && data.statistics) || null;
+    _runData = data || null;
     _selectedSuiteId = _suites.length > 0 ? (_suites[0].id || null) : null;
     _render();
   };
@@ -52,6 +54,7 @@
     if (!_container) return;
     _suites = (data && data.suites) || [];
     _statistics = (data && data.statistics) || null;
+    _runData = data || null;
     // Keep selected suite if still present, otherwise reset
     if (_selectedSuiteId) {
       var found = false;
@@ -191,6 +194,22 @@
     var m = Math.floor(ms / 60000);
     var s = ((ms % 60000) / 1000).toFixed(0);
     return m + 'm ' + s + 's';
+  }
+
+  /**
+   * Format an epoch-nanosecond timestamp to a readable date/time string.
+   * Returns 'N/A' for zero, null, or undefined values.
+   * @param {number} epochNs - Epoch time in nanoseconds
+   * @returns {string} Formatted timestamp or 'N/A'
+   */
+  function _formatTimestamp(epochNs) {
+    if (!epochNs || epochNs === 0) return 'N/A';
+    var ms = epochNs / 1e6;
+    var d = new Date(ms);
+    if (isNaN(d.getTime())) return 'N/A';
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+      pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }
 
   /**
@@ -811,6 +830,39 @@
     }
 
     dashboard.appendChild(hero);
+
+    // ── Execution metadata row ──
+    var metaItems = [];
+    if (_runData) {
+      var runStart = _formatTimestamp(_runData.start_time);
+      if (runStart !== 'N/A') metaItems.push({ label: 'Start', value: runStart });
+      var runEnd = _formatTimestamp(_runData.end_time);
+      if (runEnd !== 'N/A') metaItems.push({ label: 'End', value: runEnd });
+      if (_runData.rf_version && _runData.rf_version !== '') {
+        metaItems.push({ label: 'RF Version', value: _runData.rf_version });
+      }
+      if (_runData.executor && _runData.executor !== '') {
+        metaItems.push({ label: 'Executor', value: _runData.executor });
+      }
+    }
+    if (metaItems.length > 0) {
+      var metaRow = document.createElement('div');
+      metaRow.className = 'report-metadata-row';
+      for (var mi = 0; mi < metaItems.length; mi++) {
+        var metaItem = document.createElement('span');
+        metaItem.className = 'report-metadata-item';
+        var metaLabel = document.createElement('span');
+        metaLabel.className = 'report-metadata-label';
+        metaLabel.textContent = metaItems[mi].label + ':';
+        metaItem.appendChild(metaLabel);
+        var metaValue = document.createElement('span');
+        metaValue.className = 'report-metadata-value';
+        metaValue.textContent = ' ' + metaItems[mi].value;
+        metaItem.appendChild(metaValue);
+        metaRow.appendChild(metaItem);
+      }
+      dashboard.appendChild(metaRow);
+    }
 
     return dashboard;
   }
@@ -1487,6 +1539,10 @@
           av = a.elapsed_time || 0;
           bv = b.elapsed_time || 0;
           return asc ? av - bv : bv - av;
+        case 'start_time':
+          av = a.start_time || 0;
+          bv = b.start_time || 0;
+          return asc ? av - bv : bv - av;
         case 'message':
           av = (a.status_message || '').toLowerCase();
           bv = (b.status_message || '').toLowerCase();
@@ -1770,6 +1826,7 @@
     sortBar.className = 'report-sort-bar';
     var sortCols = [
       { key: 'name', label: 'Name', flex: '1' },
+      { key: 'start_time', label: 'Start Time', flex: '0 0 150px' },
       { key: 'status', label: 'Status', flex: '0 0 70px' },
       { key: 'duration', label: 'Duration', flex: '0 0 90px' }
     ];
@@ -1848,6 +1905,18 @@
           summary.appendChild(errPreview);
         }
       }
+
+      var startEl = document.createElement('span');
+      startEl.className = 'report-test-timestamp';
+      startEl.textContent = _formatTimestamp(test.start_time);
+      startEl.title = 'Start: ' + _formatTimestamp(test.start_time);
+      summary.appendChild(startEl);
+
+      var endEl = document.createElement('span');
+      endEl.className = 'report-test-timestamp';
+      endEl.textContent = _formatTimestamp(test.end_time);
+      endEl.title = 'End: ' + _formatTimestamp(test.end_time);
+      summary.appendChild(endEl);
 
       var durEl = document.createElement('span');
       durEl.className = 'report-test-dur';

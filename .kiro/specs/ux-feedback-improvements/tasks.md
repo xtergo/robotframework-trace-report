@@ -124,15 +124,15 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
 - [x] 6. Checkpoint — Verify Report page filter changes
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Timestamps and metadata display
-  - [ ] 7.1 Add timestamps to test case rows
+- [x] 7. Timestamps and metadata display
+  - [x] 7.1 Add timestamps to test case rows
     - In `src/rf_trace_viewer/viewer/report-page.js` → `_renderTestResultsTable`, add "Start Time" column to sort bar
     - Display formatted start time and end time in each test row summary
     - Display "N/A" when `start_time === 0`
     - Add `_sortTests` support for `start_time` column
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-  - [ ] 7.2 Add execution metadata to summary dashboard
+  - [x] 7.2 Add execution metadata to summary dashboard
     - In `src/rf_trace_viewer/viewer/report-page.js` → `_renderSummaryDashboard`, add metadata row below hero section
     - Display run start time, end time (formatted from epoch nanoseconds)
     - Display RF version (from `data.rf_version`) only if non-empty
@@ -140,7 +140,7 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Omit fields that are zero/empty/undefined (no empty placeholders)
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-  - [ ] 7.3 Verify generator serializes metadata fields
+  - [x] 7.3 Verify generator serializes metadata fields
     - In `src/rf_trace_viewer/generator.py`, verify `_serialize` includes `rf_version`, `start_time`, `end_time` from `RFRunModel` and `start_time`, `end_time` from `RFTest`
     - Add any missing fields if needed
     - _Requirements: 7.2, 7.3, 11.1, 11.2, 11.3_
@@ -164,7 +164,7 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Generate random `RFRunModel` instances, verify non-zero/non-empty fields are included in serialized output
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5**
 
-  - [ ] 7.7 Add CSS for timestamps and metadata
+  - [x] 7.7 Add CSS for timestamps and metadata
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for timestamp columns and metadata row in summary dashboard
     - _Requirements: 7.1, 11.1_
 
