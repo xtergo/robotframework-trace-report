@@ -217,7 +217,17 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Verify that for both layout modes, `aria-label` equals `textContent`
     - **Validates: Requirements 15.3**
 
-- [ ] 10. Final checkpoint — Ensure all tests pass
+- [x] 10. Offline auto-compact and oldest test positioning
+  - [x] 10.1 Auto-select oldest test case and position view on offline load
+    - In `src/rf_trace_viewer/viewer/timeline.js` → `initTimeline`, after the initial `_render()` call, add an offline-only block guarded by `!window.__RF_TRACE_LIVE__`
+    - Find the oldest test case span: iterate `timelineState.flatSpans`, find the span with `type === 'test'` and the smallest `startTime`
+    - Set `timelineState.selectedSpan` to that span (highlights it in the Gantt chart)
+    - Position the viewport so the span's `startTime` is at the left edge: set `viewStart` to `span.startTime` minus a small padding (e.g. 2% of total range), compute `viewEnd` from current zoom level, clamp to data bounds
+    - Trigger compact layout programmatically: call `compactBtn.click()` (or invoke `_toggleLayoutMode` directly if in baseline mode) so spans pack tightly
+    - Re-render after positioning: call `_render()`, `_renderHeader()`, sync slider and hscroll
+    - Guard: only run when `flatSpans.length > 0` and at least one span has `type === 'test'`
+
+- [x] 11. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

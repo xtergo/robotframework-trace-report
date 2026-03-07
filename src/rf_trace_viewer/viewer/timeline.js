@@ -768,6 +768,56 @@
 
     // Initial render
     _render();
+
+    // ── Offline auto-select: find oldest test span, select it, position viewport, compact ──
+    if (!window.__RF_TRACE_LIVE__ && timelineState.flatSpans.length > 0) {
+      var oldestTest = null;
+      for (var oi = 0; oi < timelineState.flatSpans.length; oi++) {
+        var sp = timelineState.flatSpans[oi];
+        if (sp.type === 'test') {
+          if (!oldestTest || sp.startTime < oldestTest.startTime) {
+            oldestTest = sp;
+          }
+        }
+      }
+      if (oldestTest) {
+        // Select the oldest test span
+        timelineState.selectedSpan = oldestTest;
+        _emitSpanSelected(oldestTest);
+
+        // Position viewport so the span's startTime is near the left edge
+        var totalRange = timelineState.maxTime - timelineState.minTime;
+        var padding = 0.02 * totalRange;
+        var newViewStart = oldestTest.startTime - padding;
+        if (newViewStart < timelineState.minTime) {
+          newViewStart = timelineState.minTime;
+        }
+        var currentViewWidth = timelineState.viewEnd - timelineState.viewStart;
+        var newViewEnd = newViewStart + currentViewWidth;
+        if (newViewEnd > timelineState.maxTime) {
+          newViewEnd = timelineState.maxTime;
+          // Re-adjust viewStart if clamping viewEnd shrunk the window
+          if (newViewEnd - currentViewWidth >= timelineState.minTime) {
+            newViewStart = newViewEnd - currentViewWidth;
+          } else {
+            newViewStart = timelineState.minTime;
+          }
+        }
+        timelineState.viewStart = newViewStart;
+        timelineState.viewEnd = newViewEnd;
+
+        // Trigger compact layout if currently in baseline mode
+        if (timelineState.layoutMode === 'baseline') {
+          _toggleLayoutMode();
+        }
+
+        // Re-render and sync UI controls
+        _render();
+        _renderHeader();
+        if (timelineState._syncSlider) timelineState._syncSlider();
+        if (timelineState._syncHScroll) timelineState._syncHScroll();
+      }
+    }
   };
 
   /**
