@@ -44,6 +44,17 @@
     _runData = data || null;
     _selectedSuiteId = _suites.length > 0 ? (_suites[0].id || null) : null;
     _render();
+
+    // Listen for global search suite filter navigation (Req 12.4)
+    if (typeof window.RFTraceViewer !== 'undefined' &&
+        typeof window.RFTraceViewer.on === 'function') {
+      window.RFTraceViewer.on('set-suite-filter', function (evt) {
+        if (evt && evt.suiteName) {
+          _state.suiteFilter = evt.suiteName;
+          _render();
+        }
+      });
+    }
   };
 
   /**

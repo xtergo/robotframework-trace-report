@@ -827,6 +827,280 @@
     headerSpacer.className = 'header-spacer';
     header.appendChild(headerSpacer);
 
+    // ── Global Search Bar (Req 12) ──
+    var searchWrapper = document.createElement('div');
+    searchWrapper.className = 'global-search-bar';
+
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'global-search-input';
+    searchInput.placeholder = 'Search suites, tests, keywords\u2026';
+    searchInput.setAttribute('aria-label', 'Global search');
+    searchInput.setAttribute('autocomplete', 'off');
+    searchWrapper.appendChild(searchInput);
+
+    var searchDropdown = document.createElement('div');
+    searchDropdown.className = 'search-dropdown';
+    searchDropdown.style.display = 'none';
+    searchWrapper.appendChild(searchDropdown);
+
+    // Collect suite names recursively from suite tree
+    function _collectSuiteNames(suites) {
+      var results = [];
+      var stack = suites ? suites.slice() : [];
+      while (stack.length > 0) {
+        var s = stack.pop();
+        if (s.name) {
+          results.push({ type: 'suite', name: s.name, id: s.id || '', context: '' });
+        }
+        var children = s.children || [];
+        for (var ci = 0; ci < children.length; ci++) {
+          // Only recurse into sub-suites (not tests)
+          if (children[ci].children !== undefined && children[ci].keywords === undefined) {
+            stack.push(children[ci]);
+          }
+        }
+      }
+      return results;
+    }
+
+    // Collect test case names from suite tree
+    function _collectTestNames(suites) {
+      var results = [];
+      var stack = suites ? suites.slice() : [];
+      while (stack.length > 0) {
+        var s = stack.pop();
+        var suiteName = s.name || '';
+        var children = s.children || [];
+        for (var ci = 0; ci < children.length; ci++) {
+          var child = children[ci];
+          if (child.keywords !== undefined) {
+            // It's a test
+            results.push({ type: 'test', name: child.name || '', id: child.id || '', context: suiteName });
+          } else if (child.children !== undefined) {
+            stack.push(child);
+          }
+        }
+      }
+      return results;
+    }
+
+    // Collect keyword names from suite tree (aggregated, unique)
+    function _collectKeywordNames(suites) {
+      var kwMap = {};
+      var suiteStack = suites ? suites.slice() : [];
+      while (suiteStack.length > 0) {
+        var s = suiteStack.pop();
+        var children = s.children || [];
+        for (var ci = 0; ci < children.length; ci++) {
+          var child = children[ci];
+          if (child.keywords !== undefined) {
+            // Walk keyword tree
+            var kwStack = (child.keywords || []).slice();
+            while (kwStack.length > 0) {
+              var kw = kwStack.pop();
+              if (kw.name && !kwMap[kw.name]) {
+                kwMap[kw.name] = { type: 'keyword', name: kw.name, id: kw.id || '', context: '' };
+              }
+              var kwChildren = kw.children || [];
+              for (var ki = 0; ki < kwChildren.length; ki++) {
+                kwStack.push(kwChildren[ki]);
+              }
+            }
+          } else if (child.children !== undefined) {
+            suiteStack.push(child);
+          }
+        }
+      }
+      var results = [];
+      for (var key in kwMap) {
+        if (kwMap.hasOwnProperty(key)) {
+          results.push(kwMap[key]);
+        }
+      }
+      return results;
+    }
+
+    // Perform search across all data types
+    function _performSearch(query) {
+      if (!query) return null;
+      var d = appState.data;
+      if (!d) return { loading: true };
+
+      var suites = d.suites || [];
+      var lowerQuery = query.toLowerCase();
+      var results = { suites: [], tests: [], keywords: [] };
+      var cap = 50;
+
+      // Search suites
+      var allSuites = _collectSuiteNames(suites);
+      for (var si = 0; si < allSuites.length && results.suites.length < cap; si++) {
+        if (allSuites[si].name.toLowerCase().indexOf(lowerQuery) !== -1) {
+          results.suites.push(allSuites[si]);
+        }
+      }
+
+      // Search tests
+      var allTests = _collectTestNames(suites);
+      for (var ti = 0; ti < allTests.length && results.tests.length < cap; ti++) {
+        if (allTests[ti].name.toLowerCase().indexOf(lowerQuery) !== -1) {
+          results.tests.push(allTests[ti]);
+        }
+      }
+
+      // Search keywords
+      var allKeywords = _collectKeywordNames(suites);
+      for (var ki = 0; ki < allKeywords.length && results.keywords.length < cap; ki++) {
+        if (allKeywords[ki].name.toLowerCase().indexOf(lowerQuery) !== -1) {
+          results.keywords.push(allKeywords[ki]);
+        }
+      }
+
+      return results;
+    }
+
+    // Render search results dropdown
+    function _renderSearchDropdown(results) {
+      searchDropdown.innerHTML = '';
+
+      if (!results) {
+        searchDropdown.style.display = 'none';
+        return;
+      }
+
+      if (results.loading) {
+        var loadingEl = document.createElement('div');
+        loadingEl.className = 'search-no-results';
+        loadingEl.textContent = 'Loading\u2026';
+        searchDropdown.appendChild(loadingEl);
+        searchDropdown.style.display = '';
+        return;
+      }
+
+      var totalCount = results.suites.length + results.tests.length + results.keywords.length;
+
+      if (totalCount === 0) {
+        var noResults = document.createElement('div');
+        noResults.className = 'search-no-results';
+        noResults.textContent = 'No results';
+        searchDropdown.appendChild(noResults);
+        searchDropdown.style.display = '';
+        return;
+      }
+
+      var groups = [
+        { label: 'Suites', items: results.suites },
+        { label: 'Test Cases', items: results.tests },
+        { label: 'Keywords', items: results.keywords }
+      ];
+
+      for (var gi = 0; gi < groups.length; gi++) {
+        var group = groups[gi];
+        if (group.items.length === 0) continue;
+
+        var groupEl = document.createElement('div');
+        groupEl.className = 'search-result-group';
+
+        var groupHeader = document.createElement('div');
+        groupHeader.className = 'search-result-group-header';
+        groupHeader.textContent = group.label + ' (' + group.items.length + ')';
+        groupEl.appendChild(groupHeader);
+
+        for (var ii = 0; ii < group.items.length; ii++) {
+          var item = group.items[ii];
+          var itemEl = document.createElement('div');
+          itemEl.className = 'search-result-item';
+          itemEl.setAttribute('data-type', item.type);
+          itemEl.setAttribute('data-id', item.id);
+          itemEl.setAttribute('data-name', item.name);
+
+          var nameSpan = document.createElement('span');
+          nameSpan.className = 'search-result-name';
+          nameSpan.textContent = item.name;
+          itemEl.appendChild(nameSpan);
+
+          if (item.context) {
+            var ctxSpan = document.createElement('span');
+            ctxSpan.className = 'search-result-context';
+            ctxSpan.textContent = item.context;
+            itemEl.appendChild(ctxSpan);
+          }
+
+          itemEl.addEventListener('click', (function (itm) {
+            return function () {
+              _navigateSearchResult(itm);
+              searchInput.value = '';
+              searchDropdown.style.display = 'none';
+            };
+          })(item));
+
+          groupEl.appendChild(itemEl);
+        }
+
+        searchDropdown.appendChild(groupEl);
+      }
+
+      searchDropdown.style.display = '';
+    }
+
+    // Navigate to a search result
+    function _navigateSearchResult(item) {
+      if (item.type === 'test') {
+        // Switch to Explorer tab, highlight in tree
+        _switchTab('explorer');
+        if (item.id && typeof window.highlightNodeInTree === 'function') {
+          window.highlightNodeInTree(item.id);
+        }
+      } else if (item.type === 'suite') {
+        // Switch to Report tab, set suite filter
+        _switchTab('report');
+        if (typeof window.RFTraceViewer !== 'undefined') {
+          eventBus.emit('set-suite-filter', { suiteName: item.name });
+        }
+      } else if (item.type === 'keyword') {
+        // Switch to Explorer tab, highlight first occurrence
+        _switchTab('explorer');
+        if (item.id && typeof window.highlightNodeInTree === 'function') {
+          window.highlightNodeInTree(item.id);
+        }
+      }
+    }
+
+    // Debounced search handler (150ms)
+    var _searchTimer = null;
+    searchInput.addEventListener('input', function () {
+      var query = searchInput.value.trim();
+      if (_searchTimer) {
+        clearTimeout(_searchTimer);
+      }
+      if (!query) {
+        searchDropdown.style.display = 'none';
+        searchDropdown.innerHTML = '';
+        return;
+      }
+      _searchTimer = setTimeout(function () {
+        var results = _performSearch(query);
+        _renderSearchDropdown(results);
+      }, 150);
+    });
+
+    // Close dropdown on click outside
+    document.addEventListener('click', function (e) {
+      if (!searchWrapper.contains(e.target)) {
+        searchDropdown.style.display = 'none';
+      }
+    });
+
+    // Close dropdown on Escape
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        searchDropdown.style.display = 'none';
+        searchInput.blur();
+      }
+    });
+
+    header.appendChild(searchWrapper);
+
     var toggleBtn = document.createElement('button');
     toggleBtn.className = 'theme-toggle-icon';
     toggleBtn.textContent = theme === 'dark' ? '\u2600' : '\ud83c\udf19';

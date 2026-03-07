@@ -168,21 +168,21 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for timestamp columns and metadata row in summary dashboard
     - _Requirements: 7.1, 11.1_
 
-- [ ] 8. Global search bar
-  - [ ] 8.1 Build global search bar DOM and debounced input handler
+- [x] 8. Global search bar
+  - [x] 8.1 Build global search bar DOM and debounced input handler
     - In `src/rf_trace_viewer/viewer/app.js` → `_initApp`, add search input to viewer header between title and theme toggle
     - Implement 150ms debounce on input
     - Search across suite names (recursive), test case names, and keyword names
     - _Requirements: 12.1, 12.7_
 
-  - [ ] 8.2 Build search results dropdown with grouped results
+  - [x] 8.2 Build search results dropdown with grouped results
     - Display results in a dropdown grouped by type (suites, test cases, keywords)
     - Cap results at 50 items per group
     - Show "No results" when query has no matches
     - Show "Loading..." if data not yet loaded
     - _Requirements: 12.2, 12.6_
 
-  - [ ] 8.3 Implement search result navigation
+  - [x] 8.3 Implement search result navigation
     - Test case result → switch to Explorer tab, highlight in tree view
     - Suite result → switch to Report tab, set suite filter
     - Keyword result → switch to Explorer tab, highlight first occurrence in tree
@@ -194,7 +194,7 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
     - Generate random data sets with suites, tests, keywords; verify results are partitioned by type and each result matches query as case-insensitive substring
     - **Validates: Requirements 12.2**
 
-  - [ ] 8.5 Add CSS for global search bar and dropdown
+  - [x] 8.5 Add CSS for global search bar and dropdown
     - In `src/rf_trace_viewer/viewer/style.css`, add styles for `.global-search-bar`, `.search-dropdown`, `.search-result-group`
     - _Requirements: 12.1, 12.2_
 
