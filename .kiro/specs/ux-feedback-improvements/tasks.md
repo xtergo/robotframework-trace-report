@@ -230,6 +230,51 @@ Implement 14 UX improvements to the RF Trace Viewer across four categories: Navi
 - [x] 11. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
+- [ ] 12. Run Verdict Header Redesign
+  - [x] 12.1 Replace hero-top-row and ratio bar with Run Verdict Header in report-page.js
+    - In `src/rf_trace_viewer/viewer/report-page.js` → `_renderSummaryDashboard`, remove the `hero-top-row` (verdict badge + stat chips) and the `hero-ratio-bar-wrap` (ratio bar + pass-rate label)
+    - Add verdict determination logic with SKIPPED support: `failed > 0` → FAILED/❌, `passed === 0 && skipped > 0` → SKIPPED/⚠️, else → PASSED/✅
+    - Build `run-verdict-header` div containing `verdict-icon` span, `verdict-label` span ("Test Run:"), and `verdict-word` span (verdict text)
+    - Apply verdict-specific CSS class (`verdict-pass`, `verdict-fail`, `verdict-skip`) to the header div
+    - Update hero class logic to include `hero-skip` when all tests are skipped
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.14_
+
+  - [x] 12.2 Add Metrics Summary Line below verdict header in report-page.js
+    - In `src/rf_trace_viewer/viewer/report-page.js` → `_renderSummaryDashboard`, build `metrics-summary-line` div after the `run-verdict-header`
+    - Compute pass rate as `Math.round(passed / total_tests * 100)` (0 when `total_tests` is 0)
+    - Format as pipe-separated string: "N tests | N passed | N failed | N skipped | Duration Xs | Pass rate N%"
+    - Use existing `_formatDuration` helper for duration formatting
+    - Ensure metrics update on live polling (already handled by re-render cycle)
+    - _Requirements: 16.7, 16.8, 16.9, 16.10, 16.13_
+
+  - [x] 12.3 Add CSS for Run Verdict Header and Metrics Summary Line
+    - In `src/rf_trace_viewer/viewer/style.css`, add `.run-verdict-header` (flex, align-items center, gap 8px)
+    - Add `.verdict-icon` (font-size 28px, line-height 1)
+    - Add `.verdict-label` and `.verdict-word` (font-size 24px, font-weight 700)
+    - Add `.verdict-pass .verdict-word` (color: var(--status-pass)), `.verdict-fail .verdict-word` (color: var(--status-fail)), `.verdict-skip .verdict-word` (color: var(--status-skip))
+    - Add `.report-hero.hero-skip` (border-left: 5px solid var(--status-skip))
+    - Add `.metrics-summary-line` (margin-top 8px, font-size 14px, color var(--text-secondary), font-variant-numeric tabular-nums)
+    - _Requirements: 16.2, 16.3, 16.4, 16.5, 16.11, 16.12, 16.14_
+
+  - [ ]* 12.4 Write property test for verdict determination logic
+    - **Property 15: Verdict determination correctness**
+    - **Validates: Requirements 16.1, 16.3, 16.4, 16.5, 16.6**
+    - Create `tests/unit/test_report_verdict.py`
+    - Generate random statistics with non-negative `passed`, `failed`, `skipped` counts using Hypothesis
+    - Verify: `failed > 0` → ("FAILED", "verdict-fail", "❌"); `failed == 0 and passed == 0 and skipped > 0` → ("SKIPPED", "verdict-skip", "⚠️"); otherwise → ("PASSED", "verdict-pass", "✅")
+    - Verify output always contains "Test Run:" prefix
+
+  - [ ]* 12.5 Write property test for metrics summary line completeness
+    - **Property 16: Metrics summary line completeness**
+    - **Validates: Requirements 16.8, 16.9**
+    - Add to `tests/unit/test_report_verdict.py`
+    - Generate random statistics with non-negative `total_tests`, `passed`, `failed`, `skipped`, `total_duration_ms` using Hypothesis
+    - Verify the formatted metrics string contains all six values: total count, passed count, failed count, skipped count, duration, and pass rate percentage
+    - Verify pass rate is `round(passed / total_tests * 100)` when `total_tests > 0`, else 0
+
+- [ ] 13. Final checkpoint — Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP

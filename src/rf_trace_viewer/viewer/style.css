@@ -3487,6 +3487,43 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-left: 5px solid var(--status-fail);
 }
 
+.rf-trace-viewer .report-hero.hero-skip {
+  border-left: 5px solid var(--status-skip);
+}
+
+.rf-trace-viewer .run-verdict-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rf-trace-viewer .run-verdict-header .verdict-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.rf-trace-viewer .run-verdict-header .verdict-label {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .run-verdict-header .verdict-word {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.rf-trace-viewer .verdict-pass .verdict-word { color: var(--status-pass); }
+.rf-trace-viewer .verdict-fail .verdict-word { color: var(--status-fail); }
+.rf-trace-viewer .verdict-skip .verdict-word { color: var(--status-skip); }
+
+.rf-trace-viewer .metrics-summary-line {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .rf-trace-viewer .hero-top-row {
   display: flex;
   align-items: center;

@@ -736,109 +736,70 @@
 
     var stats = _statistics || { total_tests: 0, passed: 0, failed: 0, skipped: 0, total_duration_ms: 0, suite_stats: [] };
 
-    // ── Hero section: compact verdict + inline stats + stacked bar ──
+    // ── Hero section: Run Verdict Header + Metrics Summary Line ──
+    var verdictWord, verdictClass, verdictIcon;
+    if (stats.failed > 0) {
+      verdictWord = 'FAILED';
+      verdictClass = 'verdict-fail';
+      verdictIcon = '\u274C';
+    } else if (stats.passed === 0 && stats.skipped > 0) {
+      verdictWord = 'SKIPPED';
+      verdictClass = 'verdict-skip';
+      verdictIcon = '\u26A0\uFE0F';
+    } else {
+      verdictWord = 'PASSED';
+      verdictClass = 'verdict-pass';
+      verdictIcon = '\u2705';
+    }
+
+    var heroClass = 'report-hero';
+    if (stats.failed > 0) {
+      heroClass += ' hero-fail';
+    } else if (stats.passed === 0 && stats.skipped > 0) {
+      heroClass += ' hero-skip';
+    } else {
+      heroClass += ' hero-pass';
+    }
+
     var hero = document.createElement('div');
-    hero.className = 'report-hero' + (stats.failed > 0 ? ' hero-fail' : ' hero-pass');
+    hero.className = heroClass;
 
-    // Top row: verdict badge + inline stat chips + duration
-    var topRow = document.createElement('div');
-    topRow.className = 'hero-top-row';
+    // Run Verdict Header
+    var verdictHeader = document.createElement('div');
+    verdictHeader.className = 'run-verdict-header ' + verdictClass;
 
-    // Verdict badge
-    var verdict = document.createElement('div');
-    verdict.className = 'report-verdict';
-    var verdictIcon = document.createElement('span');
-    verdictIcon.className = 'verdict-icon';
-    verdictIcon.textContent = stats.failed > 0 ? '\u2717' : '\u2713';
-    verdict.appendChild(verdictIcon);
-    var verdictText = document.createElement('span');
-    verdictText.className = 'verdict-text';
-    verdictText.textContent = stats.failed > 0 ? 'FAILED' : 'PASSED';
-    verdict.appendChild(verdictText);
-    topRow.appendChild(verdict);
+    var vIcon = document.createElement('span');
+    vIcon.className = 'verdict-icon';
+    vIcon.textContent = verdictIcon;
+    verdictHeader.appendChild(vIcon);
 
-    // Inline stat chips: "8919 tests · 7569 passed · 739 failed · 439 skipped"
-    var chipRow = document.createElement('div');
-    chipRow.className = 'hero-stat-chips';
+    var vLabel = document.createElement('span');
+    vLabel.className = 'verdict-label';
+    vLabel.textContent = 'Test Run:';
+    verdictHeader.appendChild(vLabel);
 
-    var chipData = [
-      { value: stats.total_tests, label: 'tests', cls: '' },
-      { value: stats.passed, label: 'passed', cls: 'chip-pass' },
-      { value: stats.failed, label: 'failed', cls: 'chip-fail' },
-      { value: stats.skipped, label: 'skipped', cls: 'chip-skip' }
-    ];
+    var vWord = document.createElement('span');
+    vWord.className = 'verdict-word';
+    vWord.textContent = verdictWord;
+    verdictHeader.appendChild(vWord);
 
-    for (var i = 0; i < chipData.length; i++) {
-      if (i > 0) {
-        var sep = document.createElement('span');
-        sep.className = 'chip-sep';
-        sep.textContent = '\u00B7';
-        chipRow.appendChild(sep);
-      }
-      var chip = document.createElement('span');
-      chip.className = 'hero-stat-chip' + (chipData[i].cls ? ' ' + chipData[i].cls : '');
-      var chipVal = document.createElement('span');
-      chipVal.className = 'chip-value';
-      chipVal.textContent = chipData[i].value;
-      chip.appendChild(chipVal);
-      var chipLbl = document.createTextNode(' ' + chipData[i].label);
-      chip.appendChild(chipLbl);
-      chipRow.appendChild(chip);
-    }
+    hero.appendChild(verdictHeader);
 
-    // Duration chip at the end
-    var durChip = document.createElement('span');
-    durChip.className = 'hero-stat-chip chip-duration';
-    durChip.textContent = _formatDuration(stats.total_duration_ms);
-    chipRow.appendChild(durChip);
+    // Metrics Summary Line
+    var passRate = stats.total_tests > 0
+      ? Math.round(stats.passed / stats.total_tests * 100)
+      : 0;
+    var metricsText = stats.total_tests + ' tests | '
+      + stats.passed + ' passed | '
+      + stats.failed + ' failed | '
+      + stats.skipped + ' skipped | '
+      + 'Duration ' + _formatDuration(stats.total_duration_ms) + ' | '
+      + 'Pass rate ' + passRate + '%';
 
-    topRow.appendChild(chipRow);
-    hero.appendChild(topRow);
-
-    // ── Stacked ratio bar: pass/fail/skip as colored segments ──
-    if (stats.total_tests > 0) {
-      var barWrap = document.createElement('div');
-      barWrap.className = 'hero-ratio-bar-wrap';
-
-      var bar = document.createElement('div');
-      bar.className = 'hero-ratio-bar';
-
-      var passPct = (stats.passed / stats.total_tests * 100);
-      var failPct = (stats.failed / stats.total_tests * 100);
-      var skipPct = (stats.skipped / stats.total_tests * 100);
-
-      if (stats.passed > 0) {
-        var passSegment = document.createElement('div');
-        passSegment.className = 'ratio-segment ratio-pass';
-        passSegment.style.width = passPct + '%';
-        passSegment.title = stats.passed + ' passed (' + Math.round(passPct) + '%)';
-        bar.appendChild(passSegment);
-      }
-      if (stats.failed > 0) {
-        var failSegment = document.createElement('div');
-        failSegment.className = 'ratio-segment ratio-fail';
-        failSegment.style.width = failPct + '%';
-        failSegment.title = stats.failed + ' failed (' + Math.round(failPct) + '%)';
-        bar.appendChild(failSegment);
-      }
-      if (stats.skipped > 0) {
-        var skipSegment = document.createElement('div');
-        skipSegment.className = 'ratio-segment ratio-skip';
-        skipSegment.style.width = skipPct + '%';
-        skipSegment.title = stats.skipped + ' skipped (' + Math.round(skipPct) + '%)';
-        bar.appendChild(skipSegment);
-      }
-
-      barWrap.appendChild(bar);
-
-      // Pass-rate label
-      var rateLabel = document.createElement('span');
-      rateLabel.className = 'hero-rate-label';
-      rateLabel.textContent = Math.round(passPct) + '% pass rate';
-      barWrap.appendChild(rateLabel);
-
-      hero.appendChild(barWrap);
-    }
+    var metricsLine = document.createElement('div');
+    metricsLine.className = 'metrics-summary-line';
+    metricsLine.textContent = metricsText;
+    hero.appendChild(metricsLine);
 
     dashboard.appendChild(hero);
 

@@ -2,14 +2,15 @@
 
 ## Overview
 
-This design covers 14 UX improvements to the RF Trace Viewer (Requirement 13 is out of scope). The changes span both the Explorer page (`app.js`, `search.js`, `timeline.js`) and the Report page (`report-page.js`), plus the shared header (`app.js`, `theme.js`) and stylesheet (`style.css`). No backend (Python) changes are required for most items; only Requirement 11 (metadata display) and Requirement 7 (timestamps) depend on data already present in the `RFRunModel` serialization pipeline.
+This design covers 15 UX improvements to the RF Trace Viewer (Requirement 13 is out of scope). The changes span both the Explorer page (`app.js`, `search.js`, `timeline.js`) and the Report page (`report-page.js`), plus the shared header (`app.js`, `theme.js`) and stylesheet (`style.css`). No backend (Python) changes are required for most items; only Requirement 11 (metadata display) and Requirement 7 (timestamps) depend on data already present in the `RFRunModel` serialization pipeline.
 
-The improvements fall into four categories:
+The improvements fall into five categories:
 
 1. **Navigation & Defaults** (Reqs 1, 2, 9, 10): Change the default active tab, expand the filter panel on load, add suite-grouped view, fix the dark mode icon.
 2. **Filter Enhancements** (Reqs 3, 4, 5, 6, 8, 12): Per-section reset buttons, vertical duration stacking, multi-select tags, keyword filtering on Report page, suite filter on Report page, global search bar.
 3. **Data Display** (Reqs 7, 11): Timestamps on test cases, execution metadata on the summary dashboard.
 4. **Timeline Polish** (Reqs 14, 15): Hide time presets in offline mode, fix compact button wording.
+5. **Report Header Redesign** (Req 16): Replace the existing verdict badge + stat chips layout with a prominent "Test Run: VERDICT" header and a concise metrics summary line.
 
 All JavaScript must use the IIFE pattern with `var` declarations — no ES6+ features. The viewer is a single-page HTML report; all DOM is built programmatically.
 
@@ -56,10 +57,10 @@ graph TD
 |------|-------------|---------|
 | `app.js` | 1, 2, 10, 12 | Tab order & default, filter panel init state, theme icon chars, global search bar in header |
 | `search.js` | 3, 4 | Per-section reset buttons, vertical duration range layout |
-| `report-page.js` | 5, 6, 7, 8, 9, 11 | Multi-select tags, keyword filtering, timestamps, suite filter, suite-grouped view, metadata display |
+| `report-page.js` | 5, 6, 7, 8, 9, 11, 16 | Multi-select tags, keyword filtering, timestamps, suite filter, suite-grouped view, metadata display, run verdict header redesign |
 | `timeline.js` | 14, 15 | Hide time presets in offline mode, compact button wording |
 | `theme.js` | 10 | Moon icon character update |
-| `style.css` | 3, 4, 5, 6, 7, 8, 9, 12, 14 | New CSS for reset buttons, vertical stacking, filter badges, timestamps, suite groups, global search dropdown, preset hiding |
+| `style.css` | 3, 4, 5, 6, 7, 8, 9, 12, 14, 16 | New CSS for reset buttons, vertical stacking, filter badges, timestamps, suite groups, global search dropdown, preset hiding, verdict header and metrics line |
 | `generator.py` | 11 | Ensure `rf_version`, `start_time`, `end_time` are serialized (already present in `_serialize`) |
 
 ## Components and Interfaces
@@ -204,6 +205,127 @@ Display results in a dropdown grouped by type. Selecting a result navigates:
 **Change**: Change to `'Expand to baseline'` with matching `aria-label`. Also update `_handleFilterChanged` (which resets layout on filter change) to ensure the button text reverts to `'Compact visible spans'`.
 
 **File**: `timeline.js` → `_toggleLayoutMode`, `_handleFilterChanged`
+
+### 15. Run Verdict Header Redesign (Req 16)
+
+**Current**: `_renderSummaryDashboard` builds a `report-hero` div containing a `hero-top-row` with a small verdict badge (`✗`/`✓` icon + "FAILED"/"PASSED" text at 15px), inline stat chips (total · passed · failed · skipped · duration), and a stacked ratio bar with pass-rate label. The verdict only distinguishes PASSED vs FAILED (no SKIPPED verdict). The hero section gets class `hero-pass` or `hero-fail`.
+
+**Change**: Replace the `hero-top-row` contents (verdict badge + stat chips) and the ratio bar with two new elements:
+
+1. **Run_Verdict_Header** — a prominent heading showing "Test Run: VERDICT" with a status icon.
+2. **Metrics_Summary_Line** — a single concise line of pipe-separated stats below the verdict.
+
+The stacked ratio bar and pass-rate label are removed. The execution metadata row below the hero section is unchanged.
+
+**Verdict determination logic** (updated to handle all-skipped):
+
+```javascript
+var verdictWord, verdictClass, verdictIcon;
+if (stats.failed > 0) {
+  verdictWord = 'FAILED';
+  verdictClass = 'verdict-fail';
+  verdictIcon = '\u274C';       // ❌
+} else if (stats.passed === 0 && stats.skipped > 0) {
+  verdictWord = 'SKIPPED';
+  verdictClass = 'verdict-skip';
+  verdictIcon = '\u26A0\uFE0F'; // ⚠️
+} else {
+  verdictWord = 'PASSED';
+  verdictClass = 'verdict-pass';
+  verdictIcon = '\u2705';       // ✅
+}
+```
+
+**DOM structure**:
+
+```
+div.summary-dashboard
+  div.report-hero.hero-{pass|fail|skip}
+    div.run-verdict-header.{verdict-pass|verdict-fail|verdict-skip}
+      span.verdict-icon          → "✅" / "❌" / "⚠️"
+      span.verdict-label         → "Test Run:"
+      span.verdict-word          → "PASSED" / "FAILED" / "SKIPPED"
+    div.metrics-summary-line
+      → "11 tests | 8 passed | 2 failed | 1 skipped | Duration 45s | Pass rate 73%"
+  div.report-metadata-row        → (unchanged, from Req 11)
+```
+
+**Hero class update**: Add `hero-skip` alongside existing `hero-pass` / `hero-fail`:
+
+```javascript
+var heroClass = 'report-hero';
+if (stats.failed > 0) {
+  heroClass += ' hero-fail';
+} else if (stats.passed === 0 && stats.skipped > 0) {
+  heroClass += ' hero-skip';
+} else {
+  heroClass += ' hero-pass';
+}
+```
+
+**Metrics summary line construction**:
+
+```javascript
+var passRate = stats.total_tests > 0
+  ? Math.round(stats.passed / stats.total_tests * 100)
+  : 0;
+var metricsText = stats.total_tests + ' tests | '
+  + stats.passed + ' passed | '
+  + stats.failed + ' failed | '
+  + stats.skipped + ' skipped | '
+  + 'Duration ' + _formatDuration(stats.total_duration_ms) + ' | '
+  + 'Pass rate ' + passRate + '%';
+```
+
+**New CSS classes**:
+
+```css
+/* Run Verdict Header */
+.rf-trace-viewer .run-verdict-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rf-trace-viewer .run-verdict-header .verdict-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.rf-trace-viewer .run-verdict-header .verdict-label {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .run-verdict-header .verdict-word {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.rf-trace-viewer .verdict-pass .verdict-word { color: var(--status-pass); }
+.rf-trace-viewer .verdict-fail .verdict-word { color: var(--status-fail); }
+.rf-trace-viewer .verdict-skip .verdict-word { color: var(--status-skip); }
+
+/* Hero skip variant */
+.rf-trace-viewer .report-hero.hero-skip {
+  border-left: 5px solid var(--status-skip);
+}
+
+/* Metrics Summary Line */
+.rf-trace-viewer .metrics-summary-line {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+```
+
+**Removed elements**: The `hero-top-row`, `hero-stat-chips`, `chip-*`, `hero-ratio-bar-wrap`, `hero-ratio-bar`, `ratio-segment`, and `hero-rate-label` elements are no longer rendered by `_renderSummaryDashboard`. Their CSS can remain (no harm) or be cleaned up in a follow-up.
+
+**Live polling**: The `_renderSummaryDashboard` function is called on every data refresh (via `_renderReportPage`), so the verdict and metrics line automatically reflect the latest `_statistics` values. No additional polling logic is needed.
+
+**File**: `report-page.js` → `_renderSummaryDashboard`, `style.css`
 
 ## Data Models
 
@@ -368,6 +490,18 @@ var _state = {
 
 **Validates: Requirements 15.3**
 
+### Property 15: Verdict determination correctness
+
+*For any* statistics object with non-negative `passed`, `failed`, and `skipped` counts, the verdict determination produces: (a) verdict word "FAILED" with red color class and ❌ icon when `failed > 0`; (b) verdict word "SKIPPED" with yellow color class and ⚠️ icon when `failed === 0` and `passed === 0` and `skipped > 0`; (c) verdict word "PASSED" with green color class and ✅ icon otherwise. The rendered header always contains the text "Test Run:" followed by the verdict word.
+
+**Validates: Requirements 16.1, 16.3, 16.4, 16.5, 16.6**
+
+### Property 16: Metrics summary line completeness
+
+*For any* statistics object with non-negative `total_tests`, `passed`, `failed`, `skipped`, and non-negative `total_duration_ms`, the rendered metrics summary line contains all six values: the total test count, passed count, failed count, skipped count, formatted duration, and pass rate percentage (computed as `round(passed / total_tests * 100)`, or 0 when `total_tests` is 0).
+
+**Validates: Requirements 16.8, 16.9**
+
 ## Error Handling
 
 ### Filter State Errors
@@ -392,6 +526,11 @@ var _state = {
 - The `_state.tagFilter` (singular) to `_state.tagFilters` (array) migration: if any external code or deep-link state references the old `tagFilter` property, add a compatibility shim that converts a string to a single-element array.
 - The `_filterTests` function signature changes from `(tests, text, tagFilter)` to `(tests, text, tagFilters, keywordFilters, suiteFilter)`. Any callers must be updated.
 
+### Verdict Header Errors
+- If `_statistics` is `null` or `undefined`, fall back to `{ total_tests: 0, passed: 0, failed: 0, skipped: 0, total_duration_ms: 0 }` before computing the verdict. This is already handled by the existing default at the top of `_renderSummaryDashboard`.
+- If `total_tests` is 0 (no tests at all), the verdict defaults to "PASSED" (no failures). The pass rate displays as "0%". This is a valid edge case — an empty run is not a failure.
+- The emoji icons (✅, ❌, ⚠️) may render differently across platforms. Since the viewer already uses emoji elsewhere (and the verdict word provides the semantic meaning), this is acceptable.
+
 ## Testing Strategy
 
 ### Property-Based Testing
@@ -415,6 +554,8 @@ Since the UX improvements are primarily JavaScript/DOM changes, the testable pro
 - Property 5 (tag OR filter): Implement the filter logic as a pure function and test with generated test/tag data.
 - Property 10 (combined filters): Test the filter composition logic with generated multi-filter states.
 - Property 13 (search grouping): Test the search function with generated data sets.
+- Property 15 (verdict determination): Implement the verdict logic (`failed > 0` → FAILED, `passed === 0 && skipped > 0` → SKIPPED, else → PASSED) as a pure function. Generate random statistics with non-negative counts and verify the returned verdict word, color class, and icon are correct.
+- Property 16 (metrics summary line): Implement the metrics formatting as a pure function. Generate random statistics and verify the output string contains all six values (total, passed, failed, skipped, duration, pass rate percentage).
 
 **2. Unit tests** (specific examples and edge cases):
 - Req 1: Verify tab order and default active state in generated HTML.
@@ -423,6 +564,7 @@ Since the UX improvements are primarily JavaScript/DOM changes, the testable pro
 - Req 10: Verify moon/sun icon characters.
 - Req 14: Verify time preset visibility based on `__RF_TRACE_LIVE__` flag.
 - Req 15: Verify compact button text in both states.
+- Req 16: Verify verdict header DOM structure (presence of `run-verdict-header`, `verdict-label`, `verdict-word`, `metrics-summary-line` elements). Verify the all-skipped edge case produces "SKIPPED" verdict. Verify zero-test edge case produces "PASSED" with "0%" pass rate.
 
 **3. Browser integration tests** (Robot Framework):
 - End-to-end verification of filter interactions, tag multi-select, keyword filtering, global search navigation.
@@ -447,6 +589,7 @@ tests/
     test_report_filters.py      # Properties 4, 5, 6, 7, 10 (filter logic)
     test_report_sort.py          # Property 9 (sort correctness)
     test_report_metadata.py      # Property 12 (metadata serialization)
+    test_report_verdict.py       # Properties 15, 16 (verdict determination, metrics line)
     test_global_search.py        # Property 13 (search grouping)
     test_generator.py            # Property 8 (timestamp serialization) — extend existing
   browser/

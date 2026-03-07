@@ -24,6 +24,8 @@ This specification captures a set of UX improvements for the RF Trace Viewer, dr
 - **Time_Preset_Buttons**: The segmented button group in the timeline zoom bar (15m, 1h, 6h, 24h, 7d) that sets the view window to a rolling time range. Only meaningful in live mode.
 - **Compact_Button**: The button in the timeline zoom bar that toggles between baseline and compact span layout modes. Currently labeled "Compact visible spans" / "Reset layout".
 - **Horizontal_Scrollbar**: The thin horizontal scroll element below the timeline canvas that allows panning the viewport left/right by dragging.
+- **Run_Verdict_Header**: The prominent heading within the Summary_Dashboard that displays "Test Run: PASSED/FAILED/SKIPPED" with a status icon, serving as the primary visual indicator of the overall test run outcome.
+- **Metrics_Summary_Line**: The concise single-line summary below the Run_Verdict_Header showing total tests, passed/failed/skipped counts, duration, and pass rate percentage.
 
 ## Requirements
 
@@ -195,3 +197,24 @@ This feedback item reports that indentation in the tree view does not apply corr
 2. WHEN the timeline is in compact layout mode, THE Compact_Button text SHALL read "Expand to baseline" (instead of the current "Reset layout").
 3. THE Compact_Button aria-label SHALL match the visible button text in both states.
 4. WHEN the layout mode resets due to a filter change, THE Compact_Button text SHALL revert to "Compact visible spans".
+
+### Requirement 16: Run Verdict Header Redesign
+
+**User Story:** As a user (including those unfamiliar with Robot Framework), I want the Summary Dashboard header to clearly label the overall test run verdict and key execution statistics, so that I immediately understand this page represents a full test run, what the outcome was, and the key metrics without needing domain knowledge.
+
+#### Acceptance Criteria
+
+1. THE Summary_Dashboard SHALL display a Run_Verdict_Header containing the text "Test Run:" followed by the verdict word ("PASSED", "FAILED", or "SKIPPED").
+2. THE Run_Verdict_Header verdict text SHALL be the most visually prominent element in the Summary_Dashboard, rendered at a larger font size than all other Summary_Dashboard content.
+3. WHEN the verdict is "PASSED", THE Run_Verdict_Header verdict text SHALL use the existing green color semantic defined in the Viewer theme.
+4. WHEN the verdict is "FAILED", THE Run_Verdict_Header verdict text SHALL use the existing red color semantic defined in the Viewer theme.
+5. WHEN the verdict is "SKIPPED" (all tests skipped), THE Run_Verdict_Header verdict text SHALL use the existing yellow color semantic defined in the Viewer theme.
+6. THE Run_Verdict_Header SHALL display a status icon adjacent to the verdict text: "✅" for PASSED, "❌" for FAILED, and "⚠️" for SKIPPED.
+7. THE Summary_Dashboard SHALL display a Metrics_Summary_Line below the Run_Verdict_Header, visually separated from the verdict.
+8. THE Metrics_Summary_Line SHALL display the following values derived from the run data: total test count, passed count, failed count, skipped count, total duration, and pass rate percentage.
+9. THE Metrics_Summary_Line SHALL format the values as a single concise line (e.g., "11 tests | 8 passed | 2 failed | 1 skipped | Duration 45s | Pass rate 73%").
+10. WHEN the run data changes (e.g., during live polling), THE Metrics_Summary_Line values SHALL update to reflect the current run data.
+11. WHILE the Viewer is in dark mode, THE Run_Verdict_Header and Metrics_Summary_Line SHALL use colors and contrast ratios consistent with the existing dark theme.
+12. WHILE the Viewer is in light mode, THE Run_Verdict_Header and Metrics_Summary_Line SHALL use colors and contrast ratios consistent with the existing light theme.
+13. THE Run_Verdict_Header and Metrics_Summary_Line SHALL not interfere with existing filtering, navigation, or sub-tab features on the Report_Page.
+14. THE Run_Verdict_Header layout SHALL remain compact, occupying no more vertical space than necessary to display the verdict and metrics clearly.
