@@ -4939,3 +4939,179 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .actions-dropdown-item:hover {
   background: var(--bg-tertiary);
 }
+
+/* White color for metadata chip values */
+.rf-trace-viewer .report-metadata-value {
+  color: #ffffff;
+}
+
+/* ── Report Sort Bar: Modern Dashboard Header (Stripe/Linear style) ── */
+
+/* Sort column: inline-flex for label + icon alignment */
+.rf-trace-viewer .report-sort-col {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+/* Sort column label */
+.rf-trace-viewer .sort-col-label {
+  white-space: nowrap;
+}
+
+/* Sort indicator icon: subtle neutral state */
+.rf-trace-viewer .sort-col-icon {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.4;
+  transition: opacity 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+/* Active sort icon: prominent */
+.rf-trace-viewer .sort-col-icon-active {
+  opacity: 1;
+  color: var(--focus-outline);
+  font-size: 10px;
+}
+
+/* Hover: reveal neutral icon */
+.rf-trace-viewer .report-sort-col:hover .sort-col-icon {
+  opacity: 0.8;
+}
+
+/* Hover: brighten active icon */
+.rf-trace-viewer .report-sort-col.sorted:hover .sort-col-icon-active {
+  opacity: 1;
+}
+
+/* Sorted column: accent color for label too */
+.rf-trace-viewer .report-sort-col.sorted .sort-col-label {
+  color: var(--focus-outline);
+}
+
+/* Sort bar: stronger bottom border for clean separation */
+.rf-trace-viewer .report-sort-bar {
+  border-bottom: 2px solid var(--border-color);
+  padding: 6px 12px;
+}
+
+/* ── Column alignment overhaul: Status first, add End Time column ── */
+
+/* Override shared column widths to include end_time and narrower status */
+.rf-trace-viewer .report-test-results {
+  --col-status: 0 0 50px;
+  --col-name: 1;
+  --col-start: 0 0 140px;
+  --col-end: 0 0 140px;
+  --col-duration: 0 0 85px;
+}
+
+/* Sort bar: 5 columns in new order */
+.rf-trace-viewer .report-sort-col:nth-child(1) {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(2) {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(3) {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(4) {
+  flex: var(--col-end);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(5) {
+  flex: var(--col-duration);
+}
+
+/* Test row summary: match sort bar order */
+.rf-trace-viewer .report-test-summary .report-status-dot {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-name {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-timestamp {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-end-time {
+  flex: var(--col-end);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-dur {
+  flex: var(--col-duration);
+}
+
+/* ── Column alignment fix: error inside name, sort bar gap ── */
+
+/* Sort bar needs same gap as test summary rows */
+.rf-trace-viewer .report-sort-bar {
+  gap: 8px;
+}
+
+/* Error preview lives inside the name column now — inline display */
+.rf-trace-viewer .report-test-error {
+  flex: none;
+  display: inline;
+  margin-left: 8px;
+  font-size: 11px;
+}
+
+/* Name column: truncate the combined name+error with ellipsis */
+.rf-trace-viewer .report-test-summary .report-test-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Ensure the test name text itself truncates */
+.rf-trace-viewer .report-test-name > .report-test-error {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Column alignment fix v2: consistent text-align, padding, and border compensation ── */
+
+/* Remove padding from sort columns so they align flush with data cells */
+.rf-trace-viewer .report-sort-col {
+  padding: 0;
+}
+
+/* Left-align all data columns to match sort bar headers */
+.rf-trace-viewer .report-test-dur {
+  text-align: left;
+}
+
+.rf-trace-viewer .report-test-timestamp {
+  text-align: left;
+}
+
+/* Compensate for the 3px border-left on failed rows so columns stay aligned */
+.rf-trace-viewer .report-test-row.row-fail > .report-test-summary {
+  padding-left: 9px;
+}
+
+/* Override base report-test-error flex so it doesn't push siblings */
+.rf-trace-viewer .report-test-name > .report-test-error {
+  flex: none;
+  display: inline;
+}
+
+/* Status dot: override base width so flex-basis controls sizing */
+.rf-trace-viewer .report-status-dot {
+  width: auto;
+}
