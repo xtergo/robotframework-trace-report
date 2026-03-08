@@ -4758,3 +4758,184 @@ html[data-theme="dark"], html[data-theme="dark"] body {
     flex-direction: column;
   }
 }
+
+/* ── Report UX Overhaul: Inline metadata chips (Task 2.3) ── */
+
+/* Tighten metadata row spacing */
+.rf-trace-viewer .report-metadata-row {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Style each metadata item as a compact chip */
+.rf-trace-viewer .report-metadata-item {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── Report UX Overhaul: Improved tab navigation (Task 3.1) ── */
+
+/* Remove gap between tabs and content; add tab bar background */
+.rf-trace-viewer .report-sub-tabs {
+  margin-bottom: 0;
+  background: var(--bg-secondary);
+}
+
+/* Active tab: underline + distinct background */
+.rf-trace-viewer .report-sub-tab.active {
+  border-bottom: 2px solid var(--focus-outline);
+  background: var(--bg-tertiary);
+}
+
+/* Inactive tabs: reduced opacity for visual hierarchy */
+.rf-trace-viewer .report-sub-tab:not(.active) {
+  opacity: 0.6;
+}
+
+/* Controls panel: visually group tabs with content */
+.rf-trace-viewer .report-controls-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Suite selector dropdown: match search input height and border styling */
+.rf-trace-viewer .suite-selector-dropdown {
+  padding: 7px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+/* ── Semantic Status Pill Colors ── */
+
+/* Active semantic pills: status-specific backgrounds */
+.rf-trace-viewer .report-status-pill.pill-pass.active {
+  background: var(--status-pass);
+  color: #fff;
+}
+
+.rf-trace-viewer .report-status-pill.pill-fail.active {
+  background: var(--status-fail);
+  color: #fff;
+}
+
+.rf-trace-viewer .report-status-pill.pill-skip.active {
+  background: var(--status-skip);
+  color: #fff;
+}
+
+/* Inactive semantic pills: muted semantic text colors */
+.rf-trace-viewer .report-status-pill.pill-pass:not(.active) {
+  color: var(--status-pass);
+  opacity: 0.6;
+}
+
+.rf-trace-viewer .report-status-pill.pill-fail:not(.active) {
+  color: var(--status-fail);
+  opacity: 0.6;
+}
+
+.rf-trace-viewer .report-status-pill.pill-skip:not(.active) {
+  color: var(--status-skip);
+  opacity: 0.6;
+}
+
+/* ── Report UX Overhaul: Shared column width custom properties (Task 6.1) ── */
+
+/* Define shared column widths on the results container */
+.rf-trace-viewer .report-test-results {
+  --col-name: 1;
+  --col-start: 0 0 140px;
+  --col-status: 0 0 60px;
+  --col-duration: 0 0 85px;
+}
+
+/* Sort bar columns use shared widths */
+.rf-trace-viewer .report-sort-col:nth-child(1) {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(2) {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(3) {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(4) {
+  flex: var(--col-duration);
+}
+
+/* Test row summary children use the same shared widths */
+.rf-trace-viewer .report-test-summary .report-test-name {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-timestamp {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-test-summary .report-status-dot {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-dur {
+  flex: var(--col-duration);
+}
+
+/* ── Actions dropdown (Req 8) ── */
+.rf-trace-viewer .actions-dropdown {
+  position: relative;
+}
+
+.rf-trace-viewer .actions-dropdown-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .actions-dropdown-btn:hover {
+  background: var(--bg-secondary);
+}
+
+.rf-trace-viewer .actions-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 100;
+  min-width: 160px;
+}
+
+.rf-trace-viewer .actions-dropdown-item {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  padding: 8px 14px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .actions-dropdown-item:hover {
+  background: var(--bg-tertiary);
+}

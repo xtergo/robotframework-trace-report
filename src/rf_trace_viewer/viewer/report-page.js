@@ -841,6 +841,71 @@
       heroTopRow.style.justifyContent = 'space-between';
       heroTopRow.appendChild(verdictHeader);
       heroTopRow.appendChild(metricsLine);
+
+      // Actions dropdown (Export button with JSON/CSV download options)
+      var actionsDropdown = document.createElement('div');
+      actionsDropdown.className = 'actions-dropdown';
+
+      var exportBtn = document.createElement('button');
+      exportBtn.className = 'actions-dropdown-btn';
+      exportBtn.textContent = 'Export \u25BE';
+      exportBtn.setAttribute('aria-haspopup', 'true');
+      exportBtn.setAttribute('aria-expanded', 'false');
+      actionsDropdown.appendChild(exportBtn);
+
+      var dropdownMenu = document.createElement('div');
+      dropdownMenu.className = 'actions-dropdown-menu';
+      dropdownMenu.style.display = 'none';
+
+      var jsonBtn = document.createElement('button');
+      jsonBtn.className = 'actions-dropdown-item';
+      jsonBtn.textContent = 'Download JSON';
+      jsonBtn.addEventListener('click', function() {
+        var content = _generateReportJSON();
+        _triggerDownload(content, 'report.json', 'application/json');
+        dropdownMenu.style.display = 'none';
+        exportBtn.setAttribute('aria-expanded', 'false');
+      });
+      dropdownMenu.appendChild(jsonBtn);
+
+      var csvBtn = document.createElement('button');
+      csvBtn.className = 'actions-dropdown-item';
+      csvBtn.textContent = 'Download CSV';
+      csvBtn.addEventListener('click', function() {
+        var content = _generateReportCSV();
+        _triggerDownload(content, 'report.csv', 'text/csv');
+        dropdownMenu.style.display = 'none';
+        exportBtn.setAttribute('aria-expanded', 'false');
+      });
+      dropdownMenu.appendChild(csvBtn);
+
+      actionsDropdown.appendChild(dropdownMenu);
+
+      exportBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var isOpen = dropdownMenu.style.display !== 'none';
+        dropdownMenu.style.display = isOpen ? 'none' : 'block';
+        exportBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+      });
+
+      // Close on outside click
+      document.addEventListener('click', function(e) {
+        if (!actionsDropdown.contains(e.target)) {
+          dropdownMenu.style.display = 'none';
+          exportBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      // Close on Escape key
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && dropdownMenu.style.display !== 'none') {
+          dropdownMenu.style.display = 'none';
+          exportBtn.setAttribute('aria-expanded', 'false');
+          exportBtn.focus();
+        }
+      });
+
+      heroTopRow.appendChild(actionsDropdown);
       hero.appendChild(heroTopRow);
 
       // Ratio bar (pass/fail/skip distribution) — below the top row
