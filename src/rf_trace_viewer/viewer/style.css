@@ -4737,3 +4737,24 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .report-test-summary:hover {
   background: color-mix(in srgb, var(--bg-tertiary) 80%, var(--hover-bg));
 }
+
+/* ── Report UX Overhaul: Compact header & hero-top-row (Task 2.2) ── */
+
+/* Reduce hero padding for a more compact header */
+.rf-trace-viewer .report-hero {
+  padding: 10px 20px;
+}
+
+/* Hero top row: verdict left, metrics right, wrapping on narrow screens */
+.rf-trace-viewer .hero-top-row {
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Stack hero top row vertically on small viewports */
+@media (max-width: 768px) {
+  .rf-trace-viewer .hero-top-row {
+    flex-direction: column;
+  }
+}
