@@ -37,15 +37,24 @@ def collect_all_tests(suite):
 # ---------------------------------------------------------------------------
 def format_duration(ms):
     """Python reference of _formatDuration() from report-page.js."""
-    if not isinstance(ms, (int, float)) or ms <= 0:
+    import math
+
+    if not isinstance(ms, (int, float)) or isinstance(ms, bool):
+        return "0s"
+    if math.isnan(ms) or ms <= 0:
         return "0s"
     if ms < 1000:
-        return f"{int(ms)}ms"
+        return f"{round(ms)}ms"
     if ms < 60000:
         return f"{ms / 1000:.1f}s"
-    m = int(ms // 60000)
-    s = int((ms % 60000) / 1000)
-    return f"{m}m {s}s"
+    if ms < 3600000:
+        m = int(ms // 60000)
+        s = round((ms % 60000) / 1000)
+        return f"{m}m {s}s"
+    h = int(ms // 3600000)
+    m = int((ms % 3600000) // 60000)
+    s = round((ms % 60000) / 1000)
+    return f"{h}h {m}m {s}s"
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +277,7 @@ def test_summary_stats_no_negative_counts(test_list):
 def test_format_duration_zero():
     """Zero ms returns '0s'.
 
-    **Validates: Requirements 4.2**
+    **Validates: Requirements 7.5**
     """
     assert format_duration(0) == "0s"
 
@@ -276,7 +285,7 @@ def test_format_duration_zero():
 def test_format_duration_milliseconds():
     """Values under 1000ms show as Nms.
 
-    **Validates: Requirements 4.2**
+    **Validates: Requirements 7.1**
     """
     assert format_duration(500) == "500ms"
     assert format_duration(1) == "1ms"
@@ -286,7 +295,7 @@ def test_format_duration_milliseconds():
 def test_format_duration_seconds():
     """Values 1000-59999ms show as N.Ns.
 
-    **Validates: Requirements 4.2**
+    **Validates: Requirements 7.2**
     """
     assert format_duration(1000) == "1.0s"
     assert format_duration(2500) == "2.5s"
@@ -294,20 +303,45 @@ def test_format_duration_seconds():
 
 
 def test_format_duration_minutes():
-    """Values >= 60000ms show as Nm Ns.
+    """Values 60000-3599999ms show as Nm Ns.
 
-    **Validates: Requirements 4.2**
+    **Validates: Requirements 7.3**
     """
     assert format_duration(60000) == "1m 0s"
     assert format_duration(154000) == "2m 34s"
+    assert format_duration(3599999) == "59m 60s"
 
 
 def test_format_duration_negative():
     """Negative values return '0s'.
 
-    **Validates: Requirements 4.2**
+    **Validates: Requirements 7.5**
     """
     assert format_duration(-100) == "0s"
+    assert format_duration(-1) == "0s"
+
+
+def test_format_duration_hours():
+    """Values >= 3600000ms show as Xh Ym Zs.
+
+    **Validates: Requirements 7.4**
+    """
+    assert format_duration(3600000) == "1h 0m 0s"
+    assert format_duration(3661000) == "1h 1m 1s"
+    assert format_duration(7384000) == "2h 3m 4s"
+    assert format_duration(86400000) == "24h 0m 0s"
+
+
+def test_format_duration_invalid_inputs():
+    """Non-numeric, None, NaN, booleans all return '0s'.
+
+    **Validates: Requirements 7.5**
+    """
+    assert format_duration(None) == "0s"
+    assert format_duration("abc") == "0s"
+    assert format_duration(True) == "0s"
+    assert format_duration(False) == "0s"
+    assert format_duration(float("nan")) == "0s"
 
 
 # ---------------------------------------------------------------------------
@@ -1599,3 +1633,265 @@ def test_aggregate_keyword_stats_avg_property(test_data):
         if entry["count"] > 0:
             expected_avg = entry["total_duration"] / entry["count"]
             assert abs(entry["avg_duration"] - expected_avg) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _csvEscape(val) from report-page.js
+# ---------------------------------------------------------------------------
+def csv_escape(val):
+    """Python reference of _csvEscape() from report-page.js.
+
+    Escapes a value for CSV output per RFC 4180.
+    Fields containing commas, double-quotes, or newlines are wrapped in
+    double-quotes, and any embedded double-quotes are doubled.
+    """
+    s = "" if val is None else str(val)
+    if '"' in s or "," in s or "\n" in s or "\r" in s:
+        return '"' + s.replace('"', '""') + '"'
+    return s
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _generateReportJSON() from report-page.js
+# ---------------------------------------------------------------------------
+def generate_report_json(run_data, statistics, suites):
+    """Python reference of _generateReportJSON() from report-page.js.
+
+    Returns a JSON string of { run, statistics, suites }.
+    """
+    import json
+
+    data = {
+        "run": run_data if run_data is not None else {},
+        "statistics": statistics if statistics is not None else {},
+        "suites": suites if suites is not None else [],
+    }
+    return json.dumps(data, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Python mirror of JS _generateReportCSV() from report-page.js
+# ---------------------------------------------------------------------------
+def format_timestamp_for_csv(epoch_ns):
+    """Python reference of _formatTimestamp() from report-page.js."""
+    if not epoch_ns or epoch_ns == 0:
+        return "N/A"
+    import datetime
+
+    ms = epoch_ns / 1e6
+    try:
+        d = datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc)
+        return d.strftime("%Y-%m-%d %H:%M:%S")
+    except (OSError, ValueError, OverflowError):
+        return "N/A"
+
+
+def generate_report_csv(suites):
+    """Python reference of _generateReportCSV() from report-page.js.
+
+    Generates CSV with headers: Name, Status, Duration (ms), Start Time, End Time, Tags.
+    Walks the suite tree to collect all tests.
+    """
+    rows = ["Name,Status,Duration (ms),Start Time,End Time,Tags"]
+    all_tests = []
+    for suite in suites or []:
+        all_tests.extend(collect_all_tests(suite))
+    for t in all_tests:
+        name = csv_escape(t.get("name", ""))
+        status = csv_escape(t.get("status", ""))
+        elapsed = t.get("elapsed_time")
+        duration = csv_escape(str(elapsed * 1000) if isinstance(elapsed, (int, float)) else "")
+        start_time = csv_escape(format_timestamp_for_csv(t.get("start_time")))
+        end_time = csv_escape(format_timestamp_for_csv(t.get("end_time")))
+        tags = csv_escape(", ".join(t.get("tags") or []))
+        rows.append(",".join([name, status, duration, start_time, end_time, tags]))
+    return "\n".join(rows)
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for CSV escaping
+# ---------------------------------------------------------------------------
+class TestCsvEscape:
+    """Tests for csv_escape() — Python mirror of _csvEscape()."""
+
+    def test_plain_string(self):
+        assert csv_escape("hello") == "hello"
+
+    def test_string_with_comma(self):
+        assert csv_escape("hello, world") == '"hello, world"'
+
+    def test_string_with_quotes(self):
+        assert csv_escape('say "hi"') == '"say ""hi"""'
+
+    def test_string_with_comma_and_quotes(self):
+        assert csv_escape('a "b", c') == '"a ""b"", c"'
+
+    def test_string_with_newline(self):
+        assert csv_escape("line1\nline2") == '"line1\nline2"'
+
+    def test_string_with_carriage_return(self):
+        assert csv_escape("line1\rline2") == '"line1\rline2"'
+
+    def test_none_value(self):
+        assert csv_escape(None) == ""
+
+    def test_empty_string(self):
+        assert csv_escape("") == ""
+
+    def test_numeric_value(self):
+        assert csv_escape(42) == "42"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for JSON export
+# ---------------------------------------------------------------------------
+class TestGenerateReportJSON:
+    """Tests for generate_report_json() — Python mirror of _generateReportJSON()."""
+
+    def test_basic_round_trip(self):
+        import json
+
+        run = {"start_time": 1000, "end_time": 2000}
+        stats = {"total_tests": 5, "passed": 3, "failed": 2}
+        suites = [make_suite("S1", [make_test("T1")])]
+        result = generate_report_json(run, stats, suites)
+        parsed = json.loads(result)
+        assert parsed["run"] == run
+        assert parsed["statistics"] == stats
+        assert len(parsed["suites"]) == 1
+
+    def test_none_inputs(self):
+        import json
+
+        result = generate_report_json(None, None, None)
+        parsed = json.loads(result)
+        assert parsed["run"] == {}
+        assert parsed["statistics"] == {}
+        assert parsed["suites"] == []
+
+    def test_empty_inputs(self):
+        import json
+
+        result = generate_report_json({}, {}, [])
+        parsed = json.loads(result)
+        assert parsed["run"] == {}
+        assert parsed["statistics"] == {}
+        assert parsed["suites"] == []
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for CSV export
+# ---------------------------------------------------------------------------
+class TestGenerateReportCSV:
+    """Tests for generate_report_csv() — Python mirror of _generateReportCSV()."""
+
+    def test_empty_suites(self):
+        result = generate_report_csv([])
+        assert result == "Name,Status,Duration (ms),Start Time,End Time,Tags"
+
+    def test_single_test(self):
+        suites = [
+            make_suite(
+                "S1",
+                [
+                    {
+                        "name": "Login Test",
+                        "id": "t1",
+                        "status": "PASS",
+                        "elapsed_time": 1.5,
+                        "start_time": 0,
+                        "end_time": 0,
+                        "tags": ["smoke"],
+                        "keywords": [],
+                    }
+                ],
+            )
+        ]
+        result = generate_report_csv(suites)
+        lines = result.split("\n")
+        assert len(lines) == 2
+        assert lines[0] == "Name,Status,Duration (ms),Start Time,End Time,Tags"
+        assert "Login Test" in lines[1]
+        assert "PASS" in lines[1]
+        assert "1500" in lines[1]
+        assert "smoke" in lines[1]
+
+    def test_csv_escaping_in_name(self):
+        suites = [
+            make_suite(
+                "S1",
+                [
+                    {
+                        "name": 'Test "with quotes", commas',
+                        "id": "t1",
+                        "status": "FAIL",
+                        "elapsed_time": 0.5,
+                        "start_time": 0,
+                        "end_time": 0,
+                        "tags": [],
+                        "keywords": [],
+                    }
+                ],
+            )
+        ]
+        result = generate_report_csv(suites)
+        lines = result.split("\n")
+        assert len(lines) == 2
+        # Name should be quoted with escaped inner quotes
+        assert '"Test ""with quotes"", commas"' in lines[1]
+
+    def test_multiple_tests_across_suites(self):
+        suites = [
+            make_suite("S1", [make_test("T1", "PASS"), make_test("T2", "FAIL")]),
+            make_suite("S2", [make_test("T3", "SKIP")]),
+        ]
+        # Add keywords and elapsed_time to make them proper test objects
+        for suite in suites:
+            for child in suite["children"]:
+                child.setdefault("elapsed_time", 0)
+                child.setdefault("start_time", 0)
+                child.setdefault("end_time", 0)
+                child.setdefault("tags", [])
+        result = generate_report_csv(suites)
+        lines = result.split("\n")
+        # Header + 3 test rows
+        assert len(lines) == 4
+
+    def test_nested_suite_tests(self):
+        inner = make_suite("Inner", [make_test("Deep Test", "PASS")])
+        inner["children"][0]["elapsed_time"] = 2.0
+        inner["children"][0]["start_time"] = 0
+        inner["children"][0]["end_time"] = 0
+        inner["children"][0]["tags"] = ["regression"]
+        outer = make_suite("Outer", [inner])
+        result = generate_report_csv([outer])
+        lines = result.split("\n")
+        assert len(lines) == 2
+        assert "Deep Test" in lines[1]
+        assert "regression" in lines[1]
+
+    def test_missing_tags(self):
+        suites = [
+            make_suite(
+                "S1",
+                [
+                    {
+                        "name": "No Tags",
+                        "id": "t1",
+                        "status": "PASS",
+                        "elapsed_time": 1.0,
+                        "start_time": 0,
+                        "end_time": 0,
+                        "keywords": [],
+                    }
+                ],
+            )
+        ]
+        result = generate_report_csv(suites)
+        lines = result.split("\n")
+        # Should not error; tags column should be empty
+        assert len(lines) == 2
+
+    def test_none_suites(self):
+        result = generate_report_csv(None)
+        assert result == "Name,Status,Duration (ms),Start Time,End Time,Tags"

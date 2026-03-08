@@ -199,12 +199,18 @@
    * @returns {string} Formatted duration string
    */
   function _formatDuration(ms) {
-    if (typeof ms !== 'number' || ms <= 0) return '0s';
-    if (ms < 1000) return ms + 'ms';
+    if (typeof ms !== 'number' || isNaN(ms) || ms <= 0) return '0s';
+    if (ms < 1000) return Math.round(ms) + 'ms';
     if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
-    var m = Math.floor(ms / 60000);
-    var s = ((ms % 60000) / 1000).toFixed(0);
-    return m + 'm ' + s + 's';
+    if (ms < 3600000) {
+      var m = Math.floor(ms / 60000);
+      var s = Math.round((ms % 60000) / 1000);
+      return m + 'm ' + s + 's';
+    }
+    var h = Math.floor(ms / 3600000);
+    var m = Math.floor((ms % 3600000) / 60000);
+    var s = Math.round((ms % 60000) / 1000);
+    return h + 'h ' + m + 'm ' + s + 's';
   }
 
   /**
@@ -247,7 +253,7 @@
 
     var label = document.createElement('label');
     label.className = 'suite-selector-label';
-    label.textContent = 'Suite: ';
+    label.textContent = 'Suite Filter ';
 
     var select = document.createElement('select');
     select.className = 'suite-selector-dropdown';
@@ -775,61 +781,6 @@
       vWord.textContent = verdictWord;
       verdictHeader.appendChild(vWord);
 
-      hero.appendChild(verdictHeader);
-
-      // Ratio bar (pass/fail/skip distribution)
-      if (stats.total_tests > 0) {
-        var barWrap = document.createElement('div');
-        barWrap.className = 'hero-ratio-bar-wrap';
-
-        var bar = document.createElement('div');
-        bar.className = 'hero-ratio-bar';
-
-        var passPct = (stats.passed / stats.total_tests * 100);
-        var failPct = (stats.failed / stats.total_tests * 100);
-        var skipPct = (stats.skipped / stats.total_tests * 100);
-
-        if (stats.passed > 0) {
-          var passSegment = document.createElement('div');
-          passSegment.className = 'ratio-segment ratio-pass';
-          passSegment.style.width = passPct + '%';
-          passSegment.title = stats.passed + ' passed (' + Math.round(passPct) + '%)';
-          passSegment.style.cursor = 'pointer';
-          passSegment.addEventListener('click', function() {
-            _state.statusFilter = _state.statusFilter === 'PASS' ? null : 'PASS';
-            _render();
-          });
-          bar.appendChild(passSegment);
-        }
-        if (stats.failed > 0) {
-          var failSegment = document.createElement('div');
-          failSegment.className = 'ratio-segment ratio-fail';
-          failSegment.style.width = failPct + '%';
-          failSegment.title = stats.failed + ' failed (' + Math.round(failPct) + '%)';
-          failSegment.style.cursor = 'pointer';
-          failSegment.addEventListener('click', function() {
-            _state.statusFilter = _state.statusFilter === 'FAIL' ? null : 'FAIL';
-            _render();
-          });
-          bar.appendChild(failSegment);
-        }
-        if (stats.skipped > 0) {
-          var skipSegment = document.createElement('div');
-          skipSegment.className = 'ratio-segment ratio-skip';
-          skipSegment.style.width = skipPct + '%';
-          skipSegment.title = stats.skipped + ' skipped (' + Math.round(skipPct) + '%)';
-          skipSegment.style.cursor = 'pointer';
-          skipSegment.addEventListener('click', function() {
-            _state.statusFilter = _state.statusFilter === 'SKIP' ? null : 'SKIP';
-            _render();
-          });
-          bar.appendChild(skipSegment);
-        }
-
-        barWrap.appendChild(bar);
-        hero.appendChild(barWrap);
-      }
-
       // Metrics Summary Line with individually colored spans
       var metricsLine = document.createElement('div');
       metricsLine.className = 'metrics-summary-line';
@@ -882,7 +833,68 @@
       metricsLine.appendChild(rateLabel);
       metricsLine.appendChild(document.createTextNode(passRate + '%'));
 
-      hero.appendChild(metricsLine);
+      // Hero top row: verdict + metrics in a flexbox row
+      var heroTopRow = document.createElement('div');
+      heroTopRow.className = 'hero-top-row';
+      heroTopRow.style.display = 'flex';
+      heroTopRow.style.alignItems = 'baseline';
+      heroTopRow.style.justifyContent = 'space-between';
+      heroTopRow.appendChild(verdictHeader);
+      heroTopRow.appendChild(metricsLine);
+      hero.appendChild(heroTopRow);
+
+      // Ratio bar (pass/fail/skip distribution) — below the top row
+      if (stats.total_tests > 0) {
+        var barWrap = document.createElement('div');
+        barWrap.className = 'hero-ratio-bar-wrap';
+
+        var bar = document.createElement('div');
+        bar.className = 'hero-ratio-bar';
+
+        var passPct = (stats.passed / stats.total_tests * 100);
+        var failPct = (stats.failed / stats.total_tests * 100);
+        var skipPct = (stats.skipped / stats.total_tests * 100);
+
+        if (stats.passed > 0) {
+          var passSegment = document.createElement('div');
+          passSegment.className = 'ratio-segment ratio-pass';
+          passSegment.style.width = passPct + '%';
+          passSegment.title = stats.passed + ' passed (' + Math.round(passPct) + '%)';
+          passSegment.style.cursor = 'pointer';
+          passSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'PASS' ? null : 'PASS';
+            _render();
+          });
+          bar.appendChild(passSegment);
+        }
+        if (stats.failed > 0) {
+          var failSegment = document.createElement('div');
+          failSegment.className = 'ratio-segment ratio-fail';
+          failSegment.style.width = failPct + '%';
+          failSegment.title = stats.failed + ' failed (' + Math.round(failPct) + '%)';
+          failSegment.style.cursor = 'pointer';
+          failSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'FAIL' ? null : 'FAIL';
+            _render();
+          });
+          bar.appendChild(failSegment);
+        }
+        if (stats.skipped > 0) {
+          var skipSegment = document.createElement('div');
+          skipSegment.className = 'ratio-segment ratio-skip';
+          skipSegment.style.width = skipPct + '%';
+          skipSegment.title = stats.skipped + ' skipped (' + Math.round(skipPct) + '%)';
+          skipSegment.style.cursor = 'pointer';
+          skipSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'SKIP' ? null : 'SKIP';
+            _render();
+          });
+          bar.appendChild(skipSegment);
+        }
+
+        barWrap.appendChild(bar);
+        hero.appendChild(barWrap);
+      }
 
       dashboard.appendChild(hero);
 
@@ -1745,7 +1757,9 @@
     for (var pi = 0; pi < statusFilters.length; pi++) {
       (function (sf) {
         var pill = document.createElement('button');
-        pill.className = 'report-status-pill' + ((_state.statusFilter || 'All') === sf ? ' active' : '');
+        var pillClass = 'report-status-pill' + ((_state.statusFilter || 'All') === sf ? ' active' : '');
+        if (sf !== 'All') pillClass += ' pill-' + sf.toLowerCase();
+        pill.className = pillClass;
         pill.setAttribute('data-status', sf);
 
         // Count for each status
@@ -1882,9 +1896,9 @@
     sortBar.className = 'report-sort-bar';
     var sortCols = [
       { key: 'name', label: 'Name', flex: '1' },
-      { key: 'start_time', label: 'Start Time', flex: '0 0 150px' },
-      { key: 'status', label: 'Status', flex: '0 0 70px' },
-      { key: 'duration', label: 'Duration', flex: '0 0 90px' }
+      { key: 'start_time', label: 'Start Time', flex: '0 0 140px' },
+      { key: 'status', label: 'Status', flex: '0 0 60px' },
+      { key: 'duration', label: 'Duration', flex: '0 0 85px' }
     ];
     for (var sc = 0; sc < sortCols.length; sc++) {
       (function (col) {
@@ -1941,11 +1955,13 @@
 
       var statusDot = document.createElement('span');
       statusDot.className = 'report-status-dot status-' + testStatus.toLowerCase();
+      statusDot.style.flex = '0 0 60px';
       statusDot.textContent = isFail ? '\u2717' : isSkip ? '\u2298' : '\u2713';
       summary.appendChild(statusDot);
 
       var nameEl = document.createElement('span');
       nameEl.className = 'report-test-name';
+      nameEl.style.flex = '1';
       nameEl.textContent = test.name || '';
       nameEl.title = test.name || '';
       summary.appendChild(nameEl);
@@ -1964,6 +1980,7 @@
 
       var startEl = document.createElement('span');
       startEl.className = 'report-test-timestamp';
+      startEl.style.flex = '0 0 140px';
       startEl.textContent = _formatTimestamp(test.start_time);
       startEl.title = 'Start: ' + _formatTimestamp(test.start_time);
       summary.appendChild(startEl);
@@ -1976,6 +1993,7 @@
 
       var durEl = document.createElement('span');
       durEl.className = 'report-test-dur';
+      durEl.style.flex = '0 0 85px';
       durEl.textContent = _formatDuration((test.elapsed_time || 0) * 1000);
       summary.appendChild(durEl);
 
@@ -2116,6 +2134,100 @@
     return section;
   }
 
+  // ---------------------------------------------------------------------------
+  // Export helpers — JSON, CSV, download trigger (Req 8.3, 8.4, 8.5)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Collect all tests across every top-level suite.
+   * @returns {Array} Flat array of test objects
+   */
+  function _collectAllTestsFromAllSuites() {
+    var allTests = [];
+    for (var i = 0; i < _suites.length; i++) {
+      var tests = _collectAllTests(_suites[i]);
+      for (var j = 0; j < tests.length; j++) {
+        allTests.push(tests[j]);
+      }
+    }
+    return allTests;
+  }
+
+  /**
+   * Generate a JSON string of the report data.
+   * @returns {string} JSON string with run, statistics, and suites
+   */
+  function _generateReportJSON() {
+    var data = {
+      run: _runData || {},
+      statistics: _statistics || {},
+      suites: _suites || []
+    };
+    return JSON.stringify(data, null, 2);
+  }
+
+  /**
+   * Escape a value for CSV output per RFC 4180.
+   * Fields containing commas, double-quotes, or newlines are wrapped in
+   * double-quotes, and any embedded double-quotes are doubled.
+   * @param {string} val - The value to escape
+   * @returns {string} The escaped CSV field
+   */
+  function _csvEscape(val) {
+    var s = (val == null) ? '' : '' + val;
+    if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  /**
+   * Generate a CSV string of all test results.
+   * Headers: Name, Status, Duration (ms), Start Time, End Time, Tags
+   * @returns {string} CSV content
+   */
+  function _generateReportCSV() {
+    var rows = ['Name,Status,Duration (ms),Start Time,End Time,Tags'];
+    var allTests = _collectAllTestsFromAllSuites();
+    for (var i = 0; i < allTests.length; i++) {
+      var t = allTests[i];
+      var name = _csvEscape(t.name || '');
+      var status = _csvEscape(t.status || '');
+      var duration = _csvEscape(
+        (typeof t.elapsed_time === 'number') ? '' + (t.elapsed_time * 1000) : ''
+      );
+      var startTime = _csvEscape(_formatTimestamp(t.start_time));
+      var endTime = _csvEscape(_formatTimestamp(t.end_time));
+      var tags = _csvEscape((t.tags || []).join(', '));
+      rows.push(name + ',' + status + ',' + duration + ',' + startTime + ',' + endTime + ',' + tags);
+    }
+    return rows.join('\n');
+  }
+
+  /**
+   * Trigger a browser file download.
+   * Creates a temporary <a> element with a Blob URL and clicks it.
+   * @param {string} content - The file content
+   * @param {string} filename - The download filename
+   * @param {string} mimeType - The MIME type (e.g. 'application/json')
+   */
+  function _triggerDownload(content, filename, mimeType) {
+    try {
+      var blob = new Blob([content], { type: mimeType });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // Silently fail if Blob URL creation fails
+    }
+  }
+
   /**
    * Render the Report page content.
    * Calls section renderers in order: suite selector, summary dashboard, failure triage, test results.
@@ -2218,6 +2330,10 @@
     formatKwDuration: _formatKwDuration,
     getState: function () { return _state; },
     collectAllTestsWithSuite: _collectAllTestsWithSuite,
-    getUniqueSuiteNames: _getUniqueSuiteNames
+    getUniqueSuiteNames: _getUniqueSuiteNames,
+    generateReportJSON: _generateReportJSON,
+    generateReportCSV: _generateReportCSV,
+    triggerDownload: _triggerDownload,
+    csvEscape: _csvEscape
   };
 })();
