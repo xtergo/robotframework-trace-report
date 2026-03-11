@@ -68,6 +68,9 @@ class RFKeyword:
     status_message: str = ""
     events: list[dict] = field(default_factory=list)
     children: list[RFKeyword] = field(default_factory=list)
+    library: str = ""
+    suite_name: str = ""
+    suite_source: str = ""
 
 
 @dataclass
@@ -174,6 +177,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         status_message=node.span.status.get("message", ""),
         events=node.span.events,
         children=children,
+        library=str(attrs.get("rf.keyword.library", "")),
     )
 
 
@@ -212,7 +216,10 @@ def _build_suite(node: SpanNode) -> RFSuite:
         elif span_type == SpanType.KEYWORD:
             kw_type = child.span.attributes.get("rf.keyword.type", "KEYWORD")
             if kw_type in ("SETUP", "TEARDOWN"):
-                children.append(_build_keyword(child))
+                kw = _build_keyword(child)
+                kw.suite_name = attrs.get("rf.suite.name", node.span.name)
+                kw.suite_source = str(attrs.get("rf.suite.source", ""))
+                children.append(kw)
         # Signals and generic spans are not added to the suite children
 
     # Collect suite metadata from rf.suite.metadata.* attributes
