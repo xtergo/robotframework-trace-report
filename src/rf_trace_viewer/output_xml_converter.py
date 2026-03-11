@@ -219,7 +219,16 @@ def _make_span(
     # Map RF status to OTLP status code
     otlp_status_code = _STATUS_CODE_MAP.get(rf_status, "STATUS_CODE_OK")
 
+    # Extract failure message from <status> text content
+    status_message = ""
+    if status_elem is not None and status_elem.text:
+        status_message = status_elem.text.strip()
+
     # --- Build span dict -----------------------------------------------------
+    otlp_status: dict = {"code": otlp_status_code}
+    if status_message:
+        otlp_status["message"] = status_message
+
     span: dict = {
         "trace_id": context.trace_id,
         "span_id": span_id,
@@ -229,7 +238,7 @@ def _make_span(
         "start_time_unix_nano": start_ns,
         "end_time_unix_nano": end_ns,
         "attributes": attrs,
-        "status": {"code": otlp_status_code},
+        "status": otlp_status,
         "events": events if events is not None else [],
     }
 
@@ -271,6 +280,16 @@ def _walk_element(
             _make_otlp_attr("rf.suite.id", elem.get("id", "")),
             _make_otlp_attr("rf.suite.source", elem.get("source", "")),
         ]
+        # Extract <doc> child
+        doc_el = elem.find("doc")
+        if doc_el is not None and doc_el.text:
+            attrs.append(_make_otlp_attr("rf.suite.doc", doc_el.text))
+        # Extract <metadata> items
+        for item in elem.findall("metadata/item"):
+            meta_name = item.get("name", "")
+            meta_value = item.text or ""
+            if meta_name:
+                attrs.append(_make_otlp_attr(f"rf.suite.metadata.{meta_name}", meta_value))
         span_id = _make_span(
             name=elem.get("name", ""),
             attrs=attrs,
@@ -300,6 +319,10 @@ def _walk_element(
             _make_otlp_attr("rf.test.name", elem.get("name", "")),
             _make_otlp_attr("rf.test.id", elem.get("id", "")),
         ]
+        # Extract <doc> child
+        doc_el = elem.find("doc")
+        if doc_el is not None and doc_el.text:
+            attrs.append(_make_otlp_attr("rf.test.doc", doc_el.text))
 
         # Collect <tag> children → rf.test.tags as array_value
         tags = [t.text or "" for t in elem.iterfind("tag")]
@@ -336,6 +359,10 @@ def _walk_element(
             _make_otlp_attr("rf.keyword.name", elem.get("name", "")),
             _make_otlp_attr("rf.keyword.type", kw_type),
         ]
+        # Extract <doc> child
+        doc_el = elem.find("doc")
+        if doc_el is not None and doc_el.text:
+            attrs.append(_make_otlp_attr("rf.keyword.doc", doc_el.text))
 
         # Collect <arg> children → rf.keyword.args
         args = [a.text or "" for a in elem.iterfind("arg")]
