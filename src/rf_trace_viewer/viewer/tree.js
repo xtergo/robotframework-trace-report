@@ -1617,6 +1617,13 @@ function _createTreeNode(opts) {
   var row = document.createElement('div');
   row.className = 'tree-row';
 
+  // Setup/teardown visual distinction
+  if (opts.kwType === 'SETUP') {
+    row.classList.add('kw-setup');
+  } else if (opts.kwType === 'TEARDOWN') {
+    row.classList.add('kw-teardown');
+  }
+
   // Toggle arrow (or spacer)
   var toggle = document.createElement('button');
   toggle.className = 'tree-toggle toggle-' + opts.type + ' ' + _statusClass(opts.status);
@@ -1643,6 +1650,14 @@ function _createTreeNode(opts) {
   typeLabel.className = 'node-type';
   typeLabel.textContent = opts.kwType || opts.type;
   nameEl.appendChild(typeLabel);
+
+  // Library prefix (e.g. "BuiltIn . Set Variable")
+  if (opts.data && opts.data.library) {
+    var libSpan = document.createElement('span');
+    libSpan.className = 'kw-library';
+    libSpan.textContent = opts.data.library;
+    nameEl.appendChild(libSpan);
+  }
 
   nameEl.appendChild(document.createTextNode(opts.name));
 
