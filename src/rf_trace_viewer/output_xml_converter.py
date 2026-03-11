@@ -232,3 +232,89 @@ def _make_span(
 
     context.spans.append(span)
     return span_id
+
+
+# Tags that _walk_element recurses into
+_WALKABLE_TAGS = frozenset({"suite", "test", "kw", "for", "while", "if", "try"})
+
+
+def _walk_element(
+    elem,
+    parent_span_id: str,
+    context: _ConversionContext,
+) -> None:
+    """Recursively walk an XML element tree, creating OTLP spans.
+
+    Handles ``<suite>`` and ``<test>`` elements (keywords and control
+    structures are added in a later task).  The function uses if/elif
+    tag matching so it is easy to extend.
+
+    Parameters
+    ----------
+    elem:
+        The current ``xml.etree.ElementTree.Element`` to process.
+    parent_span_id:
+        The span ID of the parent element (empty string for the root).
+    context:
+        Shared conversion context carrying ``trace_id``,
+        ``parent_start_time_ns``, and the accumulated ``spans`` list.
+    """
+    tag = elem.tag
+
+    if tag == "suite":
+        attrs = [
+            _make_otlp_attr("rf.suite.name", elem.get("name", "")),
+            _make_otlp_attr("rf.suite.id", elem.get("id", "")),
+            _make_otlp_attr("rf.suite.source", elem.get("source", "")),
+        ]
+        span_id = _make_span(
+            name=elem.get("name", ""),
+            attrs=attrs,
+            elem=elem,
+            parent_span_id=parent_span_id,
+            context=context,
+        )
+
+        # Save and update parent_start_time_ns for children
+        saved_start = context.parent_start_time_ns
+        status_elem = elem.find("status")
+        if status_elem is not None:
+            start_attr = status_elem.get("start")
+            if start_attr:
+                context.parent_start_time_ns = _parse_timestamp(start_attr)
+
+        # Recurse into all walkable children
+        for child in elem:
+            if child.tag in _WALKABLE_TAGS:
+                _walk_element(child, span_id, context)
+
+        # Restore parent_start_time_ns
+        context.parent_start_time_ns = saved_start
+
+    elif tag == "test":
+        attrs = [
+            _make_otlp_attr("rf.test.name", elem.get("name", "")),
+            _make_otlp_attr("rf.test.id", elem.get("id", "")),
+        ]
+
+        # Collect <tag> children → rf.test.tags as array_value
+        tags = [t.text or "" for t in elem.iterfind("tag")]
+        if tags:
+            attrs.append(_make_otlp_array_attr("rf.test.tags", tags))
+
+        # Collect events from <msg> children
+        events = _make_events(elem, context.parent_start_time_ns)
+
+        span_id = _make_span(
+            name=elem.get("name", ""),
+            attrs=attrs,
+            elem=elem,
+            parent_span_id=parent_span_id,
+            context=context,
+            events=events,
+        )
+
+        # Recurse into keyword and control structure children
+        for child in elem:
+            if child.tag in _WALKABLE_TAGS:
+                _walk_element(child, span_id, context)
