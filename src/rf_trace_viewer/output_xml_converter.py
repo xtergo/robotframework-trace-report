@@ -9,7 +9,9 @@ standard library: xml.etree.ElementTree, json, uuid, datetime, os, sys.
 from __future__ import annotations
 
 import os
+import re
 import sys
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -86,3 +88,30 @@ def _validate_schema(root) -> None:
             file=sys.stderr,
         )
         raise SystemExit(1)
+
+
+_ROBOT_VERSION_RE = re.compile(r"^Robot\s+(\S+)")
+
+
+def _extract_resource_attrs(root) -> list[dict]:
+    """Build OTLP resource attributes from the ``<robot>`` root element.
+
+    Extracts ``service.name`` (top-level suite name), ``rf.version``
+    (parsed from the ``generator`` attribute), ``telemetry.sdk.name``
+    (constant), and ``run.id`` (generated UUID).
+    """
+    # service.name — first <suite> child's name attribute
+    suite_elem = root.find("suite")
+    service_name = suite_elem.get("name", "") if suite_elem is not None else ""
+
+    # rf.version — parse "Robot X.Y.Z (...)" from generator attribute
+    generator = root.get("generator", "")
+    match = _ROBOT_VERSION_RE.match(generator)
+    rf_version = match.group(1) if match else generator
+
+    return [
+        _make_otlp_attr("service.name", service_name),
+        _make_otlp_attr("rf.version", rf_version),
+        _make_otlp_attr("telemetry.sdk.name", "rf-output-xml-converter"),
+        _make_otlp_attr("run.id", str(uuid.uuid4())),
+    ]
