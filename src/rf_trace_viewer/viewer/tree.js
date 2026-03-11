@@ -1387,23 +1387,39 @@ function _renderKeywordDetail(panel, data) {
   if (data.keyword_type) {
     _addBadgeRow(panel, 'Type', data.keyword_type);
   }
+  if (data.library) {
+    _addBadgeRow(panel, 'Library', data.library);
+  }
   if (data.args) {
-    _addDetailRow(panel, 'Arguments', data.args);
+    var argsWrap = document.createElement('div');
+    argsWrap.setAttribute('data-field', 'args');
+    _addDetailRow(argsWrap, 'Arguments', data.args);
+    panel.appendChild(argsWrap);
   }
   if (data.doc) {
-    _addDetailRow(panel, 'Documentation', data.doc);
+    var docWrap = document.createElement('div');
+    docWrap.setAttribute('data-field', 'doc');
+    _addDetailRow(docWrap, 'Documentation', data.doc);
+    panel.appendChild(docWrap);
   }
   if (data.lineno && data.lineno > 0) {
     var sourceText = data.source ? data.source + ':' + data.lineno : 'Line ' + data.lineno;
-    _addDetailRow(panel, 'Source', sourceText);
+    var sourceWrap = document.createElement('div');
+    sourceWrap.setAttribute('data-field', 'source');
+    _addDetailRow(sourceWrap, 'Source', sourceText);
+    panel.appendChild(sourceWrap);
   }
   _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
   if (data.events && data.events.length > 0) {
-    _renderEventsSection(panel, data.events);
+    var eventsWrap = document.createElement('div');
+    eventsWrap.setAttribute('data-field', 'events');
+    _renderEventsSection(eventsWrap, data.events);
+    panel.appendChild(eventsWrap);
   }
+  _createFieldTogglePills(panel);
 }
 
 /** Add a compact info bar with status, duration, and timestamps on one line. */
