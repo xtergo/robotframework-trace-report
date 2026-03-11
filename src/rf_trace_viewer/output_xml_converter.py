@@ -418,3 +418,50 @@ def _walk_element(
         for child in elem:
             if child.tag in _WALKABLE_TAGS:
                 _walk_element(child, span_id, context)
+
+
+def convert_xml(root) -> dict:
+    """Convert a parsed XML root element to an ExportTraceServiceRequest dict.
+
+    This is the pure-logic core, separated from I/O for testability.
+    Returns the complete NDJSON object ready for ``json.dumps()``.
+
+    Parameters
+    ----------
+    root:
+        An ``xml.etree.ElementTree.Element`` representing the ``<robot>``
+        root of an RF output.xml file.
+
+    Returns
+    -------
+    dict
+        A complete ``ExportTraceServiceRequest`` dict.
+
+    Raises
+    ------
+    SystemExit
+        If the schema version is missing or unsupported.
+    """
+    _validate_schema(root)
+    resource_attrs = _extract_resource_attrs(root)
+    trace_id = os.urandom(16).hex()
+    context = _ConversionContext(trace_id=trace_id, parent_start_time_ns=0)
+
+    # Walk the top-level <suite> child
+    suite_elem = root.find("suite")
+    if suite_elem is not None:
+        _walk_element(suite_elem, "", context)
+
+    return {
+        "resource_spans": [
+            {
+                "resource": {"attributes": resource_attrs},
+                "scope_spans": [
+                    {
+                        "scope": {"name": "rf-output-xml-converter"},
+                        "spans": context.spans,
+                    }
+                ],
+            }
+        ]
+    }
