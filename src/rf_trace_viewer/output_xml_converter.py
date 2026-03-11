@@ -149,3 +149,86 @@ def _make_events(elem, parent_start_time_ns: int = 0) -> list[dict]:
             event["attributes"] = [_make_otlp_attr("log.level", level)]
         events.append(event)
     return events
+
+
+# Status → OTLP status-code mapping
+_STATUS_CODE_MAP = {
+    "PASS": "STATUS_CODE_OK",
+    "FAIL": "STATUS_CODE_ERROR",
+    "SKIP": "STATUS_CODE_OK",
+}
+
+
+def _make_span(
+    name: str,
+    attrs: list[dict],
+    elem,
+    parent_span_id: str,
+    context: _ConversionContext,
+    events: list[dict] | None = None,
+) -> str:
+    """Create a single OTLP span dict and append it to *context.spans*.
+
+    Parameters
+    ----------
+    name:
+        Human-readable span name (suite name, test name, keyword name, etc.).
+    attrs:
+        Pre-built list of OTLP attribute dicts (``rf.suite.name``, etc.).
+    elem:
+        The XML element whose ``<status>`` child provides timestamps and
+        the RF status value.
+    parent_span_id:
+        The parent span's ID (empty string for the root span).
+    context:
+        Conversion context carrying ``trace_id``, ``parent_start_time_ns``,
+        and the accumulated ``spans`` list.
+    events:
+        Optional list of OTLP event dicts (from ``_make_events``).
+
+    Returns
+    -------
+    str
+        The generated ``span_id`` for this span.
+    """
+    span_id = _generate_span_id()
+
+    # --- Parse <status> child ------------------------------------------------
+    status_elem = elem.find("status")
+
+    if status_elem is not None:
+        start_attr = status_elem.get("start")
+        start_ns = _parse_timestamp(start_attr) if start_attr else context.parent_start_time_ns
+
+        elapsed_attr = status_elem.get("elapsed")
+        end_ns = start_ns + _parse_elapsed(elapsed_attr) if elapsed_attr else start_ns
+
+        rf_status = status_elem.get("status", "")
+    else:
+        start_ns = context.parent_start_time_ns
+        end_ns = start_ns
+        rf_status = ""
+
+    # Append rf.status attribute
+    if rf_status:
+        attrs = [*attrs, _make_otlp_attr("rf.status", rf_status)]
+
+    # Map RF status to OTLP status code
+    otlp_status_code = _STATUS_CODE_MAP.get(rf_status, "STATUS_CODE_OK")
+
+    # --- Build span dict -----------------------------------------------------
+    span: dict = {
+        "trace_id": context.trace_id,
+        "span_id": span_id,
+        "parent_span_id": parent_span_id,
+        "name": name,
+        "kind": "SPAN_KIND_INTERNAL",
+        "start_time_unix_nano": start_ns,
+        "end_time_unix_nano": end_ns,
+        "attributes": attrs,
+        "status": {"code": otlp_status_code},
+        "events": events if events is not None else [],
+    }
+
+    context.spans.append(span)
+    return span_id
