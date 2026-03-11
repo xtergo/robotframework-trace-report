@@ -516,7 +516,8 @@ function _flattenTree(suites, filteredSpanIds, expandedIds) {
       displayName: displayName,
       hasChildren: hasChildren,
       maxSiblingDuration: maxSibDur,
-      truncatedCount: (itemType === 'keyword' && item.truncated) ? item.truncated : 0
+      truncatedCount: (itemType === 'keyword' && item.truncated) ? item.truncated : 0,
+      rootCauseClass: (itemType === 'keyword' && item.status === 'FAIL') ? _classifyFailKeyword(item) : null
     });
 
     // If expanded, push children onto stack
@@ -639,6 +640,12 @@ function _createVirtualRow(item, index) {
     kwArgs: item.data.args,
     maxSiblingDuration: item.maxSiblingDuration || 0
   });
+
+  // Apply wrapper de-emphasis in virtual mode
+  if (item.rootCauseClass === 'wrapper') {
+    var vRow = node.querySelector(':scope > .tree-row');
+    if (vRow) vRow.classList.add('kw-wrapper');
+  }
 
   // Set fixed height for consistent virtual scrolling
   node.style.height = vs.ROW_HEIGHT + 'px';
