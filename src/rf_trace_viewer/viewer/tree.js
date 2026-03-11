@@ -31,6 +31,105 @@ var VIRTUAL_BUFFER = 20;
 var _indentSliders = [];  // all slider elements for sync
 var _cachedIndentSize = 24;  // cached current indent value in px
 
+// ── Root Cause Classification ──
+
+/**
+ * Control flow keyword name patterns (case-insensitive match).
+ * A FAIL keyword whose name matches one of these AND has FAIL children
+ * is classified as a "wrapper" — it failed only because a child failed.
+ */
+var CONTROL_FLOW_WRAPPERS = [
+  'Run Keyword And Continue On Failure',
+  'Run Keyword If',
+  'Run Keyword Unless',
+  'Run Keyword And Expect Error',
+  'Run Keyword And Ignore Error',
+  'Run Keyword And Return Status',
+  'Wait Until Keyword Succeeds',
+  'Repeat Keyword',
+  'IF', 'ELSE IF', 'ELSE',
+  'TRY', 'EXCEPT', 'FINALLY',
+  'FOR', 'WHILE'
+];
+
+// Pre-compute lower-cased wrapper names for fast matching
+var _wrapperNamesLower = [];
+for (var _wi = 0; _wi < CONTROL_FLOW_WRAPPERS.length; _wi++) {
+  _wrapperNamesLower.push(CONTROL_FLOW_WRAPPERS[_wi].toLowerCase());
+}
+
+/**
+ * Classify a FAIL keyword.
+ * @param {Object} kw - Keyword data with status, children, name
+ * @returns {'root-cause'|'wrapper'|'none'}
+ */
+function _classifyFailKeyword(kw) {
+  var kids = kw.children || [];
+  var hasFailChild = false;
+  for (var i = 0; i < kids.length; i++) {
+    if (kids[i].status === 'FAIL') { hasFailChild = true; break; }
+  }
+  if (!hasFailChild) return 'root-cause';
+  var nameLower = (kw.name || '').toLowerCase();
+  for (var j = 0; j < _wrapperNamesLower.length; j++) {
+    if (nameLower === _wrapperNamesLower[j]) return 'wrapper';
+  }
+  return 'none';
+}
+
+/**
+ * Find all root cause keywords in a test's keyword tree (iterative DFS).
+ * @param {Object} test - Test data with keywords array
+ * @returns {Array<Object>} Root cause keyword data objects
+ */
+function _findRootCauseKeywords(test) {
+  var results = [];
+  var stack = [];
+  var kws = test.keywords || [];
+  for (var i = kws.length - 1; i >= 0; i--) stack.push(kws[i]);
+  while (stack.length > 0) {
+    var kw = stack.pop();
+    if (kw.status !== 'FAIL') continue;
+    var cls = _classifyFailKeyword(kw);
+    if (cls === 'root-cause') {
+      results.push(kw);
+    } else {
+      var kids = kw.children || [];
+      for (var j = kids.length - 1; j >= 0; j--) stack.push(kids[j]);
+    }
+  }
+  return results;
+}
+
+/**
+ * Find the span ID path from test to the first root cause keyword (DFS).
+ * @param {Object} test - Test data
+ * @returns {Array<string>} Span IDs from test to first root cause
+ */
+function _findRootCausePath(test) {
+  var stack = [];
+  var kws = test.keywords || [];
+  for (var i = kws.length - 1; i >= 0; i--) {
+    stack.push({ node: kws[i], path: [test.id] });
+  }
+  while (stack.length > 0) {
+    var item = stack.pop();
+    var node = item.node;
+    if (node.status !== 'FAIL') continue;
+    var currentPath = item.path.concat([node.id]);
+    var cls = _classifyFailKeyword(node);
+    if (cls === 'root-cause') return currentPath;
+    var kids = node.children || [];
+    for (var j = kids.length - 1; j >= 0; j--) {
+      if (kids[j].status === 'FAIL') {
+        stack.push({ node: kids[j], path: currentPath });
+        break; // follow first FAIL child only
+      }
+    }
+  }
+  return [];
+}
+
 /** Get the .rf-trace-viewer element where CSS custom properties are defined. */
 function _getIndentTarget() {
   return document.querySelector('.rf-trace-viewer') || document.documentElement;

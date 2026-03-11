@@ -893,6 +893,84 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: #f06292;
 }
 
+/* ── Root Cause UX ── */
+
+/* De-emphasize control flow wrapper FAIL keywords */
+.rf-trace-viewer .tree-row.kw-wrapper {
+  opacity: 0.55;
+}
+.rf-trace-viewer .tree-row.kw-wrapper .tree-toggle,
+.rf-trace-viewer .tree-row.kw-wrapper .tree-status-icon {
+  opacity: 1;  /* keep toggle and status icon at full opacity */
+}
+
+/* Root Cause badge in keyword detail panel */
+.rf-trace-viewer .root-cause-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  background: var(--status-fail, #f85149);
+  color: #fff;
+  vertical-align: middle;
+}
+
+/* Wrapper badge in keyword detail panel */
+.rf-trace-viewer .wrapper-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  background: var(--text-muted, #888);
+  color: #fff;
+  vertical-align: middle;
+}
+
+/* Root cause summary section in test detail panel */
+.rf-trace-viewer .root-cause-summary {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--status-fail, #f85149);
+  background: var(--bg-secondary, #f8f8f8);
+  border-radius: 0 4px 4px 0;
+}
+
+.rf-trace-viewer .root-cause-summary-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--status-fail, #f85149);
+  margin-bottom: 4px;
+}
+
+.rf-trace-viewer .root-cause-entry {
+  padding: 3px 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.rf-trace-viewer .root-cause-entry:hover {
+  text-decoration: underline;
+}
+
+.rf-trace-viewer .root-cause-entry-name {
+  font-weight: 600;
+  color: var(--text-primary, #333);
+}
+
+.rf-trace-viewer .root-cause-entry-msg {
+  color: var(--status-fail, #f85149);
+  font-family: monospace;
+  font-size: 11px;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rf-trace-viewer .tree-name .exec-id-badge {
   color: var(--text-muted, #999);
   font-size: 10px;
