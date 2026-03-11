@@ -15,6 +15,7 @@ Skip slow tests (default):  make test-unit  (uses --skip-slow)
 
 import json
 import os
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
@@ -817,3 +818,271 @@ def span_tree_strategy(draw, max_depth: int = 3, max_children: int = 3) -> list[
     _build_subtree("", 0)
 
     return spans
+
+
+# ============================================================================
+# RF Output XML Strategy (for output_xml_converter property tests)
+# ============================================================================
+
+import xml.etree.ElementTree as ET  # noqa: E402
+
+# Small alphabets for fast generation
+_SIMPLE_NAME = st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=8)
+_SIMPLE_ID = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789-", min_size=1, max_size=6)
+_RF_STATUSES = st.sampled_from(["PASS", "FAIL", "SKIP"])
+_MSG_LEVELS = st.sampled_from(["INFO", "WARN", "ERROR", "DEBUG", "TRACE"])
+
+
+@st.composite
+def _rf_timestamp(draw, base_ns: int, offset_ms: int = 0) -> str:
+    """Generate an ISO 8601 timestamp string offset from a base time.
+
+    Parameters
+    ----------
+    base_ns:
+        Base time in nanoseconds since epoch.
+    offset_ms:
+        Additional millisecond offset drawn by the caller.
+
+    Returns
+    -------
+    str
+        ISO 8601 timestamp like ``2025-06-01T12:00:00.001000``.
+    """
+    total_ns = base_ns + offset_ms * 1_000_000
+    dt = datetime.fromtimestamp(total_ns / 1e9, tz=timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+
+@st.composite
+def _rf_status_element(draw, parent: ET.Element, base_ns: int) -> int:
+    """Append a ``<status>`` sub-element to *parent* and return the start time in ns.
+
+    Parameters
+    ----------
+    parent:
+        The XML element to attach the ``<status>`` child to.
+    base_ns:
+        Base time in nanoseconds since epoch for generating the start timestamp.
+
+    Returns
+    -------
+    int
+        The start time in nanoseconds for this status element.
+    """
+    offset_ms = draw(st.integers(min_value=0, max_value=500))
+    start_ts = draw(_rf_timestamp(base_ns, offset_ms))
+    elapsed = draw(st.floats(min_value=0.0, max_value=2.0))
+    status_val = draw(_RF_STATUSES)
+    status_el = ET.SubElement(parent, "status")
+    status_el.set("status", status_val)
+    status_el.set("start", start_ts)
+    status_el.set("elapsed", f"{elapsed:.3f}")
+    return base_ns + offset_ms * 1_000_000
+
+
+@st.composite
+def _rf_msg_elements(draw, parent: ET.Element, base_ns: int) -> None:
+    """Optionally append ``<msg>`` sub-elements to *parent*."""
+    num_msgs = draw(st.integers(min_value=0, max_value=2))
+    for _ in range(num_msgs):
+        msg_el = ET.SubElement(parent, "msg")
+        msg_el.text = draw(_SIMPLE_NAME)
+        offset_ms = draw(st.integers(min_value=0, max_value=200))
+        msg_ts = draw(_rf_timestamp(base_ns, offset_ms))
+        msg_el.set("time", msg_ts)
+        msg_el.set("level", draw(_MSG_LEVELS))
+
+
+@st.composite
+def _rf_keyword_element(draw, parent: ET.Element, base_ns: int, depth: int) -> None:
+    """Append a ``<kw>`` sub-element to *parent* with optional children."""
+    kw = ET.SubElement(parent, "kw")
+    kw.set("name", draw(_SIMPLE_NAME))
+
+    # Optionally set type to setup/teardown
+    kw_type = draw(st.sampled_from(["", "setup", "teardown"]))
+    if kw_type:
+        kw.set("type", kw_type)
+
+    # Optionally set library
+    if draw(st.booleans()):
+        kw.set("library", draw(_SIMPLE_NAME))
+
+    # Optional <arg> children
+    num_args = draw(st.integers(min_value=0, max_value=2))
+    for _ in range(num_args):
+        arg_el = ET.SubElement(kw, "arg")
+        arg_el.text = draw(_SIMPLE_NAME)
+
+    # Messages
+    draw(_rf_msg_elements(kw, base_ns))
+
+    # Nested keywords (limit depth)
+    if depth < 2:
+        num_nested = draw(st.integers(min_value=0, max_value=1))
+        for _ in range(num_nested):
+            draw(_rf_keyword_element(kw, base_ns, depth + 1))
+
+    # Status (must be last for realistic structure)
+    draw(_rf_status_element(kw, base_ns))
+
+
+@st.composite
+def _rf_control_structure(draw, parent: ET.Element, base_ns: int) -> None:
+    """Append a random control structure element to *parent*."""
+    ctrl_type = draw(st.sampled_from(["for", "while", "if", "try"]))
+    ctrl = ET.SubElement(parent, ctrl_type)
+
+    if ctrl_type in ("for", "while"):
+        # Add 1-2 <iter> children
+        num_iters = draw(st.integers(min_value=1, max_value=2))
+        for _ in range(num_iters):
+            iter_el = ET.SubElement(ctrl, "iter")
+            # Each iter can have a keyword child
+            if draw(st.booleans()):
+                draw(_rf_keyword_element(iter_el, base_ns, depth=2))
+            draw(_rf_status_element(iter_el, base_ns))
+    elif ctrl_type == "if":
+        # Add 1-2 <branch> children with if/else types
+        branch_types = ["IF"]
+        if draw(st.booleans()):
+            branch_types.append(draw(st.sampled_from(["ELSE IF", "ELSE"])))
+        for bt in branch_types:
+            branch = ET.SubElement(ctrl, "branch")
+            branch.set("type", bt)
+            if draw(st.booleans()):
+                draw(_rf_keyword_element(branch, base_ns, depth=2))
+            draw(_rf_status_element(branch, base_ns))
+    else:  # try
+        branch_types = ["TRY"]
+        if draw(st.booleans()):
+            branch_types.append("EXCEPT")
+        if draw(st.booleans()):
+            branch_types.append("FINALLY")
+        for bt in branch_types:
+            branch = ET.SubElement(ctrl, "branch")
+            branch.set("type", bt)
+            if draw(st.booleans()):
+                draw(_rf_keyword_element(branch, base_ns, depth=2))
+            draw(_rf_status_element(branch, base_ns))
+
+    draw(_rf_status_element(ctrl, base_ns))
+
+
+@st.composite
+def _rf_test_element(draw, parent: ET.Element, base_ns: int, test_idx: int, suite_id: str) -> None:
+    """Append a ``<test>`` sub-element to *parent*."""
+    test = ET.SubElement(parent, "test")
+    test_name = draw(_SIMPLE_NAME)
+    test.set("name", test_name)
+    test.set("id", f"{suite_id}-t{test_idx}")
+
+    # Optional <tag> children
+    num_tags = draw(st.integers(min_value=0, max_value=2))
+    for _ in range(num_tags):
+        tag_el = ET.SubElement(test, "tag")
+        tag_el.text = draw(_SIMPLE_NAME)
+
+    # Keywords inside test
+    num_kws = draw(st.integers(min_value=1, max_value=2))
+    for _ in range(num_kws):
+        draw(_rf_keyword_element(test, base_ns, depth=0))
+
+    # Optional control structure
+    if draw(st.booleans()):
+        draw(_rf_control_structure(test, base_ns))
+
+    # Messages on test
+    draw(_rf_msg_elements(test, base_ns))
+
+    # Status
+    draw(_rf_status_element(test, base_ns))
+
+
+@st.composite
+def _rf_suite_element(
+    draw,
+    parent: ET.Element,
+    base_ns: int,
+    suite_depth: int,
+    max_suite_depth: int,
+    suite_id: str,
+) -> None:
+    """Append a ``<suite>`` sub-element to *parent*."""
+    suite = ET.SubElement(parent, "suite")
+    suite_name = draw(_SIMPLE_NAME)
+    suite.set("name", suite_name)
+    suite.set("id", suite_id)
+    suite.set("source", f"/tests/{suite_name}.robot")
+
+    # Nested suites (if depth allows)
+    if suite_depth < max_suite_depth:
+        num_nested = draw(st.integers(min_value=0, max_value=1))
+        for i in range(num_nested):
+            draw(
+                _rf_suite_element(
+                    suite,
+                    base_ns,
+                    suite_depth + 1,
+                    max_suite_depth,
+                    f"{suite_id}-s{i + 1}",
+                )
+            )
+
+    # Tests
+    num_tests = draw(st.integers(min_value=1, max_value=2))
+    for i in range(num_tests):
+        draw(_rf_test_element(suite, base_ns, i + 1, suite_id))
+
+    # Suite-level setup/teardown keywords (optional)
+    if draw(st.booleans()):
+        kw = ET.SubElement(suite, "kw")
+        kw.set("name", draw(_SIMPLE_NAME))
+        kw.set("type", draw(st.sampled_from(["setup", "teardown"])))
+        draw(_rf_status_element(kw, base_ns))
+
+    # Status
+    draw(_rf_status_element(suite, base_ns))
+
+
+@st.composite
+def rf_output_xml(draw, max_suite_depth=2, max_tests=3, max_keywords=3):
+    """Generate a valid RF 7.x output.xml Element tree.
+
+    Returns an ``xml.etree.ElementTree.Element`` representing a ``<robot>``
+    root element with realistic structure: suites, tests, keywords, control
+    structures, messages, tags, and args.
+
+    Parameters
+    ----------
+    max_suite_depth:
+        Maximum nesting depth for suites (default 2).
+    max_tests:
+        Maximum tests per suite (kept low for speed).
+    max_keywords:
+        Maximum keywords per test (kept low for speed).
+    """
+    schema_version = draw(st.sampled_from(["5", "6"]))
+
+    root = ET.Element("robot")
+    root.set("generator", "Robot 7.4.2 (Python 3.12 on linux)")
+    root.set("generated", "2025-06-01T12:00:00.000000")
+    root.set("rpa", "false")
+    root.set("schemaversion", schema_version)
+
+    # Base time: 2025-06-01T12:00:00 UTC in nanoseconds
+    base_ns = 1748779200 * 1_000_000_000
+
+    # Top-level suite
+    draw(
+        _rf_suite_element(
+            root,
+            base_ns,
+            suite_depth=0,
+            max_suite_depth=max_suite_depth,
+            suite_id="s1",
+        )
+    )
+
+    return root
