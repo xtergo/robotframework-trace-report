@@ -1390,6 +1390,12 @@ function _renderKeywordDetail(panel, data) {
   if (data.library) {
     _addBadgeRow(panel, 'Library', data.library);
   }
+  if (data.suite_name) {
+    _addDetailRow(panel, 'Suite', data.suite_name);
+  }
+  if (data.suite_source) {
+    _addDetailRow(panel, 'Source File', data.suite_source);
+  }
   if (data.args) {
     var argsWrap = document.createElement('div');
     argsWrap.setAttribute('data-field', 'args');
