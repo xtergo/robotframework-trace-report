@@ -402,6 +402,34 @@ def _is_serve_subcommand() -> bool:
     return False
 
 
+def _is_convert_subcommand() -> bool:
+    """Check if the first non-option argument in sys.argv is 'convert'."""
+    for arg in sys.argv[1:]:
+        if arg.startswith("-"):
+            continue
+        return arg == "convert"
+    return False
+
+
+def _build_convert_parser() -> argparse.ArgumentParser:
+    """Build the parser for the 'convert' subcommand."""
+    parser = argparse.ArgumentParser(
+        prog="rf-trace-report convert",
+        description="Convert RF output.xml to OTLP NDJSON trace file",
+    )
+    parser.add_argument(
+        "input",
+        help="Path to RF output.xml file",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Output NDJSON file path (default: input with .json.gz extension)",
+    )
+    return parser
+
+
 def _build_serve_parser() -> argparse.ArgumentParser:
     """Build the parser for the 'serve' subcommand."""
     parser = argparse.ArgumentParser(
@@ -440,6 +468,22 @@ def _build_default_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """CLI entry point. Returns 0 on success, 1 on error."""
+
+    # Detect 'convert' subcommand before argparse to avoid positional arg conflict
+    if _is_convert_subcommand():
+        import os
+
+        parser = _build_convert_parser()
+        args = parser.parse_args(sys.argv[2:])
+        output_path = args.output or os.path.splitext(args.input)[0] + ".json.gz"
+        try:
+            from rf_trace_viewer.output_xml_converter import convert_file
+
+            convert_file(args.input, output_path)
+            print(output_path)
+            return 0
+        except SystemExit as exc:
+            return exc.code if isinstance(exc.code, int) else 1
 
     # Detect 'serve' subcommand before argparse to avoid positional arg conflict
     if _is_serve_subcommand():
