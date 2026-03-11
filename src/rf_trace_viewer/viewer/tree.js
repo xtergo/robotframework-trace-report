@@ -1306,6 +1306,15 @@ function _renderKeywordNode(kw, depth, filteredSpanIds) {
     data: kw
   });
 
+  // Apply wrapper de-emphasis for FAIL keywords classified as wrappers
+  if (kw.status === 'FAIL') {
+    var kwClass = _classifyFailKeyword(kw);
+    if (kwClass === 'wrapper') {
+      var kwRow = node.querySelector(':scope > .tree-row');
+      if (kwRow) kwRow.classList.add('kw-wrapper');
+    }
+  }
+
   // Store lazy children data instead of rendering them now
   if (hasChildren) {
     node._lazyChildren = {
@@ -1907,7 +1916,15 @@ function _createTreeNode(opts) {
   if (opts.status === 'FAIL' && opts.data && opts.data.status_message) {
     var errorSnippet = document.createElement('div');
     errorSnippet.className = 'tree-error-snippet';
-    var truncated = opts.data.status_message;
+    // For test nodes, bubble up the first root cause error message
+    var snippetMsg = opts.data.status_message;
+    if (opts.type === 'test') {
+      var rootCauses = _findRootCauseKeywords(opts.data);
+      if (rootCauses.length > 0 && rootCauses[0].status_message) {
+        snippetMsg = rootCauses[0].status_message;
+      }
+    }
+    var truncated = snippetMsg;
     // Truncate to first line, max 150 chars
     var newlineIdx = truncated.indexOf('\n');
     if (newlineIdx !== -1) {
@@ -1948,6 +1965,36 @@ function _createTreeNode(opts) {
       });
     }
   });
+
+  // Auto-expand failure path when clicking a FAIL test node
+  if (opts.type === 'test' && opts.status === 'FAIL') {
+    row.addEventListener('click', function () {
+      var rcPath = _findRootCausePath(opts.data);
+      if (rcPath.length < 2) return; // no root cause found
+      // Expand each node along the path (skip test itself at index 0)
+      for (var pi = 1; pi < rcPath.length; pi++) {
+        var pathNode = wrapper.querySelector('.tree-node[data-span-id="' + rcPath[pi] + '"]');
+        if (!pathNode) {
+          // Might need materialization first
+          _materializeIfNeeded(wrapper);
+          pathNode = wrapper.querySelector('.tree-node[data-span-id="' + rcPath[pi] + '"]');
+        }
+        if (pathNode) {
+          _materializeIfNeeded(pathNode);
+          _expandNodeOnly(pathNode);
+          var pathChildren = pathNode.querySelector(':scope > .tree-children');
+          if (pathChildren) pathChildren.classList.add('expanded');
+        }
+      }
+      // Scroll the root cause node into view
+      var rcNode = wrapper.querySelector('.tree-node[data-span-id="' + rcPath[rcPath.length - 1] + '"]');
+      if (rcNode) {
+        requestAnimationFrame(function () {
+          rcNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      }
+    });
+  }
 
   // Children container
   if (opts.hasChildren) {
