@@ -1407,6 +1407,39 @@ function _renderTestDetail(panel, data) {
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
+  // Root cause summary section
+  if (data.status === 'FAIL') {
+    var rootCauses = _findRootCauseKeywords(data);
+    if (rootCauses.length > 0) {
+      var summary = document.createElement('div');
+      summary.className = 'root-cause-summary';
+      var title = document.createElement('div');
+      title.className = 'root-cause-summary-title';
+      title.textContent = 'Root Cause' + (rootCauses.length > 1 ? 's (' + rootCauses.length + ')' : '');
+      summary.appendChild(title);
+      for (var ri = 0; ri < rootCauses.length; ri++) {
+        (function (rc) {
+          var entry = document.createElement('div');
+          entry.className = 'root-cause-entry';
+          var nameSpan = document.createElement('div');
+          nameSpan.className = 'root-cause-entry-name';
+          nameSpan.textContent = rc.name;
+          entry.appendChild(nameSpan);
+          if (rc.status_message) {
+            var msgSpan = document.createElement('div');
+            msgSpan.className = 'root-cause-entry-msg';
+            msgSpan.textContent = rc.status_message;
+            entry.appendChild(msgSpan);
+          }
+          entry.addEventListener('click', function () {
+            if (rc.id) highlightNodeInTree(rc.id);
+          });
+          summary.appendChild(entry);
+        })(rootCauses[ri]);
+      }
+      panel.appendChild(summary);
+    }
+  }
 }
 
 /**
@@ -1494,6 +1527,21 @@ function _createFieldTogglePills(panel) {
 function _renderKeywordDetail(panel, data) {
   if (data.keyword_type) {
     _addBadgeRow(panel, 'Type', data.keyword_type);
+  }
+  // Root cause / wrapper classification badge
+  if (data.status === 'FAIL') {
+    var kwCls = _classifyFailKeyword(data);
+    if (kwCls === 'root-cause') {
+      var rcBadge = document.createElement('span');
+      rcBadge.className = 'root-cause-badge';
+      rcBadge.textContent = 'Root Cause';
+      panel.appendChild(rcBadge);
+    } else if (kwCls === 'wrapper') {
+      var wBadge = document.createElement('span');
+      wBadge.className = 'wrapper-badge';
+      wBadge.textContent = 'Wrapper';
+      panel.appendChild(wBadge);
+    }
   }
   if (data.library) {
     _addBadgeRow(panel, 'Library', data.library);
