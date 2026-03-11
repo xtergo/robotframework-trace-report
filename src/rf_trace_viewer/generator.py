@@ -120,6 +120,9 @@ KEY_MAP: dict[str, str] = {
     "args": "a",
     "tags": "tg",
     "metadata": "md",
+    "library": "lb",
+    "suite_name": "sn",
+    "suite_source": "ss",
 }
 
 
