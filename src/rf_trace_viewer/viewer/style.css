@@ -1379,6 +1379,35 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   line-height: 1.4;
 }
 
+/* ── Detail Panel Toggle Pills ── */
+.rf-trace-viewer .detail-field-pills {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.rf-trace-viewer .detail-field-pill {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rf-trace-viewer .detail-field-pill:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .detail-field-pill.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
 .rf-trace-viewer .detail-metadata-table {
   width: 100%;
   border-collapse: collapse;
