@@ -8,10 +8,13 @@ standard library: xml.etree.ElementTree, json, uuid, datetime, os, sys.
 
 from __future__ import annotations
 
+import gzip
+import json
 import os
 import re
 import sys
 import uuid
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -465,3 +468,31 @@ def convert_xml(root) -> dict:
             }
         ]
     }
+
+
+def convert_file(input_path: str, output_path: str) -> None:
+    """Convert an RF output.xml file to OTLP NDJSON.
+
+    Raises SystemExit if the file is missing, unreadable, or has unsupported schema version.
+    """
+    try:
+        tree = ET.parse(input_path)
+    except FileNotFoundError:
+        print(f"Error: file not found: {input_path}", file=sys.stderr)
+        raise SystemExit(1) from None
+    except PermissionError:
+        print(f"Error: permission denied: {input_path}", file=sys.stderr)
+        raise SystemExit(1) from None
+    except ET.ParseError as exc:
+        print(f"Error: failed to parse XML: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+    root = tree.getroot()
+    result = convert_xml(root)
+
+    try:
+        with gzip.open(output_path, "wt", encoding="utf-8") as f:
+            json.dump(result, f, separators=(",", ":"))
+            f.write("\n")
+    except OSError as exc:
+        print(f"Error: failed to write output file: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
