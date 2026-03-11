@@ -1301,6 +1301,87 @@ function _renderTestDetail(panel, data) {
   }
 }
 
+/**
+ * Create toggle pill buttons for keyword detail panel fields.
+ * Reads/writes visibility state from localStorage key 'rf-trace-detail-fields'.
+ * @param {HTMLElement} panel - The detail panel element to prepend pills into.
+ */
+function _createFieldTogglePills(panel) {
+  var STORAGE_KEY = 'rf-trace-detail-fields';
+  var FIELDS = ['args', 'doc', 'events', 'source'];
+
+  // Read persisted state, falling back to all-visible defaults
+  var state = { args: true, doc: true, events: true, source: true };
+  try {
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (var i = 0; i < FIELDS.length; i++) {
+          var f = FIELDS[i];
+          if (typeof parsed[f] === 'boolean') {
+            state[f] = parsed[f];
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Invalid JSON or localStorage unavailable — use defaults
+  }
+
+  var container = document.createElement('div');
+  container.className = 'detail-field-pills';
+
+  FIELDS.forEach(function (field) {
+    var pill = document.createElement('button');
+    pill.className = 'detail-field-pill' + (state[field] ? ' active' : '');
+    pill.textContent = field;
+    pill.setAttribute('data-toggle-field', field);
+
+    pill.addEventListener('click', function () {
+      state[field] = !state[field];
+
+      // Update pill appearance
+      if (state[field]) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.remove('active');
+      }
+
+      // Toggle matching data-field containers within the panel
+      var targets = panel.querySelectorAll('[data-field="' + field + '"]');
+      for (var j = 0; j < targets.length; j++) {
+        targets[j].style.display = state[field] ? '' : 'none';
+      }
+
+      // Persist to localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        // Storage full or unavailable — silently ignore
+      }
+    });
+
+    container.appendChild(pill);
+  });
+
+  // Prepend pill bar to the panel
+  if (panel.firstChild) {
+    panel.insertBefore(container, panel.firstChild);
+  } else {
+    panel.appendChild(container);
+  }
+
+  // Apply initial visibility to data-field containers
+  FIELDS.forEach(function (field) {
+    var targets = panel.querySelectorAll('[data-field="' + field + '"]');
+    for (var j = 0; j < targets.length; j++) {
+      targets[j].style.display = state[field] ? '' : 'none';
+    }
+  });
+}
+
+
 /** Render keyword-specific detail rows. */
 function _renderKeywordDetail(panel, data) {
   if (data.keyword_type) {
