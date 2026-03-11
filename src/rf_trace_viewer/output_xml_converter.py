@@ -115,3 +115,37 @@ def _extract_resource_attrs(root) -> list[dict]:
         _make_otlp_attr("telemetry.sdk.name", "rf-output-xml-converter"),
         _make_otlp_attr("run.id", str(uuid.uuid4())),
     ]
+
+
+def _make_events(elem, parent_start_time_ns: int = 0) -> list[dict]:
+    """Convert ``<msg>`` children of *elem* to OTLP span events.
+
+    Each ``<msg>`` element becomes one event dict with:
+    - ``name``: the message text content
+    - ``time_unix_nano``: parsed from the ``time`` attribute, falling back
+      to *parent_start_time_ns* when the attribute is absent
+    - ``attributes``: a ``log.level`` attribute when the ``level``
+      attribute is present on the ``<msg>`` element
+
+    Parameters
+    ----------
+    elem:
+        An ``xml.etree.ElementTree.Element`` (e.g. ``<kw>``, ``<test>``).
+    parent_start_time_ns:
+        Fallback timestamp (nanoseconds since epoch) used when a ``<msg>``
+        element lacks a ``time`` attribute.
+    """
+    events: list[dict] = []
+    for msg in elem.iterfind("msg"):
+        text = msg.text or ""
+        time_attr = msg.get("time")
+        time_ns = _parse_timestamp(time_attr) if time_attr else parent_start_time_ns
+        event: dict = {
+            "name": text,
+            "time_unix_nano": time_ns,
+        }
+        level = msg.get("level")
+        if level:
+            event["attributes"] = [_make_otlp_attr("log.level", level)]
+        events.append(event)
+    return events
