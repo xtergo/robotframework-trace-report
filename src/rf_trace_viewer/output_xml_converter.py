@@ -235,7 +235,7 @@ def _make_span(
 
 
 # Tags that _walk_element recurses into
-_WALKABLE_TAGS = frozenset({"suite", "test", "kw", "for", "while", "if", "try"})
+_WALKABLE_TAGS = frozenset({"suite", "test", "kw", "for", "while", "if", "try", "branch", "iter"})
 
 
 def _walk_element(
@@ -245,9 +245,10 @@ def _walk_element(
 ) -> None:
     """Recursively walk an XML element tree, creating OTLP spans.
 
-    Handles ``<suite>`` and ``<test>`` elements (keywords and control
-    structures are added in a later task).  The function uses if/elif
-    tag matching so it is easy to extend.
+    Handles ``<suite>``, ``<test>``, ``<kw>``, and control structure
+    elements (``<for>``, ``<while>``, ``<if>``, ``<try>``, ``<branch>``,
+    ``<iter>``).  The function uses if/elif tag matching so it is easy
+    to extend.
 
     Parameters
     ----------
@@ -315,6 +316,105 @@ def _walk_element(
         )
 
         # Recurse into keyword and control structure children
+        for child in elem:
+            if child.tag in _WALKABLE_TAGS:
+                _walk_element(child, span_id, context)
+
+    elif tag == "kw":
+        kw_type_raw = elem.get("type", "")
+        if kw_type_raw.lower() == "setup":
+            kw_type = "SETUP"
+        elif kw_type_raw.lower() == "teardown":
+            kw_type = "TEARDOWN"
+        else:
+            kw_type = "KEYWORD"
+
+        attrs = [
+            _make_otlp_attr("rf.keyword.name", elem.get("name", "")),
+            _make_otlp_attr("rf.keyword.type", kw_type),
+        ]
+
+        # Collect <arg> children → rf.keyword.args
+        args = [a.text or "" for a in elem.iterfind("arg")]
+        if args:
+            attrs.append(_make_otlp_attr("rf.keyword.args", ", ".join(args)))
+
+        # rf.keyword.library from library or owner attribute
+        library = elem.get("library") or elem.get("owner", "")
+        if library:
+            attrs.append(_make_otlp_attr("rf.keyword.library", library))
+
+        events = _make_events(elem, context.parent_start_time_ns)
+
+        span_id = _make_span(
+            name=elem.get("name", ""),
+            attrs=attrs,
+            elem=elem,
+            parent_span_id=parent_span_id,
+            context=context,
+            events=events,
+        )
+
+        # Recurse into walkable children
+        for child in elem:
+            if child.tag in _WALKABLE_TAGS:
+                _walk_element(child, span_id, context)
+
+    elif tag in ("for", "while", "if", "try"):
+        upper_tag = tag.upper()
+        attrs = [
+            _make_otlp_attr("rf.keyword.name", upper_tag),
+            _make_otlp_attr("rf.keyword.type", upper_tag),
+        ]
+
+        span_id = _make_span(
+            name=upper_tag,
+            attrs=attrs,
+            elem=elem,
+            parent_span_id=parent_span_id,
+            context=context,
+        )
+
+        # Recurse into children (including <branch> and <iter>)
+        for child in elem:
+            if child.tag in _WALKABLE_TAGS:
+                _walk_element(child, span_id, context)
+
+    elif tag == "branch":
+        branch_type = elem.get("type", "")
+        attrs = [
+            _make_otlp_attr("rf.keyword.name", branch_type),
+            _make_otlp_attr("rf.keyword.type", branch_type),
+        ]
+
+        span_id = _make_span(
+            name=branch_type,
+            attrs=attrs,
+            elem=elem,
+            parent_span_id=parent_span_id,
+            context=context,
+        )
+
+        # Recurse into walkable children
+        for child in elem:
+            if child.tag in _WALKABLE_TAGS:
+                _walk_element(child, span_id, context)
+
+    elif tag == "iter":
+        attrs = [
+            _make_otlp_attr("rf.keyword.name", "ITERATION"),
+            _make_otlp_attr("rf.keyword.type", "ITERATION"),
+        ]
+
+        span_id = _make_span(
+            name="ITERATION",
+            attrs=attrs,
+            elem=elem,
+            parent_span_id=parent_span_id,
+            context=context,
+        )
+
+        # Recurse into walkable children
         for child in elem:
             if child.tag in _WALKABLE_TAGS:
                 _walk_element(child, span_id, context)
