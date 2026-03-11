@@ -746,6 +746,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 }
 
 .rf-trace-viewer .tree-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -753,6 +754,21 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-radius: 3px;
   cursor: pointer;
   user-select: none;
+}
+
+/* Tree indent guides — one vertical line per nesting level.
+   Each nested tree-node draws its own guide via ::before,
+   so a depth-3 node shows lines from depth-1, -2, and -3. */
+.rf-trace-viewer .tree-node:not(.depth-0) > .tree-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--tree-indent-size) + 8px);
+  width: 1px;
+  background: var(--border-color);
+  opacity: 0.25;
+  pointer-events: none;
 }
 
 .rf-trace-viewer .tree-row:hover {
