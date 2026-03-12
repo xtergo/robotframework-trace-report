@@ -2566,14 +2566,24 @@ function _virtualHighlight(spanId) {
   // Clear previous highlight
   vs.highlightedSpanId = spanId;
 
+  // Failure-focused expand: if the target span belongs to a FAIL test,
+  // apply failure-focused collapse to the test's subtree before expanding
+  // ancestors of the specific target span.
+  var mergedModel = { suites: vs.mergedSuites };
+  var testData = _findTestForSpan(mergedModel, spanId);
+  if (testData && testData.status === 'FAIL') {
+    var failExpanded = _computeFailFocusedExpanded(testData);
+    for (var key in failExpanded) {
+      vs.expandedIds[key] = true;
+    }
+  }
+
+  // Expand ancestors of the target span so it becomes visible
+  // (the target may be a PASS node the user needs to see)
+  _virtualExpandAncestors(spanId);
+
   // Find the item in flat list
   var idx = _findFlatIndex(spanId);
-
-  // If not found, expand ancestors and rebuild
-  if (idx < 0) {
-    _virtualExpandAncestors(spanId);
-    idx = _findFlatIndex(spanId);
-  }
 
   // If still not found, try to find via timeline parent chain
   if (idx < 0) {
