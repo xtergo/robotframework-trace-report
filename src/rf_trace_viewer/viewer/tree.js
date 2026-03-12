@@ -1114,9 +1114,10 @@ function _findFirstFailPath(suites) {
  * @param {Array} suites - The merged suite data array
  */
 function _autoExpandFirstFailure(treeRoot, suites) {
-  var failPath = _findFirstFailPath(suites);
+  var expandSet = _computeInitialExpanded(suites);
+  var ids = Object.keys(expandSet);
 
-  if (!failPath || failPath.length === 0) {
+  if (ids.length === 0) {
     // No failures — expand root suites only (original behavior)
     var rootNodes = treeRoot.querySelectorAll(':scope > .tree-node.depth-0');
     for (var j = 0; j < rootNodes.length; j++) {
@@ -1126,31 +1127,58 @@ function _autoExpandFirstFailure(treeRoot, suites) {
     return;
   }
 
-  // Materialize and expand each node along the failure path
-  var failNode = null;
-  for (var i = 0; i < failPath.length; i++) {
-    var spanId = failPath[i];
-    var node = treeRoot.querySelector('.tree-node[data-span-id="' + spanId + '"]');
-    if (!node) break;
-    failNode = node;
+  // Materialize and expand each node in the expand set
+  for (var i = 0; i < ids.length; i++) {
+    var node = treeRoot.querySelector('.tree-node[data-span-id="' + ids[i] + '"]');
+    if (!node) continue;
     _materializeIfNeeded(node);
     _expandNodeOnly(node);
-    // Also expand the .tree-children container
-    var childrenEl = node.querySelector(':scope > .tree-children');
-    if (childrenEl) childrenEl.classList.add('expanded');
   }
 
-  // Scroll the failing node into view after the DOM settles
-  if (failNode) {
+  // Find the first root cause keyword to scroll to.
+  // Walk suites to find the first FAIL test, then get its root cause keywords.
+  var scrollTarget = null;
+  var suiteStack = suites.slice();
+  while (suiteStack.length > 0 && !scrollTarget) {
+    var suite = suiteStack.shift();
+    var children = suite.children || [];
+    for (var c = 0; c < children.length; c++) {
+      var child = children[c];
+      if (child.keywords !== undefined) {
+        // It's a test
+        if (child.status === 'FAIL') {
+          var rootCauses = _findRootCauseKeywords(child);
+          if (rootCauses.length > 0) {
+            scrollTarget = treeRoot.querySelector(
+              '.tree-node[data-span-id="' + rootCauses[0].id + '"]'
+            );
+          }
+          if (!scrollTarget) {
+            // Fallback: scroll to the test node itself
+            scrollTarget = treeRoot.querySelector(
+              '.tree-node[data-span-id="' + child.id + '"]'
+            );
+          }
+          break;
+        }
+      } else {
+        // Nested suite
+        suiteStack.push(child);
+      }
+    }
+  }
+
+  // Scroll the target node into view after the DOM settles
+  if (scrollTarget) {
     requestAnimationFrame(function () {
-      var treePanel = failNode.closest('.panel-tree');
+      var treePanel = scrollTarget.closest('.panel-tree');
       if (treePanel) {
         var panelRect = treePanel.getBoundingClientRect();
-        var nodeRect = failNode.getBoundingClientRect();
+        var nodeRect = scrollTarget.getBoundingClientRect();
         var scrollOffset = nodeRect.top - panelRect.top - panelRect.height / 3 + nodeRect.height / 2;
         treePanel.scrollBy({ top: scrollOffset, behavior: 'smooth' });
       } else {
-        failNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     });
   }
