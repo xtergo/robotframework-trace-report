@@ -12,6 +12,36 @@
 (function () {
   'use strict';
 
+  // Control flow wrapper names (lower-cased) — used to filter breadcrumb chains.
+  // Mirrors the CONTROL_FLOW_WRAPPERS list in tree.js.
+  var _CONTROL_FLOW_WRAPPERS_LOWER = [
+    'run keyword and continue on failure',
+    'run keyword if',
+    'run keyword unless',
+    'run keyword and expect error',
+    'run keyword and ignore error',
+    'run keyword and return status',
+    'wait until keyword succeeds',
+    'repeat keyword',
+    'if', 'else if', 'else',
+    'try', 'except', 'finally',
+    'for', 'while'
+  ];
+
+  /**
+   * Check if a keyword name matches a known control flow wrapper (case-insensitive).
+   * @param {string} name - Keyword name
+   * @returns {boolean}
+   */
+  function _isControlFlowWrapper(name) {
+    if (!name) return false;
+    var lower = name.toLowerCase();
+    for (var i = 0; i < _CONTROL_FLOW_WRAPPERS_LOWER.length; i++) {
+      if (lower === _CONTROL_FLOW_WRAPPERS_LOWER[i]) return true;
+    }
+    return false;
+  }
+
   var _container = null;
   var _suites = [];
   var _statistics = null;
@@ -1394,6 +1424,18 @@
       });
       kws = failedKw.children || [];
     }
+    // Filter out control flow wrappers from intermediate entries.
+    // Keep first (test) and last (root cause), remove wrapper keywords in between.
+    if (chain.length > 2) {
+      var filtered = [chain[0]];
+      for (var ci = 1; ci < chain.length - 1; ci++) {
+        if (!_isControlFlowWrapper(chain[ci].name)) {
+          filtered.push(chain[ci]);
+        }
+      }
+      filtered.push(chain[chain.length - 1]);
+      chain = filtered;
+    }
     return chain;
   }
 
@@ -1675,6 +1717,10 @@
         case 'start_time':
           av = a.start_time || 0;
           bv = b.start_time || 0;
+          return asc ? av - bv : bv - av;
+        case 'end_time':
+          av = a.end_time || 0;
+          bv = b.end_time || 0;
           return asc ? av - bv : bv - av;
         case 'message':
           av = (a.status_message || '').toLowerCase();
@@ -1960,9 +2006,10 @@
     var sortBar = document.createElement('div');
     sortBar.className = 'report-sort-bar';
     var sortCols = [
+      { key: 'status', label: 'Status', flex: '0 0 50px' },
       { key: 'name', label: 'Name', flex: '1' },
       { key: 'start_time', label: 'Start Time', flex: '0 0 140px' },
-      { key: 'status', label: 'Status', flex: '0 0 60px' },
+      { key: 'end_time', label: 'End Time', flex: '0 0 140px' },
       { key: 'duration', label: 'Duration', flex: '0 0 85px' }
     ];
     for (var sc = 0; sc < sortCols.length; sc++) {
@@ -1970,12 +2017,24 @@
         var sortBtn = document.createElement('span');
         sortBtn.className = 'report-sort-col';
         sortBtn.style.flex = col.flex;
-        sortBtn.textContent = col.label;
-        if (_state.sortColumn === col.key) {
-          sortBtn.textContent += _state.sortAsc ? ' \u25B2' : ' \u25BC';
-          sortBtn.classList.add('sorted');
-        }
         sortBtn.style.cursor = 'pointer';
+
+        var labelSpan = document.createElement('span');
+        labelSpan.className = 'sort-col-label';
+        labelSpan.textContent = col.label;
+        sortBtn.appendChild(labelSpan);
+
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'sort-col-icon';
+        if (_state.sortColumn === col.key) {
+          iconSpan.textContent = _state.sortAsc ? '\u25B2' : '\u25BC';
+          iconSpan.classList.add('sort-col-icon-active');
+          sortBtn.classList.add('sorted');
+        } else {
+          iconSpan.textContent = '\u21C5';
+        }
+        sortBtn.appendChild(iconSpan);
+
         sortBtn.addEventListener('click', function () {
           if (_state.sortColumn === col.key) {
             _state.sortAsc = !_state.sortAsc;
@@ -2020,7 +2079,7 @@
 
       var statusDot = document.createElement('span');
       statusDot.className = 'report-status-dot status-' + testStatus.toLowerCase();
-      statusDot.style.flex = '0 0 60px';
+      statusDot.style.flex = '0 0 50px';
       statusDot.textContent = isFail ? '\u2717' : isSkip ? '\u2298' : '\u2713';
       summary.appendChild(statusDot);
 
@@ -2039,7 +2098,7 @@
           errPreview.className = 'report-test-error';
           errPreview.textContent = lastLink.error;
           errPreview.title = lastLink.error;
-          summary.appendChild(errPreview);
+          nameEl.appendChild(errPreview);
         }
       }
 
@@ -2051,7 +2110,8 @@
       summary.appendChild(startEl);
 
       var endEl = document.createElement('span');
-      endEl.className = 'report-test-timestamp';
+      endEl.className = 'report-test-timestamp report-test-end-time';
+      endEl.style.flex = '0 0 140px';
       endEl.textContent = _formatTimestamp(test.end_time);
       endEl.title = 'End: ' + _formatTimestamp(test.end_time);
       summary.appendChild(endEl);
