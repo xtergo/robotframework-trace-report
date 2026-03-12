@@ -626,6 +626,10 @@ def sort_tests(tests, column, asc):
             av = a.get("elapsed_time") or 0
             bv = b.get("elapsed_time") or 0
             return (av - bv) if asc else (bv - av)
+        elif column == "end_time":
+            av = a.get("end_time") or 0
+            bv = b.get("end_time") or 0
+            return (av - bv) if asc else (bv - av)
         elif column == "message":
             av = (a.get("status_message") or "").lower()
             bv = (b.get("status_message") or "").lower()
@@ -853,7 +857,7 @@ def test_sort_preserves_all_elements(test_list):
     **Validates: Requirements 5.3, 5.5**
     """
     tests = [make_full_test(name, status, elapsed_time=dur) for name, status, dur in test_list]
-    for col in ["name", "status", "duration", "tags", "message"]:
+    for col in ["name", "status", "duration", "tags", "message", "end_time"]:
         for asc in [True, False]:
             sorted_t = sort_tests(tests, col, asc)
             assert len(sorted_t) == len(tests)

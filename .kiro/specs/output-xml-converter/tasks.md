@@ -6,8 +6,8 @@ Implement a converter module that transforms RF 7.x output.xml files into OTLP N
 
 ## Tasks
 
-- [ ] 1. Create the core converter module with internal helpers
-  - [ ] 1.1 Create `src/rf_trace_viewer/output_xml_converter.py` with `_ConversionContext` dataclass, `_generate_span_id()`, `_parse_timestamp()`, `_parse_elapsed()`, `_make_otlp_attr()`, `_make_otlp_array_attr()`, and `_validate_schema()` helpers
+- [x] 1. Create the core converter module with internal helpers
+  - [x] 1.1 Create `src/rf_trace_viewer/output_xml_converter.py` with `_ConversionContext` dataclass, `_generate_span_id()`, `_parse_timestamp()`, `_parse_elapsed()`, `_make_otlp_attr()`, `_make_otlp_array_attr()`, and `_validate_schema()` helpers
     - `_ConversionContext` holds `trace_id`, `parent_start_time_ns`, and accumulated `spans` list
     - `_generate_span_id()` returns 16-char lowercase hex string
     - `_parse_timestamp(iso_str)` converts ISO 8601 string to nanoseconds since epoch
@@ -17,35 +17,35 @@ Implement a converter module that transforms RF 7.x output.xml files into OTLP N
     - `_validate_schema(root)` checks `schemaversion` attribute ≥ 5, raises `SystemExit` otherwise
     - _Requirements: 1.1, 1.3, 6.1, 6.2_
 
-  - [ ] 1.2 Implement `_extract_resource_attrs(root)` to build resource attributes from `<robot>` element
+  - [x] 1.2 Implement `_extract_resource_attrs(root)` to build resource attributes from `<robot>` element
     - Extract `service.name` from top-level `<suite name="...">` child
     - Extract `rf.version` from `generator` attribute (parse "Robot X.Y.Z (...)" pattern)
     - Set `telemetry.sdk.name` to `"rf-output-xml-converter"`
     - Generate `run.id` as UUID
     - _Requirements: 1.4, 9.1, 9.2, 9.3, 9.4_
 
-  - [ ] 1.3 Implement `_make_events(elem)` to convert `<msg>` children to OTLP events
+  - [x] 1.3 Implement `_make_events(elem)` to convert `<msg>` children to OTLP events
     - Create one event per `<msg>` element with `name` = message text
     - Set `time_unix_nano` from `<msg time="...">` attribute
     - Set `log.level` event attribute from `<msg level="...">` attribute
     - Handle missing `time` (use parent start time) and missing `level` (omit attribute)
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ] 1.4 Implement `_make_span()` to create a single OTLP span dict
+  - [x] 1.4 Implement `_make_span()` to create a single OTLP span dict
     - Build span with `trace_id`, `span_id`, `parent_span_id`, `name`, `kind=SPAN_KIND_INTERNAL`
     - Parse `<status>` child for `start_time_unix_nano`, `end_time_unix_nano`, `rf.status`
     - Map `PASS` → `STATUS_CODE_OK`, `FAIL` → `STATUS_CODE_ERROR`, `SKIP` → `STATUS_CODE_OK`
     - Handle missing `start` (fallback to parent time) and missing `elapsed` (zero duration)
     - _Requirements: 6.1, 6.2, 6.3, 8.5, 8.6_
 
-- [ ] 2. Implement element-to-span mapping in the recursive walker
-  - [ ] 2.1 Implement `_walk_element(elem, parent_span_id, trace_id, context)` with suite and test mapping
+- [x] 2. Implement element-to-span mapping in the recursive walker
+  - [x] 2.1 Implement `_walk_element(elem, parent_span_id, trace_id, context)` with suite and test mapping
     - For `<suite>`: create span with `rf.suite.name`, `rf.suite.id`, `rf.suite.source`, `rf.status`; recurse into children
     - For `<test>`: create span with `rf.test.name`, `rf.test.id`, `rf.test.tags` (array_value), `rf.status`; recurse into `<kw>` children
     - Set `parent_span_id` correctly for nested elements
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4_
 
-  - [ ] 2.2 Add keyword and control structure mapping to `_walk_element`
+  - [x] 2.2 Add keyword and control structure mapping to `_walk_element`
     - For `<kw>`: create span with `rf.keyword.name`, `rf.keyword.type` (KEYWORD/SETUP/TEARDOWN), `rf.keyword.args`, `rf.keyword.library`
     - For `<for>`, `<while>`, `<if>`, `<try>`: create span with `rf.keyword.name` and `rf.keyword.type` set to tag name uppercased
     - For `<branch>`: create child span with `rf.keyword.type` from `type` attribute
@@ -53,7 +53,7 @@ Implement a converter module that transforms RF 7.x output.xml files into OTLP N
     - Attach events from `_make_events()` to keyword and test spans
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-  - [ ] 2.3 Implement `convert_xml(root)` public function
+  - [x] 2.3 Implement `convert_xml(root)` public function
     - Validate schema version via `_validate_schema()`
     - Extract resource attributes via `_extract_resource_attrs()`
     - Generate `trace_id` (32-char lowercase hex)
@@ -61,17 +61,17 @@ Implement a converter module that transforms RF 7.x output.xml files into OTLP N
     - Assemble and return the complete `ExportTraceServiceRequest` dict
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
-  - [ ] 2.4 Implement `convert_file(input_path, output_path)` public function
+  - [x] 2.4 Implement `convert_file(input_path, output_path)` public function
     - Parse XML file with `xml.etree.ElementTree`
     - Handle file-not-found, permission errors, and XML parse errors with `SystemExit(1)` + stderr message
     - Call `convert_xml()` and write single NDJSON line to output file
     - _Requirements: 1.1, 1.2, 8.1_
 
-- [ ] 3. Checkpoint — verify converter module
+- [x] 3. Checkpoint — verify converter module
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Add CLI `convert` subcommand
-  - [ ] 4.1 Add `convert` subcommand to `src/rf_trace_viewer/cli.py`
+- [x] 4. Add CLI `convert` subcommand
+  - [x] 4.1 Add `convert` subcommand to `src/rf_trace_viewer/cli.py`
     - Add subcommand detection in `main()` similar to existing `serve` pattern
     - Accept positional `input` argument for the output.xml file path
     - Accept optional `--output` / `-o` argument, defaulting to input filename with `.json` extension
@@ -112,7 +112,7 @@ Implement a converter module that transforms RF 7.x output.xml files into OTLP N
     - _Requirements: 2.1, 2.2, 3.1, 3.2, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1–5.6, 7.1–7.4_
 
 - [ ] 6. Implement Hypothesis strategy and property-based tests
-  - [ ] 6.1 Add `rf_output_xml` Hypothesis strategy to `tests/conftest.py`
+  - [x] 6.1 Add `rf_output_xml` Hypothesis strategy to `tests/conftest.py`
     - Generate valid RF output.xml `Element` trees with random suite names, test names, keyword names
     - Include random nesting depth (suites containing suites, tests, keywords)
     - Include random control structures (`<for>`, `<while>`, `<if>`, `<try>` with `<branch>`/`<iter>`)
@@ -174,7 +174,7 @@ Implement a converter module that transforms RF 7.x output.xml files into OTLP N
     - **Property 14: CLI default output path**
     - **Validates: Requirements 10.2**
 
-- [ ] 7. Final checkpoint — verify all tests pass
+- [x] 7. Final checkpoint — verify all tests pass
   - Ensure all tests pass, ask the user if questions arise.
   - Run `make test-unit` and confirm it completes in under 30 seconds.
 

@@ -5,18 +5,17 @@ by the current spec. Grouped by priority.
 
 ## Should Add (high impact for viewer experience)
 
-- [ ] **`<doc>` elements** — Suites, tests, and keywords all have optional
+- [x] **`<doc>` elements** — Suites, tests, and keywords all have optional
   `<doc>` children. The rf_model has `doc` fields and the trace format
-  uses `rf.suite.doc`, `rf.test.doc`, `rf.keyword.doc`. Should be mapped.
+  uses `rf.suite.doc`, `rf.test.doc`, `rf.keyword.doc`. ✅ Mapped in b88afaf.
 
-- [ ] **Suite `<metadata>`** — `<metadata><item name="key">value</item></metadata>`
-  maps to `rf.suite.metadata.*` attributes. RFSuite already has a `metadata`
-  dict that consumes these.
+- [x] **Suite `<metadata>`** — `<metadata><item name="key">value</item></metadata>`
+  maps to `rf.suite.metadata.*` attributes. ✅ Mapped in b88afaf.
 
-- [ ] **Failure messages in `<status>`** — Status elements can contain text
+- [x] **Failure messages in `<status>`** — Status elements can contain text
   content for failures: `<status status="FAIL">Error message here</status>`.
   Maps to `status.message` on the OTLP span and `status_message` on the
-  rf_model. Important for debugging failed tests.
+  rf_model. ✅ Mapped in b88afaf.
 
 ## Conscious Deferrals (low impact / no current trace mapping)
 

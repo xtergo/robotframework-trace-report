@@ -4758,6 +4758,384 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   background: color-mix(in srgb, var(--bg-tertiary) 80%, var(--hover-bg));
 }
 
+/* ── Report UX Overhaul: Compact header & hero-top-row (Task 2.2) ── */
+
+/* Reduce hero padding for a more compact header */
+.rf-trace-viewer .report-hero {
+  padding: 10px 20px;
+}
+
+/* Hero top row: verdict left, metrics right, wrapping on narrow screens */
+.rf-trace-viewer .hero-top-row {
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Stack hero top row vertically on small viewports */
+@media (max-width: 768px) {
+  .rf-trace-viewer .hero-top-row {
+    flex-direction: column;
+  }
+}
+
+/* ── Report UX Overhaul: Inline metadata chips (Task 2.3) ── */
+
+/* Tighten metadata row spacing */
+.rf-trace-viewer .report-metadata-row {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Style each metadata item as a compact chip */
+.rf-trace-viewer .report-metadata-item {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── Report UX Overhaul: Improved tab navigation (Task 3.1) ── */
+
+/* Remove gap between tabs and content; add tab bar background */
+.rf-trace-viewer .report-sub-tabs {
+  margin-bottom: 0;
+  background: var(--bg-secondary);
+}
+
+/* Active tab: underline + distinct background */
+.rf-trace-viewer .report-sub-tab.active {
+  border-bottom: 2px solid var(--focus-outline);
+  background: var(--bg-tertiary);
+}
+
+/* Inactive tabs: reduced opacity for visual hierarchy */
+.rf-trace-viewer .report-sub-tab:not(.active) {
+  opacity: 0.6;
+}
+
+/* Controls panel: visually group tabs with content */
+.rf-trace-viewer .report-controls-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Suite selector dropdown: match search input height and border styling */
+.rf-trace-viewer .suite-selector-dropdown {
+  padding: 7px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+/* ── Semantic Status Pill Colors ── */
+
+/* Active semantic pills: status-specific backgrounds */
+.rf-trace-viewer .report-status-pill.pill-pass.active {
+  background: var(--status-pass);
+  color: #fff;
+}
+
+.rf-trace-viewer .report-status-pill.pill-fail.active {
+  background: var(--status-fail);
+  color: #fff;
+}
+
+.rf-trace-viewer .report-status-pill.pill-skip.active {
+  background: var(--status-skip);
+  color: #fff;
+}
+
+/* Inactive semantic pills: muted semantic text colors */
+.rf-trace-viewer .report-status-pill.pill-pass:not(.active) {
+  color: var(--status-pass);
+  opacity: 0.6;
+}
+
+.rf-trace-viewer .report-status-pill.pill-fail:not(.active) {
+  color: var(--status-fail);
+  opacity: 0.6;
+}
+
+.rf-trace-viewer .report-status-pill.pill-skip:not(.active) {
+  color: var(--status-skip);
+  opacity: 0.6;
+}
+
+/* ── Report UX Overhaul: Shared column width custom properties (Task 6.1) ── */
+
+/* Define shared column widths on the results container */
+.rf-trace-viewer .report-test-results {
+  --col-name: 1;
+  --col-start: 0 0 140px;
+  --col-status: 0 0 60px;
+  --col-duration: 0 0 85px;
+}
+
+/* Sort bar columns use shared widths */
+.rf-trace-viewer .report-sort-col:nth-child(1) {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(2) {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(3) {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(4) {
+  flex: var(--col-duration);
+}
+
+/* Test row summary children use the same shared widths */
+.rf-trace-viewer .report-test-summary .report-test-name {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-timestamp {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-test-summary .report-status-dot {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-dur {
+  flex: var(--col-duration);
+}
+
+/* ── Actions dropdown (Req 8) ── */
+.rf-trace-viewer .actions-dropdown {
+  position: relative;
+}
+
+.rf-trace-viewer .actions-dropdown-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .actions-dropdown-btn:hover {
+  background: var(--bg-secondary);
+}
+
+.rf-trace-viewer .actions-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 100;
+  min-width: 160px;
+}
+
+.rf-trace-viewer .actions-dropdown-item {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  padding: 8px 14px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer .actions-dropdown-item:hover {
+  background: var(--bg-tertiary);
+}
+
+/* White color for metadata chip values */
+.rf-trace-viewer .report-metadata-value {
+  color: #ffffff;
+}
+
+/* ── Report Sort Bar: Modern Dashboard Header (Stripe/Linear style) ── */
+
+/* Sort column: inline-flex for label + icon alignment */
+.rf-trace-viewer .report-sort-col {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+/* Sort column label */
+.rf-trace-viewer .sort-col-label {
+  white-space: nowrap;
+}
+
+/* Sort indicator icon: subtle neutral state */
+.rf-trace-viewer .sort-col-icon {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.4;
+  transition: opacity 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+/* Active sort icon: prominent */
+.rf-trace-viewer .sort-col-icon-active {
+  opacity: 1;
+  color: var(--focus-outline);
+  font-size: 10px;
+}
+
+/* Hover: reveal neutral icon */
+.rf-trace-viewer .report-sort-col:hover .sort-col-icon {
+  opacity: 0.8;
+}
+
+/* Hover: brighten active icon */
+.rf-trace-viewer .report-sort-col.sorted:hover .sort-col-icon-active {
+  opacity: 1;
+}
+
+/* Sorted column: accent color for label too */
+.rf-trace-viewer .report-sort-col.sorted .sort-col-label {
+  color: var(--focus-outline);
+}
+
+/* Sort bar: stronger bottom border for clean separation */
+.rf-trace-viewer .report-sort-bar {
+  border-bottom: 2px solid var(--border-color);
+  padding: 6px 12px;
+}
+
+/* ── Column alignment overhaul: Status first, add End Time column ── */
+
+/* Override shared column widths to include end_time and narrower status */
+.rf-trace-viewer .report-test-results {
+  --col-status: 0 0 50px;
+  --col-name: 1;
+  --col-start: 0 0 140px;
+  --col-end: 0 0 140px;
+  --col-duration: 0 0 85px;
+}
+
+/* Sort bar: 5 columns in new order */
+.rf-trace-viewer .report-sort-col:nth-child(1) {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(2) {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(3) {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(4) {
+  flex: var(--col-end);
+}
+
+.rf-trace-viewer .report-sort-col:nth-child(5) {
+  flex: var(--col-duration);
+}
+
+/* Test row summary: match sort bar order */
+.rf-trace-viewer .report-test-summary .report-status-dot {
+  flex: var(--col-status);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-name {
+  flex: var(--col-name);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-timestamp {
+  flex: var(--col-start);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-end-time {
+  flex: var(--col-end);
+}
+
+.rf-trace-viewer .report-test-summary .report-test-dur {
+  flex: var(--col-duration);
+}
+
+/* ── Column alignment fix: error inside name, sort bar gap ── */
+
+/* Sort bar needs same gap as test summary rows */
+.rf-trace-viewer .report-sort-bar {
+  gap: 8px;
+}
+
+/* Error preview lives inside the name column now — inline display */
+.rf-trace-viewer .report-test-error {
+  flex: none;
+  display: inline;
+  margin-left: 8px;
+  font-size: 11px;
+}
+
+/* Name column: truncate the combined name+error with ellipsis */
+.rf-trace-viewer .report-test-summary .report-test-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Ensure the test name text itself truncates */
+.rf-trace-viewer .report-test-name > .report-test-error {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Column alignment fix v2: consistent text-align, padding, and border compensation ── */
+
+/* Remove padding from sort columns so they align flush with data cells */
+.rf-trace-viewer .report-sort-col {
+  padding: 0;
+}
+
+/* Left-align all data columns to match sort bar headers */
+.rf-trace-viewer .report-test-dur {
+  text-align: left;
+}
+
+.rf-trace-viewer .report-test-timestamp {
+  text-align: left;
+}
+
+/* Compensate for the 3px border-left on failed rows so columns stay aligned */
+.rf-trace-viewer .report-test-row.row-fail > .report-test-summary {
+  padding-left: 9px;
+}
+
+/* Override base report-test-error flex so it doesn't push siblings */
+.rf-trace-viewer .report-test-name > .report-test-error {
+  flex: none;
+  display: inline;
+}
+
+/* Status dot: override base width so flex-basis controls sizing */
+.rf-trace-viewer .report-status-dot {
+  width: auto;
+}
+
 </style>
 </head>
 <body>
@@ -12005,12 +12383,18 @@ window.highlightSpanInKeywordStats = function (spanId) {
    * @returns {string} Formatted duration string
    */
   function _formatDuration(ms) {
-    if (typeof ms !== 'number' || ms <= 0) return '0s';
-    if (ms < 1000) return ms + 'ms';
+    if (typeof ms !== 'number' || isNaN(ms) || ms <= 0) return '0s';
+    if (ms < 1000) return Math.round(ms) + 'ms';
     if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
-    var m = Math.floor(ms / 60000);
-    var s = ((ms % 60000) / 1000).toFixed(0);
-    return m + 'm ' + s + 's';
+    if (ms < 3600000) {
+      var m = Math.floor(ms / 60000);
+      var s = Math.round((ms % 60000) / 1000);
+      return m + 'm ' + s + 's';
+    }
+    var h = Math.floor(ms / 3600000);
+    var m = Math.floor((ms % 3600000) / 60000);
+    var s = Math.round((ms % 60000) / 1000);
+    return h + 'h ' + m + 'm ' + s + 's';
   }
 
   /**
@@ -12053,7 +12437,7 @@ window.highlightSpanInKeywordStats = function (spanId) {
 
     var label = document.createElement('label');
     label.className = 'suite-selector-label';
-    label.textContent = 'Suite: ';
+    label.textContent = 'Suite Filter ';
 
     var select = document.createElement('select');
     select.className = 'suite-selector-dropdown';
@@ -12581,61 +12965,6 @@ window.highlightSpanInKeywordStats = function (spanId) {
       vWord.textContent = verdictWord;
       verdictHeader.appendChild(vWord);
 
-      hero.appendChild(verdictHeader);
-
-      // Ratio bar (pass/fail/skip distribution)
-      if (stats.total_tests > 0) {
-        var barWrap = document.createElement('div');
-        barWrap.className = 'hero-ratio-bar-wrap';
-
-        var bar = document.createElement('div');
-        bar.className = 'hero-ratio-bar';
-
-        var passPct = (stats.passed / stats.total_tests * 100);
-        var failPct = (stats.failed / stats.total_tests * 100);
-        var skipPct = (stats.skipped / stats.total_tests * 100);
-
-        if (stats.passed > 0) {
-          var passSegment = document.createElement('div');
-          passSegment.className = 'ratio-segment ratio-pass';
-          passSegment.style.width = passPct + '%';
-          passSegment.title = stats.passed + ' passed (' + Math.round(passPct) + '%)';
-          passSegment.style.cursor = 'pointer';
-          passSegment.addEventListener('click', function() {
-            _state.statusFilter = _state.statusFilter === 'PASS' ? null : 'PASS';
-            _render();
-          });
-          bar.appendChild(passSegment);
-        }
-        if (stats.failed > 0) {
-          var failSegment = document.createElement('div');
-          failSegment.className = 'ratio-segment ratio-fail';
-          failSegment.style.width = failPct + '%';
-          failSegment.title = stats.failed + ' failed (' + Math.round(failPct) + '%)';
-          failSegment.style.cursor = 'pointer';
-          failSegment.addEventListener('click', function() {
-            _state.statusFilter = _state.statusFilter === 'FAIL' ? null : 'FAIL';
-            _render();
-          });
-          bar.appendChild(failSegment);
-        }
-        if (stats.skipped > 0) {
-          var skipSegment = document.createElement('div');
-          skipSegment.className = 'ratio-segment ratio-skip';
-          skipSegment.style.width = skipPct + '%';
-          skipSegment.title = stats.skipped + ' skipped (' + Math.round(skipPct) + '%)';
-          skipSegment.style.cursor = 'pointer';
-          skipSegment.addEventListener('click', function() {
-            _state.statusFilter = _state.statusFilter === 'SKIP' ? null : 'SKIP';
-            _render();
-          });
-          bar.appendChild(skipSegment);
-        }
-
-        barWrap.appendChild(bar);
-        hero.appendChild(barWrap);
-      }
-
       // Metrics Summary Line with individually colored spans
       var metricsLine = document.createElement('div');
       metricsLine.className = 'metrics-summary-line';
@@ -12688,7 +13017,133 @@ window.highlightSpanInKeywordStats = function (spanId) {
       metricsLine.appendChild(rateLabel);
       metricsLine.appendChild(document.createTextNode(passRate + '%'));
 
-      hero.appendChild(metricsLine);
+      // Hero top row: verdict + metrics in a flexbox row
+      var heroTopRow = document.createElement('div');
+      heroTopRow.className = 'hero-top-row';
+      heroTopRow.style.display = 'flex';
+      heroTopRow.style.alignItems = 'baseline';
+      heroTopRow.style.justifyContent = 'space-between';
+      heroTopRow.appendChild(verdictHeader);
+      heroTopRow.appendChild(metricsLine);
+
+      // Actions dropdown (Export button with JSON/CSV download options)
+      var actionsDropdown = document.createElement('div');
+      actionsDropdown.className = 'actions-dropdown';
+
+      var exportBtn = document.createElement('button');
+      exportBtn.className = 'actions-dropdown-btn';
+      exportBtn.textContent = 'Export \u25BE';
+      exportBtn.setAttribute('aria-haspopup', 'true');
+      exportBtn.setAttribute('aria-expanded', 'false');
+      actionsDropdown.appendChild(exportBtn);
+
+      var dropdownMenu = document.createElement('div');
+      dropdownMenu.className = 'actions-dropdown-menu';
+      dropdownMenu.style.display = 'none';
+
+      var jsonBtn = document.createElement('button');
+      jsonBtn.className = 'actions-dropdown-item';
+      jsonBtn.textContent = 'Download JSON';
+      jsonBtn.addEventListener('click', function() {
+        var content = _generateReportJSON();
+        _triggerDownload(content, 'report.json', 'application/json');
+        dropdownMenu.style.display = 'none';
+        exportBtn.setAttribute('aria-expanded', 'false');
+      });
+      dropdownMenu.appendChild(jsonBtn);
+
+      var csvBtn = document.createElement('button');
+      csvBtn.className = 'actions-dropdown-item';
+      csvBtn.textContent = 'Download CSV';
+      csvBtn.addEventListener('click', function() {
+        var content = _generateReportCSV();
+        _triggerDownload(content, 'report.csv', 'text/csv');
+        dropdownMenu.style.display = 'none';
+        exportBtn.setAttribute('aria-expanded', 'false');
+      });
+      dropdownMenu.appendChild(csvBtn);
+
+      actionsDropdown.appendChild(dropdownMenu);
+
+      exportBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var isOpen = dropdownMenu.style.display !== 'none';
+        dropdownMenu.style.display = isOpen ? 'none' : 'block';
+        exportBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+      });
+
+      // Close on outside click
+      document.addEventListener('click', function(e) {
+        if (!actionsDropdown.contains(e.target)) {
+          dropdownMenu.style.display = 'none';
+          exportBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      // Close on Escape key
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && dropdownMenu.style.display !== 'none') {
+          dropdownMenu.style.display = 'none';
+          exportBtn.setAttribute('aria-expanded', 'false');
+          exportBtn.focus();
+        }
+      });
+
+      heroTopRow.appendChild(actionsDropdown);
+      hero.appendChild(heroTopRow);
+
+      // Ratio bar (pass/fail/skip distribution) — below the top row
+      if (stats.total_tests > 0) {
+        var barWrap = document.createElement('div');
+        barWrap.className = 'hero-ratio-bar-wrap';
+
+        var bar = document.createElement('div');
+        bar.className = 'hero-ratio-bar';
+
+        var passPct = (stats.passed / stats.total_tests * 100);
+        var failPct = (stats.failed / stats.total_tests * 100);
+        var skipPct = (stats.skipped / stats.total_tests * 100);
+
+        if (stats.passed > 0) {
+          var passSegment = document.createElement('div');
+          passSegment.className = 'ratio-segment ratio-pass';
+          passSegment.style.width = passPct + '%';
+          passSegment.title = stats.passed + ' passed (' + Math.round(passPct) + '%)';
+          passSegment.style.cursor = 'pointer';
+          passSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'PASS' ? null : 'PASS';
+            _render();
+          });
+          bar.appendChild(passSegment);
+        }
+        if (stats.failed > 0) {
+          var failSegment = document.createElement('div');
+          failSegment.className = 'ratio-segment ratio-fail';
+          failSegment.style.width = failPct + '%';
+          failSegment.title = stats.failed + ' failed (' + Math.round(failPct) + '%)';
+          failSegment.style.cursor = 'pointer';
+          failSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'FAIL' ? null : 'FAIL';
+            _render();
+          });
+          bar.appendChild(failSegment);
+        }
+        if (stats.skipped > 0) {
+          var skipSegment = document.createElement('div');
+          skipSegment.className = 'ratio-segment ratio-skip';
+          skipSegment.style.width = skipPct + '%';
+          skipSegment.title = stats.skipped + ' skipped (' + Math.round(skipPct) + '%)';
+          skipSegment.style.cursor = 'pointer';
+          skipSegment.addEventListener('click', function() {
+            _state.statusFilter = _state.statusFilter === 'SKIP' ? null : 'SKIP';
+            _render();
+          });
+          bar.appendChild(skipSegment);
+        }
+
+        barWrap.appendChild(bar);
+        hero.appendChild(barWrap);
+      }
 
       dashboard.appendChild(hero);
 
@@ -13405,6 +13860,10 @@ window.highlightSpanInKeywordStats = function (spanId) {
           av = a.start_time || 0;
           bv = b.start_time || 0;
           return asc ? av - bv : bv - av;
+        case 'end_time':
+          av = a.end_time || 0;
+          bv = b.end_time || 0;
+          return asc ? av - bv : bv - av;
         case 'message':
           av = (a.status_message || '').toLowerCase();
           bv = (b.status_message || '').toLowerCase();
@@ -13551,7 +14010,9 @@ window.highlightSpanInKeywordStats = function (spanId) {
     for (var pi = 0; pi < statusFilters.length; pi++) {
       (function (sf) {
         var pill = document.createElement('button');
-        pill.className = 'report-status-pill' + ((_state.statusFilter || 'All') === sf ? ' active' : '');
+        var pillClass = 'report-status-pill' + ((_state.statusFilter || 'All') === sf ? ' active' : '');
+        if (sf !== 'All') pillClass += ' pill-' + sf.toLowerCase();
+        pill.className = pillClass;
         pill.setAttribute('data-status', sf);
 
         // Count for each status
@@ -13687,22 +14148,35 @@ window.highlightSpanInKeywordStats = function (spanId) {
     var sortBar = document.createElement('div');
     sortBar.className = 'report-sort-bar';
     var sortCols = [
+      { key: 'status', label: 'Status', flex: '0 0 50px' },
       { key: 'name', label: 'Name', flex: '1' },
-      { key: 'start_time', label: 'Start Time', flex: '0 0 150px' },
-      { key: 'status', label: 'Status', flex: '0 0 70px' },
-      { key: 'duration', label: 'Duration', flex: '0 0 90px' }
+      { key: 'start_time', label: 'Start Time', flex: '0 0 140px' },
+      { key: 'end_time', label: 'End Time', flex: '0 0 140px' },
+      { key: 'duration', label: 'Duration', flex: '0 0 85px' }
     ];
     for (var sc = 0; sc < sortCols.length; sc++) {
       (function (col) {
         var sortBtn = document.createElement('span');
         sortBtn.className = 'report-sort-col';
         sortBtn.style.flex = col.flex;
-        sortBtn.textContent = col.label;
-        if (_state.sortColumn === col.key) {
-          sortBtn.textContent += _state.sortAsc ? ' \u25B2' : ' \u25BC';
-          sortBtn.classList.add('sorted');
-        }
         sortBtn.style.cursor = 'pointer';
+
+        var labelSpan = document.createElement('span');
+        labelSpan.className = 'sort-col-label';
+        labelSpan.textContent = col.label;
+        sortBtn.appendChild(labelSpan);
+
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'sort-col-icon';
+        if (_state.sortColumn === col.key) {
+          iconSpan.textContent = _state.sortAsc ? '\u25B2' : '\u25BC';
+          iconSpan.classList.add('sort-col-icon-active');
+          sortBtn.classList.add('sorted');
+        } else {
+          iconSpan.textContent = '\u21C5';
+        }
+        sortBtn.appendChild(iconSpan);
+
         sortBtn.addEventListener('click', function () {
           if (_state.sortColumn === col.key) {
             _state.sortAsc = !_state.sortAsc;
@@ -13747,11 +14221,13 @@ window.highlightSpanInKeywordStats = function (spanId) {
 
       var statusDot = document.createElement('span');
       statusDot.className = 'report-status-dot status-' + testStatus.toLowerCase();
+      statusDot.style.flex = '0 0 50px';
       statusDot.textContent = isFail ? '\u2717' : isSkip ? '\u2298' : '\u2713';
       summary.appendChild(statusDot);
 
       var nameEl = document.createElement('span');
       nameEl.className = 'report-test-name';
+      nameEl.style.flex = '1';
       nameEl.textContent = test.name || '';
       nameEl.title = test.name || '';
       summary.appendChild(nameEl);
@@ -13764,24 +14240,27 @@ window.highlightSpanInKeywordStats = function (spanId) {
           errPreview.className = 'report-test-error';
           errPreview.textContent = lastLink.error;
           errPreview.title = lastLink.error;
-          summary.appendChild(errPreview);
+          nameEl.appendChild(errPreview);
         }
       }
 
       var startEl = document.createElement('span');
       startEl.className = 'report-test-timestamp';
+      startEl.style.flex = '0 0 140px';
       startEl.textContent = _formatTimestamp(test.start_time);
       startEl.title = 'Start: ' + _formatTimestamp(test.start_time);
       summary.appendChild(startEl);
 
       var endEl = document.createElement('span');
-      endEl.className = 'report-test-timestamp';
+      endEl.className = 'report-test-timestamp report-test-end-time';
+      endEl.style.flex = '0 0 140px';
       endEl.textContent = _formatTimestamp(test.end_time);
       endEl.title = 'End: ' + _formatTimestamp(test.end_time);
       summary.appendChild(endEl);
 
       var durEl = document.createElement('span');
       durEl.className = 'report-test-dur';
+      durEl.style.flex = '0 0 85px';
       durEl.textContent = _formatDuration((test.elapsed_time || 0) * 1000);
       summary.appendChild(durEl);
 
@@ -13922,6 +14401,100 @@ window.highlightSpanInKeywordStats = function (spanId) {
     return section;
   }
 
+  // ---------------------------------------------------------------------------
+  // Export helpers — JSON, CSV, download trigger (Req 8.3, 8.4, 8.5)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Collect all tests across every top-level suite.
+   * @returns {Array} Flat array of test objects
+   */
+  function _collectAllTestsFromAllSuites() {
+    var allTests = [];
+    for (var i = 0; i < _suites.length; i++) {
+      var tests = _collectAllTests(_suites[i]);
+      for (var j = 0; j < tests.length; j++) {
+        allTests.push(tests[j]);
+      }
+    }
+    return allTests;
+  }
+
+  /**
+   * Generate a JSON string of the report data.
+   * @returns {string} JSON string with run, statistics, and suites
+   */
+  function _generateReportJSON() {
+    var data = {
+      run: _runData || {},
+      statistics: _statistics || {},
+      suites: _suites || []
+    };
+    return JSON.stringify(data, null, 2);
+  }
+
+  /**
+   * Escape a value for CSV output per RFC 4180.
+   * Fields containing commas, double-quotes, or newlines are wrapped in
+   * double-quotes, and any embedded double-quotes are doubled.
+   * @param {string} val - The value to escape
+   * @returns {string} The escaped CSV field
+   */
+  function _csvEscape(val) {
+    var s = (val == null) ? '' : '' + val;
+    if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  /**
+   * Generate a CSV string of all test results.
+   * Headers: Name, Status, Duration (ms), Start Time, End Time, Tags
+   * @returns {string} CSV content
+   */
+  function _generateReportCSV() {
+    var rows = ['Name,Status,Duration (ms),Start Time,End Time,Tags'];
+    var allTests = _collectAllTestsFromAllSuites();
+    for (var i = 0; i < allTests.length; i++) {
+      var t = allTests[i];
+      var name = _csvEscape(t.name || '');
+      var status = _csvEscape(t.status || '');
+      var duration = _csvEscape(
+        (typeof t.elapsed_time === 'number') ? '' + (t.elapsed_time * 1000) : ''
+      );
+      var startTime = _csvEscape(_formatTimestamp(t.start_time));
+      var endTime = _csvEscape(_formatTimestamp(t.end_time));
+      var tags = _csvEscape((t.tags || []).join(', '));
+      rows.push(name + ',' + status + ',' + duration + ',' + startTime + ',' + endTime + ',' + tags);
+    }
+    return rows.join('\n');
+  }
+
+  /**
+   * Trigger a browser file download.
+   * Creates a temporary <a> element with a Blob URL and clicks it.
+   * @param {string} content - The file content
+   * @param {string} filename - The download filename
+   * @param {string} mimeType - The MIME type (e.g. 'application/json')
+   */
+  function _triggerDownload(content, filename, mimeType) {
+    try {
+      var blob = new Blob([content], { type: mimeType });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // Silently fail if Blob URL creation fails
+    }
+  }
+
   /**
    * Render the Report page content.
    * Calls section renderers in order: suite selector, summary dashboard, failure triage, test results.
@@ -14024,7 +14597,11 @@ window.highlightSpanInKeywordStats = function (spanId) {
     formatKwDuration: _formatKwDuration,
     getState: function () { return _state; },
     collectAllTestsWithSuite: _collectAllTestsWithSuite,
-    getUniqueSuiteNames: _getUniqueSuiteNames
+    getUniqueSuiteNames: _getUniqueSuiteNames,
+    generateReportJSON: _generateReportJSON,
+    generateReportCSV: _generateReportCSV,
+    triggerDownload: _triggerDownload,
+    csvEscape: _csvEscape
   };
 })();
 
