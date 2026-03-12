@@ -545,6 +545,32 @@ function _flattenTree(suites, filteredSpanIds, expandedIds) {
 }
 
 /**
+ * Compute failure-focused expanded IDs for a single failing test.
+ * Walks the keyword tree: expands FAIL nodes, skips PASS/SKIP subtrees.
+ * Follows ALL FAIL branches (not just the first).
+ *
+ * @param {Object} test - Test data object with keywords array, status === 'FAIL'
+ * @returns {Object} Map of span IDs to expand (id → true)
+ */
+function _computeFailFocusedExpanded(test) {
+  var expanded = {};
+  if (test.status !== 'FAIL') return expanded;
+  expanded[test.id] = true;
+  var stack = (test.keywords || []).slice();
+  while (stack.length > 0) {
+    var kw = stack.pop();
+    if (kw.status !== 'FAIL') continue;
+    expanded[kw.id] = true;
+    var kids = kw.children || [];
+    for (var i = 0; i < kids.length; i++) {
+      stack.push(kids[i]);
+    }
+  }
+  return expanded;
+}
+
+
+/**
  * Compute the initial expanded IDs set based on failure path or root suites.
  * @param {Array} suites - Merged suite array
  * @returns {Object} Map of expanded node IDs
