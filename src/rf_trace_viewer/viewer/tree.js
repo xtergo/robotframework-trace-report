@@ -777,6 +777,29 @@ function _virtualToggle(nodeId) {
     delete vs.expandedIds[nodeId];
   } else {
     vs.expandedIds[nodeId] = true;
+
+    // Failure-focused expand: when opening a FAIL test, expand only FAIL paths
+    var item = null;
+    for (var i = 0; i < vs.flatItems.length; i++) {
+      if (vs.flatItems[i].id === nodeId) {
+        item = vs.flatItems[i];
+        break;
+      }
+    }
+    if (item && item.type === 'test' && item.data && item.data.status === 'FAIL') {
+      var failExpanded = _computeFailFocusedExpanded(item.data);
+      // Merge FAIL-path IDs into expandedIds
+      for (var key in failExpanded) {
+        vs.expandedIds[key] = true;
+      }
+      // Remove PASS/SKIP keyword IDs that are direct children of the test
+      var keywords = item.data.keywords || [];
+      for (var k = 0; k < keywords.length; k++) {
+        if (keywords[k].status !== 'FAIL') {
+          delete vs.expandedIds[keywords[k].id];
+        }
+      }
+    }
   }
 
   // Rebuild flat list
@@ -787,6 +810,7 @@ function _virtualToggle(nodeId) {
   vs.renderedRange.end = -1;
   _renderVisibleRows();
 }
+
 
 /**
  * Find the index of a span ID in the flat items list.
