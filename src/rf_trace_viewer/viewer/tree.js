@@ -2102,32 +2102,54 @@ function _createTreeNode(opts) {
     }
   });
 
-  // Auto-expand failure path when clicking a FAIL test node
+  // Failure-focused expand when clicking a FAIL test node
   if (opts.type === 'test' && opts.status === 'FAIL') {
     row.addEventListener('click', function () {
-      var rcPath = _findRootCausePath(opts.data);
-      if (rcPath.length < 2) return; // no root cause found
-      // Expand each node along the path (skip test itself at index 0)
-      for (var pi = 1; pi < rcPath.length; pi++) {
-        var pathNode = wrapper.querySelector('.tree-node[data-span-id="' + rcPath[pi] + '"]');
-        if (!pathNode) {
-          // Might need materialization first
-          _materializeIfNeeded(wrapper);
-          pathNode = wrapper.querySelector('.tree-node[data-span-id="' + rcPath[pi] + '"]');
-        }
-        if (pathNode) {
-          _materializeIfNeeded(pathNode);
-          _expandNodeOnly(pathNode);
-          var pathChildren = pathNode.querySelector(':scope > .tree-children');
-          if (pathChildren) pathChildren.classList.add('expanded');
-        }
+      // Only apply when toggling OPEN (not when collapsing)
+      var childrenEl = wrapper.querySelector(':scope > .tree-children');
+      if (!childrenEl || !childrenEl.classList.contains('expanded')) return;
+
+      // Compute the set of FAIL-path node IDs to expand
+      var failExpanded = _computeFailFocusedExpanded(opts.data);
+
+      // Materialize the test's immediate children first
+      _materializeIfNeeded(wrapper);
+
+      // Walk the test's subtree: expand FAIL path nodes, collapse PASS/SKIP siblings
+      var queue = [];
+      var directChildren = childrenEl.querySelectorAll(':scope > .tree-node');
+      for (var ci = 0; ci < directChildren.length; ci++) {
+        queue.push(directChildren[ci]);
       }
-      // Scroll the root cause node into view
-      var rcNode = wrapper.querySelector('.tree-node[data-span-id="' + rcPath[rcPath.length - 1] + '"]');
-      if (rcNode) {
-        requestAnimationFrame(function () {
-          rcNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
+
+      while (queue.length > 0) {
+        var node = queue.shift();
+        var nodeId = node.getAttribute('data-span-id');
+        if (!nodeId) continue;
+
+        if (failExpanded[nodeId]) {
+          // This node is on the FAIL path — materialize and expand
+          _materializeIfNeeded(node);
+          _expandNodeOnly(node);
+          var nodeChildren = node.querySelector(':scope > .tree-children');
+          if (nodeChildren) {
+            nodeChildren.classList.add('expanded');
+            // Queue this node's children for processing
+            var nested = nodeChildren.querySelectorAll(':scope > .tree-node');
+            for (var ni = 0; ni < nested.length; ni++) {
+              queue.push(nested[ni]);
+            }
+          }
+        } else {
+          // PASS/SKIP node — collapse it
+          var collapseChildren = node.querySelector(':scope > .tree-children');
+          var collapseToggle = node.querySelector(':scope > .tree-row > .tree-toggle');
+          if (collapseChildren) collapseChildren.classList.remove('expanded');
+          if (collapseToggle) {
+            collapseToggle.textContent = '\u25b6'; // ▶
+            collapseToggle.setAttribute('aria-label', 'Expand');
+          }
+        }
       }
     });
   }
