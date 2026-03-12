@@ -577,19 +577,46 @@ function _computeFailFocusedExpanded(test) {
  */
 function _computeInitialExpanded(suites) {
   var expandedIds = {};
-  var failPath = _findFirstFailPath(suites);
-  if (failPath && failPath.length > 0) {
-    for (var i = 0; i < failPath.length; i++) {
-      expandedIds[failPath[i]] = true;
-    }
-  } else {
-    // Expand root suites only
-    for (var j = 0; j < suites.length; j++) {
-      if (suites[j].id) {
-        expandedIds[suites[j].id] = true;
+  var hasFailure = false;
+
+  // Walk suites to find failing tests
+  var suiteStack = suites.slice();
+  while (suiteStack.length > 0) {
+    var suite = suiteStack.pop();
+    var children = suite.children || [];
+    var suiteHasFail = false;
+
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (child.keywords !== undefined) {
+        // It's a test
+        if (child.status === 'FAIL') {
+          suiteHasFail = true;
+          hasFailure = true;
+          var testExpanded = _computeFailFocusedExpanded(child);
+          for (var key in testExpanded) {
+            expandedIds[key] = true;
+          }
+        }
+      } else {
+        // It's a nested suite — push for processing
+        suiteStack.push(child);
       }
     }
+
+    // Expand this suite if it has a failing descendant
+    if (suiteHasFail || _hasDescendantFail(suite)) {
+      expandedIds[suite.id] = true;
+    }
   }
+
+  if (!hasFailure) {
+    // No failures — expand root suites only (existing behavior)
+    for (var j = 0; j < suites.length; j++) {
+      if (suites[j].id) expandedIds[suites[j].id] = true;
+    }
+  }
+
   return expandedIds;
 }
 
