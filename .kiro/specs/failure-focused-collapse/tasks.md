@@ -48,23 +48,23 @@ Modify the tree view's expand-state computation so that failing tests auto-colla
     - Assert: returned set includes all ancestor suite IDs, all FAIL path IDs, no PASS/SKIP test or keyword IDs
     - **Validates: Requirements 2.3, 4.1**
 
-- [-] 3. Checkpoint - Verify core logic
+- [x] 3. Checkpoint - Verify core logic
   - Ensure all tests pass with `make test-unit`, ask the user if questions arise.
 
 - [ ] 4. Integrate failure-focused expand into navigation and click handlers
-  - [~] 4.1 Modify `_autoExpandFirstFailure(treeRoot, suites)` in `tree.js`
+  - [x] 4.1 Modify `_autoExpandFirstFailure(treeRoot, suites)` in `tree.js`
     - Use `_computeInitialExpanded(suites)` to get the full expand set
     - For each ID in the set, find the DOM node, materialize lazy children, and expand it
     - Scroll to the first root cause keyword
     - _Requirements: 2.3_
 
-  - [~] 4.2 Modify FAIL test node click handler in `_createTreeNode`
+  - [x] 4.2 Modify FAIL test node click handler in `_createTreeNode`
     - When a FAIL test node is toggled open, compute `_computeFailFocusedExpanded(test.data)`
     - Materialize and expand FAIL path nodes within that test's subtree
     - Collapse previously expanded PASS/SKIP siblings within that test
     - _Requirements: 2.1, 3.1, 3.2, 3.3_
 
-  - [~] 4.3 Modify `highlightNodeInTree(spanId)` for failure-focused expand
+  - [-] 4.3 Modify `highlightNodeInTree(spanId)` for failure-focused expand
     - Find the test ancestor of the target span
     - If the test is FAIL, apply `_computeFailFocusedExpanded(test)` to set expand state
     - Also expand ancestors of the specific target span (it may be a PASS node the user needs to see)

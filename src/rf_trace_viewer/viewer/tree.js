@@ -2397,7 +2397,60 @@ function highlightNodeInTree(spanId) {
 
   if (!targetNode) return;
 
+  // Failure-focused expand: if the target span belongs to a FAIL test,
+  // apply failure-focused collapse to the test's subtree before expanding
+  // ancestors of the specific target span.
+  if (_originalModel) {
+    var testData = _findTestForSpan(_originalModel, spanId);
+    if (testData && testData.status === 'FAIL') {
+      var failExpanded = _computeFailFocusedExpanded(testData);
+      // Find the test's DOM node and apply failure-focused expand
+      var testDomNode = document.querySelector('.tree-node[data-span-id="' + testData.id + '"]');
+      if (testDomNode) {
+        _materializeIfNeeded(testDomNode);
+        _expandNodeOnly(testDomNode);
+        var testChildrenEl = testDomNode.querySelector(':scope > .tree-children');
+        if (testChildrenEl) {
+          testChildrenEl.classList.add('expanded');
+          // Walk the test's subtree: expand FAIL path, collapse PASS/SKIP
+          var queue = [];
+          var directKids = testChildrenEl.querySelectorAll(':scope > .tree-node');
+          for (var qi = 0; qi < directKids.length; qi++) {
+            queue.push(directKids[qi]);
+          }
+          while (queue.length > 0) {
+            var qNode = queue.shift();
+            var qId = qNode.getAttribute('data-span-id');
+            if (!qId) continue;
+            if (failExpanded[qId]) {
+              _materializeIfNeeded(qNode);
+              _expandNodeOnly(qNode);
+              var qChildren = qNode.querySelector(':scope > .tree-children');
+              if (qChildren) {
+                qChildren.classList.add('expanded');
+                var qNested = qChildren.querySelectorAll(':scope > .tree-node');
+                for (var qni = 0; qni < qNested.length; qni++) {
+                  queue.push(qNested[qni]);
+                }
+              }
+            } else {
+              // Collapse PASS/SKIP nodes
+              var colCh = qNode.querySelector(':scope > .tree-children');
+              var colTog = qNode.querySelector(':scope > .tree-row > .tree-toggle');
+              if (colCh) colCh.classList.remove('expanded');
+              if (colTog) {
+                colTog.textContent = '\u25b6'; // ▶
+                colTog.setAttribute('aria-label', 'Expand');
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Expand all parent nodes to make the target visible
+  // (ensures the specific target span is visible even if it's a PASS node)
   var parent = targetNode.parentElement;
   while (parent) {
     if (parent.classList.contains('tree-children')) {
@@ -2586,6 +2639,46 @@ function _findAncestorPath(model, targetId) {
   }
   return null;
 }
+/**
+ * Find the test data object that contains the given span ID.
+ * Walks the model's suites and tests to locate the test ancestor.
+ * Returns null if the span is a suite-level node or not found.
+ * @param {Object} model - RFRunModel with suites array
+ * @param {string} spanId - The span ID to find
+ * @returns {Object|null} The test data object, or null
+ */
+function _findTestForSpan(model, spanId) {
+  function kwContains(kw, targetId) {
+    if (kw.id === targetId) return true;
+    var kids = kw.children || [];
+    for (var i = 0; i < kids.length; i++) {
+      if (kwContains(kids[i], targetId)) return true;
+    }
+    return false;
+  }
+  var suiteStack = (model.suites || []).slice();
+  while (suiteStack.length > 0) {
+    var suite = suiteStack.pop();
+    var children = suite.children || [];
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (child.keywords !== undefined) {
+        // It's a test — check if it is or contains the target span
+        if (child.id === spanId) return child;
+        var kws = child.keywords || [];
+        for (var k = 0; k < kws.length; k++) {
+          if (kwContains(kws[k], spanId)) return child;
+        }
+      } else if (child.keyword_type === undefined) {
+        // Nested suite
+        suiteStack.push(child);
+      }
+    }
+  }
+  return null;
+}
+
+
 
 /**
  * Set up event listeners for timeline synchronization.
