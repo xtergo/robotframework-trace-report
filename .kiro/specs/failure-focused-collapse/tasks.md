@@ -85,7 +85,7 @@ Modify the tree view's expand-state computation so that failing tests auto-colla
     - Rebuild flat list and scroll to target
     - _Requirements: 2.2, 4.1, 4.2_
 
-- [-] 6. Checkpoint - Full test suite
+- [x] 6. Checkpoint - Full test suite
   - Ensure all tests pass with `make test-full` (ci profile, 200 examples), ask the user if questions arise.
 
 ## Notes

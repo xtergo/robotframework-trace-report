@@ -797,16 +797,20 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 }
 
 .rf-trace-viewer .tree-toggle.toggle-suite.pass,
-.rf-trace-viewer .tree-toggle.toggle-test.pass { color: var(--status-pass); }
+.rf-trace-viewer .tree-toggle.toggle-test.pass,
+.rf-trace-viewer .tree-toggle.toggle-keyword.pass { color: var(--status-pass); }
 
 .rf-trace-viewer .tree-toggle.toggle-suite.fail,
-.rf-trace-viewer .tree-toggle.toggle-test.fail { color: var(--status-fail); }
+.rf-trace-viewer .tree-toggle.toggle-test.fail,
+.rf-trace-viewer .tree-toggle.toggle-keyword.fail { color: var(--status-fail); }
 
 .rf-trace-viewer .tree-toggle.toggle-suite.skip,
-.rf-trace-viewer .tree-toggle.toggle-test.skip { color: var(--status-skip); }
+.rf-trace-viewer .tree-toggle.toggle-test.skip,
+.rf-trace-viewer .tree-toggle.toggle-keyword.skip { color: var(--status-skip); }
 
 .rf-trace-viewer .tree-toggle.toggle-suite.not-run,
-.rf-trace-viewer .tree-toggle.toggle-test.not-run { color: var(--status-not-run); }
+.rf-trace-viewer .tree-toggle.toggle-test.not-run,
+.rf-trace-viewer .tree-toggle.toggle-keyword.not-run { color: var(--status-not-run); }
 
 .rf-trace-viewer.theme-dark .tree-toggle.toggle-suite { color: #64b5f6; }
 .rf-trace-viewer.theme-dark .tree-toggle.toggle-test { color: #42a5f5; }
