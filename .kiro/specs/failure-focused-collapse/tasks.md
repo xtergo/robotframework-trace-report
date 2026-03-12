@@ -51,7 +51,7 @@ Modify the tree view's expand-state computation so that failing tests auto-colla
 - [x] 3. Checkpoint - Verify core logic
   - Ensure all tests pass with `make test-unit`, ask the user if questions arise.
 
-- [ ] 4. Integrate failure-focused expand into navigation and click handlers
+- [x] 4. Integrate failure-focused expand into navigation and click handlers
   - [x] 4.1 Modify `_autoExpandFirstFailure(treeRoot, suites)` in `tree.js`
     - Use `_computeInitialExpanded(suites)` to get the full expand set
     - For each ID in the set, find the DOM node, materialize lazy children, and expand it
@@ -64,28 +64,28 @@ Modify the tree view's expand-state computation so that failing tests auto-colla
     - Collapse previously expanded PASS/SKIP siblings within that test
     - _Requirements: 2.1, 3.1, 3.2, 3.3_
 
-  - [-] 4.3 Modify `highlightNodeInTree(spanId)` for failure-focused expand
+  - [x] 4.3 Modify `highlightNodeInTree(spanId)` for failure-focused expand
     - Find the test ancestor of the target span
     - If the test is FAIL, apply `_computeFailFocusedExpanded(test)` to set expand state
     - Also expand ancestors of the specific target span (it may be a PASS node the user needs to see)
     - Scroll to the target
     - _Requirements: 2.2, 3.1, 3.2, 3.3_
 
-- [ ] 5. Virtual scroll mode integration
-  - [~] 5.1 Modify FAIL test node toggle in virtual scroll mode (`_virtualToggle`)
+- [x] 5. Virtual scroll mode integration
+  - [x] 5.1 Modify FAIL test node toggle in virtual scroll mode (`_virtualToggle`)
     - When a FAIL test node is toggled open, compute `_computeFailFocusedExpanded(test.data)`
     - Merge into `expandedIds`, removing PASS/SKIP keyword IDs that are direct children of the test
     - Rebuild flat list and re-render
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [~] 5.2 Modify `_virtualHighlight(spanId)` for failure-focused expand
+  - [x] 5.2 Modify `_virtualHighlight(spanId)` for failure-focused expand
     - Find the test ancestor in the data model
     - If the test is FAIL, apply `_computeFailFocusedExpanded(test)` to `expandedIds`
     - Expand ancestors of the target span
     - Rebuild flat list and scroll to target
     - _Requirements: 2.2, 4.1, 4.2_
 
-- [~] 6. Checkpoint - Full test suite
+- [-] 6. Checkpoint - Full test suite
   - Ensure all tests pass with `make test-full` (ci profile, 200 examples), ask the user if questions arise.
 
 ## Notes
