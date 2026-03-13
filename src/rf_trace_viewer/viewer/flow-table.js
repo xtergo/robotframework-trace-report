@@ -174,6 +174,7 @@
         status: kw.status || '',
         duration: kw.elapsed_time || 0,
         error: kw.status_message || '',
+        events: kw.events || [],
         id: kw.id || '',
         keyword_type: kw.keyword_type || 'KEYWORD',
         depth: e.depth,
@@ -554,6 +555,66 @@
     tdD.className = 'flow-col-duration';
     tdD.textContent = _formatDuration(row.duration);
     tr.appendChild(tdD);
+
+    // For FAIL keywords with error or log messages, add a detail row
+    if (row.status === 'FAIL' && (row.error || (row.events && row.events.length > 0))) {
+      var frag = document.createDocumentFragment();
+      frag.appendChild(tr);
+
+      var detailTr = document.createElement('tr');
+      detailTr.className = 'flow-table-row flow-row-detail';
+      var detailTd = document.createElement('td');
+      detailTd.colSpan = 4;
+      detailTd.className = 'flow-detail-cell';
+      detailTd.style.paddingLeft = (row.depth * 20 + 30) + 'px';
+
+      if (row.error) {
+        var errDiv = document.createElement('div');
+        errDiv.className = 'flow-error-msg';
+        errDiv.textContent = row.error;
+        detailTd.appendChild(errDiv);
+      }
+
+      // Show log messages (events) — limit to 10
+      if (row.events && row.events.length > 0) {
+        var maxLogs = 10;
+        var shown = Math.min(row.events.length, maxLogs);
+        for (var ei = 0; ei < shown; ei++) {
+          var evt = row.events[ei];
+          var logDiv = document.createElement('div');
+          logDiv.className = 'flow-log-msg';
+          var evtName = evt.name || '';
+          // Check log level from attributes
+          var logLevel = '';
+          if (evt.attributes) {
+            for (var ai = 0; ai < evt.attributes.length; ai++) {
+              if (evt.attributes[ai].key === 'log.level') {
+                logLevel = (evt.attributes[ai].value && evt.attributes[ai].value.string_value) || '';
+              }
+            }
+          }
+          if (logLevel && logLevel !== 'INFO') {
+            var levelSpan = document.createElement('span');
+            levelSpan.className = 'flow-log-level flow-log-level-' + logLevel.toLowerCase();
+            levelSpan.textContent = logLevel;
+            logDiv.appendChild(levelSpan);
+            logDiv.appendChild(document.createTextNode(' '));
+          }
+          logDiv.appendChild(document.createTextNode(evtName));
+          detailTd.appendChild(logDiv);
+        }
+        if (row.events.length > maxLogs) {
+          var moreDiv = document.createElement('div');
+          moreDiv.className = 'flow-log-msg flow-log-more';
+          moreDiv.textContent = '… ' + (row.events.length - maxLogs) + ' more messages';
+          detailTd.appendChild(moreDiv);
+        }
+      }
+
+      detailTr.appendChild(detailTd);
+      frag.appendChild(detailTr);
+      return frag;
+    }
 
     return tr;
   }

@@ -2329,6 +2329,58 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-left: 3px solid var(--status-fail);
 }
 
+/* ── Flow table detail rows (error + log messages) ── */
+.rf-trace-viewer .flow-row-detail {
+  background: var(--status-fail-bg);
+  border-left: 3px solid var(--status-fail);
+}
+
+.rf-trace-viewer .flow-row-detail:hover {
+  background: var(--status-fail-bg);
+}
+
+.rf-trace-viewer .flow-detail-cell {
+  padding: 4px 10px 8px;
+}
+
+.rf-trace-viewer .flow-error-msg {
+  color: var(--status-fail);
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rf-trace-viewer .flow-log-msg {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rf-trace-viewer .flow-log-level {
+  font-weight: 600;
+  font-size: 10px;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
+.rf-trace-viewer .flow-log-level-fail,
+.rf-trace-viewer .flow-log-level-error {
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .flow-log-level-warn {
+  color: var(--status-skip);
+}
+
+.rf-trace-viewer .flow-log-more {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
 /* ── Print styles for flow table ── */
 @media print {
   .rf-trace-viewer .flow-table-section {
