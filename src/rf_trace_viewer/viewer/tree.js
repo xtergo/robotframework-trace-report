@@ -195,6 +195,12 @@ function _createIndentControl() {
     } catch (e) {
       // localStorage may be unavailable
     }
+    // Force virtual scroll re-render so depth-based inline margins update
+    if (_virtualState) {
+      _virtualState.renderedRange.start = -1;
+      _virtualState.renderedRange.end = -1;
+      _renderVisibleRows();
+    }
   });
 
   _indentSliders.push({ slider: slider, valSpan: valSpan });
@@ -831,6 +837,10 @@ function _createVirtualRow(item, index) {
   node.style.height = vs.ROW_HEIGHT + 'px';
   node.style.overflow = 'hidden';
   node.style.boxSizing = 'border-box';
+
+  // In virtual mode nodes are flat siblings, so apply depth-based indent inline
+  // Use calc() with CSS variable so the indent slider updates all levels live
+  node.style.marginLeft = 'calc(' + item.depth + ' * var(--tree-indent-size))';
 
   // Override toggle behavior for virtual mode
   var toggleBtn = node.querySelector(':scope > .tree-row > .tree-toggle');
