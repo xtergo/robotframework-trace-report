@@ -1995,21 +1995,15 @@ function _createTreeNode(opts) {
     row.classList.add('kw-teardown');
   }
 
-  // Toggle arrow (or spacer for leaf nodes)
+  // Toggle arrow (or spacer)
   var toggle = document.createElement('button');
   toggle.className = 'tree-toggle toggle-' + opts.type + ' ' + _statusClass(opts.status);
-  if (opts.hasChildren) {
-    toggle.textContent = '\u25b6'; // ▶
-    toggle.setAttribute('aria-label', 'Expand');
-    toggle.addEventListener('click', function (e) {
-      e.stopPropagation();
-      _toggleNode(wrapper);
-    });
-  } else {
-    // Leaf node — invisible spacer to keep alignment
-    toggle.style.visibility = 'hidden';
-    toggle.setAttribute('aria-hidden', 'true');
-  }
+  toggle.textContent = '\u25b6'; // ▶
+  toggle.setAttribute('aria-label', 'Expand');
+  toggle.addEventListener('click', function (e) {
+    e.stopPropagation();
+    _toggleNode(wrapper);
+  });
   row.appendChild(toggle);
 
   // Status icon

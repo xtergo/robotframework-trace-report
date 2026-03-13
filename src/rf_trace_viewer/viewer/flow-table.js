@@ -43,7 +43,6 @@
     // Reuse existing state if same container, just update data
     if (_flowState && _flowState.container === container) {
       _flowState.data = data;
-      // Don't clear the current view — the navigate-to-span listener handles updates
       return;
     }
 
@@ -54,7 +53,8 @@
       highlightSpanId: null,
       pinned: false,
       showOnlyFailed: _showOnlyFailed,
-      rows: []
+      rows: [],
+      expandedIds: {}
     };
     _flowState = state;
     _renderEmpty(state);
@@ -69,17 +69,21 @@
         if (test) {
           s.currentTestId = test.id;
           s.highlightSpanId = null;
-          s.rows = _flattenKeywords(test);
+          s.rows = _buildKeywordRows(test);
+          s.expandedIds = _computeFailFocusedExpanded(test);
           _renderTable(s);
           return;
         }
         var pt = _findTestContainingSpan(suites, spanId);
         if (pt) {
           if (s.currentTestId !== pt.id) {
-            s.rows = _flattenKeywords(pt);
+            s.rows = _buildKeywordRows(pt);
+            s.expandedIds = _computeFailFocusedExpanded(pt);
           }
           s.currentTestId = pt.id;
           s.highlightSpanId = spanId;
+          // Expand ancestors of the highlighted span so it's visible
+          _expandAncestors(s, spanId);
           _renderTable(s);
           _scrollToHighlighted(s);
           return;
@@ -87,10 +91,102 @@
         s.currentTestId = null;
         s.highlightSpanId = null;
         s.rows = [];
+        s.expandedIds = {};
         _renderEmpty(s);
       });
     }
   };
+
+  /**
+   * Compute failure-focused expanded IDs for the flow table.
+   * Expands FAIL-status keywords, collapses PASS/SKIP.
+   * If no failures, expands everything (all-pass test).
+   */
+  function _computeFailFocusedExpanded(test) {
+    var expanded = {};
+    if (!test || !test.keywords) return expanded;
+    if (test.status !== 'FAIL') {
+      // All-pass test: expand everything
+      var stack = test.keywords.slice();
+      while (stack.length) {
+        var kw = stack.pop();
+        if (kw.children && kw.children.length > 0) {
+          expanded[kw.id] = true;
+          for (var i = 0; i < kw.children.length; i++) stack.push(kw.children[i]);
+        }
+      }
+      return expanded;
+    }
+    // FAIL test: expand only FAIL-path keywords
+    var fStack = test.keywords.slice();
+    while (fStack.length) {
+      var fkw = fStack.pop();
+      if (fkw.status !== 'FAIL') continue;
+      if (fkw.children && fkw.children.length > 0) {
+        expanded[fkw.id] = true;
+        for (var fi = 0; fi < fkw.children.length; fi++) fStack.push(fkw.children[fi]);
+      }
+    }
+    return expanded;
+  }
+
+  /**
+   * Expand all ancestors of a given span ID so it becomes visible.
+   */
+  function _expandAncestors(state, spanId) {
+    for (var i = 0; i < state.rows.length; i++) {
+      if (state.rows[i].id === spanId) {
+        // Walk up the parentId chain
+        var parentId = state.rows[i].parentId;
+        while (parentId) {
+          state.expandedIds[parentId] = true;
+          // Find the parent row
+          for (var j = 0; j < state.rows.length; j++) {
+            if (state.rows[j].id === parentId) {
+              parentId = state.rows[j].parentId;
+              break;
+            }
+            if (j === state.rows.length - 1) parentId = null;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Build keyword rows with parent tracking for expand/collapse.
+   * Returns flat array with parentId and hasChildren fields.
+   */
+  function _buildKeywordRows(test) {
+    var rows = [], stack = [], kws = test.keywords || [];
+    for (var i = kws.length - 1; i >= 0; i--) {
+      stack.push({ kw: kws[i], depth: 0, parentId: null });
+    }
+    while (stack.length) {
+      var e = stack.pop(), kw = e.kw;
+      var hasChildren = kw.children && kw.children.length > 0;
+      rows.push({
+        source: kw.source || test.source || '',
+        lineno: kw.lineno || 0,
+        name: kw.name || '',
+        args: kw.args || '',
+        status: kw.status || '',
+        duration: kw.elapsed_time || 0,
+        error: kw.status_message || '',
+        id: kw.id || '',
+        keyword_type: kw.keyword_type || 'KEYWORD',
+        depth: e.depth,
+        parentId: e.parentId,
+        hasChildren: hasChildren
+      });
+      var ch = kw.children || [];
+      for (var c = ch.length - 1; c >= 0; c--) {
+        stack.push({ kw: ch[c], depth: e.depth + 1, parentId: kw.id });
+      }
+    }
+    return rows;
+  }
 
   function _renderEmpty(state) {
     state.container.innerHTML = '';
@@ -159,33 +255,37 @@
     return false;
   }
 
-  function _flattenKeywords(test) {
-    var rows = [], stack = [], kws = test.keywords || [];
-    for (var i = kws.length - 1; i >= 0; i--) stack.push({ kw: kws[i], depth: 0 });
-    while (stack.length) {
-      var e = stack.pop(), kw = e.kw;
-      rows.push({
-        source: kw.source || test.source || '',
-        lineno: kw.lineno || 0,
-        name: kw.name || '',
-        args: kw.args || '',
-        status: kw.status || '',
-        duration: kw.elapsed_time || 0,
-        error: kw.status_message || '',
-        id: kw.id || '',
-        keyword_type: kw.keyword_type || 'KEYWORD',
-        depth: e.depth
-      });
-      var ch = kw.children || [];
-      for (var c = ch.length - 1; c >= 0; c--) stack.push({ kw: ch[c], depth: e.depth + 1 });
-    }
-    return rows;
-  }
-
   function _extractFilename(sourcePath) {
     if (!sourcePath) return '';
     var parts = sourcePath.replace(/\\/g, '/').split('/');
     return parts[parts.length - 1] || sourcePath;
+  }
+
+  /**
+   * Get visible rows based on expand/collapse state.
+   * A row is visible if all its ancestors are expanded.
+   */
+  function _getVisibleRows(state) {
+    var visible = [];
+    // Track which parent IDs are collapsed (not in expandedIds)
+    var collapsedParents = {};
+    for (var i = 0; i < state.rows.length; i++) {
+      var row = state.rows[i];
+      // Check if any ancestor is collapsed
+      if (row.parentId && !state.expandedIds[row.parentId]) {
+        continue;
+      }
+      // Check if a grandparent+ is collapsed
+      if (row.parentId && collapsedParents[row.parentId]) {
+        collapsedParents[row.id] = true;
+        continue;
+      }
+      if (row.hasChildren && !state.expandedIds[row.id]) {
+        collapsedParents[row.id] = true;
+      }
+      visible.push(row);
+    }
+    return visible;
   }
 
   function _renderTable(state) {
@@ -230,10 +330,34 @@
       _renderTable(state);
     });
     controls.appendChild(filterBtn);
+
+    // Expand All / Collapse All buttons
+    var expandAllBtn = document.createElement('button');
+    expandAllBtn.className = 'flow-table-filter-btn';
+    expandAllBtn.textContent = '\u25bc Expand All';
+    expandAllBtn.addEventListener('click', function () {
+      for (var i = 0; i < state.rows.length; i++) {
+        if (state.rows[i].hasChildren) {
+          state.expandedIds[state.rows[i].id] = true;
+        }
+      }
+      _renderTable(state);
+    });
+    controls.appendChild(expandAllBtn);
+
+    var collapseAllBtn = document.createElement('button');
+    collapseAllBtn.className = 'flow-table-filter-btn';
+    collapseAllBtn.textContent = '\u25b6 Collapse All';
+    collapseAllBtn.addEventListener('click', function () {
+      state.expandedIds = {};
+      _renderTable(state);
+    });
+    controls.appendChild(collapseAllBtn);
+
     header.appendChild(controls);
     state.container.appendChild(header);
 
-    // Sticky suite and test headers (rendered above the table)
+    // Sticky suite and test headers
     var suites = (state.data && state.data.suites) || [];
     var result = _findTestAndSuite(suites, state.currentTestId);
     if (result.suite) {
@@ -265,12 +389,14 @@
       state.container.appendChild(testHeader);
     }
 
-    var visibleRows = state.rows;
+    // Get visible rows based on expand/collapse state
+    var visibleRows = _getVisibleRows(state);
     if (state.showOnlyFailed) {
-      visibleRows = [];
-      for (var i = 0; i < state.rows.length; i++) {
-        if (state.rows[i].status === 'FAIL') visibleRows.push(state.rows[i]);
+      var filtered = [];
+      for (var i = 0; i < visibleRows.length; i++) {
+        if (visibleRows[i].status === 'FAIL') filtered.push(visibleRows[i]);
       }
+      visibleRows = filtered;
     }
     if (!visibleRows.length) {
       var empty = document.createElement('div');
@@ -303,7 +429,7 @@
     table.appendChild(thead);
     var tbody = document.createElement('tbody');
     for (var r = 0; r < visibleRows.length; r++) {
-      tbody.appendChild(_createRow(visibleRows[r], state.highlightSpanId));
+      tbody.appendChild(_createRow(visibleRows[r], state.highlightSpanId, state));
     }
     table.appendChild(tbody);
     tableWrap.appendChild(table);
@@ -315,91 +441,122 @@
     if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  function _createRow(row, hlId) {
-      var tr = document.createElement('tr');
-      tr.className = 'flow-table-row';
-      if (row.status === 'FAIL') tr.classList.add('flow-row-fail');
-      var kwTypeUpper = (row.keyword_type || '').toUpperCase();
-      if (kwTypeUpper === 'SETUP') tr.classList.add('flow-row-setup');
-      if (kwTypeUpper === 'TEARDOWN') tr.classList.add('flow-row-teardown');
-      if (hlId && row.id === hlId) tr.classList.add('flow-row-highlight');
-      if (row.id) {
-        tr.setAttribute('data-span-id', row.id);
-        tr.style.cursor = 'pointer';
-        tr.addEventListener('click', function () {
-          if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-            window.RFTraceViewer.emit('navigate-to-span', { spanId: row.id, source: 'flow-table' });
-          }
-        });
-      }
-
-      // Error tooltip on FAIL rows
-      if (row.status === 'FAIL' && row.error) {
-        tr.title = row.error;
-      }
-
-      // Combined Keyword column (badge + indent + name + args)
-      var tdKw = document.createElement('td');
-      tdKw.className = 'flow-col-keyword';
-      tdKw.style.paddingLeft = (row.depth * 20 + 8) + 'px';
-
-      // Indent guides
-      for (var g = 0; g < row.depth; g++) {
-        var guide = document.createElement('span');
-        guide.className = 'flow-indent-guide';
-        guide.style.left = (g * 20 + 4) + 'px';
-        tdKw.appendChild(guide);
-      }
-
-      // Type badge (abbreviated)
-      var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
-      var badge = document.createElement('span');
-      badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
-      badge.textContent = BADGE_LABELS[kwType] || kwType;
-      tdKw.appendChild(badge);
-
-      // Name
-      var nameSpan = document.createElement('span');
-      nameSpan.className = 'flow-kw-name';
-      nameSpan.textContent = row.name;
-      tdKw.appendChild(nameSpan);
-
-      // Args (inline, truncated at 60 chars)
-      if (row.args) {
-        var argsSpan = document.createElement('span');
-        argsSpan.className = 'flow-kw-args';
-        argsSpan.textContent = row.args.length > 60 ? row.args.substring(0, 57) + '...' : row.args;
-        argsSpan.title = row.args;
-        tdKw.appendChild(argsSpan);
-      }
-
-      tr.appendChild(tdKw);
-
-      // Line column
-      var tdL = document.createElement('td');
-      tdL.className = 'flow-col-line';
-      tdL.textContent = row.lineno > 0 ? row.lineno : '';
-      tr.appendChild(tdL);
-
-      // Status column
-      var tdSt = document.createElement('td');
-      tdSt.className = 'flow-col-status';
-      var sb = document.createElement('span');
-      sb.className = 'flow-status-badge';
-      sb.classList.add('flow-status-' + (row.status || '').toLowerCase().replace(/\s+/g, '-'));
-      sb.textContent = row.status;
-      tdSt.appendChild(sb);
-      tr.appendChild(tdSt);
-
-      // Duration column
-      var tdD = document.createElement('td');
-      tdD.className = 'flow-col-duration';
-      tdD.textContent = _formatDuration(row.duration);
-      tr.appendChild(tdD);
-
-      return tr;
+  function _createRow(row, hlId, state) {
+    var tr = document.createElement('tr');
+    tr.className = 'flow-table-row';
+    if (row.status === 'FAIL') tr.classList.add('flow-row-fail');
+    var kwTypeUpper = (row.keyword_type || '').toUpperCase();
+    if (kwTypeUpper === 'SETUP') tr.classList.add('flow-row-setup');
+    if (kwTypeUpper === 'TEARDOWN') tr.classList.add('flow-row-teardown');
+    if (hlId && row.id === hlId) tr.classList.add('flow-row-highlight');
+    if (row.id) {
+      tr.setAttribute('data-span-id', row.id);
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', function (e) {
+        // Don't navigate if clicking the toggle arrow
+        if (e.target.classList.contains('flow-toggle')) return;
+        if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+          window.RFTraceViewer.emit('navigate-to-span', { spanId: row.id, source: 'flow-table' });
+        }
+      });
     }
 
+    if (row.status === 'FAIL' && row.error) {
+      tr.title = row.error;
+    }
+
+    // Combined Keyword column (toggle + badge + indent + name + args)
+    var tdKw = document.createElement('td');
+    tdKw.className = 'flow-col-keyword';
+    tdKw.style.paddingLeft = (row.depth * 20 + 8) + 'px';
+
+    // Indent guides
+    for (var g = 0; g < row.depth; g++) {
+      var guide = document.createElement('span');
+      guide.className = 'flow-indent-guide';
+      guide.style.left = (g * 20 + 4) + 'px';
+      tdKw.appendChild(guide);
+    }
+
+    // Toggle arrow for nodes with children
+    if (row.hasChildren) {
+      var isExpanded = !!state.expandedIds[row.id];
+      var toggle = document.createElement('span');
+      toggle.className = 'flow-toggle';
+      toggle.textContent = isExpanded ? '\u25bc' : '\u25b6'; // ▼ or ▶
+      toggle.style.cursor = 'pointer';
+      toggle.style.marginRight = '4px';
+      toggle.style.fontSize = '10px';
+      toggle.style.color = row.status === 'FAIL' ? 'var(--status-fail)' : 'var(--text-muted)';
+      toggle.addEventListener('click', (function (rowId) {
+        return function (e) {
+          e.stopPropagation();
+          if (state.expandedIds[rowId]) {
+            delete state.expandedIds[rowId];
+          } else {
+            state.expandedIds[rowId] = true;
+          }
+          _renderTable(state);
+        };
+      })(row.id));
+      tdKw.appendChild(toggle);
+    } else {
+      // Spacer for alignment
+      var spacer = document.createElement('span');
+      spacer.style.display = 'inline-block';
+      spacer.style.width = '14px';
+      spacer.style.marginRight = '4px';
+      tdKw.appendChild(spacer);
+    }
+
+    // Type badge (abbreviated)
+    var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
+    var badge = document.createElement('span');
+    badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
+    badge.textContent = BADGE_LABELS[kwType] || kwType;
+    tdKw.appendChild(badge);
+
+    // Name
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'flow-kw-name';
+    nameSpan.textContent = row.name;
+    tdKw.appendChild(nameSpan);
+
+    // Args (inline, truncated at 60 chars)
+    if (row.args) {
+      var argsSpan = document.createElement('span');
+      argsSpan.className = 'flow-kw-args';
+      argsSpan.textContent = row.args.length > 60 ? row.args.substring(0, 57) + '...' : row.args;
+      argsSpan.title = row.args;
+      tdKw.appendChild(argsSpan);
+    }
+
+    tr.appendChild(tdKw);
+
+    // Line column
+    var tdL = document.createElement('td');
+    tdL.className = 'flow-col-line';
+    tdL.textContent = row.lineno > 0 ? row.lineno : '';
+    tr.appendChild(tdL);
+
+    // Status column
+    var tdSt = document.createElement('td');
+    tdSt.className = 'flow-col-status';
+    var sb = document.createElement('span');
+    sb.className = 'flow-status-badge';
+    sb.classList.add('flow-status-' + (row.status || '').toLowerCase().replace(/\s+/g, '-'));
+    sb.textContent = row.status;
+    tdSt.appendChild(sb);
+    tr.appendChild(tdSt);
+
+    // Duration column
+    var tdD = document.createElement('td');
+    tdD.className = 'flow-col-duration';
+    tdD.textContent = _formatDuration(row.duration);
+    tr.appendChild(tdD);
+
+    return tr;
+  }
 
   function _formatDuration(seconds) {
     if (typeof seconds !== 'number' || seconds <= 0) return '';

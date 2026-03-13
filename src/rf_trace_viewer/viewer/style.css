@@ -814,6 +814,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 .rf-trace-viewer.theme-dark .tree-toggle.toggle-suite { color: #64b5f6; }
 .rf-trace-viewer.theme-dark .tree-toggle.toggle-test { color: #42a5f5; }
+.rf-trace-viewer.theme-dark .tree-toggle.toggle-keyword { color: #90a4ae; }
 
 .rf-trace-viewer .tree-toggle:focus-visible {
   outline: 2px solid var(--focus-outline);
