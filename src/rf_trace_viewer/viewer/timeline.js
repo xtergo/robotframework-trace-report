@@ -2226,10 +2226,14 @@
 
     // Highlight selected or hovered
     if (span === timelineState.selectedSpan) {
-      _roundRect(ctx, x1 - 1, barY - 1, barWidth + 2, barHeight + 2, radius + 1);
+      ctx.save();
+      ctx.shadowColor = '#fdd835';
+      ctx.shadowBlur = 8;
+      _roundRect(ctx, x1 - 2, barY - 2, barWidth + 4, barHeight + 4, radius + 2);
       ctx.strokeStyle = '#fdd835';
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 3;
       ctx.stroke();
+      ctx.restore();
     } else if (span === timelineState.hoveredSpan) {
       _roundRect(ctx, x1, barY, barWidth, barHeight, radius);
       ctx.strokeStyle = 'rgba(0,0,0,0.4)';
@@ -2966,9 +2970,21 @@
         var height = canvas.height / (window.devicePixelRatio || 1);
         var centerX = width / 2;
         
-        // Horizontal centering: adjust viewport to center the span
+        // Auto-zoom: ensure the span occupies at least ~40% of the visible width
         var viewRange = timelineState.viewEnd - timelineState.viewStart;
+        var spanDuration = span.endTime - span.startTime;
         var spanMid = (span.startTime + span.endTime) / 2;
+        if (spanDuration > 0) {
+          var spanPixels = (spanDuration / viewRange) * (width - timelineState.leftMargin - timelineState.rightMargin);
+          if (spanPixels < width * 0.2) {
+            // Zoom in so span takes ~20% of usable width
+            var targetRange = spanDuration / 0.2;
+            // Don't zoom in more than needed — cap at a reasonable minimum
+            viewRange = Math.max(targetRange, 0.5);
+          }
+        }
+
+        // Horizontal centering: adjust viewport to center the span
         timelineState.viewStart = spanMid - viewRange / 2;
         timelineState.viewEnd = spanMid + viewRange / 2;
         // Clamp to data bounds
@@ -3020,6 +3036,13 @@
           yOffset += (maxLane + 2) * timelineState.rowHeight;
         }
         
+        // Update zoom state to match new view range
+        var totalRange = timelineState.maxTime - timelineState.minTime;
+        var newViewRange = timelineState.viewEnd - timelineState.viewStart;
+        timelineState.zoom = (totalRange > 0 && newViewRange > 0) ? totalRange / newViewRange : 1;
+        if (timelineState._syncSlider) timelineState._syncSlider();
+        if (timelineState._syncHScroll) timelineState._syncHScroll();
+
         // Scroll the canvas container to center the span vertically
         if (spanY !== null && canvas.parentElement) {
           var container = canvas.parentElement;

@@ -72,6 +72,7 @@
           s.rows = _buildKeywordRows(test);
           s.expandedIds = _computeFailFocusedExpanded(test);
           _renderTable(s);
+          _scrollToHighlighted(s);
           return;
         }
         var pt = _findTestContainingSpan(suites, spanId);
@@ -435,17 +436,25 @@
     table.appendChild(tbody);
     tableWrap.appendChild(table);
     state.container.appendChild(tableWrap);
-
-    // Auto-scroll to first FAIL detail row so error info is visible
-    var firstDetail = tableWrap.querySelector('.flow-row-detail');
-    if (firstDetail) {
-      firstDetail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
   }
 
   function _scrollToHighlighted(state) {
     var el = state.container.querySelector('.flow-row-highlight');
-    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (el) {
+      // If the highlighted row has a detail row right after it, scroll to show both
+      var next = el.nextElementSibling;
+      if (next && next.classList.contains('flow-row-detail')) {
+        next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      return;
+    }
+    // No highlighted row — scroll to first detail row if present
+    var firstDetail = state.container.querySelector('.flow-row-detail');
+    if (firstDetail) {
+      firstDetail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }
 
   function _createRow(row, hlId, state) {
