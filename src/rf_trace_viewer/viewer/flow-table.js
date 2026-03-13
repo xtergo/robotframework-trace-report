@@ -435,6 +435,12 @@
     table.appendChild(tbody);
     tableWrap.appendChild(table);
     state.container.appendChild(tableWrap);
+
+    // Auto-scroll to first FAIL detail row so error info is visible
+    var firstDetail = tableWrap.querySelector('.flow-row-detail');
+    if (firstDetail) {
+      firstDetail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }
 
   function _scrollToHighlighted(state) {
