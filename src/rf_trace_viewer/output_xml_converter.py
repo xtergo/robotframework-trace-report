@@ -319,6 +319,10 @@ def _walk_element(
             _make_otlp_attr("rf.test.name", elem.get("name", "")),
             _make_otlp_attr("rf.test.id", elem.get("id", "")),
         ]
+        # Extract line number if present (rf.test.lineno)
+        line = elem.get("line")
+        if line:
+            attrs.append({"key": "rf.test.lineno", "value": {"int_value": int(line)}})
         # Extract <doc> child
         doc_el = elem.find("doc")
         if doc_el is not None and doc_el.text:
@@ -359,6 +363,10 @@ def _walk_element(
             _make_otlp_attr("rf.keyword.name", elem.get("name", "")),
             _make_otlp_attr("rf.keyword.type", kw_type),
         ]
+        # Extract line number if present (RF5+, rf.keyword.lineno)
+        line = elem.get("line")
+        if line:
+            attrs.append({"key": "rf.keyword.lineno", "value": {"int_value": int(line)}})
         # Extract <doc> child
         doc_el = elem.find("doc")
         if doc_el is not None and doc_el.text:
