@@ -280,6 +280,29 @@ def _build_provider(config: AppConfig) -> TraceProvider:
         return JsonProvider(path=config.input_path)
 
 
+def _parse_xml_input(path: str) -> list[RawSpan]:
+    """Parse an RF output.xml file by converting it to OTel spans in-memory.
+
+    Uses the existing output_xml_converter to produce an
+    ExportTraceServiceRequest dict, then feeds it through parse_line.
+    """
+    import json
+    import xml.etree.ElementTree as ET
+
+    from rf_trace_viewer.output_xml_converter import convert_xml
+    from rf_trace_viewer.parser import parse_line
+
+    tree = ET.parse(path)
+    root = tree.getroot()
+    data = convert_xml(root)
+    return parse_line(json.dumps(data))
+
+
+def _is_xml_input(path: str) -> bool:
+    """Detect whether the input file is an RF output.xml."""
+    return path.endswith(".xml")
+
+
 def _run_provider_pipeline(config: AppConfig, report_options: ReportOptions) -> int:
     """Run the provider-based static report pipeline. Returns exit code."""
     from rf_trace_viewer.robot_semantics import RobotSemanticsLayer
@@ -521,7 +544,11 @@ def main() -> int:
         # For json provider, use the direct pipeline for backward compatibility
         # (parse_file → build_tree → interpret_tree → generate_report)
         if config.provider == "json":
-            spans = parse_file(config.input_path)
+            if _is_xml_input(config.input_path):
+                print("Detected RF output.xml, converting to OTel format...")
+                spans = _parse_xml_input(config.input_path)
+            else:
+                spans = parse_file(config.input_path)
             roots = build_tree(spans)
             model = interpret_tree(roots)
 
