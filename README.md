@@ -20,7 +20,7 @@ Robot Framework + robotframework-tracer
 
 ## Installation
 
-Requires **Python 3.10+**.
+Requires **Python 3.10+** on Linux or macOS. Windows is not supported.
 
 ```bash
 pip install robotframework-trace-report
