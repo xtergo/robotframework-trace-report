@@ -2271,20 +2271,10 @@ function _createTreeNode(opts) {
   row.addEventListener('click', function () { _toggleNode(wrapper); });
 
   // Emit event when node is clicked (for timeline synchronization)
-  row.addEventListener('click', function (e) {
+  row.addEventListener('click', function () {
     var capturedId = opts.id;
-    var capturedName = opts.name;
-    console.log('[Tree] Node clicked:', capturedName, 'id:', capturedId);
-    console.log('[Tree] opts object:', JSON.stringify({ id: opts.id, name: opts.name, type: opts.type }));
     if (capturedId && window.RFTraceViewer && window.RFTraceViewer.emit) {
-      console.log('[Tree] Emitting navigate-to-span event for id:', capturedId);
       window.RFTraceViewer.emit('navigate-to-span', { spanId: capturedId, source: 'tree' });
-    } else {
-      console.warn('[Tree] Cannot emit event - missing id or RFTraceViewer:', { 
-        hasId: !!capturedId, 
-        hasRFTraceViewer: !!window.RFTraceViewer,
-        hasEmit: !!(window.RFTraceViewer && window.RFTraceViewer.emit)
-      });
     }
   });
 

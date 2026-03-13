@@ -375,6 +375,10 @@
       if (window.RFTraceViewer && window.RFTraceViewer.emit) {
         window.RFTraceViewer.emit('layout-mode-changed', { mode: timelineState.layoutMode });
       }
+      // Scroll the Gantt container to top when switching to compact view
+      if (canvas && canvas.parentElement) {
+        canvas.parentElement.scrollTop = 0;
+      }
       _render();
     }
     compactBtn.addEventListener('click', _toggleLayoutMode);
