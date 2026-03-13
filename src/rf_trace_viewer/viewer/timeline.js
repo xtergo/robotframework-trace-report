@@ -1465,6 +1465,8 @@
       var totalDataRange = timelineState.maxTime - timelineState.minTime;
       var MIN_VIEW_RANGE = Math.max(0.5, totalDataRange * 0.001);
       if (newRange < MIN_VIEW_RANGE) newRange = MIN_VIEW_RANGE;
+      // Enforce maximum view range: never zoom out beyond the full data range
+      if (totalDataRange > 0 && newRange > totalDataRange) newRange = totalDataRange;
       // Keep mouse position anchored
       var canvasWidth = canvas.width / (window.devicePixelRatio || 1);
       var timelineWidth = canvasWidth - timelineState.leftMargin - timelineState.rightMargin;
