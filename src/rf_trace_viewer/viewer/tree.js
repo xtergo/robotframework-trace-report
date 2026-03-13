@@ -442,6 +442,160 @@ function _hasDescendantFail(item) {
 }
 
 /**
+ * Build a single flat item descriptor from a data item.
+ * Shared by _flattenTree and _flattenSubtree to avoid duplication.
+ * @param {Object} item - Data item (suite, test, or keyword)
+ * @param {string} itemType - 'suite', 'test', or 'keyword'
+ * @param {number} depth - Nesting depth
+ * @param {number} maxSiblingDuration - Max sibling duration for sparkline
+ * @returns {Object} Flat item descriptor
+ */
+function _buildFlatItem(item, itemType, depth, maxSiblingDuration) {
+  var maxSibDur = (itemType === 'test') ? (maxSiblingDuration || 0) : 0;
+  var displayName = item.name;
+  if (itemType === 'suite' && item._merged_count && item._merged_count > 1) {
+    displayName = item.name + ' (' + item._merged_count + ' workers)';
+  }
+  var children = null;
+  var hasChildren = false;
+  if (itemType === 'suite') {
+    children = item.children || [];
+    hasChildren = children.length > 0;
+  } else if (itemType === 'test') {
+    children = item.keywords || [];
+    hasChildren = children.length > 0;
+  } else {
+    children = item.children || [];
+    hasChildren = children.length > 0 || (item.truncated && item.truncated > 0);
+  }
+  return {
+    data: item,
+    depth: depth,
+    type: itemType,
+    id: item.id,
+    displayName: displayName,
+    hasChildren: hasChildren,
+    maxSiblingDuration: maxSibDur,
+    truncatedCount: (itemType === 'keyword' && item.truncated) ? item.truncated : 0,
+    rootCauseClass: (itemType === 'keyword' && item.status === 'FAIL') ? _classifyFailKeyword(item) : null
+  };
+}
+
+/**
+ * Flatten a single node's visible descendants into a flat array.
+ * Used for incremental expand in virtual scroll mode.
+ * @param {Object} parentItem - The flat item being expanded
+ * @param {Object|null} filteredSpanIds - Filter map or null for all
+ * @param {Object} expandedIds - Map of expanded node IDs
+ * @returns {Array} Flat array of descendant items (not including the parent)
+ */
+function _flattenSubtree(parentItem, filteredSpanIds, expandedIds) {
+  var result = [];
+  var data = parentItem.data;
+  var parentType = parentItem.type;
+  var baseDepth = parentItem.depth + 1;
+
+  // Get children from data model
+  var children;
+  if (parentType === 'suite') {
+    children = data.children || [];
+  } else if (parentType === 'test') {
+    children = data.keywords || [];
+  } else {
+    children = data.children || [];
+  }
+  if (children.length === 0) return result;
+
+  // Compute maxSiblingDuration for child tests (same as _flattenTree)
+  var childMaxDur = 0;
+  if (parentType === 'suite') {
+    for (var c = 0; c < children.length; c++) {
+      var ch = children[c];
+      if (ch.keywords !== undefined && ch.elapsed_time > childMaxDur) {
+        childMaxDur = ch.elapsed_time;
+      }
+    }
+  }
+
+  // Iterative DFS over children
+  var stack = [{ items: children, index: 0, depth: baseDepth, maxSiblingDuration: childMaxDur }];
+  while (stack.length > 0) {
+    var frame = stack[stack.length - 1];
+    if (frame.index >= frame.items.length) {
+      stack.pop();
+      continue;
+    }
+    var item = frame.items[frame.index];
+    frame.index++;
+
+    var itemType;
+    if (item.keyword_type !== undefined) {
+      itemType = 'keyword';
+    } else if (item.keywords !== undefined) {
+      itemType = 'test';
+    } else {
+      itemType = 'suite';
+    }
+
+    // Filter check
+    if (filteredSpanIds !== null) {
+      var matchesFilter = !!filteredSpanIds[item.id];
+      if (!matchesFilter && !_hasDescendantInFilter(item, filteredSpanIds)) {
+        continue;
+      }
+    }
+
+    var flatItem = _buildFlatItem(item, itemType, frame.depth, frame.maxSiblingDuration);
+    result.push(flatItem);
+
+    // If expanded, push children onto stack
+    var itemChildren = null;
+    if (itemType === 'suite') {
+      itemChildren = item.children || [];
+    } else if (itemType === 'test') {
+      itemChildren = item.keywords || [];
+    } else {
+      itemChildren = item.children || [];
+    }
+    if (flatItem.hasChildren && expandedIds[item.id] && itemChildren.length > 0) {
+      var grandChildMaxDur = 0;
+      if (itemType === 'suite') {
+        for (var gc = 0; gc < itemChildren.length; gc++) {
+          var gch = itemChildren[gc];
+          if (gch.keywords !== undefined && gch.elapsed_time > grandChildMaxDur) {
+            grandChildMaxDur = gch.elapsed_time;
+          }
+        }
+      }
+      stack.push({
+        items: itemChildren,
+        index: 0,
+        depth: frame.depth + 1,
+        maxSiblingDuration: grandChildMaxDur
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Count the number of visible descendants of a node in the flat list.
+ * Descendants are contiguous items after the node with depth > node's depth.
+ * @param {Array} flatItems - The flat items array
+ * @param {number} nodeIndex - Index of the parent node
+ * @returns {number} Number of descendant items
+ */
+function _countFlatDescendants(flatItems, nodeIndex) {
+  var parentDepth = flatItems[nodeIndex].depth;
+  var count = 0;
+  for (var i = nodeIndex + 1; i < flatItems.length; i++) {
+    if (flatItems[i].depth <= parentDepth) break;
+    count++;
+  }
+  return count;
+}
+
+/**
  * Flatten the tree data model into a flat array of row descriptors.
  * Only includes items that pass the filter and whose ancestors are expanded.
  * @param {Array} suites - Merged suite array
@@ -482,46 +636,19 @@ function _flattenTree(suites, filteredSpanIds, expandedIds) {
       }
     }
 
-    // Compute maxSiblingDuration for test nodes
-    var maxSibDur = 0;
-    if (itemType === 'test') {
-      maxSibDur = frame.maxSiblingDuration || 0;
-    }
-
-    // Build display name for suites with merged workers
-    var displayName = item.name;
-    if (itemType === 'suite' && item._merged_count && item._merged_count > 1) {
-      displayName = item.name + ' (' + item._merged_count + ' workers)';
-    }
-
-    // Determine children
-    var children = null;
-    var hasChildren = false;
-    if (itemType === 'suite') {
-      children = item.children || [];
-      hasChildren = children.length > 0;
-    } else if (itemType === 'test') {
-      children = item.keywords || [];
-      hasChildren = children.length > 0;
-    } else {
-      children = item.children || [];
-      hasChildren = children.length > 0 || (item.truncated && item.truncated > 0);
-    }
-
-    result.push({
-      data: item,
-      depth: frame.depth,
-      type: itemType,
-      id: item.id,
-      displayName: displayName,
-      hasChildren: hasChildren,
-      maxSiblingDuration: maxSibDur,
-      truncatedCount: (itemType === 'keyword' && item.truncated) ? item.truncated : 0,
-      rootCauseClass: (itemType === 'keyword' && item.status === 'FAIL') ? _classifyFailKeyword(item) : null
-    });
+    var flatItem = _buildFlatItem(item, itemType, frame.depth, frame.maxSiblingDuration);
+    result.push(flatItem);
 
     // If expanded, push children onto stack
-    if (hasChildren && expandedIds[item.id] && children.length > 0) {
+    var children;
+    if (itemType === 'suite') {
+      children = item.children || [];
+    } else if (itemType === 'test') {
+      children = item.keywords || [];
+    } else {
+      children = item.children || [];
+    }
+    if (flatItem.hasChildren && expandedIds[item.id] && children.length > 0) {
       // Compute maxSiblingDuration for child tests
       var childMaxDur = 0;
       if (itemType === 'suite') {
@@ -766,29 +893,45 @@ function _createVirtualRow(item, index) {
 
 /**
  * Toggle expand/collapse for a node in virtual mode.
- * Rebuilds the flat list and re-renders visible rows.
+ * Uses incremental splice for simple toggles, full rebuild for complex cases.
  * @param {string} nodeId - The span ID to toggle
  */
 function _virtualToggle(nodeId) {
   var vs = _virtualState;
   if (!vs) return;
+  var t0 = performance.now();
+
+  // Find the item in the current flat list
+  var nodeIndex = -1;
+  var item = null;
+  for (var i = 0; i < vs.flatItems.length; i++) {
+    if (vs.flatItems[i].id === nodeId) {
+      nodeIndex = i;
+      item = vs.flatItems[i];
+      break;
+    }
+  }
 
   if (vs.expandedIds[nodeId]) {
+    // ── COLLAPSE: remove descendants from flat list ──
     delete vs.expandedIds[nodeId];
+
+    if (nodeIndex >= 0) {
+      // Incremental: count and splice out descendants
+      var removeCount = _countFlatDescendants(vs.flatItems, nodeIndex);
+      if (removeCount > 0) {
+        vs.flatItems.splice(nodeIndex + 1, removeCount);
+      }
+    } else {
+      // Fallback: full rebuild
+      vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+    }
   } else {
     vs.expandedIds[nodeId] = true;
 
-    // Failure-focused expand: when opening a FAIL test, expand only FAIL paths
-    var item = null;
-    for (var i = 0; i < vs.flatItems.length; i++) {
-      if (vs.flatItems[i].id === nodeId) {
-        item = vs.flatItems[i];
-        break;
-      }
-    }
+    // Check if this is a FAIL test that needs failure-focused expand
     if (item && item.type === 'test' && item.data && item.data.status === 'FAIL') {
       var failExpanded = _computeFailFocusedExpanded(item.data);
-      // Merge FAIL-path IDs into expandedIds
       for (var key in failExpanded) {
         vs.expandedIds[key] = true;
       }
@@ -799,11 +942,31 @@ function _virtualToggle(nodeId) {
           delete vs.expandedIds[keywords[k].id];
         }
       }
+      // Failure-focused expand touches multiple levels — use subtree flatten
+      // but still incremental (only flatten this test's subtree, not the whole tree)
+    }
+
+    // ── EXPAND: flatten subtree and splice into flat list ──
+    if (nodeIndex >= 0 && item) {
+      var newItems = _flattenSubtree(item, vs.filteredSpanIds, vs.expandedIds);
+      if (newItems.length > 0) {
+        // Splice new items after the toggled node
+        var spliceArgs = [nodeIndex + 1, 0];
+        for (var ni = 0; ni < newItems.length; ni++) {
+          spliceArgs.push(newItems[ni]);
+        }
+        Array.prototype.splice.apply(vs.flatItems, spliceArgs);
+      }
+    } else {
+      // Fallback: full rebuild
+      vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
     }
   }
 
-  // Rebuild flat list
-  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+  var elapsed = performance.now() - t0;
+  if (elapsed > 50) {
+    console.log('[Tree] _virtualToggle took ' + elapsed.toFixed(1) + 'ms for ' + vs.flatItems.length + ' items');
+  }
 
   // Force re-render by resetting rendered range
   vs.renderedRange.start = -1;
@@ -829,6 +992,7 @@ function _findFlatIndex(spanId) {
 /**
  * Expand ancestors of a target span in virtual mode.
  * Walks the data model to find the ancestor path, adds all to expandedIds.
+ * Does NOT rebuild the flat list — caller is responsible for that.
  * @param {string} targetId - The span ID to reveal
  */
 function _virtualExpandAncestors(targetId) {
@@ -843,8 +1007,6 @@ function _virtualExpandAncestors(targetId) {
       vs.expandedIds[ancestorPath[i]] = true;
     }
   }
-  // Rebuild flat list
-  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
 }
 
 function _renderTreeWithFilter(container, model, filteredSpanIds) {
@@ -2582,6 +2744,9 @@ function _virtualHighlight(spanId) {
   // (the target may be a PASS node the user needs to see)
   _virtualExpandAncestors(spanId);
 
+  // Rebuild flat list once after all expandedIds changes
+  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+
   // Find the item in flat list
   var idx = _findFlatIndex(spanId);
 
@@ -2590,6 +2755,8 @@ function _virtualHighlight(spanId) {
     var fallbackId = _findNearestTreeAncestor(spanId);
     if (fallbackId) {
       _virtualExpandAncestors(fallbackId);
+      // Rebuild again after fallback ancestor expansion
+      vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
       idx = _findFlatIndex(fallbackId);
       if (idx >= 0) {
         vs.highlightedSpanId = fallbackId;
