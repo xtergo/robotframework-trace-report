@@ -1042,6 +1042,21 @@
   var LOG_LEVELS = { TRACE: 0, DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 };
 
   /**
+   * Extract log.level from an OTel event's attributes array.
+   * Falls back to 'INFO' when the attribute is absent.
+   */
+  function _evtLogLevel(evt) {
+    if (evt.attributes) {
+      for (var i = 0; i < evt.attributes.length; i++) {
+        if (evt.attributes[i].key === 'log.level') {
+          return (evt.attributes[i].value && evt.attributes[i].value.string_value) || 'INFO';
+        }
+      }
+    }
+    return 'INFO';
+  }
+
+  /**
    * Flatten keywords for report drill-down using DFS (same approach as flow-table.js).
    * Also captures events array for inline log messages.
    * @param {Object} test - An RFTest object with keywords array
@@ -1088,7 +1103,7 @@
     var threshold = LOG_LEVELS[minLevel] !== undefined ? LOG_LEVELS[minLevel] : LOG_LEVELS.INFO;
     var result = [];
     for (var i = 0; i < events.length; i++) {
-      var evtLevel = (events[i].level || 'INFO').toUpperCase();
+      var evtLevel = _evtLogLevel(events[i]).toUpperCase();
       var evtVal = LOG_LEVELS[evtLevel] !== undefined ? LOG_LEVELS[evtLevel] : LOG_LEVELS.INFO;
       if (evtVal >= threshold) {
         result.push(events[i]);
@@ -1374,21 +1389,21 @@
             logEntry.style.paddingLeft = ((row.depth + 1) * 20 + 8) + 'px';
 
             var levelBadge = document.createElement('span');
-            var evtLevel = (evt.level || 'INFO').toUpperCase();
+            var evtLevel = _evtLogLevel(evt).toUpperCase();
             levelBadge.className = 'drill-down-log-level log-level-' + evtLevel.toLowerCase();
             levelBadge.textContent = evtLevel;
             logEntry.appendChild(levelBadge);
 
-            if (evt.timestamp) {
+            if (evt.time_unix_nano) {
               var tsSpan = document.createElement('span');
               tsSpan.className = 'drill-down-log-timestamp';
-              tsSpan.textContent = evt.timestamp;
+              tsSpan.textContent = _formatTimestamp(evt.time_unix_nano);
               logEntry.appendChild(tsSpan);
             }
 
             var msgSpan = document.createElement('span');
             msgSpan.className = 'drill-down-log-message';
-            msgSpan.textContent = evt.message || '';
+            msgSpan.textContent = evt.name || '';
             logEntry.appendChild(msgSpan);
 
             kwContainer.appendChild(logEntry);
@@ -1486,11 +1501,12 @@
         var events = kw.events || [];
         for (var e = 0; e < events.length; e++) {
           var evt = events[e];
-          if (evt.level === 'WARN' || evt.level === 'ERROR') {
+          var evtLevel = _evtLogLevel(evt).toUpperCase();
+          if (evtLevel === 'WARN' || evtLevel === 'ERROR' || evtLevel === 'FAIL') {
             errors.push({
-              level: evt.level,
-              timestamp: evt.timestamp || '',
-              message: evt.message || '',
+              level: evtLevel,
+              timestamp: evt.time_unix_nano ? _formatTimestamp(evt.time_unix_nano) : '',
+              message: evt.name || '',
               keywordId: kw.id,
               keywordName: kw.name
             });
