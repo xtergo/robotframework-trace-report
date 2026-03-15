@@ -234,6 +234,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         if path in ("/api/v1/spans", "/api/spans"):
             since_ns = int(query.get("since_ns", ["0"])[0])
             service = query.get("service", [None])[0]
+            # Normalize empty string to None so base_filter logic applies
+            if service is not None and service.strip() == "":
+                service = None
             execution_id = query.get("execution_id", [None])[0]
             self._serve_signoz_spans(
                 since_ns,

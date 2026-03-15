@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Service name filter: no checkboxes selected by default — all spans visible without filtering
+- Service names populate dynamically as spans arrive; checking one or more acts as a filter
+- Backend normalizes empty service param to None so base_filter exclusion logic applies correctly
+
 ### Added
 - Expand/Collapse controls for keyword drill-down: "Expand All", "Collapse All", and "Expand Failed" buttons in drill-down toolbar
 - Collapsible keyword tree nodes with chevron toggles in drill-down view

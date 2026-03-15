@@ -1915,25 +1915,25 @@
     _serviceDropdownEl.appendChild(dropdown);
     header.appendChild(_serviceDropdownEl);
 
-    // Seed the default service as pre-checked
+    // Seed the default service as known (visible in list) but NOT pre-checked.
+    // No checkboxes selected = show all spans (no filter).
     if (_defaultService) {
       _knownServices[_defaultService] = true;
-      _activeServices[_defaultService] = true;
-      _getServiceState(_defaultService).enabled = true;
-      _serviceFilter = _defaultService;
       _renderServiceList();
     }
 
-    // Also seed from URL param if different
+    // Also seed from URL param — if ?service= is set, pre-check that one
     var urlSvc = '';
     try { urlSvc = new URLSearchParams(window.location.search).get('service') || ''; } catch (e) {}
-    if (urlSvc && !_knownServices[urlSvc]) {
+    if (urlSvc) {
       _knownServices[urlSvc] = true;
       _activeServices[urlSvc] = true;
       _getServiceState(urlSvc).enabled = true;
-      _serviceFilter = _getActiveServiceFilter();
-      _renderServiceList();
     }
+
+    _serviceFilter = _getActiveServiceFilter();
+    _renderServiceList();
+    _updateServiceBtnLabel();
 
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -1952,12 +1952,9 @@
   }
 
   function _onServiceDiscovered(svcName) {
-    // Initialize service state if not already tracked
-    var state = _getServiceState(svcName);
-    if (svcName === _defaultService) {
-      _activeServices[svcName] = true;
-      state.enabled = true;
-    }
+    // Initialize service state if not already tracked — but don't auto-check.
+    // New services just appear in the list; user opts in by checking them.
+    _getServiceState(svcName);
     _renderServiceList();
     _updateServiceBtnLabel();
   }
@@ -2054,9 +2051,8 @@
 
   function _getActiveServiceFilter() {
     var active = Object.keys(_activeServices);
-    // No services checked → send a sentinel that matches nothing
-    // so the server returns zero spans (true filter behavior)
-    if (active.length === 0) return '__none__';
+    // No services checked → empty string means "show all" (no server-side filter)
+    if (active.length === 0) return '';
     if (active.length === 1) return active[0];
     // Multiple services: pass comma-separated (server-side will need to handle)
     // For now, send the first one — server only supports single service filter
@@ -2070,7 +2066,7 @@
       var active = Object.keys(_activeServices);
       var total = Object.keys(_knownServices).length;
       if (active.length === 0) {
-        btn.textContent = 'Services';
+        btn.textContent = 'Services (all)';
         btn.classList.remove('has-filter');
       } else if (active.length === 1) {
         btn.textContent = active[0];
