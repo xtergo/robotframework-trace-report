@@ -173,6 +173,7 @@ class TestArgumentParsing:
                 base_filter=ANY,
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 
@@ -225,6 +226,7 @@ class TestArgumentParsing:
                 base_filter=ANY,
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )
 
     def test_no_open_argument(self, monkeypatch):
@@ -621,6 +623,7 @@ class TestServeSubcommand:
                 base_filter=ANY,
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )
             mock_server.start.assert_called_once_with(open_browser=True)
 

@@ -255,6 +255,7 @@ class TestCLIForwardArgument:
                 base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )
 
     def test_forward_url_default_none(self, monkeypatch):
@@ -296,4 +297,5 @@ class TestCLIForwardArgument:
                 base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )

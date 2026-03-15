@@ -292,6 +292,26 @@ class SigNozProvider(TraceProvider):
 
         return TraceViewModel(spans=spans)
 
+    def fetch_spans_by_trace_ids(self, trace_ids: set[str], limit: int = 10_000) -> list[TraceSpan]:
+        """Fetch all spans matching any of the given trace_ids, across all services."""
+        if not trace_ids:
+            return []
+        filters = [
+            {
+                "key": {
+                    "key": "traceID",
+                    "dataType": "string",
+                    "type": "",
+                    "isColumn": True,
+                },
+                "op": "in",
+                "value": sorted(trace_ids),
+            }
+        ]
+        query = self._build_span_query(filters=filters, offset=0, limit=limit)
+        response = self._api_request("/api/v3/query_range", query)
+        return self._parse_spans(response)
+
     # ------------------------------------------------------------------
     # HTTP client
     # ------------------------------------------------------------------

@@ -51,6 +51,7 @@ class AppConfig:
     signoz_user_id: str | None = None  # SigNoz user ID for JWT self-signing
     signoz_org_id: str | None = None  # SigNoz org ID for JWT self-signing
     signoz_email: str | None = None  # SigNoz user email for JWT claims (must match DB)
+    follow_traces: bool = True  # fetch cross-service spans sharing the same trace_id
 
     # Existing settings preserved
     receiver: bool = False
@@ -103,6 +104,7 @@ class SigNozConfig:
     signoz_user_id: str | None = None  # SigNoz user ID for JWT self-signing
     signoz_org_id: str | None = None  # SigNoz org ID for JWT self-signing
     signoz_email: str | None = None  # SigNoz user email for JWT claims
+    follow_traces: bool = True  # fetch cross-service spans sharing the same trace_id
 
 
 # Fields that hold int values (for env var coercion)
@@ -127,6 +129,7 @@ _BOOL_FIELDS = {
     "no_open",
     "compact_html",
     "gzip_embed",
+    "follow_traces",
 }
 
 
@@ -329,6 +332,7 @@ def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
         "BASE_FILTER_CONFIG": "base_filter_config",
         "RATE_LIMIT_PER_IP": "rate_limit_per_ip",
         "LOGO_PATH": "logo_path",
+        "FOLLOW_TRACES": "follow_traces",
     }
     for env_key, attr in env_map.items():
         val = os.environ.get(env_key)

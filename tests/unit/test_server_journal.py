@@ -248,6 +248,7 @@ class TestCLIJournalArguments:
                 base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )
 
     def test_custom_journal_path(self, monkeypatch):
@@ -289,6 +290,7 @@ class TestCLIJournalArguments:
                 base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )
 
     def test_no_journal_flag(self, monkeypatch):
@@ -330,6 +332,7 @@ class TestCLIJournalArguments:
                 base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )
 
     def test_no_journal_overrides_custom_path(self, monkeypatch):
@@ -378,4 +381,5 @@ class TestCLIJournalArguments:
                 base_filter=BaseFilterConfig(excluded_by_default=[], hard_blocked=[]),
                 query_semaphore=None,
                 logo_path=None,
+                follow_traces=True,
             )

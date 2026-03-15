@@ -36,7 +36,12 @@ from rf_trace_viewer.metrics import (
     shutdown_metrics,
 )
 from rf_trace_viewer.parser import parse_line
-from rf_trace_viewer.providers.base import AuthenticationError, ProviderError, RateLimitError
+from rf_trace_viewer.providers.base import (
+    AuthenticationError,
+    ProviderError,
+    RateLimitError,
+    TraceViewModel,
+)
 from rf_trace_viewer.providers.signoz_metrics import SigNozMetricsQuery
 from rf_trace_viewer.providers.signoz_provider import SigNozProvider
 from rf_trace_viewer.resources import get_history, record_snapshot
@@ -571,6 +576,29 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 since_ns, service_name=service_name, execution_id=execution_id
             )
 
+            # Trace-follow enrichment: fetch cross-service spans sharing
+            # the same trace_ids as the primary service's spans.
+            follow_traces = getattr(self.server, "follow_traces", True)
+            if (
+                follow_traces
+                and service_name
+                and view_model.spans
+                and hasattr(provider, "fetch_spans_by_trace_ids")
+            ):
+                trace_ids = {s.trace_id for s in view_model.spans if s.trace_id}
+                if trace_ids:
+                    try:
+                        cross_spans = provider.fetch_spans_by_trace_ids(trace_ids)
+                        existing_ids = {s.span_id for s in view_model.spans}
+                        new_spans = [s for s in cross_spans if s.span_id not in existing_ids]
+                        if new_spans:
+                            view_model = TraceViewModel(
+                                spans=list(view_model.spans) + new_spans,
+                                resource_attributes=view_model.resource_attributes,
+                            )
+                    except Exception:
+                        pass  # trace-follow is best-effort; don't fail the request
+
             # Apply base filter: exclude spans from excluded-by-default services
             # (and hard-blocked services) unless explicitly included via service param
             if base_filter and service_name is None:
@@ -835,6 +863,7 @@ class LiveServer:
         query_semaphore: threading.Semaphore | None = None,
         termination_grace_period: int = 30,
         logo_path: str | None = None,
+        follow_traces: bool = True,
     ) -> None:
         self.trace_path = trace_path
         self.port = port
@@ -859,6 +888,8 @@ class LiveServer:
         self.base_filter = base_filter or BaseFilterConfig()
         self.query_semaphore = query_semaphore
         self.termination_grace_period = termination_grace_period
+
+        self.follow_traces = follow_traces
 
         # Resolve logo: validate custom path, fall back to default on failure
         self._logo_warning: str | None = None
@@ -892,6 +923,7 @@ class LiveServer:
         self._httpd.max_spans = self.max_spans  # type: ignore[attr-defined]
         self._httpd.service_name = self.service_name  # type: ignore[attr-defined]
         self._httpd.execution_attribute = self.execution_attribute  # type: ignore[attr-defined]
+        self._httpd.follow_traces = self.follow_traces  # type: ignore[attr-defined]
 
         # K8s integration: health, status, rate limiting, base filter
         self._httpd._health_router = self.health_router  # type: ignore[attr-defined]

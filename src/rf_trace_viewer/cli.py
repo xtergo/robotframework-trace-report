@@ -161,6 +161,18 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         "Also settable via ?service=<name> URL param by end users.",
     )
     parser.add_argument(
+        "--follow-traces",
+        action="store_true",
+        default=None,
+        help="Fetch cross-service spans sharing the same trace_id (default: enabled when --service-name is set)",
+    )
+    parser.add_argument(
+        "--no-follow-traces",
+        action="store_true",
+        default=False,
+        help="Disable cross-service trace following (avoids the second query per poll)",
+    )
+    parser.add_argument(
         "--signoz-jwt-secret",
         default=None,
         help="JWT signing secret for self-hosted SigNoz token auto-refresh "
@@ -212,6 +224,11 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
         val = getattr(args, arg_name, None)
         if val is not None:
             result[config_name] = val
+    # Handle --follow-traces / --no-follow-traces boolean pair
+    if getattr(args, "no_follow_traces", False):
+        result["follow_traces"] = False
+    elif getattr(args, "follow_traces", None):
+        result["follow_traces"] = True
     return result
 
 
@@ -411,6 +428,7 @@ def _run_live_server(args: argparse.Namespace) -> int:
         base_filter=config.base_filter,
         query_semaphore=query_semaphore,
         logo_path=config.logo_path,
+        follow_traces=config.follow_traces,
     )
     server.start(open_browser=not config.no_open)
     return 0
