@@ -1035,7 +1035,8 @@
           depth: depth,
           worker: worker,
           children: [],
-          execution_id: node.execution_id || ''
+          execution_id: node.execution_id || '',
+          service_name: (node.attributes && node.attributes['service.name']) || ''
         };
         allSpans.push(span);
 
@@ -1062,7 +1063,8 @@
           worker: worker,
           parent: parentSpan,
           children: [],
-          execution_id: node.execution_id || ''
+          execution_id: node.execution_id || '',
+          service_name: (node.attributes && node.attributes['service.name']) || ''
         };
         allSpans.push(span);
         if (parentSpan) parentSpan.children.push(span);
@@ -1086,7 +1088,8 @@
           depth: depth,
           worker: worker,
           parent: parentSpan,
-          children: []
+          children: [],
+          service_name: (node.attributes && node.attributes['service.name']) || ''
         };
         allSpans.push(span);
         if (parentSpan) parentSpan.children.push(span);
@@ -2252,7 +2255,22 @@
       if (span.execution_id && barWidth > 200) {
         nameText += '  [' + span.execution_id + ']';
       }
-      ctx.fillText(_truncateText(ctx, nameText, barWidth - 8), x1 + 5, y + 14);
+      var truncatedName = _truncateText(ctx, nameText, barWidth - 8);
+      ctx.fillText(truncatedName, x1 + 5, y + 14);
+
+      // Service name badge after the span name
+      if (span.service_name && barWidth > 120) {
+        var svcLabel = '  ' + span.service_name;
+        var nameWidth = ctx.measureText(truncatedName).width;
+        var svcX = x1 + 5 + nameWidth;
+        var maxSvcWidth = barWidth - 8 - nameWidth;
+        if (maxSvcWidth > 20) {
+          var isNonRf = span.service_name.indexOf('rf') !== 0;
+          ctx.fillStyle = isNonRf ? '#9c27b0' : 'rgba(255,255,255,0.5)';
+          ctx.font = isNonRf ? 'bold 9px sans-serif' : '9px sans-serif';
+          ctx.fillText(_truncateText(ctx, svcLabel, maxSvcWidth), svcX, y + 14);
+        }
+      }
     }
   }
 

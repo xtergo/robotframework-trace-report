@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fix: metrics provider no longer duplicated across suites
 
 ### Added
+- Gantt chart: service name shown after span name on bars (when wide enough)
+- Non-RF service names (not starting with "rf") rendered in purple bold for visibility
 - Expand/Collapse controls for keyword drill-down: "Expand All", "Collapse All", and "Expand Failed" buttons in drill-down toolbar
 - Collapsible keyword tree nodes with chevron toggles in drill-down view
 
