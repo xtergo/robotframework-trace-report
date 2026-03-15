@@ -76,7 +76,7 @@ def _make_sample_spans():
     ]
 
 
-def _create_server_with_provider(provider=None):
+def _create_server_with_provider(provider=None, service_name=None):
     """Create a fake server object with an optional provider attached."""
     server = MagicMock(spec=HTTPServer)
     server.receiver_mode = False
@@ -87,6 +87,7 @@ def _create_server_with_provider(provider=None):
     server.title = "Test Report"
     server.poll_interval = 5
     server.provider = provider
+    server.service_name = service_name
     return server
 
 
@@ -386,6 +387,17 @@ class TestServiceNameFilter:
         body = json.loads(handler.wfile.data.decode("utf-8"))
         assert "spans" in body
         assert body["total_count"] == 3
+
+    def test_server_config_service_name_used_when_request_param_empty(self):
+        """When browser sends service= empty, handler resolves from server config."""
+        provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
+        server = _create_server_with_provider(provider=provider, service_name="essvt-test-runner")
+
+        _get_api_spans(server, since_ns=0, service_name=None)
+
+        provider.poll_new_spans.assert_called_once_with(
+            0, service_name="essvt-test-runner", execution_id=None
+        )
 
 
 # ---------------------------------------------------------------------------

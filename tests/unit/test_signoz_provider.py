@@ -466,8 +466,12 @@ class TestDeduplication:
             filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
             assert len(filters) == 0
 
-        def test_config_service_name_used_as_fallback(self):
-            """When service_name param is None, config.service_name is used as fallback."""
+        def test_no_service_filter_when_none_passed(self):
+            """When service_name param is None, no service filter is applied.
+
+            The caller (server handler) is responsible for resolving defaults
+            before calling poll_new_spans.
+            """
             provider = SigNozProvider(_make_config(service_name="admin-default-svc"))
             resp = _make_response(["s1"])
 
@@ -476,8 +480,7 @@ class TestDeduplication:
 
             payload = mock_req.call_args[0][1]
             filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
-            assert len(filters) == 1
-            assert filters[0]["value"] == "admin-default-svc"
+            assert len(filters) == 0
 
         def test_explicit_service_name_overrides_config(self):
             """Explicit service_name param takes precedence over config.service_name."""

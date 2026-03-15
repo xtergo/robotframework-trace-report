@@ -572,8 +572,15 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
+            # Resolve effective service name: request param > server config default.
+            # The browser may send service= empty, which normalizes to None here,
+            # but the server was started with --service-name so we fall back to that.
+            effective_service = service_name
+            if not effective_service:
+                effective_service = getattr(self.server, "service_name", None) or None
+
             view_model = provider.poll_new_spans(
-                since_ns, service_name=service_name, execution_id=execution_id
+                since_ns, service_name=effective_service, execution_id=execution_id
             )
 
             # Trace-follow enrichment: fetch cross-service spans sharing
@@ -581,7 +588,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             follow_traces = getattr(self.server, "follow_traces", True)
             if (
                 follow_traces
-                and service_name
+                and effective_service
                 and view_model.spans
                 and hasattr(provider, "fetch_spans_by_trace_ids")
             ):

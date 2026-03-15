@@ -244,12 +244,9 @@ class SigNozProvider(TraceProvider):
             overlap_ns = int(self._config.overlap_window_seconds * 1_000_000_000)
             query_start_ns = max(0, since_ns - overlap_ns)
 
-        # Build filters
+        # Build filters — caller is responsible for resolving defaults
         filters: list[dict] = []
-        if service_name is None:
-            svc = self._config.service_name
-        else:
-            svc = service_name
+        svc = service_name
         if svc:
             filters.append(
                 {
