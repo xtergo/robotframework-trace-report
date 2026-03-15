@@ -4,7 +4,7 @@ WORKDIR /rf
 
 # Install dependencies (cached layer)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir robotframework==7.4.1 robotframework-tracer==0.5.11
+    pip install --no-cache-dir robotframework==7.4.1 robotframework-tracer==0.5.15
 
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4318/v1/traces
 ENV OTEL_RESOURCE_ATTRIBUTES="execution_id=integration-test-run"

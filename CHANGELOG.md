@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Service names populate dynamically as spans arrive; checking one or more acts as a filter
 - Backend normalizes empty service param to None so base_filter exclusion logic applies correctly
 
+### Changed
+- Upgraded robotframework-tracer from 0.5.11 to 0.5.15 in test/integration Dockerfiles
+  - New `rf.type` span attribute for faster span classification
+  - Metrics now include `trace_id` for per-trace correlation
+  - Fix: metrics provider no longer duplicated across suites
+
 ### Added
 - Expand/Collapse controls for keyword drill-down: "Expand All", "Collapse All", and "Expand Failed" buttons in drill-down toolbar
 - Collapsible keyword tree nodes with chevron toggles in drill-down view
