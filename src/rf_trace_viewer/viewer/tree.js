@@ -1812,6 +1812,9 @@ function _renderKeywordDetail(panel, data) {
   if (data.keyword_type) {
     _addBadgeRow(panel, 'Type', data.keyword_type);
   }
+  if (data.service_name) {
+    _addBadgeRow(panel, 'Service', data.service_name);
+  }
   // Root cause / wrapper classification badge
   if (data.status === 'FAIL') {
     var kwCls = _classifyFailKeyword(data);
@@ -2165,6 +2168,8 @@ function _createTreeNode(opts) {
     row.classList.add('kw-setup');
   } else if (opts.kwType === 'TEARDOWN') {
     row.classList.add('kw-teardown');
+  } else if (opts.kwType === 'EXTERNAL') {
+    row.classList.add('kw-external');
   }
 
   // Toggle arrow (or spacer)
@@ -2219,6 +2224,15 @@ function _createTreeNode(opts) {
     execBadge.textContent = opts.data.execution_id;
     execBadge.title = 'Execution ID: ' + opts.data.execution_id;
     nameEl.appendChild(execBadge);
+  }
+
+  // Service name badge (for external/cross-service spans)
+  if (opts.data && opts.data.service_name && opts.kwType === 'EXTERNAL') {
+    var svcBadge = document.createElement('span');
+    svcBadge.className = 'svc-name-badge';
+    svcBadge.textContent = opts.data.service_name;
+    svcBadge.title = 'Service: ' + opts.data.service_name;
+    nameEl.appendChild(svcBadge);
   }
   row.appendChild(nameEl);
 

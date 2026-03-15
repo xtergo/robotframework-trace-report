@@ -1501,28 +1501,51 @@
     function buildKeywords(parentId) {
       var kids = childrenOf[parentId] || [];
       var result = [];
+      var primarySvc = window.__RF_SERVICE_NAME__ || '';
       for (var k = 0; k < kids.length; k++) {
         var child = kids[k];
         var ca = child.attributes;
-        // Only include keyword spans (not signals)
-        if (!ca['rf.keyword.name'] && !ca['rf.signal']) continue;
+        // Skip signal spans
         if (ca['rf.signal']) continue;
-        var kw = {
-          name: ca['rf.keyword.name'] || child.name || '',
-          keyword_type: ca['rf.keyword.type'] || 'KEYWORD',
-          args: ca['rf.keyword.args'] || '',
-          status: _mapStatus(child),
-          start_time: child.start_time,
-          end_time: child.end_time,
-          elapsed_time: _elapsedMs(child.start_time, child.end_time),
-          id: child.span_id,
-          lineno: parseInt(ca['rf.keyword.lineno'] || '0', 10),
-          doc: ca['rf.keyword.doc'] || '',
-          status_message: ca['rf.status_message'] || '',
-          events: _mapEvents(child.events),
-          children: buildKeywords(child.span_id)
-        };
-        result.push(kw);
+        // RF keyword spans
+        if (ca['rf.keyword.name']) {
+          var kw = {
+            name: ca['rf.keyword.name'] || child.name || '',
+            keyword_type: ca['rf.keyword.type'] || 'KEYWORD',
+            args: ca['rf.keyword.args'] || '',
+            status: _mapStatus(child),
+            start_time: child.start_time,
+            end_time: child.end_time,
+            elapsed_time: _elapsedMs(child.start_time, child.end_time),
+            id: child.span_id,
+            lineno: parseInt(ca['rf.keyword.lineno'] || '0', 10),
+            doc: ca['rf.keyword.doc'] || '',
+            status_message: ca['rf.status_message'] || '',
+            events: _mapEvents(child.events),
+            children: buildKeywords(child.span_id)
+          };
+          result.push(kw);
+          continue;
+        }
+        // Cross-service spans (no rf.* attributes, from backend services)
+        var svcName = ca['service.name'] || '';
+        if (svcName && svcName !== primarySvc) {
+          result.push({
+            name: child.name || 'unknown',
+            keyword_type: 'EXTERNAL',
+            service_name: svcName,
+            args: '',
+            status: _mapStatus(child),
+            start_time: child.start_time,
+            end_time: child.end_time,
+            elapsed_time: _elapsedMs(child.start_time, child.end_time),
+            id: child.span_id,
+            status_message: ca['rf.status_message'] || '',
+            events: _mapEvents(child.events),
+            attributes: ca,
+            children: buildKeywords(child.span_id)
+          });
+        }
       }
       // Sort by start_time
       result.sort(function (a, b) { return a.start_time - b.start_time; });
@@ -1533,6 +1556,7 @@
     function buildTests(suiteSpanId) {
       var kids = childrenOf[suiteSpanId] || [];
       var tests = [];
+      var primarySvc = window.__RF_SERVICE_NAME__ || '';
       for (var t = 0; t < kids.length; t++) {
         var child = kids[t];
         var ca = child.attributes;
@@ -1542,6 +1566,33 @@
         if (inProgress[child.span_id]) {
           testStatus = 'RUNNING';
         }
+        var kws = buildKeywords(child.span_id);
+        // Also include cross-service spans that are direct children of the test
+        var testKids = childrenOf[child.span_id] || [];
+        for (var ek = 0; ek < testKids.length; ek++) {
+          var extChild = testKids[ek];
+          var eca = extChild.attributes;
+          if (eca['rf.keyword.name'] || eca['rf.test.name'] || eca['rf.suite.name'] || eca['rf.signal']) continue;
+          var extSvc = eca['service.name'] || '';
+          if (extSvc && extSvc !== primarySvc) {
+            kws.push({
+              name: extChild.name || 'unknown',
+              keyword_type: 'EXTERNAL',
+              service_name: extSvc,
+              args: '',
+              status: _mapStatus(extChild),
+              start_time: extChild.start_time,
+              end_time: extChild.end_time,
+              elapsed_time: _elapsedMs(extChild.start_time, extChild.end_time),
+              id: extChild.span_id,
+              status_message: eca['rf.status_message'] || '',
+              events: _mapEvents(extChild.events),
+              attributes: eca,
+              children: buildKeywords(extChild.span_id)
+            });
+          }
+        }
+        kws.sort(function (a, b) { return a.start_time - b.start_time; });
         var test = {
           name: ca['rf.test.name'] || child.name || '',
           id: child.span_id,
@@ -1549,7 +1600,7 @@
           start_time: child.start_time,
           end_time: child.end_time,
           elapsed_time: _elapsedMs(child.start_time, child.end_time),
-          keywords: buildKeywords(child.span_id),
+          keywords: kws,
           tags: _parseTags(ca['rf.test.tags']),
           doc: ca['rf.test.doc'] || '',
           status_message: ca['rf.status_message'] || '',

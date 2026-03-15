@@ -898,6 +898,40 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: #f06292;
 }
 
+/* ── External / Cross-Service Spans ── */
+
+.rf-trace-viewer .tree-row.kw-external {
+  border-left: 3px solid #7b1fa2;
+}
+
+.rf-trace-viewer .tree-row.kw-external .node-type {
+  color: #7b1fa2;
+}
+
+.rf-trace-viewer .svc-name-badge {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  border-radius: 3px;
+  background: #7b1fa2;
+  color: #fff;
+  vertical-align: middle;
+  font-weight: 600;
+}
+
+.rf-trace-viewer.theme-dark .tree-row.kw-external {
+  border-left-color: #ce93d8;
+}
+
+.rf-trace-viewer.theme-dark .tree-row.kw-external .node-type {
+  color: #ce93d8;
+}
+
+.rf-trace-viewer.theme-dark .svc-name-badge {
+  background: #9c27b0;
+}
+
 /* ── Root Cause UX ── */
 
 /* De-emphasize control flow wrapper FAIL keywords */
