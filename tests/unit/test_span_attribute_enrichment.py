@@ -699,3 +699,126 @@ def test_truncation_81_chars():
     result = truncate_context_line(line)
     assert result == "B" * 77 + "..."
     assert len(result) == 80
+
+
+# ============================================================================
+# Property tests
+# ============================================================================
+
+# --- Design Property 1: Attribute extraction correctness ---
+# For any attributes object, extract_span_attributes shall return:
+# - HTTP summary when http.request.method is present
+# - DB summary when db.system is present (and no http.request.method)
+# - None when neither key is present
+# Fields with empty/None/zero values are omitted.
+# Validates: Requirements 1.1, 1.2, 1.3, 1.5
+
+# HTTP field mapping: source attr key → result field name
+_HTTP_FIELD_MAP = {
+    "http.request.method": "method",
+    "http.route": "route",
+    "url.path": "path",
+    "server.address": "server_address",
+    "client.address": "client_address",
+    "url.scheme": "url_scheme",
+    "user_agent.original": "user_agent",
+}
+
+_HTTP_INT_FIELD_MAP = {
+    "http.response.status_code": "status_code",
+    "server.port": "server_port",
+}
+
+# DB field mapping: source attr key → result field name
+_DB_FIELD_MAP = {
+    "db.system": "system",
+    "db.operation": "operation",
+    "db.name": "name",
+    "db.sql.table": "table",
+    "db.statement": "statement",
+    "db.connection_string": "connection_string",
+    "db.user": "user",
+    "server.address": "server_address",
+}
+
+_DB_INT_FIELD_MAP = {
+    "server.port": "server_port",
+}
+
+
+@given(attrs=any_span_attributes_strategy())
+def test_property_extraction_correctness(attrs):
+    """Property 1: Attribute extraction correctness.
+
+    **Validates: Requirements 1.1, 1.2, 1.3, 1.5**
+    """
+    result = extract_span_attributes(attrs)
+
+    has_http = bool(attrs.get("http.request.method"))
+    has_db = bool(attrs.get("db.system"))
+
+    # Requirement 1.3: neither key → None
+    if not has_http and not has_db:
+        assert result is None
+        return
+
+    assert isinstance(result, dict)
+
+    if has_http:
+        # Requirement 1.1: HTTP detection takes priority
+        assert result["type"] == "http"
+
+        # Verify string fields
+        for src_key, result_key in _HTTP_FIELD_MAP.items():
+            src_val = attrs.get(src_key)
+            if src_val:
+                assert result_key in result
+                assert result[result_key] == src_val
+            else:
+                assert result_key not in result
+
+        # Verify integer fields
+        for src_key, result_key in _HTTP_INT_FIELD_MAP.items():
+            raw = attrs.get(src_key, 0) or 0
+            try:
+                parsed = int(raw)
+            except (ValueError, TypeError):
+                parsed = 0
+            if parsed:
+                assert result_key in result
+                assert result[result_key] == parsed
+            else:
+                assert result_key not in result
+
+    else:
+        # Requirement 1.2: DB summary
+        assert result["type"] == "db"
+
+        # Verify string fields
+        for src_key, result_key in _DB_FIELD_MAP.items():
+            src_val = attrs.get(src_key)
+            if src_val:
+                assert result_key in result
+                assert result[result_key] == src_val
+            else:
+                assert result_key not in result
+
+        # Verify integer fields
+        for src_key, result_key in _DB_INT_FIELD_MAP.items():
+            raw = attrs.get(src_key, 0) or 0
+            try:
+                parsed = int(raw)
+            except (ValueError, TypeError):
+                parsed = 0
+            if parsed:
+                assert result_key in result
+                assert result[result_key] == parsed
+            else:
+                assert result_key not in result
+
+    # Requirement 1.5: no extra keys beyond 'type' and mapped fields
+    if result["type"] == "http":
+        allowed = {"type"} | set(_HTTP_FIELD_MAP.values()) | set(_HTTP_INT_FIELD_MAP.values())
+    else:
+        allowed = {"type"} | set(_DB_FIELD_MAP.values()) | set(_DB_INT_FIELD_MAP.values())
+    assert set(result.keys()) <= allowed
