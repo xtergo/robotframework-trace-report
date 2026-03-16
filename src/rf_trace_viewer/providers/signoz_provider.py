@@ -414,7 +414,7 @@ class SigNozProvider(TraceProvider):
                         ],
                         "filters": {"items": [], "op": "AND"},
                         "selectColumns": [],
-                        "orderBy": [{"columnName": "timestamp", "order": "desc"}],
+                        "orderBy": [],
                     }
                 },
                 "panelType": "graph",
