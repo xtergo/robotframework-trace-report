@@ -536,6 +536,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             record_items_returned("/api/v1/services", "query_services", len(services))
             self._send_json_response(200, services, request_id)
         except Exception as exc:
+            logger.error("Services endpoint error: %s", exc, exc_info=True)
             status, body = error_response("INTERNAL_ERROR", str(exc), request_id, status=500)
             self._send_json_response(status, body, request_id)
         finally:
