@@ -502,3 +502,200 @@ def test_truncate_context_line_smoke(line):
     result = truncate_context_line(line)
     assert isinstance(result, str)
     assert len(result) <= 80
+
+
+# ============================================================================
+# Unit tests — specific examples and edge cases
+# Requirements: 1.1, 1.2, 1.3, 1.5, 2.1, 2.2, 2.5, 2.6, 3.4, 5.1, 5.2
+# ============================================================================
+
+
+def test_extract_http_full():
+    """All HTTP fields present — verify complete summary."""
+    attrs = {
+        "http.request.method": "PUT",
+        "http.route": "/v1/runners/{runnerName}/heartbeat",
+        "url.path": "/v1/runners/r1/heartbeat",
+        "http.response.status_code": "204",
+        "server.address": "essvt",
+        "server.port": "8080",
+        "client.address": "10.0.0.1",
+        "url.scheme": "http",
+        "user_agent.original": "python-requests/2.31",
+    }
+    result = extract_span_attributes(attrs)
+    assert result is not None
+    assert result["type"] == "http"
+    assert result["method"] == "PUT"
+    assert result["route"] == "/v1/runners/{runnerName}/heartbeat"
+    assert result["path"] == "/v1/runners/r1/heartbeat"
+    assert result["status_code"] == 204
+    assert result["server_address"] == "essvt"
+    assert result["server_port"] == 8080
+    assert result["client_address"] == "10.0.0.1"
+    assert result["url_scheme"] == "http"
+    assert result["user_agent"] == "python-requests/2.31"
+
+
+def test_extract_db_full():
+    """All DB fields present — verify complete summary."""
+    attrs = {
+        "db.system": "postgresql",
+        "db.operation": "SELECT",
+        "db.name": "testdb",
+        "db.sql.table": "runner_t",
+        "db.statement": "SELECT * FROM runner_t WHERE id = $1",
+        "db.connection_string": "postgresql://localhost:5432/testdb",
+        "db.user": "appuser",
+        "server.address": "postgres",
+        "server.port": "5432",
+    }
+    result = extract_span_attributes(attrs)
+    assert result is not None
+    assert result["type"] == "db"
+    assert result["system"] == "postgresql"
+    assert result["operation"] == "SELECT"
+    assert result["name"] == "testdb"
+    assert result["table"] == "runner_t"
+    assert result["statement"] == "SELECT * FROM runner_t WHERE id = $1"
+    assert result["connection_string"] == "postgresql://localhost:5432/testdb"
+    assert result["user"] == "appuser"
+    assert result["server_address"] == "postgres"
+    assert result["server_port"] == 5432
+
+
+def test_extract_null_attrs():
+    """Null input returns None."""
+    assert extract_span_attributes(None) is None
+
+
+def test_extract_empty_attrs():
+    """Empty dict returns None."""
+    assert extract_span_attributes({}) is None
+
+
+def test_extract_empty_values_omitted():
+    """Keys present with empty string values are omitted from result."""
+    attrs = {
+        "http.request.method": "GET",
+        "http.route": "",
+        "url.path": "",
+        "http.response.status_code": "",
+        "server.address": "",
+        "server.port": "",
+        "client.address": "",
+        "url.scheme": "",
+        "user_agent.original": "",
+    }
+    result = extract_span_attributes(attrs)
+    assert result is not None
+    assert result == {"type": "http", "method": "GET"}
+
+
+def test_extract_http_priority_over_db():
+    """Attrs with both http.request.method and db.system returns HTTP."""
+    attrs = {
+        "http.request.method": "POST",
+        "db.system": "postgresql",
+        "db.operation": "INSERT",
+    }
+    result = extract_span_attributes(attrs)
+    assert result is not None
+    assert result["type"] == "http"
+    assert result["method"] == "POST"
+    assert "system" not in result
+
+
+def test_context_line_http_with_route():
+    """Verify route used over path when both present."""
+    summary = {
+        "type": "http",
+        "method": "PUT",
+        "route": "/v1/runners",
+        "path": "/v1/runners/r1",
+        "status_code": 204,
+        "server_address": "essvt",
+        "server_port": 8080,
+    }
+    result = generate_context_line(summary)
+    assert result == "PUT /v1/runners \u2192 204 @ essvt:8080"
+
+
+def test_context_line_http_with_path_fallback():
+    """Verify path used when no route."""
+    summary = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/health",
+        "status_code": 200,
+    }
+    result = generate_context_line(summary)
+    assert result == "GET /api/health \u2192 200"
+
+
+def test_context_line_http_no_url():
+    """Verify method + status only when no route/path."""
+    summary = {
+        "type": "http",
+        "method": "POST",
+        "status_code": 201,
+    }
+    result = generate_context_line(summary)
+    assert result == "POST \u2192 201"
+
+
+def test_context_line_db_minimal():
+    """System only — minimal DB context line."""
+    summary = {
+        "type": "db",
+        "system": "postgresql",
+    }
+    result = generate_context_line(summary)
+    assert result == "postgresql"
+
+
+def test_context_line_null_returns_empty():
+    """Null summary returns empty string."""
+    assert generate_context_line(None) == ""
+
+
+def test_context_line_server_suffix():
+    """Verify @ server:port appended for DB context line."""
+    summary = {
+        "type": "db",
+        "system": "postgresql",
+        "operation": "SELECT",
+        "table": "runner_t",
+        "server_address": "postgres",
+        "server_port": 5432,
+    }
+    result = generate_context_line(summary)
+    assert result == "postgresql SELECT runner_t @ postgres:5432"
+
+
+def test_status_code_boundary_values():
+    """Boundary values for status code classification."""
+    assert classify_status_code(199) is None
+    assert classify_status_code(200) == "2xx"
+    assert classify_status_code(299) == "2xx"
+    assert classify_status_code(300) == "3xx"
+    assert classify_status_code(399) == "3xx"
+    assert classify_status_code(400) == "4xx"
+    assert classify_status_code(499) == "4xx"
+    assert classify_status_code(500) == "5xx"
+    assert classify_status_code(599) == "5xx"
+
+
+def test_truncation_exactly_80():
+    """80-char string unchanged."""
+    line = "A" * 80
+    assert truncate_context_line(line) == line
+    assert len(truncate_context_line(line)) == 80
+
+
+def test_truncation_81_chars():
+    """81-char string truncated to 77 + '...'."""
+    line = "B" * 81
+    result = truncate_context_line(line)
+    assert result == "B" * 77 + "..."
+    assert len(result) == 80
