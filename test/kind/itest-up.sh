@@ -83,6 +83,30 @@ else
     warn "No signoz/ directory found at ${SIGNOZ_DIR} — skipping SigNoz deploy"
 fi
 
+# ── Seed traces for integration tests ────────────────────────────────
+SEED_SCRIPT="${SCRIPT_DIR}/seed-traces.sh"
+if [ -f "${SEED_SCRIPT}" ]; then
+    info "Seeding test traces into otel-collector..."
+    # Wait for otel-collector to be ready before sending traces
+    OC_ELAPSED=0
+    while [ "$OC_ELAPSED" -lt 60 ]; do
+        OC_READY=$(kubectl get pods --context "kind-${CLUSTER_NAME}" \
+            -l app.kubernetes.io/name=otel-collector \
+            -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+        if [ "$OC_READY" = "True" ]; then
+            break
+        fi
+        sleep 5
+        OC_ELAPSED=$((OC_ELAPSED + 5))
+    done
+    if [ "$OC_READY" = "True" ]; then
+        bash "${SEED_SCRIPT}"
+        ok "Test traces seeded"
+    else
+        warn "OTel collector not ready after 60s — skipping trace seeding"
+    fi
+fi
+
 # ── Deploy trace-report (dev overlay) ────────────────────────────────
 info "Deploying trace-report (dev overlay)..."
 
