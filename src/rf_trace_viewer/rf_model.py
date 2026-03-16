@@ -5,6 +5,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from rf_trace_viewer.parser import RawSpan
 from rf_trace_viewer.tree import SpanNode
@@ -23,6 +24,18 @@ class Status(Enum):
     FAIL = "FAIL"
     SKIP = "SKIP"
     NOT_RUN = "NOT_RUN"
+
+
+@dataclass
+class SourceMetadata:
+    """Optional backend source-location metadata extracted from span attributes."""
+
+    class_name: str = ""
+    method_name: str = ""
+    file_name: str = ""
+    line_number: int = 0
+    display_location: str = ""
+    display_symbol: str = ""
 
 
 @dataclass
@@ -71,6 +84,7 @@ class RFKeyword:
     library: str = ""
     suite_name: str = ""
     suite_source: str = ""
+    source_metadata: SourceMetadata | None = None
 
 
 @dataclass
@@ -152,6 +166,53 @@ def extract_status(span: RawSpan) -> Status:
     return status
 
 
+def extract_source_metadata(attributes: dict[str, Any]) -> SourceMetadata | None:
+    """Extract source-location metadata from span attributes.
+
+    Looks for app.source.class, app.source.method, app.source.file,
+    and app.source.line in the attributes dict. Returns None if none
+    of the four keys are present.
+    """
+    src_class = attributes.get("app.source.class", "")
+    src_method = attributes.get("app.source.method", "")
+    src_file = attributes.get("app.source.file", "")
+    src_line_raw = attributes.get("app.source.line", "")
+
+    # Return None if no app.source.* keys are present
+    if not src_class and not src_method and not src_file and not src_line_raw:
+        return None
+
+    # Coerce to strings for class/method/file
+    class_name = str(src_class) if src_class else ""
+    method_name = str(src_method) if src_method else ""
+    file_name = str(src_file) if src_file else ""
+
+    # Convert line to int safely
+    try:
+        line_number = int(src_line_raw) if src_line_raw else 0
+    except (ValueError, TypeError):
+        line_number = 0
+
+    # Compute derived display fields
+    display_location = ""
+    if file_name and line_number > 0:
+        display_location = f"{file_name}:{line_number}"
+
+    display_symbol = ""
+    if class_name and method_name:
+        short_class = class_name.rsplit(".", 1)[-1]
+        display_symbol = f"{short_class}.{method_name}"
+
+    return SourceMetadata(
+        class_name=class_name,
+        method_name=method_name,
+        file_name=file_name,
+        line_number=line_number,
+        display_location=display_location,
+        display_symbol=display_symbol,
+    )
+
+
 def _elapsed_ms(span: RawSpan) -> float:
     """Compute elapsed time in milliseconds from span timestamps."""
     return (span.end_time_unix_nano - span.start_time_unix_nano) / 1_000_000
@@ -178,6 +239,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         events=node.span.events,
         children=children,
         library=str(attrs.get("rf.keyword.library", "")),
+        source_metadata=extract_source_metadata(attrs),
     )
 
 
