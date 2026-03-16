@@ -516,6 +516,36 @@
     return null;
   }
 
+  function generateContextLine(summary) {
+    if (!summary) return '';
+    if (summary.type === 'http') {
+      var parts = [];
+      if (summary.method) parts.push(summary.method);
+      var url = summary.route || summary.path || '';
+      if (url) parts.push(url);
+      if (summary.status_code) parts.push('→ ' + summary.status_code);
+      var line = parts.join(' ');
+      if (summary.server_address) {
+        line += ' @ ' + summary.server_address;
+        if (summary.server_port) line += ':' + summary.server_port;
+      }
+      return line;
+    }
+    if (summary.type === 'db') {
+      var parts = [];
+      if (summary.system) parts.push(summary.system);
+      if (summary.operation) parts.push(summary.operation);
+      if (summary.table) parts.push(summary.table);
+      var line = parts.join(' ');
+      if (summary.server_address) {
+        line += ' @ ' + summary.server_address;
+        if (summary.server_port) line += ':' + summary.server_port;
+      }
+      return line;
+    }
+    return '';
+  }
+
   function _createRow(row, hlId, state) {
     var tr = document.createElement('tr');
     tr.className = 'flow-table-row';
@@ -742,4 +772,5 @@
   }
   // Expose extractSpanAttributes on window for cross-file access from tree.js
   window.extractSpanAttributes = extractSpanAttributes;
+  window.generateContextLine = generateContextLine;
 })();
