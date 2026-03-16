@@ -579,7 +579,11 @@
     // Line column
     var tdL = document.createElement('td');
     tdL.className = 'flow-col-line';
-    tdL.textContent = row.lineno > 0 ? row.lineno : '';
+    if (row.source_metadata && row.source_metadata.line_number > 0) {
+      tdL.textContent = row.source_metadata.line_number;
+    } else {
+      tdL.textContent = row.lineno > 0 ? row.lineno : '';
+    }
     tr.appendChild(tdL);
 
     // Status column
