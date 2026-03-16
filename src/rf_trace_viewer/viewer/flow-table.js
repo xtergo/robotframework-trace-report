@@ -551,6 +551,20 @@
     nameSpan.textContent = row.name;
     tdKw.appendChild(nameSpan);
 
+    // Inline source info for SUT spans
+    if (row.source_metadata) {
+      var srcText = row.source_metadata.display_location
+        || row.source_metadata.display_symbol
+        || '';
+      if (srcText) {
+        var srcInline = document.createElement('span');
+        srcInline.className = 'flow-source-inline';
+        srcInline.textContent = srcText;
+        srcInline.title = srcText;
+        tdKw.appendChild(srcInline);
+      }
+    }
+
     // Args (inline, truncated at 60 chars)
     if (row.args) {
       var argsSpan = document.createElement('span');
