@@ -1207,13 +1207,21 @@
             var aws = _loadWindowState.activeWindowStart;
             if (earliestSec < aws) {
               _autoExtendDone = true;
-              // Pad 60s before earliest span so the timeline has breathing room
-              var newStart = earliestSec - 60;
+              // Cap auto-extend to 1 hour max. If the earliest DB span is
+              // further back, the user can click a larger preset manually.
+              // This prevents a multi-day fetch on startup when old data
+              // exists but nothing is recent.
+              var MAX_AUTO_EXTEND_SEC = 3600; // 1 hour
+              var gap = aws - earliestSec;
+              var newStart = (gap > MAX_AUTO_EXTEND_SEC)
+                ? aws - MAX_AUTO_EXTEND_SEC
+                : earliestSec - 60;
               console.log('[live] Auto-extend: earliest DB span at ' +
                 new Date(earliestSec * 1000).toISOString().substr(11, 8) +
                 ' is before activeWindowStart ' +
                 new Date(aws * 1000).toISOString().substr(11, 8) +
-                ' — extending window');
+                ' — extending window' +
+                (gap > MAX_AUTO_EXTEND_SEC ? ' (capped to 1h)' : ''));
               _loadWindowState.activeWindowStart = newStart;
               if (window.RFTraceViewer && window.RFTraceViewer.emit) {
                 window.RFTraceViewer.emit('active-window-start', {

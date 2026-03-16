@@ -327,6 +327,14 @@ function _mergeGroup(group) {
   merged.doc = first.doc || '';
   merged.metadata = {};
 
+  // Track all original suite IDs so Gantt click on any worker's suite
+  // can resolve to this merged node.
+  var allIds = [];
+  for (var ai = 0; ai < group.length; ai++) {
+    if (group[ai].id) allIds.push(group[ai].id);
+  }
+  merged._all_ids = allIds;
+
   // Aggregate: earliest start, latest end, sum elapsed
   var minStart = first.start_time;
   var maxEnd = first.end_time;
@@ -2672,6 +2680,12 @@ function highlightNodeInTree(spanId) {
     return;
   }
 
+  // Resolve merged suite alias (pabot workers) for DOM mode
+  if (_originalModel && _originalModel.suites) {
+    var resolved = _resolveMergedSuiteId(_originalModel.suites, spanId);
+    if (resolved) spanId = resolved;
+  }
+
   // Original mode — DOM-based highlighting
   // Clear previous highlights
   var previousHighlights = document.querySelectorAll('.tree-node.highlighted');
@@ -2858,6 +2872,40 @@ function _findNearestTreeAncestor(spanId) {
 }
 
 /**
+ * Walk merged suites recursively and check each suite's _all_ids array.
+ * If spanId is found in a suite's _all_ids, return that suite's canonical id.
+ * @param {Array} suites - Array of (possibly merged) suite objects
+ * @param {string} spanId - The span ID to resolve
+ * @returns {string|null} The canonical merged suite ID, or null if not found
+ */
+function _resolveMergedSuiteId(suites, spanId) {
+  if (!suites) return null;
+  for (var i = 0; i < suites.length; i++) {
+    var suite = suites[i];
+    if (suite._all_ids) {
+      for (var j = 0; j < suite._all_ids.length; j++) {
+        if (suite._all_ids[j] === spanId) return suite.id;
+      }
+    }
+    // Recurse into children that are suites (have children array but no keyword_type)
+    if (suite.children) {
+      var childSuites = [];
+      for (var c = 0; c < suite.children.length; c++) {
+        var ch = suite.children[c];
+        if (ch.children !== undefined && ch.keyword_type === undefined) {
+          childSuites.push(ch);
+        }
+      }
+      if (childSuites.length > 0) {
+        var found = _resolveMergedSuiteId(childSuites, spanId);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Highlight a span in virtual mode by expanding ancestors and scrolling to it.
  * @param {string} spanId
  */
@@ -2867,6 +2915,14 @@ function _virtualHighlight(spanId) {
 
   // Clear previous highlight
   vs.highlightedSpanId = spanId;
+
+  // Resolve merged suite alias: if spanId belongs to a merged suite
+  // (pabot worker), map it to the merged suite's canonical ID.
+  var resolvedId = _resolveMergedSuiteId(vs.mergedSuites, spanId);
+  if (resolvedId && resolvedId !== spanId) {
+    vs.highlightedSpanId = resolvedId;
+    spanId = resolvedId;
+  }
 
   // Failure-focused expand: if the target span belongs to a FAIL test,
   // apply failure-focused collapse to the test's subtree before expanding

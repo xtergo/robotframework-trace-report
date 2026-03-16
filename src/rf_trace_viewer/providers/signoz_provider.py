@@ -223,6 +223,50 @@ class SigNozProvider(TraceProvider):
             pass
         return 0
 
+    def get_db_span_count(self) -> int:
+        """Return the total number of spans in the DB.
+
+        Uses a COUNT aggregation query.  Result is cached for 5 minutes.
+        """
+        now = time.monotonic()
+        if hasattr(self, "_db_span_count_cache") and self._db_span_count_cache[1] > now:
+            return self._db_span_count_cache[0]
+
+        now_s = int(time.time())
+        query = {
+            "compositeQuery": {
+                "builderQueries": {
+                    "A": {
+                        "queryName": "A",
+                        "expression": "A",
+                        "dataSource": "traces",
+                        "aggregateOperator": "count",
+                        "filters": {"items": [], "op": "AND"},
+                    }
+                },
+                "panelType": "graph",
+                "queryType": "builder",
+            },
+            "start": 1_000_000_000,
+            "end": now_s,
+            "step": now_s - 1_000_000_000,  # single bucket
+        }
+        try:
+            response = self._api_request("/api/v3/query_range", query)
+            result_container = response.get("data") or response
+            result = result_container.get("result") or []
+            for series in result:
+                for point in series.get("series") or []:
+                    values = point.get("values") or []
+                    if values:
+                        # Take the last value — it's the count
+                        count = int(float(values[-1].get("value", 0)))
+                        self._db_span_count_cache = (count, now + 300)
+                        return count
+        except Exception:
+            pass
+        return 0
+
     def poll_new_spans(
         self,
         since_ns: int,

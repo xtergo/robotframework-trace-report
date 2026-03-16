@@ -1172,7 +1172,8 @@
         { key: 'rss_mb', label: 'Memory RSS', unit: 'MB', refLines: ['mem_request_mb', 'rss_limit_mb'] },
         { key: 'cpu_pct', label: 'CPU Usage', unit: '%', refLines: ['cpu_limit_pct'] },
         { key: 'spansPerSec', label: 'Spans / sec', unit: '', refLines: [] },
-        { key: 'total_spans', label: 'Total Spans', unit: '', refLines: [] },
+        { key: 'db_spans', label: 'DB Spans', unit: '', refLines: [] },
+        { key: 'cached_spans', label: 'Cached Spans', unit: '', refLines: [] },
         { key: 'active_users', label: 'Active Users', unit: '', refLines: [] }
       ];
 
@@ -1341,22 +1342,20 @@
               var series = [];
               var durationSec = 0;
 
-              if (key === 'spansPerSec') {
-                // spansPerSec comes from live connection state (client-side
-                // ingestion rate), not from server snapshots.
+              if (key === 'spansPerSec' || key === 'cached_spans') {
+                // Client-side metrics from live connection state
                 var connState = window.RFTraceViewer && window.RFTraceViewer.getConnectionState
                   ? window.RFTraceViewer.getConnectionState() : null;
-                var val = connState ? connState[key] : null;
+                var val = connState
+                  ? (key === 'cached_spans' ? connState.totalSpans : connState[key])
+                  : null;
                 chart.data.push(val != null ? val : 0);
                 if (chart.data.length > 360) chart.data.shift();
                 series = chart.data;
                 durationSec = (series.length - 1) * 10;
               } else {
-                // All other metrics (rss_mb, cpu_pct, active_users,
-                // total_spans) come from server resource snapshots.
-                // This keeps them independent of timeline time-range
-                // navigation — pressing 7d or any preset has zero
-                // effect on these charts.
+                // Server resource snapshots (rss_mb, cpu_pct, active_users,
+                // db_spans). Independent of timeline time-range navigation.
                 series = [];
                 for (var si = 0; si < snaps.length; si++) {
                   var v = snaps[si][key];
@@ -1371,7 +1370,7 @@
               if (latest != null) {
                 var formatted = chart.def.unit
                   ? (Math.round(latest * 10) / 10) + ' ' + chart.def.unit
-                  : (key === 'total_spans' ? Math.round(latest).toLocaleString()
+                  : (key === 'db_spans' || key === 'cached_spans' ? Math.round(latest).toLocaleString()
                     : key === 'active_users' ? Math.round(latest).toString()
                     : (Math.round(latest * 10) / 10).toString());
                 chart.valueEl.textContent = formatted;
