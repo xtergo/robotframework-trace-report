@@ -476,6 +476,16 @@
       tr.addEventListener('click', function (e) {
         // Don't navigate if clicking the toggle arrow
         if (e.target.classList.contains('flow-toggle')) return;
+        // For rows with children, toggle expand/collapse on row click
+        if (row.hasChildren) {
+          if (state.expandedIds[row.id]) {
+            delete state.expandedIds[row.id];
+          } else {
+            state.expandedIds[row.id] = true;
+          }
+          _renderTable(state);
+          return;
+        }
         if (window.RFTraceViewer && window.RFTraceViewer.emit) {
           window.RFTraceViewer.emit('navigate-to-span', { spanId: row.id, source: 'flow-table' });
         }
@@ -507,7 +517,8 @@
       toggle.textContent = isExpanded ? '\u25bc' : '\u25b6'; // ▼ or ▶
       toggle.style.cursor = 'pointer';
       toggle.style.marginRight = '4px';
-      toggle.style.fontSize = '10px';
+      toggle.style.fontSize = '12px';
+      toggle.style.padding = '2px 4px';
       toggle.style.color = row.status === 'FAIL' ? 'var(--status-fail)' : 'var(--text-muted)';
       toggle.addEventListener('click', (function (rowId) {
         return function (e) {
@@ -531,7 +542,6 @@
     }
 
     // Type badge or service badge
-    var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
     if (kwTypeUpper === 'EXTERNAL' && row.service_name) {
       var svcBadge = document.createElement('span');
       svcBadge.className = 'flow-svc-badge';
@@ -540,8 +550,8 @@
       tdKw.appendChild(svcBadge);
     } else {
       var badge = document.createElement('span');
-      badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
-      badge.textContent = BADGE_LABELS[kwType] || kwType;
+      badge.className = 'flow-type-badge flow-type-' + kwTypeUpper.toLowerCase();
+      badge.textContent = BADGE_LABELS[kwTypeUpper] || kwTypeUpper;
       tdKw.appendChild(badge);
     }
 

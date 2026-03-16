@@ -1601,49 +1601,6 @@
           testStatus = 'RUNNING';
         }
         var kws = buildKeywords(child.span_id);
-        // Also include cross-service spans that are direct children of the test
-        var testKids = childrenOf[child.span_id] || [];
-        for (var ek = 0; ek < testKids.length; ek++) {
-          var extChild = testKids[ek];
-          var eca = extChild.attributes;
-          if (eca['rf.keyword.name'] || eca['rf.test.name'] || eca['rf.suite.name'] || eca['rf.signal']) continue;
-          var extSvc = eca['service.name'] || '';
-          if (extSvc && extSvc !== primarySvc) {
-            kws.push({
-              name: extChild.name || 'unknown',
-              keyword_type: 'EXTERNAL',
-              service_name: extSvc,
-              args: '',
-              status: _mapStatus(extChild),
-              start_time: extChild.start_time,
-              end_time: extChild.end_time,
-              elapsed_time: _elapsedMs(extChild.start_time, extChild.end_time),
-              id: extChild.span_id,
-              status_message: eca['rf.status_message'] || '',
-              events: _mapEvents(extChild.events),
-              attributes: eca,
-              children: buildKeywords(extChild.span_id)
-            });
-            // Extract source metadata for EXTERNAL spans
-            var extSrcClass = eca['app.source.class'] || '';
-            var extSrcMethod = eca['app.source.method'] || '';
-            var extSrcFile = eca['app.source.file'] || '';
-            var extSrcLine = parseInt(eca['app.source.line'] || '0', 10) || 0;
-            if (extSrcClass || extSrcMethod || extSrcFile || extSrcLine > 0) {
-              var extShortClass = extSrcClass.indexOf('.') >= 0
-                ? extSrcClass.substring(extSrcClass.lastIndexOf('.') + 1) : extSrcClass;
-              kws[kws.length - 1].source_metadata = {
-                class_name: extSrcClass,
-                method_name: extSrcMethod,
-                file_name: extSrcFile,
-                line_number: extSrcLine,
-                display_location: (extSrcFile && extSrcLine > 0) ? extSrcFile + ':' + extSrcLine : '',
-                display_symbol: (extSrcClass && extSrcMethod) ? extShortClass + '.' + extSrcMethod : ''
-              };
-            }
-          }
-        }
-        kws.sort(function (a, b) { return a.start_time - b.start_time; });
         var test = {
           name: ca['rf.test.name'] || child.name || '',
           id: child.span_id,
