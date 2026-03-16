@@ -461,6 +461,61 @@
     }
   }
 
+  /**
+   * Extract structured HTTP or DB attribute summary from a span's attributes object.
+   * Returns { type: 'http', ... }, { type: 'db', ... }, or null.
+   * HTTP detection takes priority over DB when both keys are present.
+   * Fields with empty/null/undefined values are omitted; integer fields use parseInt and are omitted when 0.
+   */
+  function extractSpanAttributes(attrs) {
+    if (!attrs) return null;
+    if (attrs['http.request.method']) {
+      var result = { type: 'http' };
+      var method = attrs['http.request.method'];
+      if (method) result.method = method;
+      var route = attrs['http.route'];
+      if (route) result.route = route;
+      var path = attrs['url.path'];
+      if (path) result.path = path;
+      var sc = parseInt(attrs['http.response.status_code'], 10) || 0;
+      if (sc) result.status_code = sc;
+      var sa = attrs['server.address'];
+      if (sa) result.server_address = sa;
+      var sp = parseInt(attrs['server.port'], 10) || 0;
+      if (sp) result.server_port = sp;
+      var ca = attrs['client.address'];
+      if (ca) result.client_address = ca;
+      var scheme = attrs['url.scheme'];
+      if (scheme) result.url_scheme = scheme;
+      var ua = attrs['user_agent.original'];
+      if (ua) result.user_agent = ua;
+      return result;
+    }
+    if (attrs['db.system']) {
+      var result = { type: 'db' };
+      var sys = attrs['db.system'];
+      if (sys) result.system = sys;
+      var op = attrs['db.operation'];
+      if (op) result.operation = op;
+      var name = attrs['db.name'];
+      if (name) result.name = name;
+      var tbl = attrs['db.sql.table'];
+      if (tbl) result.table = tbl;
+      var stmt = attrs['db.statement'];
+      if (stmt) result.statement = stmt;
+      var cs = attrs['db.connection_string'];
+      if (cs) result.connection_string = cs;
+      var usr = attrs['db.user'];
+      if (usr) result.user = usr;
+      var sa = attrs['server.address'];
+      if (sa) result.server_address = sa;
+      var sp = parseInt(attrs['server.port'], 10) || 0;
+      if (sp) result.server_port = sp;
+      return result;
+    }
+    return null;
+  }
+
   function _createRow(row, hlId, state) {
     var tr = document.createElement('tr');
     tr.className = 'flow-table-row';
@@ -685,4 +740,6 @@
     var s = ((ms % 60000) / 1000).toFixed(1);
     return m + 'm ' + s + 's';
   }
+  // Expose extractSpanAttributes on window for cross-file access from tree.js
+  window.extractSpanAttributes = extractSpanAttributes;
 })();
