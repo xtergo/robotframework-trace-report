@@ -75,9 +75,9 @@ _KEEP_FIELDS = {"children", "keywords", "tags", "suites", "events"}
 def _serialize_compact(obj: Any) -> Any:
     """Recursively serialize like _serialize but omit dataclass fields at default empty values.
 
-    Fields are omitted when their serialized value is ``""``, ``[]``, ``{}``, or ``0`` (int).
-    ``0.0`` (float), ``False``, and ``None`` are NOT omitted — timestamps and durations use floats.
-    Only dataclass fields are subject to omission; plain dict keys are always kept.
+    Fields are omitted when their serialized value is ``None``, ``""``, ``[]``, ``{}``, or
+    ``0`` (int).  ``0.0`` (float) and ``False`` are NOT omitted — timestamps and durations
+    use floats.  Only dataclass fields are subject to omission; plain dict keys are always kept.
     """
     if isinstance(obj, Enum):
         return obj.value
@@ -88,7 +88,7 @@ def _serialize_compact(obj: Any) -> Any:
             # Skip fields whose serialized value is one of the default empties.
             # Use explicit type checks so 0.0 and False are not skipped.
             if k not in _KEEP_FIELDS and (
-                v == "" or v == [] or v == {} or (v == 0 and type(v) is int)
+                v is None or v == "" or v == [] or v == {} or (v == 0 and type(v) is int)
             ):
                 continue
             result[k] = v

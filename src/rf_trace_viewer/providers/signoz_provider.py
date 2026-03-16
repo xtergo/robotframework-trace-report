@@ -354,7 +354,16 @@ class SigNozProvider(TraceProvider):
                 ) from e
             if e.code == 429:
                 raise RateLimitError(f"SigNoz rate limit hit (429) at {url}.") from e
-            raise ProviderError(f"SigNoz API error ({e.code}) at {url}: {e.reason}") from e
+            # Read response body for better diagnostics
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")[:500]
+            except Exception:
+                pass
+            raise ProviderError(
+                f"SigNoz API error ({e.code}) at {url}: {e.reason}"
+                + (f" — {err_body}" if err_body else "")
+            ) from e
         except URLError as e:
             record_dep_timeout("signoz", operation)
             raise ProviderError(f"Cannot reach SigNoz at {url}: {e.reason}") from e
