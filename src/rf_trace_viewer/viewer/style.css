@@ -5373,3 +5373,69 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .report-status-dot {
   width: auto;
 }
+
+/* ── Source Metadata Section (detail panel) ── */
+.rf-trace-viewer .source-metadata-section {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+  opacity: 0.85;
+}
+
+.rf-trace-viewer .source-section-header {
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #666);
+  margin-bottom: 4px;
+}
+
+/* ── EXTERNAL / SUT span row styling ── */
+.rf-trace-viewer .flow-row-external {
+  border-left: 3px solid #7b1fa2;
+}
+
+.rf-trace-viewer.theme-dark .flow-row-external {
+  border-left-color: #ce93d8;
+}
+
+/* Service name badge in flow table (matches tree view svc-name-badge) */
+.rf-trace-viewer .flow-svc-badge {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #7b1fa2;
+  color: #fff;
+  font-weight: 600;
+  vertical-align: middle;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rf-trace-viewer.theme-dark .flow-svc-badge {
+  background: #9c27b0;
+}
+
+/* EXTERNAL type badge fallback (when no service_name) */
+.rf-trace-viewer .flow-type-external {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.rf-trace-viewer.theme-dark .flow-type-external {
+  background: #2a1530;
+  color: #ce93d8;
+}
+
+/* Inline source metadata (file:line or class.method) */
+.rf-trace-viewer .flow-source-inline {
+  color: var(--text-muted);
+  font-size: 0.8em;
+  margin-left: 6px;
+  font-style: italic;
+  opacity: 0.8;
+}
