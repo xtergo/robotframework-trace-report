@@ -918,3 +918,31 @@ def test_property_db_context_line_format(summary):
     if summary.get("server_address") and summary.get("server_port"):
         expected_server = "@ " + summary["server_address"] + ":" + str(summary["server_port"])
         assert expected_server in result
+
+
+# --- Design Property 6: Status code CSS class classification ---
+# For any integer HTTP status code, the CSS class shall be:
+# 2xx for codes 200-299, 3xx for codes 300-399, 4xx for codes 400-499,
+# and 5xx for codes 500-599. Codes 100-199 have no classification (None).
+# Validates: Requirements 4.5, 6.1, 6.2, 6.3, 6.4
+
+
+@given(code=st.integers(min_value=100, max_value=599))
+def test_property_status_code_classification(code):
+    """Property 6: Status code CSS class classification.
+
+    **Validates: Requirements 4.5, 6.1, 6.2, 6.3, 6.4**
+    """
+    result = classify_status_code(code)
+
+    if 200 <= code <= 299:
+        assert result == "2xx"
+    elif 300 <= code <= 399:
+        assert result == "3xx"
+    elif 400 <= code <= 499:
+        assert result == "4xx"
+    elif 500 <= code <= 599:
+        assert result == "5xx"
+    else:
+        # 100-199: no classification
+        assert result is None
