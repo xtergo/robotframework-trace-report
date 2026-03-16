@@ -468,6 +468,7 @@
     var kwTypeUpper = (row.keyword_type || '').toUpperCase();
     if (kwTypeUpper === 'SETUP') tr.classList.add('flow-row-setup');
     if (kwTypeUpper === 'TEARDOWN') tr.classList.add('flow-row-teardown');
+    if (kwTypeUpper === 'EXTERNAL') tr.classList.add('flow-row-external');
     if (hlId && row.id === hlId) tr.classList.add('flow-row-highlight');
     if (row.id) {
       tr.setAttribute('data-span-id', row.id);
