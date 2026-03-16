@@ -509,7 +509,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 "serviceName", start_ns, now_ns, attr_type="", is_column=True
             )
             response = provider._api_request("/api/v3/query_range", query)
-            logger.info("Services raw response keys: %s", json.dumps(response, default=str)[:500])
+            logger.error("Services raw response: %s", json.dumps(response, default=str)[:500])
 
             services = []
             for data in SigNozProvider._parse_aggregate_rows(response):
