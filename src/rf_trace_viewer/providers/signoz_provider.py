@@ -539,6 +539,104 @@ class SigNozProvider(TraceProvider):
                 "type": "tag",
                 "isColumn": False,
             },
+            # HTTP semantic convention attributes (OTel)
+            {
+                "key": "http.request.method",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "http.route",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "url.path",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "http.response.status_code",
+                "dataType": "float64",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "server.address",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "server.port",
+                "dataType": "float64",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "client.address",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "url.scheme",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "user_agent.original",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            # Database semantic convention attributes (OTel)
+            {
+                "key": "db.system",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "db.operation",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "db.name",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "db.sql.table",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "db.statement",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "db.connection_string",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "db.user",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
         ]
         # Execution attribute is a resource attribute set via
         # OTEL_RESOURCE_ATTRIBUTES — request it as type "resource"
