@@ -28,7 +28,8 @@
     CONTINUE: 'CNT',
     BREAK: 'BRK',
     GROUP: 'GRP',
-    ERROR: 'ERR'
+    ERROR: 'ERR',
+    EXTERNAL: 'EXT'
   };
 
   window.initFlowTable = function (container, data) {
