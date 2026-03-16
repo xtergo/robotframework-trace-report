@@ -869,3 +869,52 @@ def test_property_http_context_line_format(summary):
     if summary.get("server_address") and summary.get("server_port"):
         expected_server = "@ " + summary["server_address"] + ":" + str(summary["server_port"])
         assert expected_server in result
+
+
+# --- Design Property 3: DB context line format ---
+# For any DB attribute summary, generateContextLine shall produce a string
+# containing the present components (system, operation, table) in order
+# separated by spaces, with @ {server_address} appended if server_address
+# is present (port included only when non-zero). Components that are absent
+# shall not appear in the output.
+# Validates: Requirements 2.2, 5.2
+
+
+@given(summary=db_summary_strategy())
+def test_property_db_context_line_format(summary):
+    """Property 3: DB context line format.
+
+    **Validates: Requirements 2.2, 5.2**
+    """
+    result = generate_context_line(summary)
+
+    # 1. The result is a string
+    assert isinstance(result, str)
+
+    # 2. If system is present, it appears in the line
+    if summary.get("system"):
+        assert summary["system"] in result
+
+    # 3. If operation is present, it appears in the line
+    if summary.get("operation"):
+        assert summary["operation"] in result
+
+    # 4. If table is present, it appears in the line
+    if summary.get("table"):
+        assert summary["table"] in result
+
+    # 5. Components appear in order: system before operation, operation before table
+    if summary.get("system") and summary.get("operation"):
+        assert result.index(summary["system"]) < result.index(summary["operation"])
+    if summary.get("operation") and summary.get("table"):
+        assert result.index(summary["operation"]) < result.index(summary["table"])
+
+    # 6. If server_address is present, @ {server_address} appears in the line
+    if summary.get("server_address"):
+        assert "@ " + summary["server_address"] in result
+
+    # 7. If server_address and server_port are both present,
+    #    @ {server_address}:{server_port} appears
+    if summary.get("server_address") and summary.get("server_port"):
+        expected_server = "@ " + summary["server_address"] + ":" + str(summary["server_port"])
+        assert expected_server in result
