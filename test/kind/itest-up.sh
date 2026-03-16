@@ -65,6 +65,20 @@ if [ -d "${SIGNOZ_DIR}" ]; then
     info "Deploying SigNoz/ClickHouse into kind cluster..."
     kubectl apply -k "${SIGNOZ_DIR}" --context "kind-${CLUSTER_NAME}"
     ok "SigNoz/ClickHouse manifests applied"
+
+    # Wait for schema migrator Job to complete — tables must exist before
+    # SigNoz and otel-collector can serve queries.
+    info "Waiting for schema-migrator-sync Job to complete (timeout: ${READINESS_TIMEOUT}s)..."
+    if kubectl wait --for=condition=complete job/schema-migrator-sync \
+        --context "kind-${CLUSTER_NAME}" \
+        --timeout="${READINESS_TIMEOUT}s" 2>/dev/null; then
+        ok "Schema migrator completed successfully"
+    else
+        warn "Schema migrator did not complete — dumping logs..."
+        kubectl logs --context "kind-${CLUSTER_NAME}" \
+            -l app.kubernetes.io/name=schema-migrator --tail=50 2>/dev/null || true
+        die "Schema migrator failed — ClickHouse tables may be missing"
+    fi
 else
     warn "No signoz/ directory found at ${SIGNOZ_DIR} — skipping SigNoz deploy"
 fi

@@ -45,7 +45,21 @@ spec:
       containers:
         - name: otel-collector
           image: signoz/signoz-otel-collector:v0.144.1
-          args: ["--config=/otel/config.yaml"]
+          env:
+            - name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN
+              value: tcp://clickhouse:9000
+            - name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_CLUSTER
+              value: cluster
+            - name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_REPLICATION
+              value: "true"
+            - name: SIGNOZ_OTEL_COLLECTOR_TIMEOUT
+              value: "10m"
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              /signoz-otel-collector migrate sync check &&
+              /signoz-otel-collector --config=/otel/config.yaml
           ports:
             - containerPort: 4317
               name: otlp-grpc
