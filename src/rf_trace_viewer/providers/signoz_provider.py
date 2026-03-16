@@ -539,6 +539,65 @@ class SigNozProvider(TraceProvider):
                 "type": "tag",
                 "isColumn": False,
             },
+            # rf.type for fast span classification (tracer >= 0.5.15)
+            {
+                "key": "rf.type",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            # rf.message on keyword spans
+            {
+                "key": "rf.message",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            # Line numbers for suites and tests
+            {
+                "key": "rf.suite.lineno",
+                "dataType": "float64",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "rf.test.lineno",
+                "dataType": "float64",
+                "type": "tag",
+                "isColumn": False,
+            },
+            # Test source file path
+            {
+                "key": "rf.test.source",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            # Setup/teardown flags
+            {
+                "key": "rf.suite.has_setup",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "rf.suite.has_teardown",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "rf.test.has_setup",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
+            {
+                "key": "rf.test.has_teardown",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": False,
+            },
             # HTTP semantic convention attributes (OTel)
             {
                 "key": "http.request.method",

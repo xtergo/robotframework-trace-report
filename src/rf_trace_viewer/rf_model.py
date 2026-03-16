@@ -48,6 +48,9 @@ class RFSuite:
     end_time: int
     elapsed_time: float
     doc: str = ""
+    lineno: int = 0
+    has_setup: bool = False
+    has_teardown: bool = False
     metadata: dict[str, str] = field(default_factory=dict)
     children: list[RFSuite | RFTest | RFKeyword] = field(default_factory=list)
 
@@ -63,6 +66,10 @@ class RFTest:
     keywords: list[RFKeyword] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     doc: str = ""
+    lineno: int = 0
+    source: str = ""
+    has_setup: bool = False
+    has_teardown: bool = False
     status_message: str = ""
 
 
@@ -79,6 +86,7 @@ class RFKeyword:
     lineno: int = 0
     doc: str = ""
     status_message: str = ""
+    message: str = ""
     events: list[dict] = field(default_factory=list)
     children: list[RFKeyword] = field(default_factory=list)
     library: str = ""
@@ -135,9 +143,23 @@ _STATUS_MAP = {
 def classify_span(span: RawSpan) -> SpanType:
     """Classify a span based on rf.* attributes.
 
+    Uses rf.type for fast classification when available (tracer >= 0.5.15),
+    falls back to checking rf.suite.name / rf.test.name / rf.keyword.name.
     Priority: SUITE > TEST > KEYWORD > SIGNAL > GENERIC.
     """
     attrs = span.attributes
+    rf_type = attrs.get("rf.type", "")
+    if rf_type:
+        _type_map = {
+            "suite": SpanType.SUITE,
+            "test": SpanType.TEST,
+            "keyword": SpanType.KEYWORD,
+            "signal": SpanType.SIGNAL,
+        }
+        mapped = _type_map.get(rf_type.lower())
+        if mapped is not None:
+            return mapped
+    # Fallback: attribute-based classification
     if "rf.suite.name" in attrs:
         return SpanType.SUITE
     if "rf.test.name" in attrs:
@@ -236,6 +258,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         lineno=int(attrs.get("rf.keyword.lineno", 0)),
         doc=str(attrs.get("rf.keyword.doc", "")),
         status_message=node.span.status.get("message", ""),
+        message=str(attrs.get("rf.message", "")),
         events=node.span.events,
         children=children,
         library=str(attrs.get("rf.keyword.library", "")),
@@ -261,6 +284,10 @@ def _build_test(node: SpanNode) -> RFTest:
         keywords=keywords,
         tags=tags,
         doc=str(attrs.get("rf.test.doc", "")),
+        lineno=int(attrs.get("rf.test.lineno", 0)),
+        source=str(attrs.get("rf.test.source", "")),
+        has_setup=str(attrs.get("rf.test.has_setup", "")).lower() == "true",
+        has_teardown=str(attrs.get("rf.test.has_teardown", "")).lower() == "true",
         status_message=node.span.status.get("message", ""),
     )
 
@@ -300,6 +327,9 @@ def _build_suite(node: SpanNode) -> RFSuite:
         end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
         doc=str(attrs.get("rf.suite.doc", "")),
+        lineno=int(attrs.get("rf.suite.lineno", 0)),
+        has_setup=str(attrs.get("rf.suite.has_setup", "")).lower() == "true",
+        has_teardown=str(attrs.get("rf.suite.has_teardown", "")).lower() == "true",
         metadata=metadata,
         children=children,
     )
