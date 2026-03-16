@@ -384,18 +384,43 @@ class SigNozProvider(TraceProvider):
         attr_type: str = "tag",
         is_column: bool = False,
     ) -> dict:
-        """Build query_range payload for listing executions.
+        """Build query_range payload for listing distinct attribute values.
 
-        Args:
-            attribute: The attribute key to group by.
-            start_ns: Start time in nanoseconds.
-            end_ns: End time in nanoseconds.
-            attr_type: SigNoz attribute type (``"tag"`` for span attributes,
-                ``""`` for top-level columns like ``serviceName``).
-            is_column: Whether the attribute is a top-level column in SigNoz.
+        Uses a raw ClickHouse SQL query against
+        ``distributed_top_level_operations`` for ``serviceName`` (fast,
+        avoids the builder's attribute-key validation which fails when
+        ``distributed_span_attributes_keys`` is missing).  Falls back to
+        the builder query format for other attributes.
         """
         start_s = start_ns // 1_000_000_000
         end_s = end_ns // 1_000_000_000
+
+        # For serviceName, use a direct ClickHouse query against the
+        # top-level operations table — this avoids the builder's schema
+        # validation which requires distributed_span_attributes_keys.
+        if attribute == "serviceName" and is_column:
+            return {
+                "compositeQuery": {
+                    "chQueries": {
+                        "A": {
+                            "query": (
+                                "SELECT serviceName AS serviceName,"
+                                " toFloat64(count()) AS count"
+                                " FROM signoz_traces.distributed_top_level_operations"
+                                " GROUP BY serviceName"
+                                " ORDER BY count DESC"
+                            ),
+                            "disabled": False,
+                        }
+                    },
+                    "panelType": "table",
+                    "queryType": "clickhouse_sql",
+                },
+                "start": start_s * 1000,
+                "end": end_s * 1000,
+                "step": 60,
+            }
+
         return {
             "compositeQuery": {
                 "builderQueries": {
