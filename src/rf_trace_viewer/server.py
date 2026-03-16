@@ -505,7 +505,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         try:
             now_ns = int(time.time() * 1e9)
             start_ns = now_ns - (86400 * 30 * 1_000_000_000)  # 30 days
-            query = provider._build_aggregate_query("serviceName", start_ns, now_ns)
+            query = provider._build_aggregate_query(
+                "serviceName", start_ns, now_ns, attr_type="", is_column=True
+            )
             response = provider._api_request("/api/v3/query_range", query)
 
             services = []

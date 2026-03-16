@@ -366,8 +366,25 @@ class SigNozProvider(TraceProvider):
     # Query builders
     # ------------------------------------------------------------------
 
-    def _build_aggregate_query(self, attribute: str, start_ns: int, end_ns: int) -> dict:
-        """Build query_range payload for listing executions."""
+    def _build_aggregate_query(
+        self,
+        attribute: str,
+        start_ns: int,
+        end_ns: int,
+        *,
+        attr_type: str = "tag",
+        is_column: bool = False,
+    ) -> dict:
+        """Build query_range payload for listing executions.
+
+        Args:
+            attribute: The attribute key to group by.
+            start_ns: Start time in nanoseconds.
+            end_ns: End time in nanoseconds.
+            attr_type: SigNoz attribute type (``"tag"`` for span attributes,
+                ``""`` for top-level columns like ``serviceName``).
+            is_column: Whether the attribute is a top-level column in SigNoz.
+        """
         start_s = start_ns // 1_000_000_000
         end_s = end_ns // 1_000_000_000
         return {
@@ -382,8 +399,8 @@ class SigNozProvider(TraceProvider):
                             {
                                 "key": attribute,
                                 "dataType": "string",
-                                "type": "tag",
-                                "isColumn": False,
+                                "type": attr_type,
+                                "isColumn": is_column,
                             }
                         ],
                         "filters": {"items": [], "op": "AND"},
