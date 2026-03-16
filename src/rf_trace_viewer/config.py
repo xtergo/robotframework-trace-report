@@ -254,6 +254,8 @@ def _validate(config: AppConfig) -> None:
         raise ConfigurationError(
             f"STATUS_POLL_INTERVAL must be between 5 and 120, " f"got {config.status_poll_interval}"
         )
+    # Parse base filter config (JSON string or file path)
+    config.base_filter = load_base_filter(config.base_filter_config)
 
 
 def validate_svg(path: str) -> tuple[bool, str]:
