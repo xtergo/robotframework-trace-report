@@ -417,7 +417,7 @@ class SigNozProvider(TraceProvider):
                         "orderBy": [{"columnName": "timestamp", "order": "desc"}],
                     }
                 },
-                "panelType": "table",
+                "panelType": "graph",
                 "queryType": "builder",
             },
             "start": start_s,
@@ -640,11 +640,11 @@ class SigNozProvider(TraceProvider):
 
     @staticmethod
     def _parse_aggregate_rows(response: dict) -> list[dict]:
-        """Extract rows from a SigNoz aggregate (table) response.
+        """Extract rows from a SigNoz aggregate response.
 
-        Handles both ``list`` and ``table`` response formats so the same
-        helper works regardless of the SigNoz version or panelType used.
-        Returns a flat list of ``{key: value, ...}`` dicts — one per row.
+        Handles ``list``, ``table``, and ``series`` (graph) response formats
+        so the same helper works regardless of the SigNoz version or
+        panelType used.  Returns a flat list of ``{key: value, ...}`` dicts.
         """
         result_container = response.get("data") or response
         result = result_container.get("result") or []
@@ -661,6 +661,15 @@ class SigNozProvider(TraceProvider):
                 columns = [c.get("name", "") for c in (table.get("columns") or [])]
                 for trow in table.get("rows") or []:
                     rows.append(dict(zip(columns, trow, strict=False)))
+            # "series" (graph) format: [{labels: {k: v}, values: [[ts, val], ...]}, ...]
+            for ts_series in series.get("series") or []:
+                labels = ts_series.get("labels") or {}
+                values = ts_series.get("values") or []
+                # Sum all time-step values to get the total count
+                total = sum(v for _, v in values if isinstance(v, (int, float)))
+                row_data = dict(labels)
+                row_data["count"] = int(total)
+                rows.append(row_data)
         return rows
 
     @staticmethod
