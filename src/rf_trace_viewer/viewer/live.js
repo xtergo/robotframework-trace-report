@@ -1624,6 +1624,23 @@
               attributes: eca,
               children: buildKeywords(extChild.span_id)
             });
+            // Extract source metadata for EXTERNAL spans
+            var extSrcClass = eca['app.source.class'] || '';
+            var extSrcMethod = eca['app.source.method'] || '';
+            var extSrcFile = eca['app.source.file'] || '';
+            var extSrcLine = parseInt(eca['app.source.line'] || '0', 10) || 0;
+            if (extSrcClass || extSrcMethod || extSrcFile || extSrcLine > 0) {
+              var extShortClass = extSrcClass.indexOf('.') >= 0
+                ? extSrcClass.substring(extSrcClass.lastIndexOf('.') + 1) : extSrcClass;
+              kws[kws.length - 1].source_metadata = {
+                class_name: extSrcClass,
+                method_name: extSrcMethod,
+                file_name: extSrcFile,
+                line_number: extSrcLine,
+                display_location: (extSrcFile && extSrcLine > 0) ? extSrcFile + ':' + extSrcLine : '',
+                display_symbol: (extSrcClass && extSrcMethod) ? extShortClass + '.' + extSrcMethod : ''
+              };
+            }
           }
         }
         kws.sort(function (a, b) { return a.start_time - b.start_time; });
