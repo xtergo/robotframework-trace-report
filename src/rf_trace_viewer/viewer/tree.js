@@ -1858,6 +1858,9 @@ function _renderKeywordDetail(panel, data) {
     _addDetailRow(sourceWrap, 'Source', sourceText);
     panel.appendChild(sourceWrap);
   }
+  if (data.source_metadata) {
+    _renderSourceSection(panel, data.source_metadata);
+  }
   _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
@@ -1869,6 +1872,39 @@ function _renderKeywordDetail(panel, data) {
     panel.appendChild(eventsWrap);
   }
   _createFieldTogglePills(panel);
+}
+
+/** Render the source metadata section in the detail panel. */
+function _renderSourceSection(panel, sourceMetadata) {
+  var wrap = document.createElement('div');
+  wrap.setAttribute('data-field', 'source');
+  wrap.className = 'source-metadata-section';
+
+  var header = document.createElement('div');
+  header.className = 'source-section-header';
+  header.textContent = 'Source';
+  wrap.appendChild(header);
+
+  if (sourceMetadata.class_name) {
+    _addDetailRow(wrap, 'Class', sourceMetadata.class_name);
+  }
+  if (sourceMetadata.method_name) {
+    _addDetailRow(wrap, 'Method', sourceMetadata.method_name);
+  }
+  if (sourceMetadata.file_name) {
+    _addDetailRow(wrap, 'File', sourceMetadata.file_name);
+  }
+  if (sourceMetadata.line_number && sourceMetadata.line_number > 0) {
+    _addDetailRow(wrap, 'Line', String(sourceMetadata.line_number));
+  }
+  if (sourceMetadata.display_location) {
+    _addDetailRow(wrap, 'Location', sourceMetadata.display_location);
+  }
+  if (sourceMetadata.display_symbol) {
+    _addDetailRow(wrap, 'Symbol', sourceMetadata.display_symbol);
+  }
+
+  panel.appendChild(wrap);
 }
 
 /** Add a compact info bar with status, duration, and timestamps on one line. */
