@@ -3410,14 +3410,14 @@
     // live.js listener calls setActiveWindowStart (clamping) and _deltaFetch (Req 8.2).
     // Also emit when narrowing the window (newStart > aws) so live.js can prune
     // out-of-range spans and update earliestSpanNs.
+    // Always emit for presets so clicking the same preset acts as a refresh
+    // when no spans have arrived yet (startup scenario).
     var oldStart = aws;
-    if (clampedStart !== aws) {
-      if (window.RFTraceViewer && window.RFTraceViewer.emit) {
-        window.RFTraceViewer.emit('load-window-changed', {
-          newStart: clampedStart,
-          oldStart: oldStart
-        });
-      }
+    if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+      window.RFTraceViewer.emit('load-window-changed', {
+        newStart: clampedStart,
+        oldStart: oldStart
+      });
     }
 
     // Update view window

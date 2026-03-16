@@ -838,21 +838,21 @@
 
         // Only fetch when dragging backward (loading older data)
         console.log('[live] load-window-changed decision: newStart=' + newStart +
-          ' < oldStart=' + oldStart + '? ' + (newStart < oldStart));
+          ' < oldStart=' + oldStart + '? ' + (newStart < oldStart) +
+          ' allSpans=' + allSpans.length);
         if (newStart < oldStart) {
           _deltaFetch(newStart, oldStart);
+        } else if (allSpans.length === 0) {
+          // No cached spans (startup, or all pruned). Reset watermark to
+          // the new window start and force an immediate poll so clicking a
+          // preset (e.g. 15m) while waiting for first spans acts as refresh.
+          lastSeenNs = Math.max(0, _loadWindowState.activeWindowStart * 1e9);
+          console.log('[live] 0 cached spans — resetting lastSeenNs to ' + lastSeenNs + ' and polling immediately');
+          if (!polling) _poll();
         } else if (prunedCount > 0) {
-          if (allSpans.length === 0) {
-            // All spans pruned (e.g. 7d → 15m with no recent data).
-            // Reset watermark so polling fetches from the new window start.
-            lastSeenNs = Math.max(0, _loadWindowState.activeWindowStart * 1e9);
-            console.log('[live] Pruned to 0 spans — resetting lastSeenNs to ' + lastSeenNs + ' and re-fetching');
-            _deltaFetch(_loadWindowState.activeWindowStart, Date.now() / 1000);
-          } else {
-            // Window moved forward with no new fetch needed — rebuild
-            // to reflect pruned spans in the model and filter counters.
-            _rebuildAndRender();
-          }
+          // Window moved forward with no new fetch needed — rebuild
+          // to reflect pruned spans in the model and filter counters.
+          _rebuildAndRender();
         }
 
         // Emit active-window-start so Timeline can sync marker/overlay position
@@ -1452,23 +1452,25 @@
       byId[span.span_id] = span;
     }
 
-    // Classify spans
-    var suiteSpans = [];   // has rf.suite.name
-    var testSpans = [];    // has rf.test.name
-    var kwSpans = [];      // has rf.keyword.name
-    var signalSpans = [];  // has rf.signal
-    var rootSpans = [];    // no parent or parent not in set
+    // Classify spans — use rf.type when available (tracer >= 0.5.15),
+    // fall back to checking rf.suite.name / rf.test.name / rf.keyword.name
+    var suiteSpans = [];
+    var testSpans = [];
+    var kwSpans = [];
+    var signalSpans = [];
+    var rootSpans = [];
 
     for (i = 0; i < spans.length; i++) {
       span = spans[i];
       var attrs = span.attributes;
-      if (attrs['rf.signal']) {
+      var rfType = (attrs['rf.type'] || '').toLowerCase();
+      if (rfType === 'signal' || attrs['rf.signal']) {
         signalSpans.push(span);
-      } else if (attrs['rf.suite.name']) {
+      } else if (rfType === 'suite' || attrs['rf.suite.name']) {
         suiteSpans.push(span);
-      } else if (attrs['rf.test.name']) {
+      } else if (rfType === 'test' || attrs['rf.test.name']) {
         testSpans.push(span);
-      } else if (attrs['rf.keyword.name']) {
+      } else if (rfType === 'keyword' || attrs['rf.keyword.name']) {
         kwSpans.push(span);
       }
     }
@@ -1508,7 +1510,7 @@
         // Skip signal spans
         if (ca['rf.signal']) continue;
         // RF keyword spans
-        if (ca['rf.keyword.name']) {
+        if (ca['rf.keyword.name'] || (ca['rf.type'] || '').toLowerCase() === 'keyword') {
           var kw = {
             name: ca['rf.keyword.name'] || child.name || '',
             keyword_type: ca['rf.keyword.type'] || 'KEYWORD',
@@ -1521,6 +1523,7 @@
             lineno: parseInt(ca['rf.keyword.lineno'] || '0', 10),
             doc: ca['rf.keyword.doc'] || '',
             status_message: ca['rf.status_message'] || '',
+            message: ca['rf.message'] || '',
             events: _mapEvents(child.events),
             children: buildKeywords(child.span_id)
           };
@@ -1594,7 +1597,7 @@
       for (var t = 0; t < kids.length; t++) {
         var child = kids[t];
         var ca = child.attributes;
-        if (!ca['rf.test.name']) continue;
+        if (!ca['rf.test.name'] && (ca['rf.type'] || '').toLowerCase() !== 'test') continue;
         var testStatus = _mapStatus(child);
         // Check if in progress
         if (inProgress[child.span_id]) {
@@ -1611,6 +1614,10 @@
           keywords: kws,
           tags: _parseTags(ca['rf.test.tags']),
           doc: ca['rf.test.doc'] || '',
+          lineno: parseInt(ca['rf.test.lineno'] || '0', 10),
+          source: ca['rf.test.source'] || '',
+          has_setup: ca['rf.test.has_setup'] === 'true',
+          has_teardown: ca['rf.test.has_teardown'] === 'true',
           status_message: ca['rf.status_message'] || '',
           execution_id: ca[_execAttr] || '',
           attributes: ca
@@ -1648,7 +1655,7 @@
       for (var k = 0; k < kids.length; k++) {
         var kChild = kids[k];
         var ka = kChild.attributes;
-        if (ka['rf.keyword.name'] && !ka['rf.test.name'] && !ka['rf.suite.name']) {
+        if ((ka['rf.keyword.name'] || (ka['rf.type'] || '').toLowerCase() === 'keyword') && !ka['rf.test.name'] && !ka['rf.suite.name']) {
           suiteKws.push({
             name: ka['rf.keyword.name'] || kChild.name || '',
             keyword_type: ka['rf.keyword.type'] || 'KEYWORD',
@@ -1661,6 +1668,7 @@
             lineno: parseInt(ka['rf.keyword.lineno'] || '0', 10),
             doc: ka['rf.keyword.doc'] || '',
             status_message: ka['rf.status_message'] || '',
+            message: ka['rf.message'] || '',
             events: _mapEvents(kChild.events),
             children: buildKeywords(kChild.span_id)
           });
@@ -1696,6 +1704,9 @@
         end_time: suiteSpan.end_time,
         elapsed_time: _elapsedMs(suiteSpan.start_time, suiteSpan.end_time),
         doc: sa['rf.suite.doc'] || '',
+        lineno: parseInt(sa['rf.suite.lineno'] || '0', 10),
+        has_setup: sa['rf.suite.has_setup'] === 'true',
+        has_teardown: sa['rf.suite.has_teardown'] === 'true',
         metadata: {},
         children: children,
         execution_id: sa[_execAttr] || '',
