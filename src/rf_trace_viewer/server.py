@@ -511,27 +511,23 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             response = provider._api_request("/api/v3/query_range", query)
 
             services = []
-            result_container = response.get("data") or response
-            result = result_container.get("result") or []
-            for series in result:
-                for row in series.get("list") or []:
-                    data = row.get("data") or {}
-                    name = ""
-                    span_count = 0
-                    for key, val in data.items():
-                        if key == "count":
-                            span_count = int(val)
-                        elif key not in ("timestamp",):
-                            name = str(val)
-                    if name:
-                        services.append(
-                            {
-                                "name": name,
-                                "span_count": span_count,
-                                "excluded_by_default": name in base_filter.excluded_by_default,
-                                "hard_blocked": name in base_filter.hard_blocked,
-                            }
-                        )
+            for data in SigNozProvider._parse_aggregate_rows(response):
+                name = ""
+                span_count = 0
+                for key, val in data.items():
+                    if key == "count":
+                        span_count = int(val)
+                    elif key not in ("timestamp",):
+                        name = str(val)
+                if name:
+                    services.append(
+                        {
+                            "name": name,
+                            "span_count": span_count,
+                            "excluded_by_default": name in base_filter.excluded_by_default,
+                            "hard_blocked": name in base_filter.hard_blocked,
+                        }
+                    )
 
             record_items_returned("/api/v1/services", "query_services", len(services))
             self._send_json_response(200, services, request_id)

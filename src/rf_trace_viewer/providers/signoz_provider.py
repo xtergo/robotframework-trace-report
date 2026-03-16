@@ -417,7 +417,7 @@ class SigNozProvider(TraceProvider):
                         "orderBy": [{"columnName": "timestamp", "order": "desc"}],
                     }
                 },
-                "panelType": "list",
+                "panelType": "table",
                 "queryType": "builder",
             },
             "start": start_s,
@@ -639,44 +639,59 @@ class SigNozProvider(TraceProvider):
         return spans
 
     @staticmethod
+    def _parse_aggregate_rows(response: dict) -> list[dict]:
+        """Extract rows from a SigNoz aggregate (table) response.
+
+        Handles both ``list`` and ``table`` response formats so the same
+        helper works regardless of the SigNoz version or panelType used.
+        Returns a flat list of ``{key: value, ...}`` dicts — one per row.
+        """
+        result_container = response.get("data") or response
+        result = result_container.get("result") or []
+        rows: list[dict] = []
+        for series in result:
+            # "list" format: [{data: {k: v, ...}}, ...]
+            for row in series.get("list") or []:
+                data = row.get("data") or {}
+                if data:
+                    rows.append(data)
+            # "table" format: {columns: [{name, ...}], rows: [[v, ...], ...]}
+            table = series.get("table")
+            if table:
+                columns = [c.get("name", "") for c in (table.get("columns") or [])]
+                for trow in table.get("rows") or []:
+                    rows.append(dict(zip(columns, trow, strict=False)))
+        return rows
+
+    @staticmethod
     def _parse_execution_list(response: dict) -> list[ExecutionSummary]:
         """Map SigNoz aggregate response to ExecutionSummary list."""
         executions: list[ExecutionSummary] = []
-        # SigNoz wraps result under "data" key: {"status":"success","data":{"result":[...]}}
-        result_container = response.get("data") or response
-        result = result_container.get("result") or []
-        for series in result:
-            for row in series.get("list") or []:
-                data = row.get("data") or {}
-                # The groupBy key appears as a field in the row
-                exec_id = ""
-                span_count = 0
-                start_time_ns = 0
+        for data in SigNozProvider._parse_aggregate_rows(response):
+            exec_id = ""
+            span_count = 0
+            start_time_ns = 0
 
-                # In aggregate responses, the grouped attribute value
-                # and count are in the data dict
-                for key, val in data.items():
-                    if key == "count":
-                        span_count = int(val)
-                    elif key not in ("timestamp",):
-                        # The execution attribute value
-                        exec_id = str(val)
+            for key, val in data.items():
+                if key == "count":
+                    span_count = int(val)
+                elif key not in ("timestamp",):
+                    exec_id = str(val)
 
-                ts = data.get("timestamp")
-                if ts is not None:
-                    # timestamp may be in seconds or nanoseconds
-                    ts_int = int(ts)
-                    if ts_int > 1e15:
-                        start_time_ns = ts_int
-                    else:
-                        start_time_ns = int(ts_int * 1_000_000_000)
+            ts = data.get("timestamp")
+            if ts is not None:
+                ts_int = int(ts)
+                if ts_int > 1e15:
+                    start_time_ns = ts_int
+                else:
+                    start_time_ns = int(ts_int * 1_000_000_000)
 
-                if exec_id:
-                    executions.append(
-                        ExecutionSummary(
-                            execution_id=exec_id,
-                            start_time_ns=start_time_ns,
-                            span_count=span_count,
-                        )
+            if exec_id:
+                executions.append(
+                    ExecutionSummary(
+                        execution_id=exec_id,
+                        start_time_ns=start_time_ns,
+                        span_count=span_count,
                     )
+                )
         return executions
