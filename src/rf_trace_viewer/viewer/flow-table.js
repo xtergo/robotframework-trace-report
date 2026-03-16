@@ -181,7 +181,10 @@
         keyword_type: kw.keyword_type || 'KEYWORD',
         depth: e.depth,
         parentId: e.parentId,
-        hasChildren: hasChildren
+        hasChildren: hasChildren,
+        service_name: kw.service_name || '',
+        source_metadata: kw.source_metadata || null,
+        attributes: kw.attributes || null
       });
       var ch = kw.children || [];
       for (var c = ch.length - 1; c >= 0; c--) {
