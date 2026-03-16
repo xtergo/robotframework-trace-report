@@ -66,6 +66,7 @@
         if (!s || !evt || !evt.spanId || s.pinned) return;
         var suites = s.data.suites || [];
         var spanId = evt.spanId;
+        // 1. Direct test match — clicked on a test span
         var test = _findTestById(suites, spanId);
         if (test) {
           s.currentTestId = test.id;
@@ -76,6 +77,7 @@
           _scrollToHighlighted(s);
           return;
         }
+        // 2. Keyword inside a test — clicked on a keyword span
         var pt = _findTestContainingSpan(suites, spanId);
         if (pt) {
           if (s.currentTestId !== pt.id) {
@@ -90,6 +92,36 @@
           _scrollToHighlighted(s);
           return;
         }
+        // 3. Suite-level keyword (setup/teardown) — find parent suite,
+        //    show the first test in that suite
+        var kwSuite = _findSuiteContainingKeyword(suites, spanId);
+        if (kwSuite) {
+          var firstTest = _findFirstTest(kwSuite);
+          if (firstTest) {
+            s.currentTestId = firstTest.id;
+            s.highlightSpanId = null;
+            s.rows = _buildKeywordRows(firstTest);
+            s.expandedIds = _computeFailFocusedExpanded(firstTest);
+            _renderTable(s);
+            _scrollToHighlighted(s);
+            return;
+          }
+        }
+        // 4. Suite span — show the first test in that suite
+        var suite = _findSuiteById(suites, spanId);
+        if (suite) {
+          var suiteFirstTest = _findFirstTest(suite);
+          if (suiteFirstTest) {
+            s.currentTestId = suiteFirstTest.id;
+            s.highlightSpanId = null;
+            s.rows = _buildKeywordRows(suiteFirstTest);
+            s.expandedIds = _computeFailFocusedExpanded(suiteFirstTest);
+            _renderTable(s);
+            _scrollToHighlighted(s);
+            return;
+          }
+        }
+        // 5. Unknown span — clear the flow table
         s.currentTestId = null;
         s.highlightSpanId = null;
         s.rows = [];
@@ -259,6 +291,65 @@
       for (var i = 0; i < ch.length; i++) s.push(ch[i]);
     }
     return false;
+  }
+
+  /**
+   * Find a suite by its span ID (recursive through nested suites).
+   */
+  function _findSuiteById(suites, id) {
+    var s = suites.slice();
+    while (s.length) {
+      var item = s.pop();
+      // Suites have children array (not keywords)
+      if (item.children !== undefined && item.id === id) return item;
+      if (item.children) {
+        for (var i = 0; i < item.children.length; i++) s.push(item.children[i]);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find the first test inside a suite (depth-first).
+   */
+  function _findFirstTest(suite) {
+    if (!suite || !suite.children) return null;
+    var s = suite.children.slice();
+    while (s.length) {
+      var item = s.shift();
+      if (item.keywords !== undefined) return item;
+      if (item.children) {
+        for (var i = 0; i < item.children.length; i++) s.push(item.children[i]);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find a suite whose direct children contain a keyword with the given span ID.
+   * Suite-level setup/teardown keywords are direct children of the suite.
+   */
+  function _findSuiteContainingKeyword(suites, spanId) {
+    var s = suites.slice();
+    while (s.length) {
+      var suite = s.pop();
+      if (!suite.children) continue;
+      for (var i = 0; i < suite.children.length; i++) {
+        var child = suite.children[i];
+        // Suite-level keywords have keyword_type but no children array (they're RFKeyword)
+        if (child.keyword_type !== undefined || (child.keywords === undefined && child.children === undefined)) {
+          if (child.id === spanId) return suite;
+          if (_kwTreeContains(child.children || [], spanId)) return suite;
+        }
+      }
+      // Recurse into nested suites
+      for (var j = 0; j < suite.children.length; j++) {
+        if (suite.children[j].children !== undefined && suite.children[j].keywords === undefined) {
+          s.push(suite.children[j]);
+        }
+      }
+    }
+    return null;
   }
 
   function _extractFilename(sourcePath) {
@@ -626,28 +717,33 @@
       tdKw.appendChild(spacer);
     }
 
-    // RF service badge for non-EXTERNAL rows
-    var rfSvcName = window.__RF_SERVICE_NAME__ || '';
-    if (kwTypeUpper !== 'EXTERNAL' && rfSvcName) {
-      var rfBadge = document.createElement('span');
-      rfBadge.className = 'flow-rf-svc-badge';
-      rfBadge.textContent = rfSvcName;
-      rfBadge.title = 'RF Service: ' + rfSvcName;
-      tdKw.appendChild(rfBadge);
+    // Type badge (always first for consistent layout)
+    if (kwTypeUpper === 'EXTERNAL' && row.service_name) {
+      var extBadge = document.createElement('span');
+      extBadge.className = 'flow-type-badge flow-type-external';
+      extBadge.textContent = BADGE_LABELS['EXTERNAL'] || 'EXT';
+      tdKw.appendChild(extBadge);
+    } else {
+      var badge = document.createElement('span');
+      badge.className = 'flow-type-badge flow-type-' + kwTypeUpper.toLowerCase();
+      badge.textContent = BADGE_LABELS[kwTypeUpper] || kwTypeUpper;
+      tdKw.appendChild(badge);
     }
 
-    // Type badge or service badge
+    // Service badge (always second — consistent position for RF and external)
+    var rfSvcName = window.__RF_SERVICE_NAME__ || '';
     if (kwTypeUpper === 'EXTERNAL' && row.service_name) {
       var svcBadge = document.createElement('span');
       svcBadge.className = 'flow-svc-badge';
       svcBadge.textContent = row.service_name;
       svcBadge.title = 'Service: ' + row.service_name;
       tdKw.appendChild(svcBadge);
-    } else {
-      var badge = document.createElement('span');
-      badge.className = 'flow-type-badge flow-type-' + kwTypeUpper.toLowerCase();
-      badge.textContent = BADGE_LABELS[kwTypeUpper] || kwTypeUpper;
-      tdKw.appendChild(badge);
+    } else if (rfSvcName) {
+      var rfBadge = document.createElement('span');
+      rfBadge.className = 'flow-rf-svc-badge';
+      rfBadge.textContent = rfSvcName;
+      rfBadge.title = 'RF Service: ' + rfSvcName;
+      tdKw.appendChild(rfBadge);
     }
 
     // Name

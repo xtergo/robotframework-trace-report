@@ -2318,9 +2318,15 @@ function _createTreeNode(opts) {
   typeLabel.textContent = opts.kwType || opts.type;
   nameEl.appendChild(typeLabel);
 
-  // RF service badge for non-EXTERNAL keyword rows (matches flow table)
+  // Service badge (always second — consistent position for RF and external)
   var rfSvcName = window.__RF_SERVICE_NAME__ || '';
-  if (rfSvcName && opts.type === 'keyword' && opts.kwType !== 'EXTERNAL') {
+  if (opts.data && opts.data.service_name && opts.kwType === 'EXTERNAL') {
+    var svcBadge = document.createElement('span');
+    svcBadge.className = 'svc-name-badge';
+    svcBadge.textContent = opts.data.service_name;
+    svcBadge.title = 'Service: ' + opts.data.service_name;
+    nameEl.appendChild(svcBadge);
+  } else if (rfSvcName && opts.type === 'keyword' && opts.kwType !== 'EXTERNAL') {
     var rfBadge = document.createElement('span');
     rfBadge.className = 'tree-rf-svc-badge';
     rfBadge.textContent = rfSvcName;
@@ -2353,15 +2359,6 @@ function _createTreeNode(opts) {
     execBadge.textContent = opts.data.execution_id;
     execBadge.title = 'Execution ID: ' + opts.data.execution_id;
     nameEl.appendChild(execBadge);
-  }
-
-  // Service name badge (for external/cross-service spans)
-  if (opts.data && opts.data.service_name && opts.kwType === 'EXTERNAL') {
-    var svcBadge = document.createElement('span');
-    svcBadge.className = 'svc-name-badge';
-    svcBadge.textContent = opts.data.service_name;
-    svcBadge.title = 'Service: ' + opts.data.service_name;
-    nameEl.appendChild(svcBadge);
   }
   row.appendChild(nameEl);
 

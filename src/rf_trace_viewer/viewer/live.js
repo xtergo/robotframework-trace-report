@@ -359,6 +359,7 @@
   var MAX_SPANS = Number(window.__RF_TRACE_MAX_SPANS__) || 1000000;
   var _spanCapReached = false;
   var _spanCapBannerEl = null;
+  var _autoExtendDone = false;  // true after auto-extend has fired once
 
   /* ── Load Window state ─────────────────────────────────────────── */
 
@@ -397,7 +398,20 @@
         window.RFTraceViewer.emit('delta-fetch-start', { from: fromTime, to: toTime });
       }
 
+      // Safety timeout: if the fetch hangs (e.g. server never responds),
+      // auto-hide the loading banner after 2 minutes so it doesn't stick.
+      var _bannerSafetyTimer = setTimeout(function () {
+        if (_loadWindowState.isFetching) {
+          console.warn('[live] Delta fetch safety timeout — hiding banner');
+          var banners = document.querySelectorAll('.timeline-loading-banner');
+          for (var si = 0; si < banners.length; si++) {
+            banners[si].style.display = 'none';
+          }
+        }
+      }, 120000);
+
       function _finishDeltaFetch() {
+        clearTimeout(_bannerSafetyTimer);
         _loadWindowState.isFetching = false;
         _loadWindowState.totalCachedSpans = allSpans.length;
         console.log('[live] Delta fetch complete: allSpans=' + allSpans.length);
@@ -411,6 +425,13 @@
               activeWindowStart: _loadWindowState.activeWindowStart
             });
           }
+        }
+        // Defensively hide loading banner by DOM query before emitting
+        // delta-fetch-end. This guards against stale cached references
+        // if initTimeline re-created the banner during the fetch.
+        var banners = document.querySelectorAll('.timeline-loading-banner');
+        for (var bi = 0; bi < banners.length; bi++) {
+          banners[bi].style.display = 'none';
         }
         if (window.RFTraceViewer && window.RFTraceViewer.emit) {
           window.RFTraceViewer.emit('delta-fetch-end', { spanCount: allSpans.length });
@@ -1158,6 +1179,10 @@
         _connectionState.retryCount = 0;
 
         if (!data || !data.spans) {
+          // Track earliest DB span even when no spans returned
+          if (data && data.earliest_db_span_ns && data.earliest_db_span_ns > 0) {
+            _connectionState.earliestDbSpanNs = data.earliest_db_span_ns;
+          }
           _updateTelemetry(0);
           return;
         }
@@ -1174,6 +1199,30 @@
           }
         } else {
           _updateTelemetry(0);
+          // Auto-extend: if we have 0 cached spans and the server reports
+          // an earliest DB span outside our lookback window, widen the
+          // window to include it and trigger a delta fetch. Only once.
+          if (allSpans.length === 0 && !_autoExtendDone && _connectionState.earliestDbSpanNs > 0) {
+            var earliestSec = _connectionState.earliestDbSpanNs / 1e9;
+            var aws = _loadWindowState.activeWindowStart;
+            if (earliestSec < aws) {
+              _autoExtendDone = true;
+              // Pad 60s before earliest span so the timeline has breathing room
+              var newStart = earliestSec - 60;
+              console.log('[live] Auto-extend: earliest DB span at ' +
+                new Date(earliestSec * 1000).toISOString().substr(11, 8) +
+                ' is before activeWindowStart ' +
+                new Date(aws * 1000).toISOString().substr(11, 8) +
+                ' — extending window');
+              _loadWindowState.activeWindowStart = newStart;
+              if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+                window.RFTraceViewer.emit('active-window-start', {
+                  activeWindowStart: newStart
+                });
+              }
+              _deltaFetch(newStart, aws);
+            }
+          }
         }
       })
       .catch(function (err) {
