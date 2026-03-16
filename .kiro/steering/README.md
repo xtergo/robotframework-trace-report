@@ -57,6 +57,15 @@ Use this when working on feature implementation tasks from the main spec.
 
 Documents the workaround for clearing stuck red "Test Failed" badges on spec tasks. When PBT status gets incorrectly set to failed, this guide explains how to fix it by invoking the spec-task-execution subagent to call updatePBTStatus.
 
+### release-process.md
+**Inclusion:** Auto (always active)
+
+Release process guardrails. Covers:
+- Correct order: version bump → commit → tag → push → GitHub release
+- Why the tag must point to the version bump commit (publish-oci builds from it)
+- Checklist of files that contain the version string
+- How to avoid publishing a Docker image with stale version metadata
+
 ### troubleshooting-guide.md
 **Inclusion:** Manual (reference with `#troubleshooting-guide` in chat)
 
