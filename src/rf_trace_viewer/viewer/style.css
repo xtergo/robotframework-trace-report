@@ -932,6 +932,28 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   background: #9c27b0;
 }
 
+/* RF service badge (blue) for non-EXTERNAL keyword rows in tree */
+.rf-trace-viewer .tree-rf-svc-badge {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #1565c0;
+  color: #fff;
+  font-weight: 600;
+  vertical-align: middle;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.rf-trace-viewer.theme-dark .tree-rf-svc-badge {
+  background: #42a5f5;
+  color: #1e1e1e;
+}
+
 /* ── Root Cause UX ── */
 
 /* De-emphasize control flow wrapper FAIL keywords */

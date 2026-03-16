@@ -2318,6 +2318,16 @@ function _createTreeNode(opts) {
   typeLabel.textContent = opts.kwType || opts.type;
   nameEl.appendChild(typeLabel);
 
+  // RF service badge for non-EXTERNAL keyword rows (matches flow table)
+  var rfSvcName = window.__RF_SERVICE_NAME__ || '';
+  if (rfSvcName && opts.type === 'keyword' && opts.kwType !== 'EXTERNAL') {
+    var rfBadge = document.createElement('span');
+    rfBadge.className = 'tree-rf-svc-badge';
+    rfBadge.textContent = rfSvcName;
+    rfBadge.title = 'RF Service: ' + rfSvcName;
+    nameEl.appendChild(rfBadge);
+  }
+
   // Library prefix (e.g. "BuiltIn . Set Variable")
   if (opts.data && opts.data.library) {
     var libSpan = document.createElement('span');
