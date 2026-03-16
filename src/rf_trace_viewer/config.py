@@ -335,6 +335,7 @@ def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
         "RATE_LIMIT_PER_IP": "rate_limit_per_ip",
         "LOGO_PATH": "logo_path",
         "FOLLOW_TRACES": "follow_traces",
+        "SERVICE_NAME": "service_name",
     }
     for env_key, attr in env_map.items():
         val = os.environ.get(env_key)
