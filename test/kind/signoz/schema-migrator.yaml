@@ -1,6 +1,7 @@
-# Schema migrator Job — creates ClickHouse tables required by SigNoz.
-# Runs sync migration (creates tables for traces, metrics, logs).
-# Must complete before SigNoz can serve requests.
+# Telemetry store migrator Job — creates ClickHouse tables required by SigNoz.
+# Replaces the deprecated signoz-schema-migrator with the otel-collector's
+# built-in migration commands (required for SigNoz >= v0.113).
+# Must complete before SigNoz can serve queries.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -18,6 +19,17 @@ spec:
     spec:
       restartPolicy: OnFailure
       containers:
-        - name: schema-migrator
-          image: signoz/signoz-schema-migrator:v0.144.1
-          args: ["sync", "--dsn=tcp://clickhouse:9000", "--up", ""]
+        - name: migrator
+          image: signoz/signoz-otel-collector:v0.144.1
+          env:
+            - name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN
+              value: tcp://clickhouse:9000
+            - name: SIGNOZ_OTEL_COLLECTOR_TIMEOUT
+              value: "10m"
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              /signoz-otel-collector migrate bootstrap &&
+              /signoz-otel-collector migrate sync up &&
+              /signoz-otel-collector migrate async up
