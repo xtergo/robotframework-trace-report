@@ -1524,6 +1524,23 @@
             events: _mapEvents(child.events),
             children: buildKeywords(child.span_id)
           };
+          // Extract source metadata if present
+          var srcClass = ca['app.source.class'] || '';
+          var srcMethod = ca['app.source.method'] || '';
+          var srcFile = ca['app.source.file'] || '';
+          var srcLine = parseInt(ca['app.source.line'] || '0', 10) || 0;
+          if (srcClass || srcMethod || srcFile || srcLine > 0) {
+            var shortClass = srcClass.indexOf('.') >= 0
+              ? srcClass.substring(srcClass.lastIndexOf('.') + 1) : srcClass;
+            kw.source_metadata = {
+              class_name: srcClass,
+              method_name: srcMethod,
+              file_name: srcFile,
+              line_number: srcLine,
+              display_location: (srcFile && srcLine > 0) ? srcFile + ':' + srcLine : '',
+              display_symbol: (srcClass && srcMethod) ? shortClass + '.' + srcMethod : ''
+            };
+          }
           result.push(kw);
           continue;
         }
@@ -1545,6 +1562,23 @@
             attributes: ca,
             children: buildKeywords(child.span_id)
           });
+          // Extract source metadata for EXTERNAL spans
+          var extSrcClass = ca['app.source.class'] || '';
+          var extSrcMethod = ca['app.source.method'] || '';
+          var extSrcFile = ca['app.source.file'] || '';
+          var extSrcLine = parseInt(ca['app.source.line'] || '0', 10) || 0;
+          if (extSrcClass || extSrcMethod || extSrcFile || extSrcLine > 0) {
+            var extShortClass = extSrcClass.indexOf('.') >= 0
+              ? extSrcClass.substring(extSrcClass.lastIndexOf('.') + 1) : extSrcClass;
+            result[result.length - 1].source_metadata = {
+              class_name: extSrcClass,
+              method_name: extSrcMethod,
+              file_name: extSrcFile,
+              line_number: extSrcLine,
+              display_location: (extSrcFile && extSrcLine > 0) ? extSrcFile + ':' + extSrcLine : '',
+              display_symbol: (extSrcClass && extSrcMethod) ? extShortClass + '.' + extSrcMethod : ''
+            };
+          }
         }
       }
       // Sort by start_time
@@ -1656,6 +1690,23 @@
             events: _mapEvents(kChild.events),
             children: buildKeywords(kChild.span_id)
           });
+          // Extract source metadata if present (suite-level keywords)
+          var srcClass = ka['app.source.class'] || '';
+          var srcMethod = ka['app.source.method'] || '';
+          var srcFile = ka['app.source.file'] || '';
+          var srcLine = parseInt(ka['app.source.line'] || '0', 10) || 0;
+          if (srcClass || srcMethod || srcFile || srcLine > 0) {
+            var shortClass = srcClass.indexOf('.') >= 0
+              ? srcClass.substring(srcClass.lastIndexOf('.') + 1) : srcClass;
+            suiteKws[suiteKws.length - 1].source_metadata = {
+              class_name: srcClass,
+              method_name: srcMethod,
+              file_name: srcFile,
+              line_number: srcLine,
+              display_location: (srcFile && srcLine > 0) ? srcFile + ':' + srcLine : '',
+              display_symbol: (srcClass && srcMethod) ? shortClass + '.' + srcMethod : ''
+            };
+          }
         }
       }
       // Merge suite-level keywords into children
