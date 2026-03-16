@@ -626,6 +626,16 @@
       tdKw.appendChild(spacer);
     }
 
+    // RF service badge for non-EXTERNAL rows
+    var rfSvcName = window.__RF_SERVICE_NAME__ || '';
+    if (kwTypeUpper !== 'EXTERNAL' && rfSvcName) {
+      var rfBadge = document.createElement('span');
+      rfBadge.className = 'flow-rf-svc-badge';
+      rfBadge.textContent = rfSvcName;
+      rfBadge.title = 'RF Service: ' + rfSvcName;
+      tdKw.appendChild(rfBadge);
+    }
+
     // Type badge or service badge
     if (kwTypeUpper === 'EXTERNAL' && row.service_name) {
       var svcBadge = document.createElement('span');
@@ -657,6 +667,39 @@
         srcInline.textContent = srcText;
         srcInline.title = srcText;
         tdKw.appendChild(srcInline);
+      }
+    }
+
+    // Context line for EXTERNAL rows (HTTP/DB attribute summary)
+    if (kwTypeUpper === 'EXTERNAL' && row.attributes) {
+      var attrSummary = extractSpanAttributes(row.attributes);
+      var ctxLine = generateContextLine(attrSummary);
+      if (ctxLine) {
+        var ctxDisplay = ctxLine.length > 80 ? ctxLine.substring(0, 77) + '...' : ctxLine;
+        var ctxSpan = document.createElement('span');
+        ctxSpan.className = 'flow-context-line';
+        ctxSpan.title = ctxLine;
+        // Render with color-coded status code if HTTP
+        if (attrSummary && attrSummary.type === 'http' && attrSummary.status_code) {
+          var sc = attrSummary.status_code;
+          var scClass = 'flow-status-' + (sc < 300 ? '2xx' : sc < 400 ? '3xx' : sc < 500 ? '4xx' : '5xx');
+          // Split context line around the status code to wrap it in a colored span
+          var scStr = String(sc);
+          var scIdx = ctxDisplay.indexOf('→ ' + scStr);
+          if (scIdx >= 0) {
+            ctxSpan.appendChild(document.createTextNode(ctxDisplay.substring(0, scIdx + 2)));
+            var scSpan = document.createElement('span');
+            scSpan.className = scClass;
+            scSpan.textContent = scStr;
+            ctxSpan.appendChild(scSpan);
+            ctxSpan.appendChild(document.createTextNode(ctxDisplay.substring(scIdx + 2 + scStr.length)));
+          } else {
+            ctxSpan.textContent = ctxDisplay;
+          }
+        } else {
+          ctxSpan.textContent = ctxDisplay;
+        }
+        tdKw.appendChild(ctxSpan);
       }
     }
 

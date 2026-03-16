@@ -5439,3 +5439,100 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-style: italic;
   opacity: 0.8;
 }
+
+/* ── Span Attribute Enrichment ── */
+
+/* Context line inline in flow table */
+.rf-trace-viewer .flow-context-line {
+  color: var(--text-secondary);
+  font-size: 0.8em;
+  margin-left: 8px;
+  font-style: italic;
+  opacity: 0.85;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* RF service badge (blue) for non-EXTERNAL rows */
+.rf-trace-viewer .flow-rf-svc-badge {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #1565c0;
+  color: #fff;
+  font-weight: 600;
+  vertical-align: middle;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.rf-trace-viewer.theme-dark .flow-rf-svc-badge {
+  background: #42a5f5;
+  color: #1e1e1e;
+}
+
+/* HTTP status code colors in flow table context line */
+.rf-trace-viewer .flow-status-2xx { color: #2e7d32; font-weight: 600; }
+.rf-trace-viewer .flow-status-3xx { color: #888888; }
+.rf-trace-viewer .flow-status-4xx { color: #f9a825; font-weight: 600; }
+.rf-trace-viewer .flow-status-5xx { color: #c62828; font-weight: 600; }
+
+.rf-trace-viewer.theme-dark .flow-status-2xx { color: #66bb6a; }
+.rf-trace-viewer.theme-dark .flow-status-3xx { color: #9e9e9e; }
+.rf-trace-viewer.theme-dark .flow-status-4xx { color: #ffca28; }
+.rf-trace-viewer.theme-dark .flow-status-5xx { color: #ef5350; }
+
+/* Attribute sections in span detail panel */
+.rf-trace-viewer .attr-section {
+  margin: 8px 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.rf-trace-viewer .attr-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Status code colors in detail panel */
+.rf-trace-viewer .attr-status-code {
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.rf-trace-viewer .attr-status-code-2xx { color: #2e7d32; background: #e8f5e9; }
+.rf-trace-viewer .attr-status-code-3xx { color: #888888; background: #f5f5f5; }
+.rf-trace-viewer .attr-status-code-4xx { color: #f57f17; background: #fff8e1; }
+.rf-trace-viewer .attr-status-code-5xx { color: #c62828; background: #ffebee; }
+
+.rf-trace-viewer.theme-dark .attr-status-code-2xx { color: #66bb6a; background: #1b3a1b; }
+.rf-trace-viewer.theme-dark .attr-status-code-3xx { color: #9e9e9e; background: #2a2a2a; }
+.rf-trace-viewer.theme-dark .attr-status-code-4xx { color: #ffca28; background: #3a351b; }
+.rf-trace-viewer.theme-dark .attr-status-code-5xx { color: #ef5350; background: #3a1b1b; }
+
+/* DB statement monospace block */
+.rf-trace-viewer .attr-statement-block {
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-secondary);
+  padding: 4px 8px;
+  border-radius: 3px;
+  margin: 2px 0;
+  max-height: 120px;
+  overflow-y: auto;
+}

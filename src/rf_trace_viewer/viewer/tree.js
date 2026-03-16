@@ -1861,6 +1861,14 @@ function _renderKeywordDetail(panel, data) {
   if (data.source_metadata) {
     _renderSourceSection(panel, data.source_metadata);
   }
+  if (data.attributes && typeof window.extractSpanAttributes === 'function') {
+    var attrSummary = window.extractSpanAttributes(data.attributes);
+    if (attrSummary && attrSummary.type === 'http') {
+      _renderHttpSection(panel, attrSummary);
+    } else if (attrSummary && attrSummary.type === 'db') {
+      _renderDbSection(panel, attrSummary);
+    }
+  }
   _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
@@ -1902,6 +1910,81 @@ function _renderSourceSection(panel, sourceMetadata) {
   }
   if (sourceMetadata.display_symbol) {
     _addDetailRow(wrap, 'Symbol', sourceMetadata.display_symbol);
+  }
+
+  panel.appendChild(wrap);
+}
+
+/** Render the HTTP attributes section in the detail panel. */
+function _renderHttpSection(panel, summary) {
+  var wrap = document.createElement('div');
+  wrap.className = 'attr-section';
+  var header = document.createElement('div');
+  header.className = 'attr-section-header';
+  header.textContent = 'HTTP';
+  wrap.appendChild(header);
+
+  if (summary.method) _addDetailRow(wrap, 'Method', summary.method);
+  if (summary.route) _addDetailRow(wrap, 'Route', summary.route);
+  if (summary.path) _addDetailRow(wrap, 'Path', summary.path);
+  if (summary.status_code) {
+    var scRow = document.createElement('div');
+    scRow.className = 'detail-panel-row';
+    var scLabel = document.createElement('span');
+    scLabel.className = 'detail-label';
+    scLabel.textContent = 'Status Code:';
+    var scValue = document.createElement('span');
+    var sc = summary.status_code;
+    scValue.className = 'attr-status-code attr-status-code-' + (sc < 300 ? '2xx' : sc < 400 ? '3xx' : sc < 500 ? '4xx' : '5xx');
+    scValue.textContent = String(sc);
+    scRow.appendChild(scLabel);
+    scRow.appendChild(scValue);
+    wrap.appendChild(scRow);
+  }
+  if (summary.server_address) {
+    var server = summary.server_address;
+    if (summary.server_port) server += ':' + summary.server_port;
+    _addDetailRow(wrap, 'Server', server);
+  }
+  if (summary.client_address) _addDetailRow(wrap, 'Client', summary.client_address);
+  if (summary.url_scheme) _addDetailRow(wrap, 'Scheme', summary.url_scheme);
+  if (summary.user_agent) _addDetailRow(wrap, 'User Agent', summary.user_agent);
+
+  panel.appendChild(wrap);
+}
+
+/** Render the Database attributes section in the detail panel. */
+function _renderDbSection(panel, summary) {
+  var wrap = document.createElement('div');
+  wrap.className = 'attr-section';
+  var header = document.createElement('div');
+  header.className = 'attr-section-header';
+  header.textContent = 'Database';
+  wrap.appendChild(header);
+
+  if (summary.system) _addDetailRow(wrap, 'System', summary.system);
+  if (summary.operation) _addDetailRow(wrap, 'Operation', summary.operation);
+  if (summary.name) _addDetailRow(wrap, 'Database', summary.name);
+  if (summary.table) _addDetailRow(wrap, 'Table', summary.table);
+  if (summary.statement) {
+    var stmtRow = document.createElement('div');
+    stmtRow.className = 'detail-panel-row';
+    var stmtLabel = document.createElement('span');
+    stmtLabel.className = 'detail-label';
+    stmtLabel.textContent = 'Statement:';
+    var stmtValue = document.createElement('pre');
+    stmtValue.className = 'attr-statement-block';
+    stmtValue.textContent = summary.statement;
+    stmtRow.appendChild(stmtLabel);
+    stmtRow.appendChild(stmtValue);
+    wrap.appendChild(stmtRow);
+  }
+  if (summary.connection_string) _addDetailRow(wrap, 'Connection', summary.connection_string);
+  if (summary.user) _addDetailRow(wrap, 'User', summary.user);
+  if (summary.server_address) {
+    var server = summary.server_address;
+    if (summary.server_port) server += ':' + summary.server_port;
+    _addDetailRow(wrap, 'Server', server);
   }
 
   panel.appendChild(wrap);
