@@ -822,3 +822,50 @@ def test_property_extraction_correctness(attrs):
     else:
         allowed = {"type"} | set(_DB_FIELD_MAP.values()) | set(_DB_INT_FIELD_MAP.values())
     assert set(result.keys()) <= allowed
+
+
+# --- Design Property 2: HTTP context line format ---
+# For any HTTP attribute summary, generate_context_line shall produce a string
+# where: method appears first; route appears next (or path if route is absent);
+# → {status_code} appears if status_code is present; and
+# @ {server_address}:{server_port} is appended if server_address is present.
+# Route is always preferred over path when both are present.
+# Validates: Requirements 2.1, 2.5, 5.1
+
+
+@given(summary=http_summary_strategy())
+def test_property_http_context_line_format(summary):
+    """Property 2: HTTP context line format.
+
+    **Validates: Requirements 2.1, 2.5, 5.1**
+    """
+    result = generate_context_line(summary)
+
+    # 1. The result is a string
+    assert isinstance(result, str)
+
+    # 2. If method is present, it appears at the start of the line
+    if summary.get("method"):
+        assert result.startswith(summary["method"])
+
+    # 3. If route is present, route appears in the line (preferred over path)
+    if summary.get("route"):
+        assert summary["route"] in result
+
+    # 4. If route is absent but path is present, path appears in the line
+    if not summary.get("route") and summary.get("path"):
+        assert summary["path"] in result
+
+    # 5. If status_code is present, → {status_code} appears in the line
+    if summary.get("status_code"):
+        assert "\u2192 " + str(summary["status_code"]) in result
+
+    # 6. If server_address is present, @ {server_address} appears in the line
+    if summary.get("server_address"):
+        assert "@ " + summary["server_address"] in result
+
+    # 7. If server_address and server_port are both present,
+    #    @ {server_address}:{server_port} appears
+    if summary.get("server_address") and summary.get("server_port"):
+        expected_server = "@ " + summary["server_address"] + ":" + str(summary["server_port"])
+        assert expected_server in result
