@@ -530,12 +530,20 @@
       tdKw.appendChild(spacer);
     }
 
-    // Type badge (abbreviated)
+    // Type badge or service badge
     var kwType = (row.keyword_type || 'KEYWORD').toUpperCase();
-    var badge = document.createElement('span');
-    badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
-    badge.textContent = BADGE_LABELS[kwType] || kwType;
-    tdKw.appendChild(badge);
+    if (kwTypeUpper === 'EXTERNAL' && row.service_name) {
+      var svcBadge = document.createElement('span');
+      svcBadge.className = 'flow-svc-badge';
+      svcBadge.textContent = row.service_name;
+      svcBadge.title = 'Service: ' + row.service_name;
+      tdKw.appendChild(svcBadge);
+    } else {
+      var badge = document.createElement('span');
+      badge.className = 'flow-type-badge flow-type-' + kwType.toLowerCase();
+      badge.textContent = BADGE_LABELS[kwType] || kwType;
+      tdKw.appendChild(badge);
+    }
 
     // Name
     var nameSpan = document.createElement('span');
