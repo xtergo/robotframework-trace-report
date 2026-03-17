@@ -1805,6 +1805,80 @@
       return s.children && s.children.length > 0;
     });
 
+    // Group generic spans by service.name and build synthetic service suites
+    if (genericSpans.length > 0) {
+      var svcGroups = {};
+      for (i = 0; i < genericSpans.length; i++) {
+        span = genericSpans[i];
+        var svcName = span.attributes['service.name'] || 'unknown';
+        if (!svcGroups[svcName]) svcGroups[svcName] = [];
+        svcGroups[svcName].push(span);
+      }
+
+      var svcNames = Object.keys(svcGroups);
+      for (var si = 0; si < svcNames.length; si++) {
+        var gSvcName = svcNames[si];
+        var group = svcGroups[gSvcName];
+        var suiteChildren = [];
+        var suiteMinStart = Infinity;
+        var suiteMaxEnd = 0;
+        var suiteHasFail = false;
+
+        for (var gi = 0; gi < group.length; gi++) {
+          var gSpan = group[gi];
+          var gAttrs = gSpan.attributes;
+
+          // Naming fallback chain: span.name → METHOD PATH → 'unknown'
+          var spanName = gSpan.name || '';
+          if (!spanName) {
+            var httpMethod = gAttrs['http.request.method'] || gAttrs['http.method'] || '';
+            var httpPath = gAttrs['url.path'] || gAttrs['http.route'] || gAttrs['http.target'] || '';
+            if (httpMethod && httpPath) {
+              spanName = httpMethod + ' ' + httpPath;
+            } else {
+              spanName = 'unknown';
+            }
+          }
+
+          var gStatus = _mapStatus(gSpan);
+          if (gStatus === 'FAIL') suiteHasFail = true;
+          if (gSpan.start_time && gSpan.start_time < suiteMinStart) suiteMinStart = gSpan.start_time;
+          if (gSpan.end_time && gSpan.end_time > suiteMaxEnd) suiteMaxEnd = gSpan.end_time;
+
+          suiteChildren.push({
+            name: spanName,
+            keyword_type: 'GENERIC',
+            service_name: gSvcName,
+            args: '',
+            status: gStatus,
+            start_time: gSpan.start_time,
+            end_time: gSpan.end_time,
+            elapsed_time: _elapsedMs(gSpan.start_time, gSpan.end_time),
+            id: gSpan.span_id,
+            attributes: gAttrs,
+            events: _mapEvents(gSpan.events),
+            children: buildKeywords(gSpan.span_id)
+          });
+        }
+
+        if (suiteMinStart === Infinity) suiteMinStart = 0;
+        suiteChildren.sort(function (a, b) { return (a.start_time || 0) - (b.start_time || 0); });
+
+        rootSuites.push({
+          name: gSvcName,
+          id: '__generic_' + gSvcName,
+          source: '',
+          status: suiteHasFail ? 'FAIL' : 'PASS',
+          start_time: suiteMinStart,
+          end_time: suiteMaxEnd,
+          elapsed_time: _elapsedMs(suiteMinStart, suiteMaxEnd),
+          doc: 'Generic OTel spans from ' + gSvcName,
+          _is_generic_service: true,
+          children: suiteChildren
+        });
+      }
+    }
+
     rootSuites.sort(function (a, b) { return (a.start_time || 0) - (b.start_time || 0); });
 
     // Compute statistics
