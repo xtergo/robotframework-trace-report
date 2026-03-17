@@ -2517,6 +2517,74 @@
     ctx.strokeStyle = '#43a047';
     ctx.lineWidth = 2;
     ctx.strokeRect(left, 0, right - left, height);
+
+    // Count spans inside the selection range
+    var selStart = Math.min(timelineState.selectionStart, timelineState.selectionEnd);
+    var selEnd = Math.max(timelineState.selectionStart, timelineState.selectionEnd);
+    var totalSpans = timelineState.flatSpans ? timelineState.flatSpans.length : 0;
+    var visibleInSelection = 0;
+    var allSpans = timelineState.flatSpans || [];
+    for (var i = 0; i < allSpans.length; i++) {
+      var s = allSpans[i];
+      // Span overlaps selection if it starts before selEnd and ends after selStart
+      if (s.startTime < selEnd && s.endTime > selStart) {
+        visibleInSelection++;
+      }
+    }
+    var hiddenCount = totalSpans - visibleInSelection;
+
+    // Draw info label at top of selection box
+    var selWidth = right - left;
+    if (selWidth > 40) {
+      var labelText = visibleInSelection + ' spans';
+      if (hiddenCount > 0) {
+        labelText += '  (' + hiddenCount + ' outside)';
+      }
+      // Duration label
+      var durSec = selEnd - selStart;
+      var durLabel;
+      if (durSec < 1) {
+        durLabel = Math.round(durSec * 1000) + 'ms';
+      } else if (durSec < 60) {
+        durLabel = durSec.toFixed(1) + 's';
+      } else {
+        durLabel = (durSec / 60).toFixed(1) + 'm';
+      }
+
+      ctx.save();
+      ctx.font = 'bold 11px sans-serif';
+      var textWidth = ctx.measureText(labelText).width;
+      var durWidth = ctx.measureText(durLabel).width;
+      var maxTextW = Math.max(textWidth, durWidth);
+      var boxW = maxTextW + 16;
+      var boxH = 34;
+      var boxX = left + (selWidth - boxW) / 2;
+      var boxY = 8;
+
+      // Background pill
+      ctx.fillStyle = 'rgba(46, 125, 50, 0.9)';
+      ctx.beginPath();
+      ctx.moveTo(boxX + 4, boxY);
+      ctx.lineTo(boxX + boxW - 4, boxY);
+      ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + 4);
+      ctx.lineTo(boxX + boxW, boxY + boxH - 4);
+      ctx.quadraticCurveTo(boxX + boxW, boxY + boxH, boxX + boxW - 4, boxY + boxH);
+      ctx.lineTo(boxX + 4, boxY + boxH);
+      ctx.quadraticCurveTo(boxX, boxY + boxH, boxX, boxY + boxH - 4);
+      ctx.lineTo(boxX, boxY + 4);
+      ctx.quadraticCurveTo(boxX, boxY, boxX + 4, boxY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Text
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(labelText, boxX + boxW / 2, boxY + 14);
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(durLabel, boxX + boxW / 2, boxY + 28);
+      ctx.restore();
+    }
   }
 
   // Overlay boundary updates within the same render frame because this function

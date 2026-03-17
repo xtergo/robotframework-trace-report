@@ -428,6 +428,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .panel-tree {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 16px 4px;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -754,6 +755,8 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-radius: 3px;
   cursor: pointer;
   user-select: none;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Tree indent guides — one vertical line per nesting level.
@@ -835,17 +838,70 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 .rf-trace-viewer .tree-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .rf-trace-viewer .tree-name .node-type {
-  font-size: 10px;
+  display: inline-block;
+  font-size: 9px;
   text-transform: uppercase;
-  color: var(--text-muted);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
   margin-right: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
 }
+
+/* Colored node-type badges in tree (matching flow-type-badge colors) */
+/* Suite and test badges */
+.rf-trace-viewer .tree-node .tree-row .node-type.type-suite { background: #e3f2fd; color: #1565c0; }
+.rf-trace-viewer .tree-node .tree-row .node-type.type-test { background: #e8f5e9; color: #2e7d32; }
+.rf-trace-viewer.theme-dark .tree-node .tree-row .node-type.type-suite { background: #0d2137; color: #64b5f6; }
+.rf-trace-viewer.theme-dark .tree-node .tree-row .node-type.type-test { background: #1b3a1b; color: #66bb6a; }
+/* Green family */
+.rf-trace-viewer .tree-row.kw-setup .node-type { background: #e8f5e9; color: #2e7d32; }
+.rf-trace-viewer .tree-row.kw-teardown .node-type { background: #c8e6c9; color: #1b5e20; }
+/* Purple family */
+.rf-trace-viewer .tree-row.kw-external .node-type { background: #f3e5f5; color: #7b1fa2; }
+.rf-trace-viewer .tree-row.kw-for .node-type { background: #e8eaf6; color: #283593; }
+.rf-trace-viewer .tree-row.kw-iteration .node-type { background: #ede7f6; color: #4527a0; }
+.rf-trace-viewer .tree-row.kw-while .node-type { background: #e8eaf6; color: #283593; }
+/* Orange family */
+.rf-trace-viewer .tree-row.kw-if .node-type { background: #fff3e0; color: #e65100; }
+.rf-trace-viewer .tree-row.kw-else-if .node-type { background: #fff8e1; color: #ef6c00; }
+.rf-trace-viewer .tree-row.kw-else .node-type { background: #fff8e1; color: #ef6c00; }
+/* Teal family */
+.rf-trace-viewer .tree-row.kw-try .node-type { background: #e0f2f1; color: #00695c; }
+.rf-trace-viewer .tree-row.kw-except .node-type { background: #e0f7fa; color: #00838f; }
+.rf-trace-viewer .tree-row.kw-finally .node-type { background: #e0f7fa; color: #00838f; }
+.rf-trace-viewer .tree-row.kw-generic .node-type { background: #e0f2f1; color: #00695c; }
+/* Indigo */
+.rf-trace-viewer .tree-row.kw-group .node-type { background: #e8eaf6; color: #1a237e; }
+/* Red */
+.rf-trace-viewer .tree-row.kw-error .node-type { background: #ffebee; color: #c62828; }
+
+/* Dark mode tree node-type badges */
+.rf-trace-viewer.theme-dark .tree-row.kw-setup .node-type { background: #1b3a1b; color: #66bb6a; }
+.rf-trace-viewer.theme-dark .tree-row.kw-teardown .node-type { background: #14301a; color: #4caf50; }
+.rf-trace-viewer.theme-dark .tree-row.kw-external .node-type { background: #2a1530; color: #ce93d8; }
+.rf-trace-viewer.theme-dark .tree-row.kw-for .node-type { background: #141730; color: #7986cb; }
+.rf-trace-viewer.theme-dark .tree-row.kw-iteration .node-type { background: #1a1530; color: #9575cd; }
+.rf-trace-viewer.theme-dark .tree-row.kw-while .node-type { background: #141730; color: #7986cb; }
+.rf-trace-viewer.theme-dark .tree-row.kw-if .node-type { background: #331a00; color: #ffb74d; }
+.rf-trace-viewer.theme-dark .tree-row.kw-else-if .node-type { background: #332200; color: #ffc107; }
+.rf-trace-viewer.theme-dark .tree-row.kw-else .node-type { background: #332200; color: #ffc107; }
+.rf-trace-viewer.theme-dark .tree-row.kw-try .node-type { background: #0a2924; color: #4db6ac; }
+.rf-trace-viewer.theme-dark .tree-row.kw-except .node-type { background: #0a2a30; color: #4dd0e1; }
+.rf-trace-viewer.theme-dark .tree-row.kw-finally .node-type { background: #0a2a30; color: #4dd0e1; }
+.rf-trace-viewer.theme-dark .tree-row.kw-generic .node-type { background: #0a2924; color: #4db6ac; }
+.rf-trace-viewer.theme-dark .tree-row.kw-group .node-type { background: #141730; color: #9fa8da; }
+.rf-trace-viewer.theme-dark .tree-row.kw-error .node-type { background: #3a1b1b; color: #ef5350; }
 
 .rf-trace-viewer .tree-name .kw-args {
   color: var(--text-secondary);
@@ -874,13 +930,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-left: 3px solid #ad1457;
 }
 
-.rf-trace-viewer .tree-row.kw-setup .node-type {
-  color: #1565c0;
-}
-
-.rf-trace-viewer .tree-row.kw-teardown .node-type {
-  color: #ad1457;
-}
+/* kw-setup / kw-teardown .node-type colors now handled by badge rules above */
 
 .rf-trace-viewer.theme-dark .tree-row.kw-setup {
   border-left-color: #42a5f5;
@@ -890,13 +940,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-left-color: #f06292;
 }
 
-.rf-trace-viewer.theme-dark .tree-row.kw-setup .node-type {
-  color: #42a5f5;
-}
-
-.rf-trace-viewer.theme-dark .tree-row.kw-teardown .node-type {
-  color: #f06292;
-}
+/* dark kw-setup / kw-teardown .node-type colors now handled by badge rules above */
 
 /* ── External / Cross-Service Spans ── */
 
@@ -904,9 +948,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   border-left: 3px solid #7b1fa2;
 }
 
-.rf-trace-viewer .tree-row.kw-external .node-type {
-  color: #7b1fa2;
-}
+/* kw-external .node-type color now handled by badge rules above */
 
 .rf-trace-viewer .svc-name-badge {
   display: inline-block;
@@ -918,15 +960,17 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: #fff;
   vertical-align: middle;
   font-weight: 600;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rf-trace-viewer.theme-dark .tree-row.kw-external {
   border-left-color: #ce93d8;
 }
 
-.rf-trace-viewer.theme-dark .tree-row.kw-external .node-type {
-  color: #ce93d8;
-}
+/* dark kw-external .node-type color now handled by badge rules above */
 
 .rf-trace-viewer.theme-dark .svc-name-badge {
   background: #9c27b0;
@@ -937,9 +981,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .tree-row.kw-generic {
   border-left: 3px solid #80cbc4;
 }
-.rf-trace-viewer .kw-generic .node-type {
-  color: #00897b;
-}
+/* kw-generic .node-type color now handled by badge rules above */
 .rf-trace-viewer .kw-generic .svc-name-badge {
   background: #e0f2f1;
   color: #00695c;
@@ -958,9 +1000,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer.theme-dark .tree-row.kw-generic {
   border-left-color: #4db6ac;
 }
-.rf-trace-viewer.theme-dark .kw-generic .node-type {
-  color: #80cbc4;
-}
+/* dark kw-generic .node-type color now handled by badge rules above */
 .rf-trace-viewer.theme-dark .kw-generic .svc-name-badge {
   background: #1b5e20;
   color: #a5d6a7;
@@ -2547,19 +2587,36 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 /* ── Highlighted row (navigated-to keyword) ── */
 .rf-trace-viewer .flow-row-highlight {
   border-left: 3px solid var(--focus-outline);
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.12);
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -2px;
+  animation: flow-highlight-pulse 1.5s ease-out;
+}
+
+@keyframes flow-highlight-pulse {
+  0% { background: rgba(59, 130, 246, 0.35); }
+  100% { background: rgba(59, 130, 246, 0.12); }
 }
 
 .rf-trace-viewer .flow-row-highlight:hover {
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(59, 130, 246, 0.18);
 }
 
 .rf-trace-viewer.theme-dark .flow-row-highlight {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(59, 130, 246, 0.2);
+}
+
+@keyframes flow-highlight-pulse-dark {
+  0% { background: rgba(59, 130, 246, 0.45); }
+  100% { background: rgba(59, 130, 246, 0.2); }
+}
+
+.rf-trace-viewer.theme-dark .flow-row-highlight {
+  animation: flow-highlight-pulse-dark 1.5s ease-out;
 }
 
 .rf-trace-viewer.theme-dark .flow-row-highlight:hover {
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(59, 130, 246, 0.25);
 }
 
 /* ── Live Mode Status Bar ── */

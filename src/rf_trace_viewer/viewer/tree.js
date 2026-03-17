@@ -2370,6 +2370,10 @@ function _createTreeNode(opts) {
     row.classList.add('kw-external');
   } else if (opts.kwType === 'GENERIC') {
     row.classList.add('kw-generic');
+  } else if (opts.kwType === 'ERROR') {
+    row.classList.add('kw-error');
+  } else if (opts.kwType) {
+    row.classList.add('kw-' + opts.kwType.toLowerCase().replace(/_/g, '-'));
   }
 
   // Toggle arrow (or spacer)
@@ -2396,11 +2400,15 @@ function _createTreeNode(opts) {
 
   var typeLabel = document.createElement('span');
   typeLabel.className = 'node-type';
-  typeLabel.textContent = (function() {
+  var typeLabelText = (function() {
     if (opts.type === 'suite' && opts.data && opts.data._is_generic_service) return 'SERVICE';
     if (opts.kwType === 'GENERIC') return 'SPAN';
     return opts.kwType || opts.type;
   })();
+  typeLabel.textContent = typeLabelText;
+  // Add type-specific class for suite/test badge coloring
+  if (opts.type === 'suite') typeLabel.classList.add('type-suite');
+  else if (opts.type === 'test') typeLabel.classList.add('type-test');
   nameEl.appendChild(typeLabel);
 
   // Service badge (always second — consistent position for RF and external)

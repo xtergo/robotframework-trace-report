@@ -122,11 +122,11 @@
             return;
           }
           var suiteFirstTest = _findFirstTest(suite);
-          if (suiteFirstTest) {
-            s.currentTestId = suiteFirstTest.id;
+          if (suiteFirstTest || (suite.tests && suite.tests.length > 0) || (suite.suites && suite.suites.length > 0)) {
+            s.currentTestId = suite.id;
             s.highlightSpanId = null;
-            s.rows = _buildKeywordRows(suiteFirstTest);
-            s.expandedIds = _computeFailFocusedExpanded(suiteFirstTest);
+            s.rows = _buildSuiteSummaryRows(suite);
+            s.expandedIds = {};
             _renderTable(s);
             _scrollToHighlighted(s);
             return;
@@ -304,6 +304,100 @@
       }
     }
     return rows;
+  }
+
+  /**
+   * Build summary rows for a suite — shows tests and child suites as top-level items,
+   * with their keywords as expandable children.
+   */
+  function _buildSuiteSummaryRows(suite) {
+    var rows = [];
+    // Add suite-level setup/teardown keywords
+    var suiteKws = suite.keywords || [];
+    for (var sk = 0; sk < suiteKws.length; sk++) {
+      var skw = suiteKws[sk];
+      rows.push({
+        source: '', lineno: 0,
+        name: skw.name || '',
+        args: skw.args || '',
+        status: skw.status || '',
+        duration: skw.elapsed_time || 0,
+        error: skw.status_message || '',
+        events: skw.events || [],
+        id: skw.id || '',
+        keyword_type: skw.keyword_type || 'KEYWORD',
+        depth: 0, parentId: null,
+        hasChildren: false,
+        service_name: skw.service_name || '',
+        source_metadata: skw.source_metadata || null,
+        attributes: skw.attributes || null
+      });
+    }
+    // Add child suites as summary rows
+    var childSuites = suite.suites || [];
+    for (var cs = 0; cs < childSuites.length; cs++) {
+      var csuite = childSuites[cs];
+      var cTests = _collectTests(csuite);
+      rows.push({
+        source: csuite.source || '', lineno: 0,
+        name: csuite.name || '',
+        args: cTests.length + ' test' + (cTests.length !== 1 ? 's' : ''),
+        status: csuite.status || '',
+        duration: csuite.elapsed_time || 0,
+        error: csuite.status_message || '',
+        events: [],
+        id: csuite.id || '',
+        keyword_type: 'GROUP',
+        depth: 0, parentId: null,
+        hasChildren: cTests.length > 0,
+        service_name: '', source_metadata: null, attributes: null
+      });
+      // Add tests of child suite as depth-1 children
+      for (var ct = 0; ct < cTests.length; ct++) {
+        _addTestSummaryRow(rows, cTests[ct], 1, csuite.id);
+      }
+    }
+    // Add direct tests
+    var tests = suite.tests || [];
+    for (var t = 0; t < tests.length; t++) {
+      _addTestSummaryRow(rows, tests[t], 0, null);
+    }
+    return rows;
+  }
+
+  function _addTestSummaryRow(rows, test, depth, parentId) {
+    var kwCount = 0;
+    var stack = (test.keywords || []).slice();
+    while (stack.length) {
+      kwCount++;
+      var item = stack.pop();
+      if (item.children) {
+        for (var ci = 0; ci < item.children.length; ci++) stack.push(item.children[ci]);
+      }
+    }
+    rows.push({
+      source: test.source || '', lineno: 0,
+      name: test.name || '',
+      args: kwCount + ' keyword' + (kwCount !== 1 ? 's' : ''),
+      status: test.status || '',
+      duration: test.elapsed_time || 0,
+      error: test.status_message || '',
+      events: [],
+      id: test.id || '',
+      keyword_type: 'KEYWORD',
+      depth: depth, parentId: parentId,
+      hasChildren: false,
+      service_name: '', source_metadata: null, attributes: null
+    });
+  }
+
+  function _collectTests(suite) {
+    var tests = (suite.tests || []).slice();
+    var childSuites = suite.suites || [];
+    for (var i = 0; i < childSuites.length; i++) {
+      tests = tests.concat(_collectTests(childSuites[i]));
+    }
+    return tests;
   }
 
   /**
@@ -757,8 +851,8 @@
             state.expandedIds[row.id] = true;
           }
           _renderTable(state);
-          return;
         }
+        // Always emit navigate-to-span so timeline highlights the gantt bar
         if (window.RFTraceViewer && window.RFTraceViewer.emit) {
           window.RFTraceViewer.emit('navigate-to-span', { spanId: row.id, source: 'flow-table' });
         }

@@ -2060,14 +2060,14 @@
     dropdown.className = 'service-filter-dropdown';
     dropdown.style.display = 'none';
 
-    // Initialize "Show All Services" from localStorage, defaulting to true
-    // when no --service-name hint, false when one is set.
-    var defaultShowAll = !_defaultService || _defaultService === 'rf';
+    // Initialize "Show All Services" from localStorage, defaulting to true.
+    // --service-name only controls which service is pre-checked, not whether
+    // to show all. Users who want manual control can toggle it off.
     try {
       var saved = localStorage.getItem('rf-trace-show-all-services');
       if (saved !== null) _showAllServices = saved === 'true';
-      else _showAllServices = defaultShowAll;
-    } catch (e) { _showAllServices = defaultShowAll; }
+      else _showAllServices = true;
+    } catch (e) { _showAllServices = true; }
 
     _svcListEl = document.createElement('div');
     _svcListEl.className = 'service-filter-list';
