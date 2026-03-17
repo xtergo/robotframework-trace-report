@@ -337,7 +337,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
         max_spans = getattr(self.server, "max_spans", None)
         max_spans_js = f"window.__RF_TRACE_MAX_SPANS__ = {int(max_spans)};\n" if max_spans else ""
 
-        # Default service name filter (from --service-name config)
+        # Default service name hint (from --service-name config).
+        # This is NOT a server-side filter — it only tells the frontend
+        # which service checkbox to pre-check on page load.
         svc_name = getattr(self.server, "service_name", None) or ""
         svc_name_js = (
             f'window.__RF_SERVICE_NAME__ = "{_escape_html(svc_name)}";\n' if svc_name else ""
@@ -570,12 +572,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            # Resolve effective service name: request param > server config default.
-            # The browser may send service= empty, which normalizes to None here,
-            # but the server was started with --service-name so we fall back to that.
-            effective_service = service_name
-            if not effective_service:
-                effective_service = getattr(self.server, "service_name", None) or None
+            # Always poll ALL services — no server-side service filtering.
+            # --service-name is only a frontend hint (default-checked service).
+            # The browser sends service= but we ignore it for the query;
+            # client-side checkboxes handle visibility filtering.
+            effective_service = None
 
             view_model = provider.poll_new_spans(
                 since_ns, service_name=effective_service, execution_id=execution_id

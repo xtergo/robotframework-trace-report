@@ -356,17 +356,16 @@ class TestViewerHtmlBaseUrl:
 
 
 class TestServiceNameFilter:
-    """GET /api/spans?service=X passes service_name to provider.poll_new_spans."""
+    """Service filter is now client-side only — server always polls all services."""
 
-    def test_service_name_passed_to_provider(self):
+    def test_service_name_ignored_by_server(self):
+        """Even when service= is sent, server polls with service_name=None."""
         provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
         server = _create_server_with_provider(provider=provider)
 
         _get_api_spans(server, since_ns=0, service_name="robot-framework")
 
-        provider.poll_new_spans.assert_called_once_with(
-            0, service_name="robot-framework", execution_id=None
-        )
+        provider.poll_new_spans.assert_called_once_with(0, service_name=None, execution_id=None)
 
     def test_service_name_none_when_not_provided(self):
         provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
@@ -376,8 +375,8 @@ class TestServiceNameFilter:
 
         provider.poll_new_spans.assert_called_once_with(0, service_name=None, execution_id=None)
 
-    def test_service_name_returns_filtered_spans(self):
-        """When service_name is provided, response still contains valid JSON."""
+    def test_service_name_returns_all_spans(self):
+        """Even when service_name is provided, response contains all spans."""
         provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
         server = _create_server_with_provider(provider=provider)
 
@@ -388,16 +387,14 @@ class TestServiceNameFilter:
         assert "spans" in body
         assert body["total_count"] == 3
 
-    def test_server_config_service_name_used_when_request_param_empty(self):
-        """When browser sends service= empty, handler resolves from server config."""
+    def test_server_config_service_name_not_used_as_filter(self):
+        """Server config --service-name is a frontend hint, not a server-side filter."""
         provider = _make_mock_provider(supports_live=True, spans=_make_sample_spans())
         server = _create_server_with_provider(provider=provider, service_name="essvt-test-runner")
 
         _get_api_spans(server, since_ns=0, service_name=None)
 
-        provider.poll_new_spans.assert_called_once_with(
-            0, service_name="essvt-test-runner", execution_id=None
-        )
+        provider.poll_new_spans.assert_called_once_with(0, service_name=None, execution_id=None)
 
 
 # ---------------------------------------------------------------------------

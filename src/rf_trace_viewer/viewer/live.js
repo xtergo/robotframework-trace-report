@@ -40,9 +40,10 @@
   // Default for SigNoz live mode: 15m. Use ?lookback=0 to fetch everything.
   var _lookbackNs = _parseLookback();
 
-  // Service name filter: configurable default from server config,
+  // Service name hint: configurable default from server config,
   // overridable via URL param ?service=robot-framework.
-  // In multi-service mode, _activeServices tracks which services are checked.
+  // This only controls which service is pre-checked on page load.
+  // In multi-service mode, _activeServices tracks which services are visible.
   var _defaultService = String(window.__RF_SERVICE_NAME__ || 'rf');
   var _serviceFilter = _parseServiceFilter();
   var _knownServices = {};       // service_name → true (discovered from spans)
@@ -92,51 +93,12 @@
     state.enabled = false;
     state.disabledSince = Date.now();
 
-    // Cancel any pending grace timer (toggle-on was in progress)
-    if (state.graceTimer) {
-      clearTimeout(state.graceTimer);
-      state.graceTimer = null;
-      state.graceStartedAt = null;
-      state.graceDuration = null;
-      state.pendingEnableFetch = false;
-    }
-
-    // Start 30-second eviction timer
-    if (state.evictionTimer) clearTimeout(state.evictionTimer);
-    state.evictionTimer = setTimeout(function () {
-      _evictServiceSpans(serviceName);
-    }, 30000);
-
     delete _activeServices[serviceName];
     _serviceFilter = _getActiveServiceFilter();
     _emitServiceStateChanged(serviceName);
     _renderServiceList();
     _updateServiceBtnLabel();
-  }
-
-  function _evictServiceSpans(serviceName) {
-    var state = _getServiceState(serviceName);
-    state.evictionTimer = null;
-    state.cachedSpanCount = 0;
-    state.cachedRange = null;
-
-    // Remove this service's spans from allSpans and seenSpanIds
-    var kept = [];
-    for (var i = 0; i < allSpans.length; i++) {
-      var svc = allSpans[i].attributes ? (allSpans[i].attributes['service.name'] || '') : '';
-      if (svc === serviceName) {
-        // Remove from dedup set too
-        if (allSpans[i].span_id) delete seenSpanIds[allSpans[i].span_id];
-      } else {
-        kept.push(allSpans[i]);
-      }
-    }
-    allSpans = kept;
-    _loadWindowState.totalCachedSpans = allSpans.length;
-
-    // Service name stays in _knownServices — just state changes
-    _emitServiceStateChanged(serviceName);
-    _renderServiceList();
+    // Client-side only: just re-render with the updated visibility filter
     _rebuildAndRender();
   }
 
@@ -145,71 +107,13 @@
     state.enabled = true;
     state.disabledSince = null;
 
-    // Cancel eviction timer if toggling back on within 30s
-    if (state.evictionTimer) {
-      clearTimeout(state.evictionTimer);
-      state.evictionTimer = null;
-    }
-
     _activeServices[serviceName] = true;
     _serviceFilter = _getActiveServiceFilter();
-
-    // If we have cached spans, just show them (no fetch needed)
-    if (state.cachedSpanCount > 0) {
-      _emitServiceStateChanged(serviceName);
-      _renderServiceList();
-      _updateServiceBtnLabel();
-      _rebuildAndRender();
-      return;
-    }
-
-    // No cached spans — start grace period before fetching
-    state.pendingEnableFetch = true;
-
-    // Determine grace duration: 1s if single pending service with no cache, else 3s
-    var pendingCount = 0;
-    var names = Object.keys(_serviceStates);
-    for (var i = 0; i < names.length; i++) {
-      if (_serviceStates[names[i]].pendingEnableFetch) pendingCount++;
-    }
-    var graceDuration = (pendingCount === 1) ? 1000 : 3000;
-
-    if (state.graceTimer) clearTimeout(state.graceTimer);
-    state.graceStartedAt = Date.now();
-    state.graceDuration = graceDuration;
-    state.graceTimer = setTimeout(function () {
-      _onGraceExpired(serviceName);
-    }, graceDuration);
-
     _emitServiceStateChanged(serviceName);
     _renderServiceList();
     _updateServiceBtnLabel();
-    _startSvcLabelTimer();
-  }
-
-  function _onGraceExpired(serviceName) {
-    var state = _getServiceState(serviceName);
-    state.graceTimer = null;
-    state.graceStartedAt = null;
-    state.graceDuration = null;
-    state.pendingEnableFetch = false;
-
-    // If disabled during grace, do nothing
-    if (!state.enabled) {
-      _emitServiceStateChanged(serviceName);
-      _renderServiceList();
-      return;
-    }
-
-    // Fetch spans for [activeWindowStart, now] for this service
-    var fromTime = _loadWindowState.activeWindowStart || (_loadWindowState.executionStartTime - _loadWindowState.stepSize);
-    var toTime = _loadWindowState.executionStartTime || (Date.now() / 1000);
-
-    // Use delta fetch infrastructure — the spans will be merged via existing ingest
-    _deltaFetch(fromTime, toTime);
-
-    _emitServiceStateChanged(serviceName);
-    _renderServiceList();
+    // Client-side only: spans are already cached, just re-render
+    _rebuildAndRender();
   }
 
   function _startSvcLabelTimer() {
@@ -1114,10 +1018,9 @@
     var lookbackBufferNs = 5 * 1e9; // 5 seconds in nanoseconds
     var pollFromNs = Math.max(0, lastSeenNs - lookbackBufferNs);
     var url = '/api/spans?since_ns=' + pollFromNs;
-    var svc = _serviceFilter;
-    // Always send service param so server doesn't fall back to its config default
-    // Empty string = no filter (all services)
-    url += '&service=' + encodeURIComponent(svc || '');
+    // Always fetch ALL services — no server-side service filter.
+    // Client-side checkboxes handle visibility at render time.
+    url += '&service=';
     if (_executionFilter) {
       url += '&execution_id=' + encodeURIComponent(_executionFilter);
     }
@@ -1489,8 +1392,24 @@
   /* ── 6. Model building ─────────────────────────────────────────── */
 
   function _rebuildAndRender() {
-    var model = _buildModel(allSpans);
+    // Client-side service visibility: filter allSpans to only active services
+    var active = _activeServices;
+    var total = Object.keys(_knownServices).length;
+    var activeCount = Object.keys(active).length;
+    var visibleSpans;
+    if (activeCount === 0 || activeCount === total) {
+      // All services visible (or none checked = show all)
+      visibleSpans = allSpans;
+    } else {
+      visibleSpans = [];
+      for (var i = 0; i < allSpans.length; i++) {
+        var svc = allSpans[i].attributes ? (allSpans[i].attributes['service.name'] || '') : '';
+        if (active[svc] || !svc) visibleSpans.push(allSpans[i]);
+      }
+    }
+    var model = _buildModel(visibleSpans);
     console.log('[live] rebuildAndRender: allSpans=' + allSpans.length +
+      ', visibleSpans=' + visibleSpans.length +
       ', rootSuites=' + model.suites.length +
       ', stats.total_tests=' + (model.statistics ? model.statistics.total_tests : '?'));
     _renderAllViews(model);
@@ -2271,27 +2190,11 @@
 
   function _deriveServiceBadge(state) {
     if (state.thrashLocked) return 'Stabilizing\u2026';
-    if (state.pendingEnableFetch && state.graceTimer) {
-      // Compute remaining grace seconds from stored timestamps
-      var remaining = 0;
-      if (state.graceStartedAt && state.graceDuration) {
-        remaining = Math.max(0, Math.ceil((state.graceStartedAt + state.graceDuration - Date.now()) / 1000));
-      }
-      return 'Pending (' + remaining + ' s)';
-    }
-    if (!state.enabled && state.evictionTimer) {
-      // Compute remaining eviction seconds from disabledSince (30s timer)
-      var evictRemaining = 0;
-      if (state.disabledSince) {
-        evictRemaining = Math.max(0, Math.ceil((state.disabledSince + 30000 - Date.now()) / 1000));
-      }
-      return 'Evicting in ' + evictRemaining + ' s';
-    }
     if (state.enabled && state.cachedSpanCount > 0) {
-      return 'Enabled (' + state.cachedSpanCount + ' spans cached)';
+      return state.cachedSpanCount + ' spans';
     }
-    if (!state.enabled && !state.evictionTimer) {
-      return 'Disabled';
+    if (!state.enabled) {
+      return 'Hidden';
     }
     return '';
   }
@@ -2324,13 +2227,20 @@
     }
 
   function _resetAndRepoll() {
-    // Reset state and re-fetch from scratch with new service filter
+    // Reset state and re-fetch from scratch
     allSpans = [];
     seenSpanIds = {};
     lastSeenNs = 0;
     _spanCapReached = false;
     _lastFilterSpanCount = 0;
     _timelineInitialized = false;
+
+    // Reset per-service cached span counts
+    var names = Object.keys(_serviceStates);
+    for (var i = 0; i < names.length; i++) {
+      _serviceStates[names[i]].cachedSpanCount = 0;
+      _serviceStates[names[i]].cachedRange = null;
+    }
 
     // Re-apply lookback
     if (_lookbackNs > 0 && provider === 'signoz') {
