@@ -996,9 +996,8 @@
     return tr;
   }
 
-  function _formatDuration(seconds) {
-    if (typeof seconds !== 'number' || seconds <= 0) return '';
-    var ms = seconds * 1000;
+  function _formatDuration(ms) {
+    if (typeof ms !== 'number' || ms <= 0) return '';
     if (ms < 1) return '< 1ms';
     if (ms < 1000) return ms.toFixed(0) + 'ms';
     if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
