@@ -1532,6 +1532,23 @@
       }
     }
 
+    // Second pass: collect generic spans (no rf.* attributes, parent not in set)
+    var genericSpans = [];
+    for (i = 0; i < spans.length; i++) {
+      span = spans[i];
+      var ga = span.attributes;
+      // Skip spans that have any rf.* attribute
+      if (ga['rf.type'] || ga['rf.suite.name'] || ga['rf.test.name'] ||
+          ga['rf.keyword.name'] || ga['rf.signal']) {
+        continue;
+      }
+      // Skip spans whose parent is in the current span set (EXTERNAL path)
+      if (span.parent_span_id && byId[span.parent_span_id]) {
+        continue;
+      }
+      genericSpans.push(span);
+    }
+
     // Build parent → children map
     var childrenOf = {}; // parent_span_id → [span]
     for (i = 0; i < spans.length; i++) {
