@@ -111,6 +111,16 @@
         // 4. Suite span — show the first test in that suite
         var suite = _findSuiteById(suites, spanId);
         if (suite) {
+          // Generic service suite — build keyword rows from suite children directly
+          if (suite._is_generic_service) {
+            s.currentTestId = suite.id;
+            s.highlightSpanId = null;
+            s.rows = _buildGenericSuiteRows(suite);
+            s.expandedIds = {};
+            _renderTable(s);
+            _scrollToHighlighted(s);
+            return;
+          }
           var suiteFirstTest = _findFirstTest(suite);
           if (suiteFirstTest) {
             s.currentTestId = suiteFirstTest.id;
@@ -122,7 +132,20 @@
             return;
           }
         }
-        // 5. Unknown span — clear the flow table
+        // 5. Generic suite child span — find the parent generic suite
+        var genSuite = _findGenericSuiteContainingSpan(suites, spanId);
+        if (genSuite) {
+          s.currentTestId = genSuite.id;
+          s.highlightSpanId = spanId;
+          s.rows = _buildGenericSuiteRows(genSuite);
+          s.expandedIds = {};
+          // Expand ancestors of the highlighted span
+          _expandAncestors(s, spanId);
+          _renderTable(s);
+          _scrollToHighlighted(s);
+          return;
+        }
+        // 6. Unknown span — clear the flow table
         s.currentTestId = null;
         s.highlightSpanId = null;
         s.rows = [];
@@ -225,6 +248,78 @@
       }
     }
     return rows;
+  }
+
+  /**
+   * Build flow-table rows from a generic service suite's children.
+   * Generic suites have keyword-type children directly (no test wrapper).
+   */
+  function _buildGenericSuiteRows(suite) {
+    var rows = [], children = suite.children || [];
+    for (var i = 0; i < children.length; i++) {
+      var kw = children[i];
+      var hasChildren = kw.children && kw.children.length > 0;
+      rows.push({
+        source: '',
+        lineno: 0,
+        name: kw.name || '',
+        args: kw.args || '',
+        status: kw.status || '',
+        duration: kw.elapsed_time || 0,
+        error: kw.status_message || '',
+        events: kw.events || [],
+        id: kw.id || '',
+        keyword_type: kw.keyword_type || 'GENERIC',
+        depth: 0,
+        parentId: null,
+        hasChildren: hasChildren,
+        service_name: kw.service_name || '',
+        source_metadata: null,
+        attributes: kw.attributes || null
+      });
+      var ch = kw.children || [];
+      for (var c = ch.length - 1; c >= 0; c--) {
+        // Nested children rendered at depth 1
+        var stack = [{ kw: ch[c], depth: 1, parentId: kw.id }];
+        while (stack.length) {
+          var e = stack.pop(), nkw = e.kw;
+          var nHasChildren = nkw.children && nkw.children.length > 0;
+          rows.push({
+            source: '', lineno: 0,
+            name: nkw.name || '', args: nkw.args || '',
+            status: nkw.status || '', duration: nkw.elapsed_time || 0,
+            error: nkw.status_message || '', events: nkw.events || [],
+            id: nkw.id || '', keyword_type: nkw.keyword_type || 'KEYWORD',
+            depth: e.depth, parentId: e.parentId,
+            hasChildren: nHasChildren,
+            service_name: nkw.service_name || '',
+            source_metadata: nkw.source_metadata || null,
+            attributes: nkw.attributes || null
+          });
+          var nch = nkw.children || [];
+          for (var nc = nch.length - 1; nc >= 0; nc--) {
+            stack.push({ kw: nch[nc], depth: e.depth + 1, parentId: nkw.id });
+          }
+        }
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Find a generic service suite that contains a span with the given ID.
+   */
+  function _findGenericSuiteContainingSpan(suites, spanId) {
+    for (var i = 0; i < suites.length; i++) {
+      var suite = suites[i];
+      if (!suite._is_generic_service) continue;
+      var children = suite.children || [];
+      for (var j = 0; j < children.length; j++) {
+        if (children[j].id === spanId) return suite;
+        if (_kwTreeContains(children[j].children || [], spanId)) return suite;
+      }
+    }
+    return null;
   }
 
   function _renderEmpty(state) {

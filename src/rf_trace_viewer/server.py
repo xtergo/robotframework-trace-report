@@ -552,10 +552,13 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
         # Enforce hard block: never return spans for hard-blocked services
         base_filter = getattr(self.server, "_base_filter", None)
-        if base_filter and service_name and service_name in base_filter.hard_blocked:
-            result = {"spans": [], "orphan_count": 0, "total_count": 0}
-            self._send_json_response(200, result, request_id)
-            return
+        if base_filter and service_name:
+            # Handle comma-separated service names
+            svc_names = [s.strip() for s in service_name.split(",") if s.strip()]
+            if all(s in base_filter.hard_blocked for s in svc_names):
+                result = {"spans": [], "orphan_count": 0, "total_count": 0}
+                self._send_json_response(200, result, request_id)
+                return
 
         # Check query concurrency limit
         semaphore = getattr(self.server, "_query_semaphore", None)

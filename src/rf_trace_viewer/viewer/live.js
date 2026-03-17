@@ -2151,10 +2151,13 @@
     _serviceDropdownEl.appendChild(dropdown);
     header.appendChild(_serviceDropdownEl);
 
-    // Seed the default service as known (visible in list) but NOT pre-checked.
-    // No checkboxes selected = show all spans (no filter).
+    // Seed the default service as known and enabled (checked by default).
+    // All services start enabled; users uncheck to filter.
     if (_defaultService) {
       _knownServices[_defaultService] = true;
+      _activeServices[_defaultService] = true;
+      var defState = _getServiceState(_defaultService);
+      defState.enabled = true;
       _renderServiceList();
     }
 
@@ -2188,9 +2191,17 @@
   }
 
   function _onServiceDiscovered(svcName) {
-    // Initialize service state if not already tracked — but don't auto-check.
-    // New services just appear in the list; user opts in by checking them.
-    _getServiceState(svcName);
+    // Initialize service state if not already tracked.
+    // Auto-enable newly discovered services so the default view shows all
+    // services as checked (enabled). Users can uncheck to filter.
+    var isNew = !_knownServices[svcName];
+    _knownServices[svcName] = true;
+    var state = _getServiceState(svcName);
+    if (isNew && !state.enabled) {
+      state.enabled = true;
+      _activeServices[svcName] = true;
+      _serviceFilter = _getActiveServiceFilter();
+    }
     _renderServiceList();
     _updateServiceBtnLabel();
   }
@@ -2287,8 +2298,9 @@
 
   function _getActiveServiceFilter() {
     var active = Object.keys(_activeServices);
-    // No services checked → empty string means "show all" (no server-side filter)
-    if (active.length === 0) return '';
+    var total = Object.keys(_knownServices).length;
+    // No services checked OR all services checked → empty string means "show all"
+    if (active.length === 0 || active.length === total) return '';
     if (active.length === 1) return active[0];
     return active.join(',');
   }
@@ -2299,7 +2311,7 @@
       if (!btn) return;
       var active = Object.keys(_activeServices);
       var total = Object.keys(_knownServices).length;
-      if (active.length === 0) {
+      if (active.length === 0 || active.length === total) {
         btn.textContent = 'Services (all)';
         btn.classList.remove('has-filter');
       } else if (active.length === 1) {

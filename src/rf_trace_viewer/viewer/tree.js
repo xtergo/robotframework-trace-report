@@ -1827,6 +1827,47 @@ function _renderKeywordDetail(panel, data) {
   if (data.service_name) {
     _addBadgeRow(panel, 'Service', data.service_name);
   }
+
+  // GENERIC spans: show OTel attributes only, skip RF-specific fields
+  if (data.keyword_type === 'GENERIC') {
+    _addCompactInfoBar(panel, data);
+    if (data.attributes && typeof window.extractSpanAttributes === 'function') {
+      var genAttrSummary = window.extractSpanAttributes(data.attributes);
+      if (genAttrSummary && genAttrSummary.type === 'http') {
+        _renderHttpSection(panel, genAttrSummary);
+      } else if (genAttrSummary && genAttrSummary.type === 'db') {
+        _renderDbSection(panel, genAttrSummary);
+      }
+    }
+    if (data.attributes) {
+      var attrTable = document.createElement('table');
+      attrTable.className = 'generic-attrs-table';
+      var attrKeys = Object.keys(data.attributes).sort();
+      for (var ai = 0; ai < attrKeys.length; ai++) {
+        if (attrKeys[ai] === 'service.name') continue;
+        var attrRow = document.createElement('tr');
+        var keyCell = document.createElement('td');
+        keyCell.textContent = attrKeys[ai];
+        var valCell = document.createElement('td');
+        valCell.textContent = String(data.attributes[attrKeys[ai]]);
+        attrRow.appendChild(keyCell);
+        attrRow.appendChild(valCell);
+        attrTable.appendChild(attrRow);
+      }
+      panel.appendChild(attrTable);
+    }
+    if (data.status === 'FAIL' && data.status_message) {
+      _addErrorBlock(panel, data.status_message);
+    }
+    if (data.events && data.events.length > 0) {
+      var genEventsWrap = document.createElement('div');
+      genEventsWrap.setAttribute('data-field', 'events');
+      _renderEventsSection(genEventsWrap, data.events);
+      panel.appendChild(genEventsWrap);
+    }
+    return;
+  }
+
   // Root cause / wrapper classification badge
   if (data.status === 'FAIL') {
     var kwCls = _classifyFailKeyword(data);
@@ -1880,23 +1921,6 @@ function _renderKeywordDetail(panel, data) {
     } else if (attrSummary && attrSummary.type === 'db') {
       _renderDbSection(panel, attrSummary);
     }
-  }
-  if (data.keyword_type === 'GENERIC' && data.attributes) {
-    var attrTable = document.createElement('table');
-    attrTable.className = 'generic-attrs-table';
-    var attrKeys = Object.keys(data.attributes).sort();
-    for (var ai = 0; ai < attrKeys.length; ai++) {
-      if (attrKeys[ai] === 'service.name') continue;
-      var attrRow = document.createElement('tr');
-      var keyCell = document.createElement('td');
-      keyCell.textContent = attrKeys[ai];
-      var valCell = document.createElement('td');
-      valCell.textContent = String(data.attributes[attrKeys[ai]]);
-      attrRow.appendChild(keyCell);
-      attrRow.appendChild(valCell);
-      attrTable.appendChild(attrRow);
-    }
-    panel.appendChild(attrTable);
   }
   _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
@@ -2346,7 +2370,7 @@ function _createTreeNode(opts) {
 
   var typeLabel = document.createElement('span');
   typeLabel.className = 'node-type';
-  typeLabel.textContent = opts.kwType || opts.type;
+  typeLabel.textContent = opts.kwType === 'GENERIC' ? 'SPAN' : (opts.kwType || opts.type);
   nameEl.appendChild(typeLabel);
 
   // Service badge (always second — consistent position for RF and external)

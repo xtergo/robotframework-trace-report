@@ -292,18 +292,34 @@ class SigNozProvider(TraceProvider):
         filters: list[dict] = []
         svc = service_name
         if svc:
-            filters.append(
-                {
-                    "key": {
-                        "key": "serviceName",
-                        "dataType": "string",
-                        "type": "",
-                        "isColumn": True,
-                    },
-                    "op": "=",
-                    "value": svc,
-                }
-            )
+            # Support comma-separated service names for multi-service filter
+            svc_list = [s.strip() for s in svc.split(",") if s.strip()]
+            if len(svc_list) == 1:
+                filters.append(
+                    {
+                        "key": {
+                            "key": "serviceName",
+                            "dataType": "string",
+                            "type": "",
+                            "isColumn": True,
+                        },
+                        "op": "=",
+                        "value": svc_list[0],
+                    }
+                )
+            elif len(svc_list) > 1:
+                filters.append(
+                    {
+                        "key": {
+                            "key": "serviceName",
+                            "dataType": "string",
+                            "type": "",
+                            "isColumn": True,
+                        },
+                        "op": "in",
+                        "value": svc_list,
+                    }
+                )
 
         if execution_id:
             filters.append(
