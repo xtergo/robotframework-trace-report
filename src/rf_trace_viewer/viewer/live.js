@@ -52,6 +52,7 @@
   var _svcListEl = null;         // checkbox list inside dropdown
   var _serviceStates = {};       // serviceName → ServiceState object
   var _svcLabelTimer = null;     // 1-second interval for countdown label updates
+  var _showAllServices = true;    // when true, all discovered services are auto-enabled
 
   // Execution ID filter — narrows to a specific test run
   var _executionFilter = '';     // empty = all executions
@@ -2059,6 +2060,15 @@
     dropdown.className = 'service-filter-dropdown';
     dropdown.style.display = 'none';
 
+    // Initialize "Show All Services" from localStorage, defaulting to true
+    // when no --service-name hint, false when one is set.
+    var defaultShowAll = !_defaultService || _defaultService === 'rf';
+    try {
+      var saved = localStorage.getItem('rf-trace-show-all-services');
+      if (saved !== null) _showAllServices = saved === 'true';
+      else _showAllServices = defaultShowAll;
+    } catch (e) { _showAllServices = defaultShowAll; }
+
     _svcListEl = document.createElement('div');
     _svcListEl.className = 'service-filter-list';
 
@@ -2113,12 +2123,12 @@
 
   function _onServiceDiscovered(svcName) {
     // Initialize service state if not already tracked.
-    // Auto-enable newly discovered services so the default view shows all
-    // services as checked (enabled). Users can uncheck to filter.
     var isNew = !_knownServices[svcName];
     _knownServices[svcName] = true;
     var state = _getServiceState(svcName);
-    if (isNew && !state.enabled) {
+    // Auto-enable if "Show All Services" is on, or if this is a brand new
+    // service that hasn't been explicitly disabled by the user.
+    if (_showAllServices || (isNew && !state.enabled)) {
       state.enabled = true;
       _activeServices[svcName] = true;
       _serviceFilter = _getActiveServiceFilter();
@@ -2140,6 +2150,41 @@
       return;
     }
 
+    // "Show All Services" toggle at the top
+    var allLabel = document.createElement('label');
+    allLabel.className = 'service-filter-item service-filter-show-all';
+    var allCb = document.createElement('input');
+    allCb.type = 'checkbox';
+    allCb.checked = _showAllServices;
+    allCb.addEventListener('change', function () {
+      _showAllServices = allCb.checked;
+      try { localStorage.setItem('rf-trace-show-all-services', String(_showAllServices)); } catch (e) {}
+      if (_showAllServices) {
+        // Enable all known services
+        var allNames = Object.keys(_knownServices);
+        for (var a = 0; a < allNames.length; a++) {
+          var st = _getServiceState(allNames[a]);
+          st.enabled = true;
+          _activeServices[allNames[a]] = true;
+        }
+        _serviceFilter = _getActiveServiceFilter();
+      }
+      _renderServiceList();
+      _updateServiceBtnLabel();
+      _rebuildAndRender();
+    });
+    var allSpan = document.createElement('span');
+    allSpan.textContent = 'Show All Services';
+    allSpan.style.fontWeight = '600';
+    allLabel.appendChild(allCb);
+    allLabel.appendChild(allSpan);
+    _svcListEl.appendChild(allLabel);
+
+    // Separator
+    var sep = document.createElement('div');
+    sep.style.cssText = 'border-bottom:1px solid var(--border-color,#ddd);margin:4px 0;';
+    _svcListEl.appendChild(sep);
+
     for (var i = 0; i < names.length; i++) {
       (function (name) {
         var state = _getServiceState(name);
@@ -2149,7 +2194,11 @@
         var cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = name;
-        cb.checked = state.enabled;
+        cb.checked = _showAllServices ? true : state.enabled;
+        if (_showAllServices) {
+          cb.disabled = true;
+          label.style.opacity = '0.6';
+        }
 
         cb.addEventListener('change', function () {
           _recordToggle(name);
