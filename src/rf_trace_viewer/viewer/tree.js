@@ -1512,6 +1512,10 @@ function _renderSuiteNode(suite, depth, filteredSpanIds) {
     data: suite
   });
 
+  if (suite._is_generic_service) {
+    node.classList.add('suite-generic-service');
+  }
+
   // Store lazy children data instead of rendering them now
   if (hasChildren) {
     node._lazyChildren = {
@@ -1876,6 +1880,23 @@ function _renderKeywordDetail(panel, data) {
     } else if (attrSummary && attrSummary.type === 'db') {
       _renderDbSection(panel, attrSummary);
     }
+  }
+  if (data.keyword_type === 'GENERIC' && data.attributes) {
+    var attrTable = document.createElement('table');
+    attrTable.className = 'generic-attrs-table';
+    var attrKeys = Object.keys(data.attributes).sort();
+    for (var ai = 0; ai < attrKeys.length; ai++) {
+      if (attrKeys[ai] === 'service.name') continue;
+      var attrRow = document.createElement('tr');
+      var keyCell = document.createElement('td');
+      keyCell.textContent = attrKeys[ai];
+      var valCell = document.createElement('td');
+      valCell.textContent = String(data.attributes[attrKeys[ai]]);
+      attrRow.appendChild(keyCell);
+      attrRow.appendChild(valCell);
+      attrTable.appendChild(attrRow);
+    }
+    panel.appendChild(attrTable);
   }
   _addCompactInfoBar(panel, data);
   if (data.status === 'FAIL' && data.status_message) {
@@ -2297,6 +2318,8 @@ function _createTreeNode(opts) {
     row.classList.add('kw-teardown');
   } else if (opts.kwType === 'EXTERNAL') {
     row.classList.add('kw-external');
+  } else if (opts.kwType === 'GENERIC') {
+    row.classList.add('kw-generic');
   }
 
   // Toggle arrow (or spacer)
@@ -2328,7 +2351,7 @@ function _createTreeNode(opts) {
 
   // Service badge (always second — consistent position for RF and external)
   var rfSvcName = window.__RF_SERVICE_NAME__ || '';
-  if (opts.data && opts.data.service_name && opts.kwType === 'EXTERNAL') {
+  if (opts.data && opts.data.service_name && (opts.kwType === 'EXTERNAL' || opts.kwType === 'GENERIC')) {
     var svcBadge = document.createElement('span');
     svcBadge.className = 'svc-name-badge';
     svcBadge.textContent = opts.data.service_name;

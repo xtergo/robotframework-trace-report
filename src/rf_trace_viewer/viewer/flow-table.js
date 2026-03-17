@@ -29,7 +29,8 @@
     BREAK: 'BRK',
     GROUP: 'GRP',
     ERROR: 'ERR',
-    EXTERNAL: 'EXT'
+    EXTERNAL: 'EXT',
+    GENERIC: 'GEN'
   };
 
   window.initFlowTable = function (container, data) {
@@ -645,6 +646,7 @@
     if (kwTypeUpper === 'SETUP') tr.classList.add('flow-row-setup');
     if (kwTypeUpper === 'TEARDOWN') tr.classList.add('flow-row-teardown');
     if (kwTypeUpper === 'EXTERNAL') tr.classList.add('flow-row-external');
+    if (kwTypeUpper === 'GENERIC') tr.classList.add('flow-row-generic');
     if (hlId && row.id === hlId) tr.classList.add('flow-row-highlight');
     if (row.id) {
       tr.setAttribute('data-span-id', row.id);
@@ -718,10 +720,10 @@
     }
 
     // Type badge (always first for consistent layout)
-    if (kwTypeUpper === 'EXTERNAL' && row.service_name) {
+    if ((kwTypeUpper === 'EXTERNAL' || kwTypeUpper === 'GENERIC') && row.service_name) {
       var extBadge = document.createElement('span');
-      extBadge.className = 'flow-type-badge flow-type-external';
-      extBadge.textContent = BADGE_LABELS['EXTERNAL'] || 'EXT';
+      extBadge.className = 'flow-type-badge flow-type-' + kwTypeUpper.toLowerCase();
+      extBadge.textContent = BADGE_LABELS[kwTypeUpper] || kwTypeUpper;
       tdKw.appendChild(extBadge);
     } else {
       var badge = document.createElement('span');
@@ -732,7 +734,7 @@
 
     // Service badge (always second — consistent position for RF and external)
     var rfSvcName = window.__RF_SERVICE_NAME__ || '';
-    if (kwTypeUpper === 'EXTERNAL' && row.service_name) {
+    if ((kwTypeUpper === 'EXTERNAL' || kwTypeUpper === 'GENERIC') && row.service_name) {
       var svcBadge = document.createElement('span');
       svcBadge.className = 'flow-svc-badge';
       svcBadge.textContent = row.service_name;
@@ -767,7 +769,7 @@
     }
 
     // Context line for EXTERNAL rows (HTTP/DB attribute summary)
-    if (kwTypeUpper === 'EXTERNAL' && row.attributes) {
+    if ((kwTypeUpper === 'EXTERNAL' || kwTypeUpper === 'GENERIC') && row.attributes) {
       var attrSummary = extractSpanAttributes(row.attributes);
       var ctxLine = generateContextLine(attrSummary);
       if (ctxLine) {

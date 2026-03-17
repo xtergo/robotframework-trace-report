@@ -2307,6 +2307,12 @@
         ? { top: '#1565c0', bottom: '#0d47a1', border: 'rgba(255,255,255,0.12)', text: '#e3f2fd' }
         : { top: '#1976d2', bottom: '#1565c0', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
     }
+    // Generic OTel spans — white/neutral theme
+    if (span.kwType === 'GENERIC') {
+      return isDark
+        ? { top: '#4a4a4a', bottom: '#3a3a3a', border: 'rgba(255,255,255,0.08)', text: '#cccccc' }
+        : { top: '#f5f5f5', bottom: '#e0e0e0', border: 'rgba(0,0,0,0.1)', text: '#555555' };
+    }
     // keyword — red for FAIL, muted purple for NOT_RUN, grey otherwise
     if (span.status === 'FAIL') {
       return isDark

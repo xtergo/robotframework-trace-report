@@ -1992,6 +1992,7 @@
     var suiteStats = [];
 
     function walkSuite(suite) {
+      if (suite._is_generic_service) return;
       var sPassed = 0;
       var sFailed = 0;
       var sSkipped = 0;
@@ -2289,9 +2290,7 @@
     // No services checked → empty string means "show all" (no server-side filter)
     if (active.length === 0) return '';
     if (active.length === 1) return active[0];
-    // Multiple services: pass comma-separated (server-side will need to handle)
-    // For now, send the first one — server only supports single service filter
-    return active[0];
+    return active.join(',');
   }
 
   function _updateServiceBtnLabel() {

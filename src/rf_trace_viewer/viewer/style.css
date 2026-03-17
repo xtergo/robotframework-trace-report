@@ -932,6 +932,66 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   background: #9c27b0;
 }
 
+/* ── Generic OTel Spans — White / Neutral Theme ── */
+
+.rf-trace-viewer .tree-row.kw-generic {
+  border-left: 3px solid #bdbdbd;
+}
+.rf-trace-viewer .kw-generic .node-type {
+  color: #757575;
+}
+.rf-trace-viewer .kw-generic .svc-name-badge {
+  background: #ffffff;
+  color: #555;
+  border: 1px solid #ccc;
+}
+
+/* Generic service suite nodes */
+.rf-trace-viewer .suite-generic-service > .tree-row {
+  border-left: 3px solid #e0e0e0;
+}
+.rf-trace-viewer .suite-generic-service > .tree-row .node-type {
+  color: #9e9e9e;
+}
+
+/* Dark theme variants */
+.rf-trace-viewer.theme-dark .tree-row.kw-generic {
+  border-left-color: #616161;
+}
+.rf-trace-viewer.theme-dark .kw-generic .node-type {
+  color: #9e9e9e;
+}
+.rf-trace-viewer.theme-dark .kw-generic .svc-name-badge {
+  background: #424242;
+  color: #bbb;
+  border-color: #555;
+}
+.rf-trace-viewer.theme-dark .suite-generic-service > .tree-row {
+  border-left-color: #555;
+}
+
+/* Attributes table in generic span detail panel */
+.rf-trace-viewer .generic-attrs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.rf-trace-viewer .generic-attrs-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  vertical-align: top;
+}
+.rf-trace-viewer .generic-attrs-table td:first-child {
+  font-weight: 600;
+  color: var(--text-muted, #757575);
+  white-space: nowrap;
+  width: 1%;
+}
+.rf-trace-viewer.theme-dark .generic-attrs-table td {
+  border-bottom-color: #444;
+}
+
 /* RF service badge (blue) for non-EXTERNAL keyword rows in tree */
 .rf-trace-viewer .tree-rf-svc-badge {
   display: inline-block;
