@@ -1670,6 +1670,24 @@ function _renderDetailPanel(opts) {
 
 /** Render suite-specific detail rows. */
 function _renderSuiteDetail(panel, data) {
+  // Generic service grouping nodes get a minimal detail view
+  if (data._is_generic_service) {
+    _addBadgeRow(panel, 'Type', 'Service Group');
+    _addCompactInfoBar(panel, data);
+    var spanCount = 0;
+    var stack = (data.children || []).slice();
+    while (stack.length > 0) {
+      var item = stack.pop();
+      spanCount++;
+      if (item.children) {
+        for (var si = 0; si < item.children.length; si++) stack.push(item.children[si]);
+      }
+    }
+    if (spanCount > 0) {
+      _addDetailRow(panel, 'Spans', String(spanCount));
+    }
+    return;
+  }
   if (data.execution_id) {
     _addBadgeRow(panel, 'Execution ID', data.execution_id);
   }
@@ -2378,7 +2396,11 @@ function _createTreeNode(opts) {
 
   var typeLabel = document.createElement('span');
   typeLabel.className = 'node-type';
-  typeLabel.textContent = opts.kwType === 'GENERIC' ? 'SPAN' : (opts.kwType || opts.type);
+  typeLabel.textContent = (function() {
+    if (opts.type === 'suite' && opts.data && opts.data._is_generic_service) return 'SERVICE';
+    if (opts.kwType === 'GENERIC') return 'SPAN';
+    return opts.kwType || opts.type;
+  })();
   nameEl.appendChild(typeLabel);
 
   // Service badge (always second — consistent position for RF and external)
