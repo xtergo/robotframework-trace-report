@@ -872,7 +872,9 @@
     _poll();
 
     // Wall-clock advance: every 10s, push the timeline right edge to now.
+    // Skip when paused — the timeline should freeze in place.
     setInterval(function () {
+      if (_paused) return;
       if (typeof window.advanceTimelineNow === 'function') {
         window.advanceTimelineNow();
       }
