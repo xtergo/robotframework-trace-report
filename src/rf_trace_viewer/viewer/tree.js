@@ -1822,7 +1822,7 @@ function _createFieldTogglePills(panel) {
 /** Render keyword-specific detail rows. */
 function _renderKeywordDetail(panel, data) {
   if (data.keyword_type) {
-    _addBadgeRow(panel, 'Type', data.keyword_type);
+    _addBadgeRow(panel, 'Type', data.keyword_type === 'GENERIC' ? 'SPAN' : data.keyword_type);
   }
   if (data.service_name) {
     _addBadgeRow(panel, 'Service', data.service_name);
@@ -1844,17 +1844,25 @@ function _renderKeywordDetail(panel, data) {
       attrTable.className = 'generic-attrs-table';
       var attrKeys = Object.keys(data.attributes).sort();
       for (var ai = 0; ai < attrKeys.length; ai++) {
-        if (attrKeys[ai] === 'service.name') continue;
+        var aKey = attrKeys[ai];
+        // Skip service.name (shown as badge) and rf.* fields (not relevant for generic spans)
+        if (aKey === 'service.name') continue;
+        if (aKey.indexOf('rf.') === 0) continue;
+        var aVal = data.attributes[aKey];
+        // Skip zero/empty/null values
+        if (aVal === 0 || aVal === '' || aVal === null || aVal === undefined) continue;
         var attrRow = document.createElement('tr');
         var keyCell = document.createElement('td');
-        keyCell.textContent = attrKeys[ai];
+        keyCell.textContent = aKey;
         var valCell = document.createElement('td');
-        valCell.textContent = String(data.attributes[attrKeys[ai]]);
+        valCell.textContent = String(aVal);
         attrRow.appendChild(keyCell);
         attrRow.appendChild(valCell);
         attrTable.appendChild(attrRow);
       }
-      panel.appendChild(attrTable);
+      if (attrTable.rows.length > 0) {
+        panel.appendChild(attrTable);
+      }
     }
     if (data.status === 'FAIL' && data.status_message) {
       _addErrorBlock(panel, data.status_message);
