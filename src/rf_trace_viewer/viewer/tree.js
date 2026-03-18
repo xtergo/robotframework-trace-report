@@ -1147,6 +1147,13 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
     return;
   }
 
+  // Remember highlighted span so we can keep it visible after rebuild.
+  var prevHighlightId = null;
+  var prevHighlighted = container.querySelector('.tree-node.highlighted');
+  if (prevHighlighted) {
+    prevHighlightId = prevHighlighted.getAttribute('data-span-id');
+  }
+
   // Original path for small trees
   container.innerHTML = '';
 
@@ -1206,6 +1213,35 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
 
   // Auto-expand failure path or root suites on initial load
   _autoExpandFirstFailure(treeRoot, suites);
+
+  // If a span was highlighted before the rebuild, re-highlight it and
+  // scroll it into view so the user doesn't lose sight of it.
+  if (prevHighlightId) {
+    var restoredNode = container.querySelector('.tree-node[data-span-id="' + prevHighlightId + '"]');
+    if (restoredNode) {
+      restoredNode.classList.add('highlighted');
+      // Expand ancestors so the node is visible
+      var ancestor = restoredNode.parentElement;
+      while (ancestor && ancestor !== container) {
+        if (ancestor.classList && ancestor.classList.contains('tree-children')) {
+          ancestor.classList.add('expanded');
+        }
+        if (ancestor.classList && ancestor.classList.contains('tree-node')) {
+          var toggle = ancestor.querySelector(':scope > .tree-row > .tree-toggle');
+          if (toggle) {
+            toggle.textContent = '\u25bc';
+            toggle.setAttribute('aria-label', 'Collapse');
+          }
+        }
+        ancestor = ancestor.parentElement;
+      }
+      // Scroll the highlighted node into view
+      requestAnimationFrame(function () {
+        var row = restoredNode.querySelector(':scope > .tree-row') || restoredNode;
+        row.scrollIntoView({ block: 'center', behavior: 'instant' });
+      });
+    }
+  }
 
   var elapsed2 = Date.now() - t0;
   console.log('[Tree] Rendered ' + spanCount + ' spans in ' + elapsed2 + 'ms (lazy children enabled)');
