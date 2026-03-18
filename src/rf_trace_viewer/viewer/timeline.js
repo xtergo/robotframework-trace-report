@@ -3235,25 +3235,41 @@
     console.log('[Timeline] Found span:', span.name);
     timelineState.selectedSpan = span;
 
+    // Determine the parent span (if any) so we can include it in the view
+    var parentSpan = span.parent || null;
+    if (parentSpan) {
+      console.log('[Timeline] Parent span:', parentSpan.name);
+    }
+
+    // Compute the combined time range covering both target and parent
+    var combinedStart = span.startTime;
+    var combinedEnd = span.endTime;
+    if (parentSpan) {
+      combinedStart = Math.min(combinedStart, parentSpan.startTime);
+      combinedEnd = Math.max(combinedEnd, parentSpan.endTime);
+    }
+    var combinedDuration = combinedEnd - combinedStart;
+    var combinedMid = (combinedStart + combinedEnd) / 2;
+
     // Center the span in the viewport
     var canvas = timelineState.canvas;
     var width = canvas.width / (window.devicePixelRatio || 1);
 
-    // Auto-zoom: ensure the span occupies at least ~20% of the visible width
+    // Auto-zoom: ensure the combined range occupies ~40-60% of visible width
+    // so both target and parent are comfortably visible
     var viewRange = timelineState.viewEnd - timelineState.viewStart;
-    var spanDuration = span.endTime - span.startTime;
-    var spanMid = (span.startTime + span.endTime) / 2;
-    if (spanDuration > 0) {
-      var spanPixels = (spanDuration / viewRange) * (width - timelineState.leftMargin - timelineState.rightMargin);
-      if (spanPixels < width * 0.2) {
-        var targetRange = spanDuration / 0.2;
+    var targetFraction = parentSpan ? 0.5 : 0.2;
+    if (combinedDuration > 0) {
+      var combinedPixels = (combinedDuration / viewRange) * (width - timelineState.leftMargin - timelineState.rightMargin);
+      if (combinedPixels < width * targetFraction) {
+        var targetRange = combinedDuration / targetFraction;
         viewRange = Math.max(targetRange, 0.5);
       }
     }
 
-    // Horizontal centering
-    timelineState.viewStart = spanMid - viewRange / 2;
-    timelineState.viewEnd = spanMid + viewRange / 2;
+    // Horizontal centering on the combined midpoint
+    timelineState.viewStart = combinedMid - viewRange / 2;
+    timelineState.viewEnd = combinedMid + viewRange / 2;
     if (timelineState.viewStart < timelineState.minTime) {
       timelineState.viewStart = timelineState.minTime;
       timelineState.viewEnd = timelineState.viewStart + viewRange;
@@ -3269,27 +3285,29 @@
       }
     }
 
-    // Vertical scrolling: compute span Y from its worker/lane
-    var spanY = null;
-    if (span.worker && timelineState.workers) {
-      // Direct worker lookup instead of iterating all workers
+    // Helper: compute Y position for a span from its worker/lane
+    function _computeSpanY(s) {
+      if (!s || !s.worker || !timelineState.workers) return null;
       var workers = Object.keys(timelineState.workers);
-      var yOffset = timelineState.topMargin;
+      var yOff = timelineState.topMargin;
       for (var w = 0; w < workers.length; w++) {
         var workerSpans = timelineState.workers[workers[w]];
-        if (workers[w] === span.worker) {
-          var lane = span.lane !== undefined ? span.lane : span.depth;
-          spanY = yOffset + lane * timelineState.rowHeight + timelineState.rowHeight / 2;
-          break;
+        if (workers[w] === s.worker) {
+          var lane = s.lane !== undefined ? s.lane : s.depth;
+          return yOff + lane * timelineState.rowHeight + timelineState.rowHeight / 2;
         }
         var maxLane = 0;
         for (var _li = 0; _li < workerSpans.length; _li++) {
           var _lv = workerSpans[_li].lane !== undefined ? workerSpans[_li].lane : workerSpans[_li].depth;
           if (_lv > maxLane) maxLane = _lv;
         }
-        yOffset += (maxLane + 2) * timelineState.rowHeight;
+        yOff += (maxLane + 2) * timelineState.rowHeight;
       }
+      return null;
     }
+
+    var spanY = _computeSpanY(span);
+    var parentY = parentSpan ? _computeSpanY(parentSpan) : null;
 
     // Update zoom state
     var totalRange = timelineState.maxTime - timelineState.minTime;
@@ -3298,14 +3316,31 @@
     if (timelineState._syncSlider) timelineState._syncSlider();
     if (timelineState._syncHScroll) timelineState._syncHScroll();
 
-    // Scroll canvas container to center the span vertically
-    if (spanY !== null && canvas.parentElement) {
+    // Scroll canvas container to show both target and parent vertically
+    if (canvas.parentElement) {
       var container = canvas.parentElement;
       var containerHeight = container.clientHeight;
-      canvas.parentElement.scrollTo({
-        top: Math.max(0, spanY - containerHeight / 2),
-        behavior: 'smooth'
-      });
+      if (spanY !== null && parentY !== null) {
+        // Both visible: scroll so the midpoint between them is centered,
+        // with a bias toward the target span
+        var minY = Math.min(spanY, parentY) - timelineState.rowHeight;
+        var maxY = Math.max(spanY, parentY) + timelineState.rowHeight;
+        var regionHeight = maxY - minY;
+        var scrollTarget;
+        if (regionHeight <= containerHeight) {
+          // Both fit: center the region
+          scrollTarget = minY + regionHeight / 2 - containerHeight / 2;
+        } else {
+          // Region too tall: bias toward the target span but show as much parent as possible
+          scrollTarget = spanY - containerHeight * 0.6;
+        }
+        container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
+      } else if (spanY !== null) {
+        container.scrollTo({
+          top: Math.max(0, spanY - containerHeight / 2),
+          behavior: 'smooth'
+        });
+      }
     }
 
     _render();
