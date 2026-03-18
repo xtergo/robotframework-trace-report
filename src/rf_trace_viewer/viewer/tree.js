@@ -2011,20 +2011,19 @@ function _renderKeywordDetail(panel, data) {
     _addBadgeRow(panel, 'Service', data.service_name);
   }
 
-  // GENERIC spans: show only compact info bar + error in tree.
-  // Full attribute details are in the Execution Flow table.
-  if (data.keyword_type === 'GENERIC') {
+  // GENERIC / EXTERNAL spans: single styled detail section in tree node
+  if (data.keyword_type === 'GENERIC' || data.keyword_type === 'EXTERNAL') {
     _addCompactInfoBar(panel, data);
-    if (data.status === 'FAIL' && data.status_message) {
-      _addErrorBlock(panel, data.status_message);
+    if (data.attributes && typeof window.extractSpanAttributes === 'function') {
+      var extSummary = window.extractSpanAttributes(data.attributes);
+      if (extSummary && extSummary.type === 'http') {
+        _renderHttpSection(panel, extSummary);
+      } else if (extSummary && extSummary.type === 'db') {
+        _renderDbSection(panel, extSummary);
+      }
+      // Remaining attributes not covered by HTTP/DB sections
+      _renderOtherAttributes(panel, data.attributes, extSummary);
     }
-    return;
-  }
-
-  // EXTERNAL spans: show compact info bar + error only in tree.
-  // Full attribute details are in the Execution Flow table.
-  if (data.keyword_type === 'EXTERNAL') {
-    _addCompactInfoBar(panel, data);
     if (data.status === 'FAIL' && data.status_message) {
       _addErrorBlock(panel, data.status_message);
     }
@@ -2203,6 +2202,51 @@ function _renderDbSection(panel, summary) {
     _addDetailRow(wrap, 'Server', server);
   }
 
+  panel.appendChild(wrap);
+}
+
+/**
+ * Render remaining span attributes not already shown in HTTP/DB sections.
+ * Skips well-known keys (service.name, http.*, db.*, telemetry.*) to avoid noise.
+ */
+function _renderOtherAttributes(panel, attributes, summary) {
+  if (!attributes) return;
+  var shownKeys = { 'service.name': 1, 'telemetry.sdk.name': 1, 'telemetry.sdk.version': 1,
+    'telemetry.sdk.language': 1, 'process.pid': 1, 'process.runtime.name': 1,
+    'process.runtime.version': 1, 'process.runtime.description': 1,
+    'process.executable.name': 1, 'process.command_args': 1 };
+  var httpKeys = ['http.request.method', 'http.method', 'http.route', 'url.path',
+    'http.path', 'http.response.status_code', 'http.status_code', 'server.address',
+    'server.port', 'net.peer.name', 'net.peer.port', 'client.address', 'url.scheme',
+    'http.scheme', 'user_agent.original', 'http.user_agent'];
+  var dbKeys = ['db.system', 'db.operation', 'db.name', 'db.sql.table',
+    'db.statement', 'db.connection_string', 'db.user'];
+  var skip = httpKeys.concat(dbKeys);
+  for (var i = 0; i < skip.length; i++) shownKeys[skip[i]] = 1;
+
+  var keys = Object.keys(attributes);
+  var remaining = [];
+  for (var k = 0; k < keys.length; k++) {
+    if (!shownKeys[keys[k]] && attributes[keys[k]] !== null &&
+        attributes[keys[k]] !== undefined && attributes[keys[k]] !== '') {
+      remaining.push(keys[k]);
+    }
+  }
+  if (remaining.length === 0) return;
+
+  remaining.sort();
+  var wrap = document.createElement('div');
+  wrap.className = 'attr-section';
+  var header = document.createElement('div');
+  header.className = 'attr-section-header';
+  header.textContent = 'Attributes';
+  wrap.appendChild(header);
+  for (var r = 0; r < remaining.length; r++) {
+    var val = attributes[remaining[r]];
+    var str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+    if (str.length > 200) str = str.substring(0, 197) + '...';
+    _addDetailRow(wrap, remaining[r], str);
+  }
   panel.appendChild(wrap);
 }
 

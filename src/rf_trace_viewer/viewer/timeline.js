@@ -2974,8 +2974,14 @@
     var workerIds = Object.keys(workers);
     for (var w = 0; w < workerIds.length; w++) {
       var spans = workers[workerIds[w]];
-      // Sort by start time for greedy first-fit
-      spans.sort(function (a, b) { return a.startTime - b.startTime; });
+      // Sort: parents before children (by depth ascending), then by start time.
+      // This ensures suite/test bars get the lowest lanes and children stack below.
+      spans.sort(function (a, b) {
+        var da = a.depth !== undefined ? a.depth : 999;
+        var db = b.depth !== undefined ? b.depth : 999;
+        if (da !== db) return da - db;
+        return a.startTime - b.startTime;
+      });
       var laneEnds = []; // tracks end-time of each lane
 
       for (var i = 0; i < spans.length; i++) {
