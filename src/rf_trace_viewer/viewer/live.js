@@ -1605,13 +1605,24 @@
           testStatus = 'RUNNING';
         }
         var kws = buildKeywords(child.span_id);
+
+        // For running tests, extend end_time to cover latest keyword
+        var testEnd = child.end_time;
+        if (testStatus === 'RUNNING' || !testEnd) {
+          for (var ke = 0; ke < kws.length; ke++) {
+            if (kws[ke].end_time && kws[ke].end_time > testEnd) {
+              testEnd = kws[ke].end_time;
+            }
+          }
+        }
+
         var test = {
           name: ca['rf.test.name'] || child.name || '',
           id: child.span_id,
           status: testStatus,
           start_time: child.start_time,
-          end_time: child.end_time,
-          elapsed_time: _elapsedMs(child.start_time, child.end_time),
+          end_time: testEnd,
+          elapsed_time: _elapsedMs(child.start_time, testEnd),
           keywords: kws,
           tags: _parseTags(ca['rf.test.tags']),
           doc: ca['rf.test.doc'] || '',
@@ -1696,14 +1707,30 @@
       children = suiteKws.concat(children);
       children.sort(function (a, b) { return (a.start_time || 0) - (b.start_time || 0); });
 
+      // For running suites (or suites with end_time=0), extend end_time to
+      // cover the latest child. This ensures the Gantt bar grows as new
+      // child spans arrive in live mode.
+      var suiteEnd = suiteSpan.end_time;
+      if (suiteStatus === 'RUNNING' || !suiteEnd) {
+        var childMaxEnd = 0;
+        for (var ce = 0; ce < children.length; ce++) {
+          if (children[ce].end_time && children[ce].end_time > childMaxEnd) {
+            childMaxEnd = children[ce].end_time;
+          }
+        }
+        if (childMaxEnd > suiteEnd) {
+          suiteEnd = childMaxEnd;
+        }
+      }
+
       return {
         name: sa['rf.suite.name'] || suiteSpan.name || '',
         id: suiteSpan.span_id,
         source: sa['rf.suite.source'] || '',
         status: suiteStatus,
         start_time: suiteSpan.start_time,
-        end_time: suiteSpan.end_time,
-        elapsed_time: _elapsedMs(suiteSpan.start_time, suiteSpan.end_time),
+        end_time: suiteEnd,
+        elapsed_time: _elapsedMs(suiteSpan.start_time, suiteEnd),
         doc: sa['rf.suite.doc'] || '',
         lineno: parseInt(sa['rf.suite.lineno'] || '0', 10),
         has_setup: sa['rf.suite.has_setup'] === 'true',
