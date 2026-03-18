@@ -3517,37 +3517,17 @@
       if (hadSpansBefore) {
         // Keep existing view stable so the bar visibly grows into the
         // padding that _autoZoomToRecentCluster / _locateRecent set up.
-        // In live mode, extend viewEnd to track actual data growth so the
-        // bar visibly grows — but only if the view was at the data edge.
-        // Use actual data edges, not padded maxTime.
-        var dataGrew = actualDataMax > prevDataMax;
-        var stableAtEdge = Math.abs(savedViewEnd - prevDataMax) < 2 ||
-          (prevDataMax > 0 && savedViewEnd >= prevDataMax);
-        if (dataGrew && stableAtEdge && window.__RF_TRACE_LIVE__) {
-          var stableVR = savedViewEnd - savedViewStart;
-          var stablePad = stableVR * 0.15;
-          timelineState.viewStart = savedViewStart;
-          timelineState.viewEnd = actualDataMax + stablePad;
-          timelineState.maxTime = timelineState.viewEnd;
-          if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-          var totalR2 = timelineState.maxTime - timelineState.minTime;
-          var viewR2 = timelineState.viewEnd - timelineState.viewStart;
-          if (totalR2 > 0 && viewR2 > 0) {
-            timelineState.zoom = totalR2 / viewR2;
-          }
-          console.log('[Timeline] updateData: stable view, data grew ' +
-            (actualDataMax - prevDataMax).toFixed(1) + 's → viewEnd=' +
-            _fmtEpoch(timelineState.viewEnd) + ' (dataEdge=' + _fmtEpoch(actualDataMax) + ')');
-        } else {
-          // Data didn't grow or not live — keep view exactly as-is
-          timelineState.viewStart = savedViewStart;
-          timelineState.viewEnd = savedViewEnd;
-          if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-          if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-          console.log('[Timeline] updateData: keeping stable view ' +
-            _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
-            ' (data edge at ' + _fmtEpoch(actualDataMax) + ')');
-        }
+        // Do NOT extend viewEnd here — the initial padding provides room
+        // for the bar to grow. Extending viewEnd changes the zoom ratio
+        // which causes oscillation between the wasUserZoomed and !wasUserZoomed
+        // branches on alternating polls.
+        timelineState.viewStart = savedViewStart;
+        timelineState.viewEnd = savedViewEnd;
+        if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+        if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+        console.log('[Timeline] updateData: keeping stable view ' +
+          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
+          ' (data edge at ' + _fmtEpoch(actualDataMax) + ')');
       } else {
         console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
           '), showing full range');
