@@ -2004,14 +2004,8 @@ function _createFieldTogglePills(panel) {
 
 /** Render keyword-specific detail rows. */
 function _renderKeywordDetail(panel, data) {
-  if (data.keyword_type) {
-    _addBadgeRow(panel, 'Type', data.keyword_type === 'GENERIC' ? 'SPAN' : data.keyword_type);
-  }
-  if (data.service_name) {
-    _addBadgeRow(panel, 'Service', data.service_name);
-  }
-
-  // GENERIC / EXTERNAL spans: single styled detail section in tree node
+  // GENERIC / EXTERNAL spans: full styled detail in tree node.
+  // No redundant Type/Service badges — already shown in the tree row.
   if (data.keyword_type === 'GENERIC' || data.keyword_type === 'EXTERNAL') {
     _addCompactInfoBar(panel, data);
     if (data.attributes && typeof window.extractSpanAttributes === 'function') {
@@ -2021,7 +2015,6 @@ function _renderKeywordDetail(panel, data) {
       } else if (extSummary && extSummary.type === 'db') {
         _renderDbSection(panel, extSummary);
       }
-      // Remaining attributes not covered by HTTP/DB sections
       _renderOtherAttributes(panel, data.attributes, extSummary);
     }
     if (data.status === 'FAIL' && data.status_message) {
@@ -2163,6 +2156,7 @@ function _renderHttpSection(panel, summary) {
   }
   if (summary.client_address) _addDetailRow(wrap, 'Client', summary.client_address);
   if (summary.url_scheme) _addDetailRow(wrap, 'Scheme', summary.url_scheme);
+  if (summary.url) _addDetailRow(wrap, 'URL', summary.url);
   if (summary.user_agent) _addDetailRow(wrap, 'User Agent', summary.user_agent);
 
   panel.appendChild(wrap);
@@ -2211,26 +2205,32 @@ function _renderDbSection(panel, summary) {
  */
 function _renderOtherAttributes(panel, attributes, summary) {
   if (!attributes) return;
+  // Skip well-known keys already shown elsewhere or just noise
   var shownKeys = { 'service.name': 1, 'telemetry.sdk.name': 1, 'telemetry.sdk.version': 1,
     'telemetry.sdk.language': 1, 'process.pid': 1, 'process.runtime.name': 1,
     'process.runtime.version': 1, 'process.runtime.description': 1,
     'process.executable.name': 1, 'process.command_args': 1 };
   var httpKeys = ['http.request.method', 'http.method', 'http.route', 'url.path',
-    'http.path', 'http.response.status_code', 'http.status_code', 'server.address',
-    'server.port', 'net.peer.name', 'net.peer.port', 'client.address', 'url.scheme',
-    'http.scheme', 'user_agent.original', 'http.user_agent'];
-  var dbKeys = ['db.system', 'db.operation', 'db.name', 'db.sql.table',
-    'db.statement', 'db.connection_string', 'db.user'];
+    'http.target', 'http.path', 'http.response.status_code', 'http.status_code',
+    'server.address', 'server.port', 'net.peer.name', 'net.peer.port',
+    'client.address', 'url.scheme', 'http.scheme', 'user_agent.original',
+    'http.user_agent', 'url.full', 'http.url'];
+  var dbKeys = ['db.system', 'db.operation', 'db.operation.name', 'db.name',
+    'db.namespace', 'db.sql.table', 'db.collection.name', 'db.statement',
+    'db.query.text', 'db.connection_string', 'db.user'];
   var skip = httpKeys.concat(dbKeys);
   for (var i = 0; i < skip.length; i++) shownKeys[skip[i]] = 1;
 
   var keys = Object.keys(attributes);
   var remaining = [];
   for (var k = 0; k < keys.length; k++) {
-    if (!shownKeys[keys[k]] && attributes[keys[k]] !== null &&
-        attributes[keys[k]] !== undefined && attributes[keys[k]] !== '') {
-      remaining.push(keys[k]);
-    }
+    var key = keys[k];
+    // Skip keys already shown, rf.* internal keys, and empty values
+    if (shownKeys[key]) continue;
+    if (key.indexOf('rf.') === 0) continue;
+    var val = attributes[key];
+    if (val === null || val === undefined || val === '') continue;
+    remaining.push(key);
   }
   if (remaining.length === 0) return;
 

@@ -1009,39 +1009,43 @@
    */
   function extractSpanAttributes(attrs) {
     if (!attrs) return null;
-    if (attrs['http.request.method']) {
+    // HTTP detection: support both new (http.request.method) and old (http.method) semconv
+    var httpMethod = attrs['http.request.method'] || attrs['http.method'] || '';
+    if (httpMethod) {
       var result = { type: 'http' };
-      var method = attrs['http.request.method'];
-      if (method) result.method = method;
+      result.method = httpMethod;
       var route = attrs['http.route'];
       if (route) result.route = route;
-      var path = attrs['url.path'];
+      var path = attrs['url.path'] || attrs['http.target'] || '';
       if (path) result.path = path;
-      var sc = parseInt(attrs['http.response.status_code'], 10) || 0;
+      var sc = parseInt(attrs['http.response.status_code'] || attrs['http.status_code'] || '0', 10) || 0;
       if (sc) result.status_code = sc;
-      var sa = attrs['server.address'];
+      var sa = attrs['server.address'] || attrs['net.peer.name'] || '';
       if (sa) result.server_address = sa;
-      var sp = parseInt(attrs['server.port'], 10) || 0;
+      var sp = parseInt(attrs['server.port'] || attrs['net.peer.port'] || '0', 10) || 0;
       if (sp) result.server_port = sp;
       var ca = attrs['client.address'];
       if (ca) result.client_address = ca;
-      var scheme = attrs['url.scheme'];
+      var scheme = attrs['url.scheme'] || attrs['http.scheme'] || '';
       if (scheme) result.url_scheme = scheme;
-      var ua = attrs['user_agent.original'];
+      var ua = attrs['user_agent.original'] || attrs['http.user_agent'] || '';
       if (ua) result.user_agent = ua;
+      // URL (full)
+      var fullUrl = attrs['url.full'] || attrs['http.url'] || '';
+      if (fullUrl) result.url = fullUrl;
       return result;
     }
-    if (attrs['db.system']) {
+    if (attrs['db.system'] || attrs['db.statement']) {
       var result = { type: 'db' };
       var sys = attrs['db.system'];
       if (sys) result.system = sys;
-      var op = attrs['db.operation'];
+      var op = attrs['db.operation'] || attrs['db.operation.name'] || '';
       if (op) result.operation = op;
-      var name = attrs['db.name'];
+      var name = attrs['db.name'] || attrs['db.namespace'] || '';
       if (name) result.name = name;
-      var tbl = attrs['db.sql.table'];
+      var tbl = attrs['db.sql.table'] || attrs['db.collection.name'] || '';
       if (tbl) result.table = tbl;
-      var stmt = attrs['db.statement'];
+      var stmt = attrs['db.statement'] || attrs['db.query.text'] || '';
       if (stmt) result.statement = stmt;
       var cs = attrs['db.connection_string'];
       if (cs) result.connection_string = cs;
