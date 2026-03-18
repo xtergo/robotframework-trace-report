@@ -2,5 +2,5 @@
 
 import os as _os
 
-__version__ = "0.2.39"
+__version__ = "0.2.40"
 __git_sha__ = _os.environ.get("GIT_SHA", "dev")

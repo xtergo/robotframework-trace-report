@@ -3140,8 +3140,12 @@
         timelineState.workers[workerId] = timelineState.allWorkers[workerId].slice();
       }
       timelineState.filteredSpans = timelineState.flatSpans.slice();
-      // Restore original lanes
+      // Restore baseline lanes, then re-apply compact if active
       _restoreOriginalLanes();
+      if (timelineState.layoutMode === 'compact') {
+        timelineState._originalLanes = null;
+        _compactLanes(timelineState.workers);
+      }
     } else {
       // Create a Set of filtered span IDs for fast lookup
       var filteredIds = {};
