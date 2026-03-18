@@ -94,3 +94,6 @@ test/kind/.port-forward.pid
 
 # Tracer analysis docs (local reference only)
 contribution-tracer_*.md
+
+# Local trace data files
+traces.json

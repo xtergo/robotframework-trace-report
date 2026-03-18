@@ -3374,6 +3374,13 @@
       if (viewWasAtEdge && dataEdgeMovedFwd) {
         var ext = timelineState.maxTime - savedMaxTime;
         timelineState.viewEnd += ext;
+        // In live mode, add extra padding beyond the data edge
+        if (window.__RF_TRACE_LIVE__) {
+          var liveVR = timelineState.viewEnd - timelineState.viewStart;
+          var livePadU = liveVR * 0.15;
+          timelineState.viewEnd = timelineState.maxTime + livePadU;
+          timelineState.maxTime = timelineState.viewEnd;
+        }
         var totalR = timelineState.maxTime - timelineState.minTime;
         var viewR = timelineState.viewEnd - timelineState.viewStart;
         if (totalR > 0 && viewR > 0) {
@@ -3404,6 +3411,17 @@
       var totalRange = timelineState.maxTime - timelineState.minTime;
       var viewRange = timelineState.viewEnd - timelineState.viewStart;
       timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
+      // In live mode, auto-zoom to the recent cluster so spans are visible
+      // at a useful zoom level instead of a 900s overview where everything
+      // is sub-pixel. _autoZoomToRecentCluster adds 15% padding so the bar
+      // can visibly grow on subsequent polls.
+      if (window.__RF_TRACE_LIVE__) {
+        _autoZoomToRecentCluster();
+        // Clear the pending flag so subsequent polls don't keep re-running
+        // _locateRecent — we want the view to stay stable and let the bar
+        // visibly grow into the padding.
+        timelineState._locateRecentPending = false;
+      }
       console.log('[Timeline] updateData: first data load, view ' +
         _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
     } else if (wasUserZoomed) {
@@ -3462,6 +3480,14 @@
         if (wasTailFollowing && dataEdgeMoved && !dataStartMoved) {
           var extension = timelineState.maxTime - savedMaxTime;
           timelineState.viewEnd += extension;
+          // In live mode, add extra padding beyond the data edge so the bar
+          // has visible room to grow into on subsequent polls.
+          if (window.__RF_TRACE_LIVE__) {
+            var liveViewRange = timelineState.viewEnd - timelineState.viewStart;
+            var livePad = liveViewRange * 0.15;
+            timelineState.viewEnd = timelineState.maxTime + livePad;
+            timelineState.maxTime = timelineState.viewEnd;
+          }
           var totalRange = timelineState.maxTime - timelineState.minTime;
           var viewRange = timelineState.viewEnd - timelineState.viewStart;
           if (totalRange > 0 && viewRange > 0) {
@@ -3476,24 +3502,28 @@
       // view — this prevents repeated updateData calls from resetting the
       // view after _autoZoomToRecentCluster or marker drag set it up.
       if (hadSpansBefore) {
-        // Check if new data extends beyond the current view
-        var dataExtendedBeyondView = timelineState.maxTime > savedViewEnd || 
-                                      timelineState.minTime < savedViewStart;
-        
-        if (dataExtendedBeyondView) {
-          // New spans arrived outside the view — expand to show all data
-          timelineState.viewStart = timelineState.minTime;
-          timelineState.viewEnd = timelineState.maxTime;
-          console.log('[Timeline] updateData: data extended beyond view, expanding to full range ' +
-            _fmtEpoch(timelineState.minTime) + ' → ' + _fmtEpoch(timelineState.maxTime));
+        // Keep existing view stable so the bar visibly grows into the
+        // padding that _autoZoomToRecentCluster / _locateRecent set up.
+        // Only re-run _locateRecent if data extends well beyond the view
+        // (> 20% past viewEnd) to avoid the bar disappearing off-screen.
+        var viewRange = savedViewEnd - savedViewStart;
+        var overshoot = timelineState.maxTime - savedViewEnd;
+        if (overshoot > viewRange * 0.2) {
+          // Data grew significantly past the view — re-locate to keep
+          // the recent cluster centered with fresh padding.
+          _locateRecent();
+          console.log('[Timeline] updateData: data overshot view by ' +
+            overshoot.toFixed(1) + 's, re-ran _locateRecent → view ' +
+            _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
         } else {
-          // Data still within view — keep existing view
+          // Data still within or slightly past view — keep view stable
           timelineState.viewStart = savedViewStart;
           timelineState.viewEnd = savedViewEnd;
           if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
           if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-          console.log('[Timeline] updateData: keeping existing view ' +
-            _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+          console.log('[Timeline] updateData: keeping stable view ' +
+            _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
+            ' (data edge at ' + _fmtEpoch(timelineState.maxTime) + ')');
         }
       } else {
         console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
@@ -3817,9 +3847,16 @@
     var viewStart = clusterStart - padding;
     var viewEnd = clusterEnd + padding;
 
-    // Clamp to data bounds
+    // Clamp to data bounds. In live mode, extend maxTime to accommodate
+    // the right padding so the bar has visible room to grow into.
     if (viewStart < timelineState.minTime) viewStart = timelineState.minTime;
-    if (viewEnd > timelineState.maxTime) viewEnd = timelineState.maxTime;
+    if (viewEnd > timelineState.maxTime) {
+      if (window.__RF_TRACE_LIVE__) {
+        timelineState.maxTime = viewEnd;
+      } else {
+        viewEnd = timelineState.maxTime;
+      }
+    }
     // Clamp to activeWindowStart in live mode, but only if it doesn't
     // invert the view window (can happen when spans are older than lookback)
     if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {

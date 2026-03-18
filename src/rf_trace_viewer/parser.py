@@ -49,11 +49,22 @@ def flatten_attributes(attrs: list[dict] | None) -> dict[str, Any]:
 def _extract_value(value_obj: dict[str, Any]) -> Any:
     """Extract a typed value from an OTLP attribute value object."""
     if "string_value" in value_obj or "stringValue" in value_obj:
-        return value_obj.get("string_value") or value_obj.get("stringValue")
+        val = (
+            value_obj.get("string_value")
+            if "string_value" in value_obj
+            else value_obj.get("stringValue")
+        )
+        return val if val is not None else ""
     if "int_value" in value_obj or "intValue" in value_obj:
-        return int(value_obj.get("int_value") or value_obj.get("intValue"))
+        val = value_obj.get("int_value") if "int_value" in value_obj else value_obj.get("intValue")
+        return int(val) if val is not None else 0
     if "double_value" in value_obj or "doubleValue" in value_obj:
-        return float(value_obj.get("double_value") or value_obj.get("doubleValue"))
+        val = (
+            value_obj.get("double_value")
+            if "double_value" in value_obj
+            else value_obj.get("doubleValue")
+        )
+        return float(val) if val is not None else 0.0
     if "bool_value" in value_obj or "boolValue" in value_obj:
         return bool(value_obj.get("bool_value", value_obj.get("boolValue")))
     if "array_value" in value_obj or "arrayValue" in value_obj:
