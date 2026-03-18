@@ -1337,37 +1337,24 @@ function _renderTreeVirtual(container, model, filteredSpanIds) {
   // Build flat list and render
   _spanIndex = _buildSpanIndex(mergedSuites);
 
-  // Preserve scroll position during live re-renders. Save the scroll
-  // offset and the highlighted span's flat-list index so we can keep
-  // the user's view stable when new spans are appended.
-  var savedScrollTop = isReRender ? _virtualState.scrollEl.scrollTop : 0;
+  // Remember the highlighted span so we can keep it visible after rebuild.
   var savedHighlightId = isReRender ? _virtualState.highlightedSpanId : null;
-  var savedHighlightIdx = -1;
-  if (savedHighlightId && isReRender) {
-    for (var hi = 0; hi < _virtualState.flatItems.length; hi++) {
-      if (_virtualState.flatItems[hi].id === savedHighlightId) {
-        savedHighlightIdx = hi;
-        break;
-      }
-    }
-  }
 
   _rebuildFlatItems(_virtualState);
 
-  // After rebuild, restore scroll position. If a highlighted span exists,
-  // keep it at the same pixel offset it was at before the rebuild.
+  // After rebuild, if a span is highlighted, scroll so it stays visible.
+  // New spans may have been inserted above it, shifting its position.
   if (isReRender && savedHighlightId) {
-    var newIdx = _findFlatIndex(savedHighlightId);
-    if (newIdx >= 0 && savedHighlightIdx >= 0) {
-      // The highlighted span may have shifted in the flat list if items
-      // were inserted above it. Adjust scroll to compensate.
-      var shift = (newIdx - savedHighlightIdx) * _virtualState.ROW_HEIGHT;
-      _virtualState.scrollEl.scrollTop = savedScrollTop + shift;
-    } else {
-      _virtualState.scrollEl.scrollTop = savedScrollTop;
+    var hlIdx = _findFlatIndex(savedHighlightId);
+    if (hlIdx >= 0) {
+      var hlPixel = hlIdx * _virtualState.ROW_HEIGHT;
+      var vpHeight = _virtualState.scrollEl.clientHeight || 800;
+      var curScroll = _virtualState.scrollEl.scrollTop;
+      // Only adjust if the highlighted span scrolled out of the viewport
+      if (hlPixel < curScroll || hlPixel > curScroll + vpHeight - _virtualState.ROW_HEIGHT) {
+        _virtualState.scrollEl.scrollTop = Math.max(0, hlPixel - vpHeight / 3);
+      }
     }
-  } else if (isReRender) {
-    _virtualState.scrollEl.scrollTop = savedScrollTop;
   }
 
   _virtualState.renderedRange.start = -1;
