@@ -361,8 +361,9 @@
             return;
           }
           var url = '/api/spans?since_ns=' + pageWatermark;
-          var svc = _serviceFilter;
-          url += '&service=' + encodeURIComponent(svc || '');
+          // Always fetch ALL services (like the normal poll path).
+          // Client-side checkboxes handle visibility at render time.
+          url += '&service=';
           if (_executionFilter) {
             url += '&execution_id=' + encodeURIComponent(_executionFilter);
           }
@@ -2221,7 +2222,17 @@
         var nameSpan = document.createElement('span');
         nameSpan.textContent = name;
 
+        // Colour dot matching offline service menu
+        var dot = document.createElement('span');
+        dot.className = 'svc-legend-dot';
+        var _svcC = window.__RF_SVC_COLORS__;
+        var _svcE = _svcC ? _svcC.get(name) : null;
+        if (_svcE) {
+          dot.style.background = _svcE.light;
+        }
+
         label.appendChild(cb);
+        label.appendChild(dot);
         label.appendChild(nameSpan);
 
         // Status badge
@@ -2265,16 +2276,39 @@
       if (!btn) return;
       var active = Object.keys(_activeServices);
       var total = Object.keys(_knownServices).length;
+
+      // Build button content with colour dots (matching offline mode)
+      btn.innerHTML = '';
+      var btnContent = document.createElement('span');
+      btnContent.className = 'svc-btn-content';
+
+      // Show up to 3 service colour dots
+      var svcC = window.__RF_SVC_COLORS__;
+      var sortedNames = Object.keys(_knownServices).sort();
+      for (var di = 0; di < Math.min(sortedNames.length, 3); di++) {
+        var dEntry = svcC ? svcC.get(sortedNames[di]) : null;
+        if (dEntry) {
+          var dDot = document.createElement('span');
+          dDot.className = 'svc-legend-dot';
+          dDot.style.background = dEntry.light;
+          dDot.title = sortedNames[di];
+          btnContent.appendChild(dDot);
+        }
+      }
+
+      var labelSpan = document.createElement('span');
       if (active.length === 0 || active.length === total) {
-        btn.textContent = 'Services (all)';
+        labelSpan.textContent = 'Services';
         btn.classList.remove('has-filter');
       } else if (active.length === 1) {
-        btn.textContent = active[0];
+        labelSpan.textContent = active[0];
         btn.classList.add('has-filter');
       } else {
-        btn.textContent = active.length + '/' + total + ' services';
+        labelSpan.textContent = active.length + '/' + total + ' services';
         btn.classList.add('has-filter');
       }
+      btnContent.appendChild(labelSpan);
+      btn.appendChild(btnContent);
     }
 
   function _resetAndRepoll() {

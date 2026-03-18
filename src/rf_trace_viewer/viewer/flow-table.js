@@ -123,7 +123,8 @@
       pinned: false,
       showOnlyFailed: _showOnlyFailed,
       rows: [],
-      expandedIds: {}
+      expandedIds: {},
+      detailOpenIds: {}
     };
     _flowState = state;
     _renderEmpty(state);
@@ -144,6 +145,7 @@
               s.highlightSpanId = null;
               s.rows = _buildKeywordRows(entry.ref);
               s.expandedIds = _computeFailFocusedExpanded(entry.ref);
+              s.detailOpenIds = {};
               _renderTable(s);
               _scrollToHighlighted(s);
               return;
@@ -157,6 +159,8 @@
               }
               s.currentTestId = parentTest.id;
               s.highlightSpanId = spanId;
+              s.detailOpenIds = {};
+              s.detailOpenIds[spanId] = true;
               _expandAncestors(s, spanId);
               _renderTable(s);
               _scrollToHighlighted(s);
@@ -171,6 +175,7 @@
                 s.highlightSpanId = null;
                 s.rows = _buildKeywordRows(firstTest);
                 s.expandedIds = _computeFailFocusedExpanded(firstTest);
+                s.detailOpenIds = {};
                 _renderTable(s);
                 _scrollToHighlighted(s);
                 return;
@@ -182,6 +187,7 @@
               s.highlightSpanId = null;
               s.rows = _buildGenericSuiteRows(entry.ref);
               s.expandedIds = {};
+              s.detailOpenIds = {};
               _renderTable(s);
               _scrollToHighlighted(s);
               return;
@@ -194,6 +200,7 @@
                 s.highlightSpanId = null;
                 s.rows = _buildSuiteSummaryRows(suite);
                 s.expandedIds = {};
+                s.detailOpenIds = {};
                 _renderTable(s);
                 _scrollToHighlighted(s);
                 return;
@@ -207,6 +214,9 @@
               s.highlightSpanId = spanId;
               s.rows = _buildGenericSuiteRows(genSuite);
               s.expandedIds = {};
+              // Auto-open attribute details only for the navigated span
+              s.detailOpenIds = {};
+              s.detailOpenIds[spanId] = true;
               _expandAncestors(s, spanId);
               _renderTable(s);
               _scrollToHighlighted(s);
@@ -1339,15 +1349,25 @@
       return frag;
     }
 
-    // For EXTERNAL/GENERIC keywords with attributes, show a detail row with full attributes
+    // For EXTERNAL/GENERIC keywords with attributes, render a collapsible detail row
     if ((kwTypeUpper === 'EXTERNAL' || kwTypeUpper === 'GENERIC') && row.attributes) {
       var attrKeys = Object.keys(row.attributes);
       if (attrKeys.length > 0) {
         var frag = document.createDocumentFragment();
+
+        // Add a small detail toggle indicator to the main row
+        var detailToggle = document.createElement('span');
+        detailToggle.className = 'flow-detail-toggle';
+        var isDetailOpen = !!(state.detailOpenIds && state.detailOpenIds[row.id]);
+        detailToggle.textContent = isDetailOpen ? ' \u25bc attrs' : ' \u25b6 attrs';
+        detailToggle.title = 'Toggle span attributes';
+        tdKw.appendChild(detailToggle);
+
         frag.appendChild(tr);
 
         var attrTr = document.createElement('tr');
         attrTr.className = 'flow-table-row flow-row-detail flow-row-attr-detail';
+        if (!isDetailOpen) attrTr.style.display = 'none';
         var attrTd = document.createElement('td');
         attrTd.colSpan = 4;
         attrTd.className = 'flow-detail-cell';
@@ -1391,6 +1411,20 @@
         attrTd.appendChild(attrTable);
         attrTr.appendChild(attrTd);
         frag.appendChild(attrTr);
+
+        // Toggle detail on click of the toggle indicator
+        (function (dTr, dToggle, rowId) {
+          dToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = dTr.style.display !== 'none';
+            dTr.style.display = open ? 'none' : '';
+            dToggle.textContent = open ? ' \u25b6 attrs' : ' \u25bc attrs';
+            if (!state.detailOpenIds) state.detailOpenIds = {};
+            if (open) { delete state.detailOpenIds[rowId]; }
+            else { state.detailOpenIds[rowId] = true; }
+          });
+        })(attrTr, detailToggle, row.id);
+
         return frag;
       }
     }

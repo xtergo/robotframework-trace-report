@@ -489,6 +489,13 @@
     layoutGroup.appendChild(compactBtn);
     zoomBar.appendChild(layoutGroup);
 
+    // Span counter — shows total and visible span counts
+    var spanCounter = document.createElement('span');
+    spanCounter.className = 'timeline-span-counter';
+    spanCounter.textContent = '';
+    zoomBar.appendChild(spanCounter);
+    timelineState._spanCounter = spanCounter;
+
     headerEl.appendChild(zoomBar);
 
     // Loading banner — shown during delta fetch, between zoom bar and time axis
@@ -2152,6 +2159,7 @@
     
     // Debug counters
     var _dbgTotal = 0, _dbgXCulled = 0, _dbgYCulled = 0, _dbgSubpx = 0, _dbgRendered = 0;
+    var _dbgInTimeRange = 0; // spans overlapping the current view time range (ignoring Y scroll)
 
     // Only show worker labels if there are multiple workers
     var showWorkerLabels = workers.length > 1 || (workers.length === 1 && workers[0] !== 'default');
@@ -2206,6 +2214,11 @@
           if (spanSvc && !timelineState._svcFilter[spanSvc]) continue;
           // Also hide generic service suite bars
           if (span._is_generic_service && span.name && !timelineState._svcFilter[span.name]) continue;
+        }
+
+        // X-axis: count spans in current time range (for span counter, before Y culling)
+        if (!(span.endTime < timelineState.viewStart || span.startTime > timelineState.viewEnd)) {
+          _dbgInTimeRange++;
         }
 
         // Y-axis culling: skip spans outside visible canvas height
@@ -2274,6 +2287,13 @@
         ', viewRange=' + viewRange.toFixed(2) + 's' +
         ', timelineWidth=' + timelineWidth + 'px');
       timelineState._lastRenderLog = Date.now();
+    }
+
+    // Update span counter in zoom bar
+    if (timelineState._spanCounter) {
+      var totalSpanCount = timelineState.flatSpans.length;
+      timelineState._spanCounter.textContent =
+        _fmtCount(totalSpanCount) + ' total \u00b7 ' + _fmtCount(_dbgInTimeRange) + ' in view';
     }
   }
 
@@ -2899,6 +2919,12 @@
       String(d.getHours()).padStart(2, '0') + ':' +
       String(d.getMinutes()).padStart(2, '0') + ':' +
       String(d.getSeconds()).padStart(2, '0');
+  }
+
+  /** Format a number with locale-aware thousands separators. */
+  function _fmtCount(n) {
+    if (n == null) return '0';
+    return Number(n).toLocaleString();
   }
 
   /**

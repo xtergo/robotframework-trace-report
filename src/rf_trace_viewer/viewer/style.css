@@ -368,6 +368,16 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   font-weight: 500;
 }
 
+/* Span counter in zoom bar */
+.rf-trace-viewer .timeline-span-counter {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  margin-left: auto;
+  padding: 0 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Zoom bar groups and separators */
 .rf-trace-viewer .zoom-bar-group {
   display: inline-flex;
@@ -2605,6 +2615,18 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 .rf-trace-viewer .flow-detail-cell {
   padding: 4px 10px 8px;
+}
+
+/* Collapsible attribute detail toggle */
+.rf-trace-viewer .flow-detail-toggle {
+  font-size: 10px;
+  color: var(--text-muted, #999);
+  cursor: pointer;
+  margin-left: 6px;
+  opacity: 0.7;
+}
+.rf-trace-viewer .flow-detail-toggle:hover {
+  opacity: 1;
 }
 
 /* Attribute detail table for EXTERNAL/GENERIC spans */
