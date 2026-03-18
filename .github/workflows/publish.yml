@@ -1,14 +1,20 @@
 name: Publish to PyPI
 
+# Disabled: PyPI publishing requires either a valid PYPI_TOKEN secret or
+# trusted publisher (OIDC) configuration on pypi.org. Re-enable when ready.
+# To set up trusted publishers, see:
+# https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+  # release:
+  #   types: [published]
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -21,13 +27,10 @@ jobs:
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip
-          pip install build twine
+          pip install build
 
       - name: Build package
         run: python -m build
 
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
