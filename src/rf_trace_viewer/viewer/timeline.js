@@ -3366,8 +3366,26 @@
       timelineState.viewEnd = savedViewEnd;
       if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
       if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-      console.log('[Timeline] updateData: _userInteracted=true, preserving view ' +
-        _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+
+      // Tail-follow: if the user's viewEnd was at the data edge and new data
+      // arrived beyond it, extend viewEnd to keep tracking the latest spans.
+      // This keeps the Gantt bar covering new spans without requiring a reload.
+      var dataEdgeMovedFwd = timelineState.maxTime > savedMaxTime;
+      var viewWasAtEdge = Math.abs(savedViewEnd - savedMaxTime) < 2;
+      if (viewWasAtEdge && dataEdgeMovedFwd) {
+        var ext = timelineState.maxTime - savedMaxTime;
+        timelineState.viewEnd += ext;
+        var totalR = timelineState.maxTime - timelineState.minTime;
+        var viewR = timelineState.viewEnd - timelineState.viewStart;
+        if (totalR > 0 && viewR > 0) {
+          timelineState.zoom = totalR / viewR;
+        }
+        console.log('[Timeline] updateData: _userInteracted tail-follow, extended viewEnd by ' +
+          ext.toFixed(2) + 's → ' + _fmtEpoch(timelineState.viewEnd));
+      } else {
+        console.log('[Timeline] updateData: _userInteracted=true, preserving view ' +
+          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+      }
     } else if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
       // First data load: if a preset is active, use the rolling window (now - preset → now)
       // so new spans that just arrived are visible. Otherwise keep the saved view.
