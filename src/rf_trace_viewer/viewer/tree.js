@@ -2011,7 +2011,8 @@ function _renderKeywordDetail(panel, data) {
     _addBadgeRow(panel, 'Service', data.service_name);
   }
 
-  // GENERIC spans: show OTel attributes only, skip RF-specific fields
+  // GENERIC spans: show only compact info bar + error in tree.
+  // Full attribute details are in the Execution Flow table.
   if (data.keyword_type === 'GENERIC') {
     _addCompactInfoBar(panel, data);
     if (data.attributes && typeof window.extractSpanAttributes === 'function') {
@@ -2022,39 +2023,26 @@ function _renderKeywordDetail(panel, data) {
         _renderDbSection(panel, genAttrSummary);
       }
     }
-    if (data.attributes) {
-      var attrTable = document.createElement('table');
-      attrTable.className = 'generic-attrs-table';
-      var attrKeys = Object.keys(data.attributes).sort();
-      for (var ai = 0; ai < attrKeys.length; ai++) {
-        var aKey = attrKeys[ai];
-        // Skip service.name (shown as badge) and rf.* fields (not relevant for generic spans)
-        if (aKey === 'service.name') continue;
-        if (aKey.indexOf('rf.') === 0) continue;
-        var aVal = data.attributes[aKey];
-        // Skip zero/empty/null values
-        if (aVal === 0 || aVal === '' || aVal === null || aVal === undefined) continue;
-        var attrRow = document.createElement('tr');
-        var keyCell = document.createElement('td');
-        keyCell.textContent = aKey;
-        var valCell = document.createElement('td');
-        valCell.textContent = String(aVal);
-        attrRow.appendChild(keyCell);
-        attrRow.appendChild(valCell);
-        attrTable.appendChild(attrRow);
-      }
-      if (attrTable.rows.length > 0) {
-        panel.appendChild(attrTable);
+    if (data.status === 'FAIL' && data.status_message) {
+      _addErrorBlock(panel, data.status_message);
+    }
+    return;
+  }
+
+  // EXTERNAL spans: show compact info bar + HTTP/DB summary only in tree.
+  // Full attribute details are in the Execution Flow table.
+  if (data.keyword_type === 'EXTERNAL') {
+    _addCompactInfoBar(panel, data);
+    if (data.attributes && typeof window.extractSpanAttributes === 'function') {
+      var extAttrSummary = window.extractSpanAttributes(data.attributes);
+      if (extAttrSummary && extAttrSummary.type === 'http') {
+        _renderHttpSection(panel, extAttrSummary);
+      } else if (extAttrSummary && extAttrSummary.type === 'db') {
+        _renderDbSection(panel, extAttrSummary);
       }
     }
     if (data.status === 'FAIL' && data.status_message) {
       _addErrorBlock(panel, data.status_message);
-    }
-    if (data.events && data.events.length > 0) {
-      var genEventsWrap = document.createElement('div');
-      genEventsWrap.setAttribute('data-field', 'events');
-      _renderEventsSection(genEventsWrap, data.events);
-      panel.appendChild(genEventsWrap);
     }
     return;
   }
