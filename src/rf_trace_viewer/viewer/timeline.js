@@ -3101,13 +3101,24 @@
       ', timelineFlatSpans=' + totalFlat +
       ', timeRange=' + (event.filterState ? event.filterState.timeRangeStart + '/' + event.filterState.timeRangeEnd : 'n/a'));
     
-    // Reset layout mode to baseline on any filter change (Req 6.1, 6.2)
-    timelineState.layoutMode = 'baseline';
-    if (timelineState._compactBtn) {
-      timelineState._compactBtn.textContent = 'Compact visible spans';
-      timelineState._compactBtn.setAttribute('aria-label', 'Compact visible spans');
+    // Determine whether a real filter is active (subset of spans, or time range set)
+    var hasTimeRange = event.filterState &&
+      (event.filterState.timeRangeStart != null || event.filterState.timeRangeEnd != null);
+    var isFiltered = filteredSpans.length < totalFlat || hasTimeRange;
+
+    // Only reset layout to baseline when a real filter change occurs (Req 6.1, 6.2).
+    // In live mode, initSearch re-fires filter-changed on every data refresh with all
+    // spans visible — that should NOT reset compact mode.
+    if (isFiltered) {
+      timelineState.layoutMode = 'baseline';
+      if (timelineState._compactBtn) {
+        timelineState._compactBtn.textContent = 'Compact visible spans';
+        timelineState._compactBtn.setAttribute('aria-label', 'Compact visible spans');
+      }
+      _restoreOriginalLanes();
+    } else {
+      console.log('[Timeline] Filter unchanged (all spans visible), preserving layout:', timelineState.layoutMode);
     }
-    _restoreOriginalLanes();
     
     // Store original workers if not already stored
     if (!timelineState.allWorkers) {

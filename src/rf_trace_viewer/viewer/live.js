@@ -1996,6 +1996,9 @@
     var newSpanCount = _countModelSpans(model);
     console.log('[live] _renderAllViews: suites=' + suiteCount + ', modelSpans=' + newSpanCount);
 
+    // Track whether this call performs the first timeline init (for deferred auto-compact)
+    var didFirstTimelineInit = false;
+
     // Tree
     var treePanel = document.querySelector('.panel-tree');
     if (treePanel && typeof renderTree === 'function') {
@@ -2020,10 +2023,9 @@
         _loadWindowState.totalCachedSpans = allSpans.length;
         window.initTimeline(timelineSection, model);
         _timelineInitialized = true;
-        // Auto-compact the Gantt on first live init (matches offline default)
-        if (typeof window.triggerTimelineCompact === 'function') {
-          window.triggerTimelineCompact();
-        }
+        didFirstTimelineInit = true;
+        // NOTE: auto-compact is deferred until AFTER initSearch below,
+        // because initSearch fires filter-changed which resets layout to baseline.
       } else if (_timelineInitialized && typeof window.updateTimelineData === 'function') {
         window.updateTimelineData(model);
       }
@@ -2039,6 +2041,12 @@
         window.initSearch(filterContent, model);
         _lastFilterSpanCount = newSpanCount;
       }
+    }
+
+    // Auto-compact AFTER initSearch so filter-changed doesn't reset it back to baseline
+    if (didFirstTimelineInit && typeof window.triggerTimelineCompact === 'function') {
+      console.log('[live] Auto-compact after first timeline init + filter init');
+      window.triggerTimelineCompact();
     }
 
     // Flow table
