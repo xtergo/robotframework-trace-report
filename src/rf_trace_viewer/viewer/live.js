@@ -2016,6 +2016,10 @@
         _loadWindowState.totalCachedSpans = allSpans.length;
         window.initTimeline(timelineSection, model);
         _timelineInitialized = true;
+        // Auto-compact the Gantt on first live init (matches offline default)
+        if (typeof window.triggerTimelineCompact === 'function') {
+          window.triggerTimelineCompact();
+        }
       } else if (_timelineInitialized && typeof window.updateTimelineData === 'function') {
         window.updateTimelineData(model);
       }
