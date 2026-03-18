@@ -153,6 +153,9 @@
             case 'keyword':
               // Keyword inside a test
               var parentTest = entry.parentRef;
+              console.log('[FlowTable] Navigate to keyword: id=' + spanId + ', kwType=' +
+                (entry.ref.keyword_type || 'KEYWORD') + ', hasAttrs=' + !!(entry.ref.attributes) +
+                ', parentTest=' + parentTest.name);
               if (s.currentTestId !== parentTest.id) {
                 s.rows = _buildKeywordRows(parentTest);
                 s.expandedIds = _computeFailFocusedExpanded(parentTest);
@@ -210,6 +213,9 @@
             case 'generic-kw':
               // Generic keyword child — show parent generic suite, highlight this span
               var genSuite = entry.parentRef;
+              console.log('[FlowTable] Navigate to generic-kw: id=' + spanId + ', name=' +
+                (entry.ref.name || '') + ', hasAttrs=' + !!(entry.ref.attributes) +
+                ', genSuite=' + genSuite.name);
               s.currentTestId = genSuite.id;
               s.highlightSpanId = spanId;
               s.rows = _buildGenericSuiteRows(genSuite);
@@ -1352,6 +1358,8 @@
     // For EXTERNAL/GENERIC keywords with attributes, render a collapsible styled detail row
     if ((kwTypeUpper === 'EXTERNAL' || kwTypeUpper === 'GENERIC') && row.attributes) {
       var attrKeys = Object.keys(row.attributes);
+      console.log('[FlowTable] ' + kwTypeUpper + ' row "' + row.name + '": attrKeys=' + attrKeys.length +
+        ', id=' + row.id + ', svc=' + row.service_name);
       if (attrKeys.length > 0) {
         var frag = document.createDocumentFragment();
 
