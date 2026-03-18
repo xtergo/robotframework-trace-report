@@ -3330,15 +3330,14 @@
 
     // Detect if user's viewEnd was tracking the data edge (tail-follow mode).
     // Allow 2-second tolerance for rounding.
-    // IMPORTANT: Only consider tail-following when the view covers a
-    // significant portion of the data range (>25%). If the user is zoomed
-    // into a narrow cluster near the edge (e.g. _locateRecent auto-zoom),
-    // that's NOT tail-following — it's a focused view that should be preserved.
+    // When _userInteracted is false (auto-zoom from _locateRecent), always
+    // allow tail-follow if viewEnd is at the edge — the coverage check only
+    // applies to manual user zoom to avoid unwanted scrolling.
     var viewCoverage = (savedMaxTime > savedMinTime)
       ? (savedViewEnd - savedViewStart) / (savedMaxTime - savedMinTime) : 1;
     var wasTailFollowing = hadSpansBefore &&
       Math.abs(savedViewEnd - savedMaxTime) < 2 &&
-      viewCoverage > 0.25;
+      (viewCoverage > 0.25 || !timelineState._userInteracted);
 
     // Re-process spans with new data
     try {
