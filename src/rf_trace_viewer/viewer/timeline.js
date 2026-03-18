@@ -3347,6 +3347,14 @@
       return;
     }
 
+    // Capture the ACTUAL data edge from _processSpans before any view
+    // management code inflates maxTime with padding. This is critical for
+    // tail-follow: we must compare actual data edges, not padded ones.
+    var actualDataMax = timelineState.maxTime;
+    // The previous actual data edge is stored on timelineState so it
+    // survives across polls (savedMaxTime may be inflated by padding).
+    var prevDataMax = timelineState._actualDataMax || savedMaxTime;
+
     // Restore zoom/view BEFORE resizing canvas (which triggers _render).
     // _processSpans resets viewStart/viewEnd to full range; we must fix that
     // before any render happens.
@@ -3366,31 +3374,32 @@
       if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
       if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
 
-      // Tail-follow: if the user's viewEnd was at the data edge and new data
-      // arrived beyond it, extend viewEnd to keep tracking the latest spans.
-      // This keeps the Gantt bar covering new spans without requiring a reload.
-      var dataEdgeMovedFwd = timelineState.maxTime > savedMaxTime;
-      var viewWasAtEdge = Math.abs(savedViewEnd - savedMaxTime) < 2;
-      if (viewWasAtEdge && dataEdgeMovedFwd) {
-        var ext = timelineState.maxTime - savedMaxTime;
-        timelineState.viewEnd += ext;
-        // In live mode, add extra padding beyond the data edge
-        if (window.__RF_TRACE_LIVE__) {
-          var liveVR = timelineState.viewEnd - timelineState.viewStart;
-          var livePadU = liveVR * 0.15;
-          timelineState.viewEnd = timelineState.maxTime + livePadU;
-          timelineState.maxTime = timelineState.viewEnd;
-        }
+      // Tail-follow: if actual data grew, the user's viewEnd was near the
+      // previous data edge, AND we're in live mode, extend viewEnd so the
+      // bar visibly grows. Compare actual data edges (not padded maxTime)
+      // to avoid the padding masking real growth.
+      var dataEdgeMovedFwd = actualDataMax > prevDataMax;
+      var viewWasAtEdge = Math.abs(savedViewEnd - prevDataMax) < 2 ||
+        (prevDataMax > 0 && savedViewEnd >= prevDataMax);
+      if (dataEdgeMovedFwd && viewWasAtEdge && window.__RF_TRACE_LIVE__) {
+        var dataGrowth = actualDataMax - prevDataMax;
+        // Keep the same right padding ratio: viewEnd = actualDataMax + padding
+        var liveVR = savedViewEnd - savedViewStart;
+        var livePad = liveVR * 0.15;
+        timelineState.viewEnd = actualDataMax + livePad;
+        timelineState.maxTime = timelineState.viewEnd;
         var totalR = timelineState.maxTime - timelineState.minTime;
         var viewR = timelineState.viewEnd - timelineState.viewStart;
         if (totalR > 0 && viewR > 0) {
           timelineState.zoom = totalR / viewR;
         }
-        console.log('[Timeline] updateData: _userInteracted tail-follow, extended viewEnd by ' +
-          ext.toFixed(2) + 's → ' + _fmtEpoch(timelineState.viewEnd));
+        console.log('[Timeline] updateData: _userInteracted tail-follow, data grew ' +
+          dataGrowth.toFixed(1) + 's → viewEnd=' + _fmtEpoch(timelineState.viewEnd) +
+          ' (dataEdge=' + _fmtEpoch(actualDataMax) + ')');
       } else {
         console.log('[Timeline] updateData: _userInteracted=true, preserving view ' +
-          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd));
+          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
+          ' (dataEdge=' + _fmtEpoch(actualDataMax) + ', prevEdge=' + _fmtEpoch(prevDataMax) + ')');
       }
     } else if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
       // First data load: if a preset is active, use the rolling window (now - preset → now)
@@ -3471,23 +3480,23 @@
         timelineState.viewStart = savedViewStart;
         timelineState.viewEnd = savedViewEnd;
 
-        // Tail-follow: only extend viewEnd if the user was viewing a narrow
-        // window near the data edge AND the data edge moved forward (new live
-        // data arrived). Skip when the data range expanded because older data
-        // was loaded (e.g. fallback full fetch or delta fetch).
-        var dataEdgeMoved = timelineState.maxTime > savedMaxTime;
+        // Tail-follow: use actual data edges (not padded) to detect growth.
+        var dataEdgeMoved = actualDataMax > prevDataMax;
         var dataStartMoved = timelineState.minTime < (savedMinTime || timelineState.minTime);
-        if (wasTailFollowing && dataEdgeMoved && !dataStartMoved) {
-          var extension = timelineState.maxTime - savedMaxTime;
-          timelineState.viewEnd += extension;
-          // In live mode, add extra padding beyond the data edge so the bar
-          // has visible room to grow into on subsequent polls.
-          if (window.__RF_TRACE_LIVE__) {
-            var liveViewRange = timelineState.viewEnd - timelineState.viewStart;
-            var livePad = liveViewRange * 0.15;
-            timelineState.viewEnd = timelineState.maxTime + livePad;
-            timelineState.maxTime = timelineState.viewEnd;
+        if (wasTailFollowing && dataEdgeMoved && !dataStartMoved && window.__RF_TRACE_LIVE__) {
+          var dataGrowth2 = actualDataMax - prevDataMax;
+          var liveViewRange = savedViewEnd - savedViewStart;
+          var livePad = liveViewRange * 0.15;
+          timelineState.viewEnd = actualDataMax + livePad;
+          timelineState.maxTime = timelineState.viewEnd;
+          var totalRange = timelineState.maxTime - timelineState.minTime;
+          var viewRange = timelineState.viewEnd - timelineState.viewStart;
+          if (totalRange > 0 && viewRange > 0) {
+            timelineState.zoom = totalRange / viewRange;
           }
+        } else if (wasTailFollowing && dataEdgeMoved && !dataStartMoved) {
+          var extension = actualDataMax - prevDataMax;
+          timelineState.viewEnd += extension;
           var totalRange = timelineState.maxTime - timelineState.minTime;
           var viewRange = timelineState.viewEnd - timelineState.viewStart;
           if (totalRange > 0 && viewRange > 0) {
@@ -3504,26 +3513,36 @@
       if (hadSpansBefore) {
         // Keep existing view stable so the bar visibly grows into the
         // padding that _autoZoomToRecentCluster / _locateRecent set up.
-        // Only re-run _locateRecent if data extends well beyond the view
-        // (> 20% past viewEnd) to avoid the bar disappearing off-screen.
-        var viewRange = savedViewEnd - savedViewStart;
-        var overshoot = timelineState.maxTime - savedViewEnd;
-        if (overshoot > viewRange * 0.2) {
-          // Data grew significantly past the view — re-locate to keep
-          // the recent cluster centered with fresh padding.
-          _locateRecent();
-          console.log('[Timeline] updateData: data overshot view by ' +
-            overshoot.toFixed(1) + 's, re-ran _locateRecent → view ' +
-            _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
+        // In live mode, extend viewEnd to track actual data growth so the
+        // bar visibly grows — but only if the view was at the data edge.
+        // Use actual data edges, not padded maxTime.
+        var dataGrew = actualDataMax > prevDataMax;
+        var stableAtEdge = Math.abs(savedViewEnd - prevDataMax) < 2 ||
+          (prevDataMax > 0 && savedViewEnd >= prevDataMax);
+        if (dataGrew && stableAtEdge && window.__RF_TRACE_LIVE__) {
+          var stableVR = savedViewEnd - savedViewStart;
+          var stablePad = stableVR * 0.15;
+          timelineState.viewStart = savedViewStart;
+          timelineState.viewEnd = actualDataMax + stablePad;
+          timelineState.maxTime = timelineState.viewEnd;
+          if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
+          var totalR2 = timelineState.maxTime - timelineState.minTime;
+          var viewR2 = timelineState.viewEnd - timelineState.viewStart;
+          if (totalR2 > 0 && viewR2 > 0) {
+            timelineState.zoom = totalR2 / viewR2;
+          }
+          console.log('[Timeline] updateData: stable view, data grew ' +
+            (actualDataMax - prevDataMax).toFixed(1) + 's → viewEnd=' +
+            _fmtEpoch(timelineState.viewEnd) + ' (dataEdge=' + _fmtEpoch(actualDataMax) + ')');
         } else {
-          // Data still within or slightly past view — keep view stable
+          // Data didn't grow or not live — keep view exactly as-is
           timelineState.viewStart = savedViewStart;
           timelineState.viewEnd = savedViewEnd;
           if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
           if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
           console.log('[Timeline] updateData: keeping stable view ' +
             _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
-            ' (data edge at ' + _fmtEpoch(timelineState.maxTime) + ')');
+            ' (data edge at ' + _fmtEpoch(actualDataMax) + ')');
         }
       } else {
         console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
@@ -3542,6 +3561,9 @@
 
     timelineState.panY = savedPanY;
     timelineState.selectedSpan = savedSelected;
+
+    // Store the actual data edge (before padding) for next poll's comparison
+    timelineState._actualDataMax = actualDataMax;
 
     if (timelineState._syncSlider) timelineState._syncSlider();
     _render();
