@@ -3423,6 +3423,14 @@
       return;
     }
 
+    // Refresh allWorkers snapshot so _handleFilterChanged doesn't overwrite
+    // workers with a stale copy that's missing newly discovered services.
+    timelineState.allWorkers = {};
+    var _awKeys = Object.keys(timelineState.workers);
+    for (var _aw = 0; _aw < _awKeys.length; _aw++) {
+      timelineState.allWorkers[_awKeys[_aw]] = timelineState.workers[_awKeys[_aw]].slice();
+    }
+
     // Capture the ACTUAL data edge from _processSpans before any view
     // management code inflates maxTime with padding. This is critical for
     // tail-follow: we must compare actual data edges, not padded ones.

@@ -2015,32 +2015,16 @@ function _renderKeywordDetail(panel, data) {
   // Full attribute details are in the Execution Flow table.
   if (data.keyword_type === 'GENERIC') {
     _addCompactInfoBar(panel, data);
-    if (data.attributes && typeof window.extractSpanAttributes === 'function') {
-      var genAttrSummary = window.extractSpanAttributes(data.attributes);
-      if (genAttrSummary && genAttrSummary.type === 'http') {
-        _renderHttpSection(panel, genAttrSummary);
-      } else if (genAttrSummary && genAttrSummary.type === 'db') {
-        _renderDbSection(panel, genAttrSummary);
-      }
-    }
     if (data.status === 'FAIL' && data.status_message) {
       _addErrorBlock(panel, data.status_message);
     }
     return;
   }
 
-  // EXTERNAL spans: show compact info bar + HTTP/DB summary only in tree.
+  // EXTERNAL spans: show compact info bar + error only in tree.
   // Full attribute details are in the Execution Flow table.
   if (data.keyword_type === 'EXTERNAL') {
     _addCompactInfoBar(panel, data);
-    if (data.attributes && typeof window.extractSpanAttributes === 'function') {
-      var extAttrSummary = window.extractSpanAttributes(data.attributes);
-      if (extAttrSummary && extAttrSummary.type === 'http') {
-        _renderHttpSection(panel, extAttrSummary);
-      } else if (extAttrSummary && extAttrSummary.type === 'db') {
-        _renderDbSection(panel, extAttrSummary);
-      }
-    }
     if (data.status === 'FAIL' && data.status_message) {
       _addErrorBlock(panel, data.status_message);
     }

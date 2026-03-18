@@ -1349,7 +1349,7 @@
       return frag;
     }
 
-    // For EXTERNAL/GENERIC keywords with attributes, render a collapsible detail row
+    // For EXTERNAL/GENERIC keywords with attributes, render a collapsible styled detail row
     if ((kwTypeUpper === 'EXTERNAL' || kwTypeUpper === 'GENERIC') && row.attributes) {
       var attrKeys = Object.keys(row.attributes);
       if (attrKeys.length > 0) {
@@ -1359,8 +1359,8 @@
         var detailToggle = document.createElement('span');
         detailToggle.className = 'flow-detail-toggle';
         var isDetailOpen = !!(state.detailOpenIds && state.detailOpenIds[row.id]);
-        detailToggle.textContent = isDetailOpen ? ' \u25bc attrs' : ' \u25b6 attrs';
-        detailToggle.title = 'Toggle span attributes';
+        detailToggle.textContent = isDetailOpen ? ' \u25bc details' : ' \u25b6 details';
+        detailToggle.title = 'Toggle span details';
         tdKw.appendChild(detailToggle);
 
         frag.appendChild(tr);
@@ -1373,42 +1373,163 @@
         attrTd.className = 'flow-detail-cell';
         attrTd.style.paddingLeft = (row.depth * 20 + 30) + 'px';
 
-        var attrTable = document.createElement('table');
-        attrTable.className = 'flow-attr-table';
+        // Styled detail panel (matches tree node style)
+        var detailPanel = document.createElement('div');
+        detailPanel.className = 'detail-panel flow-styled-detail';
 
-        // Sort keys for consistent display, prioritize well-known prefixes
-        var prefixOrder = ['http.', 'url.', 'server.', 'client.', 'db.', 'rpc.', 'messaging.', 'net.'];
-        attrKeys.sort(function (a, b) {
-          var aIdx = prefixOrder.length, bIdx = prefixOrder.length;
-          for (var pi = 0; pi < prefixOrder.length; pi++) {
-            if (a.indexOf(prefixOrder[pi]) === 0) { aIdx = pi; break; }
-          }
-          for (var pj = 0; pj < prefixOrder.length; pj++) {
-            if (b.indexOf(prefixOrder[pj]) === 0) { bIdx = pj; break; }
-          }
-          if (aIdx !== bIdx) return aIdx - bIdx;
-          return a < b ? -1 : a > b ? 1 : 0;
-        });
+        var attrSummary = extractSpanAttributes(row.attributes);
 
-        for (var ak = 0; ak < attrKeys.length; ak++) {
-          var key = attrKeys[ak];
-          var val = row.attributes[key];
-          if (val === null || val === undefined || val === '') continue;
-          var attrRow = document.createElement('tr');
-          var keyTd = document.createElement('td');
-          keyTd.className = 'flow-attr-key';
-          keyTd.textContent = key;
-          var valTd = document.createElement('td');
-          valTd.className = 'flow-attr-val';
-          var valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
-          valTd.textContent = valStr.length > 200 ? valStr.substring(0, 197) + '...' : valStr;
-          valTd.title = valStr;
-          attrRow.appendChild(keyTd);
-          attrRow.appendChild(valTd);
-          attrTable.appendChild(attrRow);
+        // Info bar: type badge + status + duration + timestamps
+        var infoBar = document.createElement('div');
+        infoBar.className = 'detail-info-bar';
+        var typeBadge = document.createElement('span');
+        typeBadge.className = 'flow-type-badge flow-type-' + kwTypeUpper.toLowerCase();
+        typeBadge.textContent = kwTypeUpper === 'GENERIC' ? 'SPAN' : kwTypeUpper;
+        infoBar.appendChild(typeBadge);
+        if (row.service_name) {
+          var svcBadge = document.createElement('span');
+          svcBadge.className = 'flow-svc-badge';
+          svcBadge.textContent = row.service_name;
+          var _fSvcC = window.__RF_SVC_COLORS__;
+          var _fSvcE = _fSvcC ? _fSvcC.get(row.service_name) : null;
+          if (_fSvcE) {
+            var _fIsDk = document.documentElement.classList.contains('theme-dark') ||
+                         document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+            svcBadge.style.background = _fIsDk ? _fSvcE.badge[2] : _fSvcE.badge[0];
+            svcBadge.style.color = _fIsDk ? _fSvcE.badge[3] : _fSvcE.badge[1];
+          }
+          infoBar.appendChild(svcBadge);
+        }
+        var statusBadge = document.createElement('span');
+        statusBadge.className = 'detail-badge detail-badge-' + (row.status || '').toLowerCase();
+        statusBadge.textContent = row.status || 'UNKNOWN';
+        infoBar.appendChild(statusBadge);
+        var durSpan = document.createElement('span');
+        durSpan.className = 'detail-info-item';
+        durSpan.textContent = _formatDuration(row.duration);
+        infoBar.appendChild(durSpan);
+        detailPanel.appendChild(infoBar);
+
+        // HTTP section
+        if (attrSummary && attrSummary.type === 'http') {
+          var httpWrap = document.createElement('div');
+          httpWrap.className = 'attr-section';
+          var httpHeader = document.createElement('div');
+          httpHeader.className = 'attr-section-header';
+          httpHeader.textContent = 'HTTP';
+          httpWrap.appendChild(httpHeader);
+          if (attrSummary.method) _flowAddRow(httpWrap, 'Method:', attrSummary.method);
+          if (attrSummary.route) _flowAddRow(httpWrap, 'Route:', attrSummary.route);
+          if (attrSummary.path) _flowAddRow(httpWrap, 'Path:', attrSummary.path);
+          if (attrSummary.status_code) {
+            var scRow = document.createElement('div');
+            scRow.className = 'detail-panel-row';
+            var scLabel = document.createElement('span');
+            scLabel.className = 'detail-label';
+            scLabel.textContent = 'Status Code:';
+            var scValue = document.createElement('span');
+            var sc = attrSummary.status_code;
+            scValue.className = 'attr-status-code attr-status-code-' + (sc < 300 ? '2xx' : sc < 400 ? '3xx' : sc < 500 ? '4xx' : '5xx');
+            scValue.textContent = String(sc);
+            scRow.appendChild(scLabel);
+            scRow.appendChild(scValue);
+            httpWrap.appendChild(scRow);
+          }
+          if (attrSummary.server_address) {
+            var server = attrSummary.server_address;
+            if (attrSummary.server_port) server += ':' + attrSummary.server_port;
+            _flowAddRow(httpWrap, 'Server:', server);
+          }
+          if (attrSummary.client_address) _flowAddRow(httpWrap, 'Client:', attrSummary.client_address);
+          if (attrSummary.url_scheme) _flowAddRow(httpWrap, 'Scheme:', attrSummary.url_scheme);
+          if (attrSummary.user_agent) _flowAddRow(httpWrap, 'User Agent:', attrSummary.user_agent);
+          detailPanel.appendChild(httpWrap);
         }
 
-        attrTd.appendChild(attrTable);
+        // Database section
+        if (attrSummary && attrSummary.type === 'db') {
+          var dbWrap = document.createElement('div');
+          dbWrap.className = 'attr-section';
+          var dbHeader = document.createElement('div');
+          dbHeader.className = 'attr-section-header';
+          dbHeader.textContent = 'Database';
+          dbWrap.appendChild(dbHeader);
+          if (attrSummary.system) _flowAddRow(dbWrap, 'System:', attrSummary.system);
+          if (attrSummary.operation) _flowAddRow(dbWrap, 'Operation:', attrSummary.operation);
+          if (attrSummary.name) _flowAddRow(dbWrap, 'Database:', attrSummary.name);
+          if (attrSummary.table) _flowAddRow(dbWrap, 'Table:', attrSummary.table);
+          if (attrSummary.statement) {
+            var stmtRow = document.createElement('div');
+            stmtRow.className = 'detail-panel-row';
+            var stmtLabel = document.createElement('span');
+            stmtLabel.className = 'detail-label';
+            stmtLabel.textContent = 'Statement:';
+            var stmtPre = document.createElement('pre');
+            stmtPre.className = 'attr-statement-block';
+            stmtPre.textContent = attrSummary.statement;
+            stmtRow.appendChild(stmtLabel);
+            stmtRow.appendChild(stmtPre);
+            dbWrap.appendChild(stmtRow);
+          }
+          if (attrSummary.connection_string) _flowAddRow(dbWrap, 'Connection:', attrSummary.connection_string);
+          if (attrSummary.user) _flowAddRow(dbWrap, 'User:', attrSummary.user);
+          if (attrSummary.server_address) {
+            var dbServer = attrSummary.server_address;
+            if (attrSummary.server_port) dbServer += ':' + attrSummary.server_port;
+            _flowAddRow(dbWrap, 'Server:', dbServer);
+          }
+          detailPanel.appendChild(dbWrap);
+        }
+
+        // Error message
+        if (row.status === 'FAIL' && row.error) {
+          var errDiv = document.createElement('div');
+          errDiv.className = 'flow-error-msg';
+          errDiv.textContent = row.error;
+          detailPanel.appendChild(errDiv);
+        }
+
+        // Remaining attributes (non-HTTP/DB) in a collapsible raw table
+        var shownKeys = {};
+        if (attrSummary) {
+          // Mark keys already shown in the styled sections
+          var summaryFields = ['method', 'route', 'path', 'status_code', 'server_address',
+            'server_port', 'client_address', 'url_scheme', 'user_agent', 'system',
+            'operation', 'name', 'table', 'statement', 'connection_string', 'user'];
+          // Map summary fields back to attribute key prefixes
+          var httpKeys = ['http.request.method', 'http.method', 'http.route', 'url.path',
+            'http.path', 'http.response.status_code', 'http.status_code', 'server.address',
+            'server.port', 'net.peer.name', 'net.peer.port', 'client.address', 'url.scheme',
+            'http.scheme', 'user_agent.original', 'http.user_agent'];
+          var dbKeys = ['db.system', 'db.operation', 'db.name', 'db.sql.table',
+            'db.statement', 'db.connection_string', 'db.user'];
+          var skipKeys = httpKeys.concat(dbKeys).concat(['service.name']);
+          for (var sk = 0; sk < skipKeys.length; sk++) shownKeys[skipKeys[sk]] = true;
+        }
+        var remainingKeys = [];
+        for (var rk = 0; rk < attrKeys.length; rk++) {
+          if (!shownKeys[attrKeys[rk]] && row.attributes[attrKeys[rk]] !== null &&
+              row.attributes[attrKeys[rk]] !== undefined && row.attributes[attrKeys[rk]] !== '') {
+            remainingKeys.push(attrKeys[rk]);
+          }
+        }
+        if (remainingKeys.length > 0) {
+          var otherWrap = document.createElement('div');
+          otherWrap.className = 'attr-section';
+          var otherHeader = document.createElement('div');
+          otherHeader.className = 'attr-section-header';
+          otherHeader.textContent = 'Other Attributes';
+          otherWrap.appendChild(otherHeader);
+          remainingKeys.sort();
+          for (var ok = 0; ok < remainingKeys.length; ok++) {
+            var oVal = row.attributes[remainingKeys[ok]];
+            var oStr = typeof oVal === 'object' ? JSON.stringify(oVal) : String(oVal);
+            _flowAddRow(otherWrap, remainingKeys[ok], oStr.length > 200 ? oStr.substring(0, 197) + '...' : oStr);
+          }
+          detailPanel.appendChild(otherWrap);
+        }
+
+        attrTd.appendChild(detailPanel);
         attrTr.appendChild(attrTd);
         frag.appendChild(attrTr);
 
@@ -1418,7 +1539,7 @@
             e.stopPropagation();
             var open = dTr.style.display !== 'none';
             dTr.style.display = open ? 'none' : '';
-            dToggle.textContent = open ? ' \u25b6 attrs' : ' \u25bc attrs';
+            dToggle.textContent = open ? ' \u25b6 details' : ' \u25bc details';
             if (!state.detailOpenIds) state.detailOpenIds = {};
             if (open) { delete state.detailOpenIds[rowId]; }
             else { state.detailOpenIds[rowId] = true; }
@@ -1430,6 +1551,21 @@
     }
 
     return tr;
+  }
+
+  /** Helper: add a label/value row to a detail section (matches tree.js style). */
+  function _flowAddRow(parent, label, value) {
+    var row = document.createElement('div');
+    row.className = 'detail-panel-row';
+    var labelEl = document.createElement('span');
+    labelEl.className = 'detail-label';
+    labelEl.textContent = label;
+    var valueEl = document.createElement('span');
+    valueEl.className = 'detail-value';
+    valueEl.textContent = value;
+    row.appendChild(labelEl);
+    row.appendChild(valueEl);
+    parent.appendChild(row);
   }
 
   function _formatDuration(ms) {
