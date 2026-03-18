@@ -3541,19 +3541,33 @@
       // view — this prevents repeated updateData calls from resetting the
       // view after _autoZoomToRecentCluster or marker drag set it up.
       if (hadSpansBefore) {
-        // Keep existing view stable so the bar visibly grows into the
-        // padding that _autoZoomToRecentCluster / _locateRecent set up.
-        // Do NOT extend viewEnd here — the initial padding provides room
-        // for the bar to grow. Extending viewEnd changes the zoom ratio
-        // which causes oscillation between the wasUserZoomed and !wasUserZoomed
-        // branches on alternating polls.
         timelineState.viewStart = savedViewStart;
         timelineState.viewEnd = savedViewEnd;
         if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
         if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-        console.log('[Timeline] updateData: keeping stable view ' +
-          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
-          ' (data edge at ' + _fmtEpoch(actualDataMax) + ')');
+
+        // Tail-follow: when data grows past the current viewEnd, extend
+        // the view so new spans are visible. Keep the same view width and
+        // add 15% padding so the bar can keep growing into the next poll.
+        var stableDataGrew = actualDataMax > prevDataMax;
+        var stableDataPastView = actualDataMax > savedViewEnd;
+        if (stableDataGrew && stableDataPastView && window.__RF_TRACE_LIVE__) {
+          var stableVR = savedViewEnd - savedViewStart;
+          var stablePad = stableVR * 0.15;
+          timelineState.viewEnd = actualDataMax + stablePad;
+          timelineState.maxTime = timelineState.viewEnd;
+          var stableTR = timelineState.maxTime - timelineState.minTime;
+          var stableNewVR = timelineState.viewEnd - timelineState.viewStart;
+          if (stableTR > 0 && stableNewVR > 0) {
+            timelineState.zoom = stableTR / stableNewVR;
+          }
+          console.log('[Timeline] updateData: stable tail-follow, data past viewEnd → ' +
+            _fmtEpoch(timelineState.viewEnd) + ' (dataEdge=' + _fmtEpoch(actualDataMax) + ')');
+        } else {
+          console.log('[Timeline] updateData: keeping stable view ' +
+            _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
+            ' (data edge at ' + _fmtEpoch(actualDataMax) + ')');
+        }
       } else {
         console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
           '), showing full range');
