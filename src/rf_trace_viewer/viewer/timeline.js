@@ -3589,6 +3589,17 @@
     // Store the actual data edge (before padding) for next poll's comparison
     timelineState._actualDataMax = actualDataMax;
 
+    // Re-apply compact packing if layout mode is compact (processSpans resets to baseline lanes)
+    if (timelineState.layoutMode === 'compact') {
+      // Clear stale original lanes — _processSpans rebuilt all span objects
+      timelineState._originalLanes = null;
+      _compactLanes(timelineState.workers);
+      // Recalculate canvas height after compact changed lane assignments
+      var compactHeight = _calculateRequiredHeight();
+      canvas.style.height = compactHeight + 'px';
+      _resizeCanvas(canvas);
+    }
+
     if (timelineState._syncSlider) timelineState._syncSlider();
     _render();
     _renderHeader();

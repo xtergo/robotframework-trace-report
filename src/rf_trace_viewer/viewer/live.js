@@ -259,6 +259,7 @@
   var _paused = false;           // true = polling paused, false = live
   var _lastFilterSpanCount = 0;  // track span count to re-init filter only when data changes
   var _timelineInitialized = false;  // track whether timeline has been initialized with real data
+  var _timelineEmptyInitDone = false; // track whether empty-model init has been done
 
   // Span cap — stop ingesting beyond this limit to prevent browser tab crash
   var MAX_SPANS = Number(window.__RF_TRACE_MAX_SPANS__) || 1000000;
@@ -841,7 +842,7 @@
 
       // Init timeline with empty lookback window so the time axis is visible
       var timelineSection = document.querySelector('.timeline-section');
-      if (timelineSection && !_timelineInitialized && typeof window.initTimeline === 'function') {
+      if (timelineSection && !_timelineInitialized && !_timelineEmptyInitDone && typeof window.initTimeline === 'function') {
         var nowSec = Date.now() / 1000;
         var lookbackSec = _lookbackNs / 1e9;
         var emptyModel = _emptyModel();
@@ -851,7 +852,10 @@
         // This makes the blue load-start marker visible from the start.
         _loadWindowState.activeWindowStart = nowSec - lookbackSec;
         window.initTimeline(timelineSection, emptyModel);
-        _timelineInitialized = true;
+        // Don't set _timelineInitialized here — we want the real first-data
+        // init path (with auto-compact) to run when actual spans arrive.
+        // Mark a separate flag so we don't call initTimeline again.
+        _timelineEmptyInitDone = true;
         // Emit active-window-start so the timeline shows the blue marker immediately
         if (window.RFTraceViewer && window.RFTraceViewer.emit) {
           window.RFTraceViewer.emit('active-window-start', {
