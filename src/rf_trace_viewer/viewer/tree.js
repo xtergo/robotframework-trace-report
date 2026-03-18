@@ -1336,7 +1336,40 @@ function _renderTreeVirtual(container, model, filteredSpanIds) {
 
   // Build flat list and render
   _spanIndex = _buildSpanIndex(mergedSuites);
+
+  // Preserve scroll position during live re-renders. Save the scroll
+  // offset and the highlighted span's flat-list index so we can keep
+  // the user's view stable when new spans are appended.
+  var savedScrollTop = isReRender ? _virtualState.scrollEl.scrollTop : 0;
+  var savedHighlightId = isReRender ? _virtualState.highlightedSpanId : null;
+  var savedHighlightIdx = -1;
+  if (savedHighlightId && isReRender) {
+    for (var hi = 0; hi < _virtualState.flatItems.length; hi++) {
+      if (_virtualState.flatItems[hi].id === savedHighlightId) {
+        savedHighlightIdx = hi;
+        break;
+      }
+    }
+  }
+
   _rebuildFlatItems(_virtualState);
+
+  // After rebuild, restore scroll position. If a highlighted span exists,
+  // keep it at the same pixel offset it was at before the rebuild.
+  if (isReRender && savedHighlightId) {
+    var newIdx = _findFlatIndex(savedHighlightId);
+    if (newIdx >= 0 && savedHighlightIdx >= 0) {
+      // The highlighted span may have shifted in the flat list if items
+      // were inserted above it. Adjust scroll to compensate.
+      var shift = (newIdx - savedHighlightIdx) * _virtualState.ROW_HEIGHT;
+      _virtualState.scrollEl.scrollTop = savedScrollTop + shift;
+    } else {
+      _virtualState.scrollEl.scrollTop = savedScrollTop;
+    }
+  } else if (isReRender) {
+    _virtualState.scrollEl.scrollTop = savedScrollTop;
+  }
+
   _virtualState.renderedRange.start = -1;
   _virtualState.renderedRange.end = -1;
   _renderVisibleRows();
@@ -3192,6 +3225,37 @@ function _virtualHighlight(spanId) {
   // Expand ancestors of the target span so it becomes visible
   // (the target may be a PASS node the user needs to see)
   _virtualExpandAncestors(spanId);
+
+  // Focus-collapse: collapse all nodes that are NOT on the path to the
+  // target span. This keeps the tree clean — only the clicked node's
+  // ancestor chain stays expanded. Collect the ancestor IDs first.
+  var ancestorIds = {};
+  ancestorIds[spanId] = true;
+  if (_spanIndex && _spanIndex[spanId]) {
+    var cur = _spanIndex[spanId].parentId;
+    while (cur) {
+      ancestorIds[cur] = true;
+      if (!_spanIndex[cur]) break;
+      cur = _spanIndex[cur].parentId;
+    }
+  }
+  // Also keep the target itself expanded (if it has children)
+  // and any failure-focused expansions we just added above
+  var newExpanded = {};
+  for (var eid in vs.expandedIds) {
+    if (ancestorIds[eid]) {
+      newExpanded[eid] = true;
+    }
+  }
+  // If the target is a FAIL test, the failExpanded nodes were added above —
+  // re-add them since they're part of the focused view
+  if (testData && testData.status === 'FAIL') {
+    var failExp2 = _computeFailFocusedExpanded(testData);
+    for (var fk in failExp2) {
+      newExpanded[fk] = true;
+    }
+  }
+  vs.expandedIds = newExpanded;
 
   // Rebuild flat list once after all expandedIds changes
   _rebuildFlatItems(vs);
