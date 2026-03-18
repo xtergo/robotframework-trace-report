@@ -637,7 +637,11 @@
       var maxScrollLeft = hScrollInner.clientWidth - containerWidth;
       _hScrollSyncing = true;
       hScrollWrap.scrollLeft = Math.round(scrollFraction * maxScrollLeft);
-      _hScrollSyncing = false;
+      // Keep the guard up until the browser fires the async scroll event
+      // triggered by the programmatic scrollLeft change. Without this,
+      // the scroll handler sees _hScrollSyncing=false and incorrectly
+      // sets _userInteracted=true.
+      requestAnimationFrame(function () { _hScrollSyncing = false; });
     }
     hScrollWrap.addEventListener('scroll', function () {
       if (_hScrollSyncing) return;
