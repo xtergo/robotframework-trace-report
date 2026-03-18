@@ -48,29 +48,29 @@ def flatten_attributes(attrs: list[dict] | None) -> dict[str, Any]:
 
 def _extract_value(value_obj: dict[str, Any]) -> Any:
     """Extract a typed value from an OTLP attribute value object."""
-    if "string_value" in value_obj:
-        return value_obj["string_value"]
-    if "int_value" in value_obj:
-        return int(value_obj["int_value"])
-    if "double_value" in value_obj:
-        return float(value_obj["double_value"])
-    if "bool_value" in value_obj:
-        return bool(value_obj["bool_value"])
-    if "array_value" in value_obj:
-        array_val = value_obj["array_value"]
+    if "string_value" in value_obj or "stringValue" in value_obj:
+        return value_obj.get("string_value") or value_obj.get("stringValue")
+    if "int_value" in value_obj or "intValue" in value_obj:
+        return int(value_obj.get("int_value") or value_obj.get("intValue"))
+    if "double_value" in value_obj or "doubleValue" in value_obj:
+        return float(value_obj.get("double_value") or value_obj.get("doubleValue"))
+    if "bool_value" in value_obj or "boolValue" in value_obj:
+        return bool(value_obj.get("bool_value", value_obj.get("boolValue")))
+    if "array_value" in value_obj or "arrayValue" in value_obj:
+        array_val = value_obj.get("array_value") or value_obj.get("arrayValue")
         if isinstance(array_val, dict) and "values" in array_val:
             return [_extract_value(v) for v in array_val["values"]]
         return []
-    if "kvlist_value" in value_obj:
-        kvlist_val = value_obj["kvlist_value"]
+    if "kvlist_value" in value_obj or "kvlistValue" in value_obj:
+        kvlist_val = value_obj.get("kvlist_value") or value_obj.get("kvlistValue")
         if isinstance(kvlist_val, dict) and "values" in kvlist_val:
             return {
                 kv.get("key", ""): _extract_value(kv.get("value", {}))
                 for kv in kvlist_val["values"]
             }
         return {}
-    if "bytes_value" in value_obj:
-        return value_obj["bytes_value"]
+    if "bytes_value" in value_obj or "bytesValue" in value_obj:
+        return value_obj.get("bytes_value") or value_obj.get("bytesValue")
     return None
 
 
@@ -197,17 +197,32 @@ def parse_stream(stream: IO) -> list[RawSpan]:
     return spans
 
 
-def parse_file(path: str) -> list[RawSpan]:
-    """Parse an NDJSON trace file (plain or gzip-compressed).
+def _parse_whole_json(path: str) -> list[RawSpan]:
+    """Try parsing the file as a single OTLP JSON document (pretty-printed)."""
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as f:
+        data = json.load(f)
+    return parse_line(json.dumps(data))
 
-    Supports:
-    - Plain text ``.json`` files
-    - Gzip-compressed ``.json.gz`` files
-    - ``-`` for stdin
+
+def parse_file(path: str) -> list[RawSpan]:
+    """Parse a trace file (NDJSON or standard OTLP JSON, plain or gzip).
+
+    Tries whole-file OTLP JSON first (handles pretty-printed exports from
+    SigNoz/Jaeger). Falls back to NDJSON line-by-line parsing.
     """
     if path == "-":
         return parse_stream(sys.stdin)
 
+    # Try whole-file JSON first (avoids noisy warnings on pretty-printed files)
+    try:
+        spans = _parse_whole_json(path)
+        if spans:
+            return spans
+    except (json.JSONDecodeError, ValueError, OSError):
+        pass
+
+    # Fall back to NDJSON line-by-line parsing
     if path.endswith(".gz"):
         with gzip.open(path, "rt", encoding="utf-8") as f:
             return parse_stream(f)

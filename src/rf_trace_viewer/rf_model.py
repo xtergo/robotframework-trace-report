@@ -53,6 +53,7 @@ class RFSuite:
     has_teardown: bool = False
     metadata: dict[str, str] = field(default_factory=dict)
     children: list[RFSuite | RFTest | RFKeyword] = field(default_factory=list)
+    _is_generic_service: bool = False
 
 
 @dataclass
@@ -93,6 +94,8 @@ class RFKeyword:
     suite_name: str = ""
     suite_source: str = ""
     source_metadata: SourceMetadata | None = None
+    service_name: str = ""
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -247,7 +250,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         _build_keyword(c) for c in node.children if classify_span(c.span) == SpanType.KEYWORD
     ]
     return RFKeyword(
-        name=attrs.get("rf.keyword.name", node.span.name),
+        name=attrs.get("rf.keyword.name") or node.span.name,
         keyword_type=attrs.get("rf.keyword.type", "KEYWORD"),
         args=str(attrs.get("rf.keyword.args", "")),
         status=extract_status(node.span),
@@ -255,7 +258,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
         id=node.span.span_id,
-        lineno=int(attrs.get("rf.keyword.lineno", 0)),
+        lineno=int(attrs.get("rf.keyword.lineno") or 0),
         doc=str(attrs.get("rf.keyword.doc", "")),
         status_message=node.span.status.get("message", ""),
         message=str(attrs.get("rf.message", "")),
@@ -275,7 +278,7 @@ def _build_test(node: SpanNode) -> RFTest:
     tags_raw = attrs.get("rf.test.tags", [])
     tags = tags_raw if isinstance(tags_raw, list) else []
     return RFTest(
-        name=attrs.get("rf.test.name", node.span.name),
+        name=attrs.get("rf.test.name") or node.span.name,
         id=node.span.span_id,  # Use unique span_id instead of rf.test.id
         status=extract_status(node.span),
         start_time=node.span.start_time_unix_nano,
@@ -284,7 +287,7 @@ def _build_test(node: SpanNode) -> RFTest:
         keywords=keywords,
         tags=tags,
         doc=str(attrs.get("rf.test.doc", "")),
-        lineno=int(attrs.get("rf.test.lineno", 0)),
+        lineno=int(attrs.get("rf.test.lineno") or 0),
         source=str(attrs.get("rf.test.source", "")),
         has_setup=str(attrs.get("rf.test.has_setup", "")).lower() == "true",
         has_teardown=str(attrs.get("rf.test.has_teardown", "")).lower() == "true",
@@ -306,7 +309,7 @@ def _build_suite(node: SpanNode) -> RFSuite:
             kw_type = child.span.attributes.get("rf.keyword.type", "KEYWORD")
             if kw_type in ("SETUP", "TEARDOWN"):
                 kw = _build_keyword(child)
-                kw.suite_name = attrs.get("rf.suite.name", node.span.name)
+                kw.suite_name = attrs.get("rf.suite.name") or node.span.name
                 kw.suite_source = str(attrs.get("rf.suite.source", ""))
                 children.append(kw)
         # Signals and generic spans are not added to the suite children
@@ -319,7 +322,7 @@ def _build_suite(node: SpanNode) -> RFSuite:
             metadata[key[len(prefix) :]] = str(value)
 
     return RFSuite(
-        name=attrs.get("rf.suite.name", node.span.name),
+        name=attrs.get("rf.suite.name") or node.span.name,
         id=node.span.span_id,  # Use unique span_id instead of rf.suite.id
         source=str(attrs.get("rf.suite.source", "")),
         status=extract_status(node.span),
@@ -327,12 +330,105 @@ def _build_suite(node: SpanNode) -> RFSuite:
         end_time=node.span.end_time_unix_nano,
         elapsed_time=_elapsed_ms(node.span),
         doc=str(attrs.get("rf.suite.doc", "")),
-        lineno=int(attrs.get("rf.suite.lineno", 0)),
+        lineno=int(attrs.get("rf.suite.lineno") or 0),
         has_setup=str(attrs.get("rf.suite.has_setup", "")).lower() == "true",
         has_teardown=str(attrs.get("rf.suite.has_teardown", "")).lower() == "true",
         metadata=metadata,
         children=children,
     )
+
+
+def _collect_span_ids(node: SpanNode, ids: set[str]) -> None:
+    """Recursively collect all span_ids in a tree."""
+    ids.add(node.span.span_id)
+    for child in node.children:
+        _collect_span_ids(child, ids)
+
+
+def _build_generic_keyword(node: SpanNode, all_span_ids: set[str]) -> RFKeyword:
+    """Convert a generic (non-RF) SpanNode to an RFKeyword with GENERIC type."""
+    attrs = node.span.attributes
+    svc_name = str(node.span.resource_attributes.get("service.name") or "")
+
+    # Naming fallback: span.name → METHOD PATH → 'unknown'
+    span_name = node.span.name or ""
+    if not span_name:
+        http_method = attrs.get("http.request.method") or attrs.get("http.method", "")
+        http_path = attrs.get("url.path") or attrs.get("http.route") or attrs.get("http.target", "")
+        if http_method and http_path:
+            span_name = f"{http_method} {http_path}"
+        else:
+            span_name = "unknown"
+
+    # Build children from child spans (recursive)
+    children: list[RFKeyword] = []
+    for child in node.children:
+        children.append(_build_generic_keyword(child, all_span_ids))
+
+    # Map OTel status to our Status enum
+    otel_code = node.span.status.get("code", "")
+    if str(otel_code) == "2" or str(otel_code).upper() == "ERROR":
+        status = Status.FAIL
+    else:
+        status = Status.PASS
+
+    return RFKeyword(
+        name=span_name,
+        keyword_type="GENERIC",
+        args="",
+        status=status,
+        start_time=node.span.start_time_unix_nano,
+        end_time=node.span.end_time_unix_nano,
+        elapsed_time=_elapsed_ms(node.span),
+        id=node.span.span_id,
+        events=node.span.events,
+        children=children,
+        service_name=svc_name,
+        attributes=dict(attrs),
+    )
+
+
+def _build_generic_service_suites(
+    generic_roots: list[SpanNode], all_span_ids: set[str]
+) -> list[RFSuite]:
+    """Group generic root spans by service.name into synthetic RFSuite objects."""
+    groups: dict[str, list[SpanNode]] = {}
+    for node in generic_roots:
+        svc = str(node.span.resource_attributes.get("service.name") or "unknown")
+        groups.setdefault(svc, []).append(node)
+
+    suites: list[RFSuite] = []
+    for svc_name, nodes in groups.items():
+        children: list[RFSuite | RFTest | RFKeyword] = []
+        min_start = min(n.span.start_time_unix_nano for n in nodes)
+        max_end = max(n.span.end_time_unix_nano for n in nodes)
+        has_fail = False
+
+        for node in nodes:
+            kw = _build_generic_keyword(node, all_span_ids)
+            children.append(kw)
+            if kw.status == Status.FAIL:
+                has_fail = True
+
+        children.sort(key=lambda c: c.start_time)
+
+        suites.append(
+            RFSuite(
+                name=svc_name,
+                id=f"__generic_{svc_name}",
+                source="",
+                status=Status.FAIL if has_fail else Status.PASS,
+                start_time=min_start,
+                end_time=max_end,
+                elapsed_time=(max_end - min_start) / 1_000_000,
+                doc=f"Generic OTel spans from {svc_name}",
+                _is_generic_service=True,
+                children=children,
+            )
+        )
+
+    suites.sort(key=lambda s: s.start_time)
+    return suites
 
 
 def interpret_tree(roots: list[SpanNode]) -> RFRunModel:
@@ -353,7 +449,7 @@ def interpret_tree(roots: list[SpanNode]) -> RFRunModel:
     # Extract run-level metadata from the first root's resource attributes
     first_root = roots[0]
     res_attrs = first_root.span.resource_attributes
-    title = str(res_attrs.get("service.name", first_root.span.name))
+    title = str(res_attrs.get("service.name") or first_root.span.name)
     run_id = str(res_attrs.get("run.id", ""))
     rf_version = str(res_attrs.get("rf.version", ""))
 
@@ -361,13 +457,27 @@ def interpret_tree(roots: list[SpanNode]) -> RFRunModel:
     start_time = min(r.span.start_time_unix_nano for r in roots)
     end_time = max(r.span.end_time_unix_nano for r in roots)
 
-    # Build suites from root nodes
+    # Build suites from root nodes and collect generic root spans
     suites: list[RFSuite] = []
+    generic_roots: list[SpanNode] = []
+    # Build a span_id set for parent-in-set check
+    all_span_ids: set[str] = set()
+    for root in roots:
+        _collect_span_ids(root, all_span_ids)
+
     for root in roots:
         span_type = classify_span(root.span)
         if span_type == SpanType.SUITE:
             suites.append(_build_suite(root))
-        # Non-suite roots (rare) are skipped in the suite list
+        elif span_type == SpanType.GENERIC:
+            # Only treat as generic root if parent is not in our span set
+            pid = root.span.parent_span_id
+            if not pid or pid not in all_span_ids:
+                generic_roots.append(root)
+
+    # Group generic root spans by service.name → synthetic service suites
+    if generic_roots:
+        suites.extend(_build_generic_service_suites(generic_roots, all_span_ids))
 
     statistics = compute_statistics(suites, start_time, end_time)
 

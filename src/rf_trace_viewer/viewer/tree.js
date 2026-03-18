@@ -20,12 +20,63 @@ var _treeContainer = null;
 var _currentFilteredSpanIds = null;
 var _failuresOnlyActive = false;
 var _filterListenerRegistered = false;
+var _activeServiceFilter = null; // null = show all, otherwise { svcName: true }
 
 // Virtual scrolling state — only used when span count > VIRTUAL_THRESHOLD
 var _virtualState = null;
 var VIRTUAL_THRESHOLD = 5000;
 var VIRTUAL_ROW_HEIGHT = 28;
 var VIRTUAL_BUFFER = 20;
+
+// Span index for O(1) lookups: spanId → { parentId, testId }
+// Built once per model load, avoids O(n) tree walks on every navigate-to-span.
+var _spanIndex = null;
+
+function _buildSpanIndex(suites) {
+  var idx = {};
+  function walkKw(kw, parentId, testId) {
+    idx[kw.id] = { parentId: parentId, testId: testId };
+    var kids = kw.children || [];
+    for (var i = 0; i < kids.length; i++) {
+      walkKw(kids[i], kw.id, testId);
+    }
+  }
+  function walkSuite(suite, parentId) {
+    idx[suite.id] = { parentId: parentId, testId: null };
+    var children = suite.children || [];
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (child.keywords !== undefined) {
+        // test
+        idx[child.id] = { parentId: suite.id, testId: child.id };
+        var kws = child.keywords || [];
+        for (var k = 0; k < kws.length; k++) {
+          walkKw(kws[k], child.id, child.id);
+        }
+      } else if (child.keyword_type !== undefined) {
+        // generic keyword child of service suite
+        walkKw(child, suite.id, null);
+      } else {
+        walkSuite(child, suite.id);
+      }
+    }
+  }
+  for (var i = 0; i < suites.length; i++) {
+    walkSuite(suites[i], null);
+  }
+  return idx;
+}
+
+/** Rebuild flatItems from the merged suites and build the flat index map. */
+function _rebuildFlatItems(vs) {
+  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+  // Build O(1) flat index: spanId → position in flatItems
+  var fi = {};
+  for (var i = 0; i < vs.flatItems.length; i++) {
+    fi[vs.flatItems[i].id] = i;
+  }
+  vs._flatIndex = fi;
+}
 
 // Indentation slider state
 var _indentSliders = [];  // all slider elements for sync
@@ -231,8 +282,10 @@ function renderTree(container, model) {
   if (!_filterListenerRegistered && window.RFTraceViewer && window.RFTraceViewer.on) {
     _filterListenerRegistered = true;
     window.RFTraceViewer.on('filter-changed', function (data) {
-      var filteredSpanIds = {};
-      if (data.filteredSpans) {
+      var filteredSpanIds = null;
+      if (data.filteredSpans && data.resultCounts &&
+          data.filteredSpans.length < data.resultCounts.total) {
+        filteredSpanIds = {};
         for (var i = 0; i < data.filteredSpans.length; i++) {
           filteredSpanIds[data.filteredSpans[i].id] = true;
         }
@@ -242,6 +295,22 @@ function renderTree(container, model) {
       // the closure-captured model which would be stale in live mode
       if (_originalModel && _treeContainer) {
         _renderTreeWithFilter(_treeContainer, _originalModel, filteredSpanIds);
+      }
+    });
+
+    // Listen for service filter changes (offline mode)
+    window.RFTraceViewer.on('service-filter-changed', function (evt) {
+      if (!evt) return;
+      var active = evt.active || [];
+      var all = evt.all || [];
+      if (active.length === all.length) {
+        _activeServiceFilter = null; // show all
+      } else {
+        _activeServiceFilter = {};
+        for (var i = 0; i < active.length; i++) _activeServiceFilter[active[i]] = true;
+      }
+      if (_originalModel && _treeContainer) {
+        _renderTreeWithFilter(_treeContainer, _originalModel, _currentFilteredSpanIds);
       }
     });
   }
@@ -559,6 +628,20 @@ function _flattenSubtree(parentItem, filteredSpanIds, expandedIds) {
       }
     }
 
+    // Service filter: hide generic service suites and EXTERNAL/GENERIC keywords
+    // whose service is unchecked (same logic as _flattenTree)
+    if (_activeServiceFilter !== null) {
+      if (itemType === 'suite' && item._is_generic_service && item.name && !_activeServiceFilter[item.name]) {
+        continue;
+      }
+      if (itemType === 'keyword' && item.keyword_type === 'EXTERNAL' && item.service_name && !_activeServiceFilter[item.service_name]) {
+        continue;
+      }
+      if (itemType === 'keyword' && item.keyword_type === 'GENERIC' && item.service_name && !_activeServiceFilter[item.service_name]) {
+        continue;
+      }
+    }
+
     var flatItem = _buildFlatItem(item, itemType, frame.depth, frame.maxSiblingDuration);
     result.push(flatItem);
 
@@ -646,6 +729,20 @@ function _flattenTree(suites, filteredSpanIds, expandedIds) {
     if (filteredSpanIds !== null) {
       var matchesFilter = !!filteredSpanIds[item.id];
       if (!matchesFilter && !_hasDescendantInFilter(item, filteredSpanIds)) {
+        continue;
+      }
+    }
+
+    // Service filter: hide generic service suites and EXTERNAL keywords
+    // whose service is unchecked
+    if (_activeServiceFilter !== null) {
+      if (itemType === 'suite' && item._is_generic_service && item.name && !_activeServiceFilter[item.name]) {
+        continue;
+      }
+      if (itemType === 'keyword' && item.keyword_type === 'EXTERNAL' && item.service_name && !_activeServiceFilter[item.service_name]) {
+        continue;
+      }
+      if (itemType === 'keyword' && item.keyword_type === 'GENERIC' && item.service_name && !_activeServiceFilter[item.service_name]) {
         continue;
       }
     }
@@ -832,7 +929,8 @@ function _createVirtualRow(item, index) {
     data: item.data,
     kwType: item.data.keyword_type,
     kwArgs: item.data.args,
-    maxSiblingDuration: item.maxSiblingDuration || 0
+    maxSiblingDuration: item.maxSiblingDuration || 0,
+    skipDetailPanel: true  // Virtual mode: detail panel is removed anyway
   });
 
   // Apply wrapper de-emphasis in virtual mode
@@ -858,12 +956,6 @@ function _createVirtualRow(item, index) {
   var childrenEl = node.querySelector(':scope > .tree-children');
   if (childrenEl) {
     node.removeChild(childrenEl);
-  }
-
-  // Remove the detail panel — we handle expand differently in virtual mode
-  var detailEl = node.querySelector(':scope > .detail-panel');
-  if (detailEl) {
-    node.removeChild(detailEl);
   }
 
   // Set expanded visual state on toggle button
@@ -942,7 +1034,7 @@ function _virtualToggle(nodeId) {
       }
     } else {
       // Fallback: full rebuild
-      vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+      _rebuildFlatItems(vs);
     }
   } else {
     vs.expandedIds[nodeId] = true;
@@ -977,7 +1069,7 @@ function _virtualToggle(nodeId) {
       }
     } else {
       // Fallback: full rebuild
-      vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+      _rebuildFlatItems(vs);
     }
   }
 
@@ -1001,6 +1093,11 @@ function _virtualToggle(nodeId) {
 function _findFlatIndex(spanId) {
   var vs = _virtualState;
   if (!vs) return -1;
+  // Use flat index map if available (O(1))
+  if (vs._flatIndex) {
+    var idx = vs._flatIndex[spanId];
+    return idx !== undefined ? idx : -1;
+  }
   for (var i = 0; i < vs.flatItems.length; i++) {
     if (vs.flatItems[i].id === spanId) return i;
   }
@@ -1017,7 +1114,18 @@ function _virtualExpandAncestors(targetId) {
   var vs = _virtualState;
   if (!vs) return;
 
-  // Use merged model for ancestor path (flat list is built from merged suites)
+  // Use span index for O(1) ancestor chain walk
+  if (_spanIndex && _spanIndex[targetId]) {
+    var cur = _spanIndex[targetId].parentId;
+    while (cur) {
+      vs.expandedIds[cur] = true;
+      if (!_spanIndex[cur]) break;
+      cur = _spanIndex[cur].parentId;
+    }
+    return;
+  }
+
+  // Fallback: full model walk
   var mergedModel = { suites: vs.mergedSuites };
   var ancestorPath = _findAncestorPath(mergedModel, targetId);
   if (ancestorPath) {
@@ -1227,7 +1335,8 @@ function _renderTreeVirtual(container, model, filteredSpanIds) {
   }
 
   // Build flat list and render
-  _virtualState.flatItems = _flattenTree(mergedSuites, filteredSpanIds, _virtualState.expandedIds);
+  _spanIndex = _buildSpanIndex(mergedSuites);
+  _rebuildFlatItems(_virtualState);
   _virtualState.renderedRange.start = -1;
   _virtualState.renderedRange.end = -1;
   _renderVisibleRows();
@@ -1266,7 +1375,7 @@ function _virtualSetAllExpanded(expand) {
   }
 
   // Rebuild and re-render
-  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+  _rebuildFlatItems(vs);
   vs.renderedRange.start = -1;
   vs.renderedRange.end = -1;
   _renderVisibleRows();
@@ -2368,8 +2477,23 @@ function _createTreeNode(opts) {
     row.classList.add('kw-teardown');
   } else if (opts.kwType === 'EXTERNAL') {
     row.classList.add('kw-external');
+    // Apply service-based border color
+    var _svcCBorder = window.__RF_SVC_COLORS__;
+    var _svcEBorder = _svcCBorder && opts.data && opts.data.service_name ? _svcCBorder.get(opts.data.service_name) : null;
+    if (_svcEBorder) {
+      var _isDkB = document.documentElement.classList.contains('theme-dark') ||
+                   document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+      row.style.borderLeftColor = _isDkB ? _svcEBorder.dark : _svcEBorder.light;
+    }
   } else if (opts.kwType === 'GENERIC') {
     row.classList.add('kw-generic');
+    var _svcCBorder2 = window.__RF_SVC_COLORS__;
+    var _svcEBorder2 = _svcCBorder2 && opts.data && opts.data.service_name ? _svcCBorder2.get(opts.data.service_name) : null;
+    if (_svcEBorder2) {
+      var _isDkB2 = document.documentElement.classList.contains('theme-dark') ||
+                    document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+      row.style.borderLeftColor = _isDkB2 ? _svcEBorder2.dark : _svcEBorder2.light;
+    }
   } else if (opts.kwType === 'ERROR') {
     row.classList.add('kw-error');
   } else if (opts.kwType) {
@@ -2379,8 +2503,13 @@ function _createTreeNode(opts) {
   // Toggle arrow (or spacer)
   var toggle = document.createElement('button');
   toggle.className = 'tree-toggle toggle-' + opts.type + ' ' + _statusClass(opts.status);
-  toggle.textContent = '\u25b6'; // ▶
-  toggle.setAttribute('aria-label', 'Expand');
+  if (opts.hasChildren) {
+    toggle.textContent = '\u25b6'; // ▶
+    toggle.setAttribute('aria-label', 'Expand');
+  } else {
+    toggle.textContent = '';
+    toggle.style.visibility = 'hidden';
+  }
   toggle.addEventListener('click', function (e) {
     e.stopPropagation();
     _toggleNode(wrapper);
@@ -2418,6 +2547,15 @@ function _createTreeNode(opts) {
     svcBadge.className = 'svc-name-badge';
     svcBadge.textContent = opts.data.service_name;
     svcBadge.title = 'Service: ' + opts.data.service_name;
+    // Apply service-based color
+    var _svcC = window.__RF_SVC_COLORS__;
+    var _svcE = _svcC ? _svcC.get(opts.data.service_name) : null;
+    if (_svcE) {
+      var _isDk = document.documentElement.classList.contains('theme-dark') ||
+                  document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+      svcBadge.style.background = _isDk ? _svcE.badge[2] : _svcE.badge[0];
+      svcBadge.style.color = _isDk ? _svcE.badge[3] : _svcE.badge[1];
+    }
     nameEl.appendChild(svcBadge);
   } else if (rfSvcName && opts.type === 'keyword' && opts.kwType !== 'EXTERNAL') {
     var rfBadge = document.createElement('span');
@@ -2502,13 +2640,15 @@ function _createTreeNode(opts) {
     wrapper.appendChild(errorSnippet);
   }
 
-  // Detail panel — inserted between row and children
-  var detailPanel = _renderDetailPanel({
-    type: opts.type,
-    status: opts.status,
-    data: opts.data
-  });
-  wrapper.appendChild(detailPanel);
+  // Detail panel — inserted between row and children (skip in virtual mode)
+  if (!opts.skipDetailPanel) {
+    var detailPanel = _renderDetailPanel({
+      type: opts.type,
+      status: opts.status,
+      data: opts.data
+    });
+    wrapper.appendChild(detailPanel);
+  }
 
   // Click row to toggle (all nodes have detail panels)
   row.addEventListener('click', function () { _toggleNode(wrapper); });
@@ -2919,7 +3059,16 @@ function highlightNodeInTree(spanId) {
  * @returns {string|null} The ID of the nearest ancestor in the tree, or null
  */
 function _findNearestTreeAncestor(spanId) {
-  // Use timeline's flatSpans to walk up the parent chain
+  // Fast path: use span index to walk up parent chain
+  if (_spanIndex) {
+    var cur = _spanIndex[spanId];
+    while (cur && cur.parentId) {
+      if (_spanIndex[cur.parentId]) return cur.parentId;
+      cur = _spanIndex[cur.parentId];
+    }
+  }
+
+  // Fallback: use timeline's flatSpans to walk up the parent chain
   var ts = window.timelineState;
   if (!ts || !ts.flatSpans) return null;
 
@@ -3012,8 +3161,27 @@ function _virtualHighlight(spanId) {
   // Failure-focused expand: if the target span belongs to a FAIL test,
   // apply failure-focused collapse to the test's subtree before expanding
   // ancestors of the specific target span.
-  var mergedModel = { suites: vs.mergedSuites };
-  var testData = _findTestForSpan(mergedModel, spanId);
+  var testData = null;
+  if (_spanIndex && _spanIndex[spanId] && _spanIndex[spanId].testId) {
+    // O(1) lookup via span index
+    var testId = _spanIndex[spanId].testId;
+    // Find the test data object by walking up to it
+    var testFlatIdx = vs._flatIndex ? vs._flatIndex[testId] : -1;
+    if (testFlatIdx >= 0) {
+      testData = vs.flatItems[testFlatIdx].data;
+    }
+    if (!testData) {
+      // Test not yet in flat list — search model (still fast, just one test)
+      var mergedModel = { suites: vs.mergedSuites };
+      testData = _findTestForSpan(mergedModel, testId);
+    }
+  } else if (!_spanIndex || !_spanIndex[spanId]) {
+    // Span not in index at all — fallback to full model walk
+    var mergedModel = { suites: vs.mergedSuites };
+    testData = _findTestForSpan(mergedModel, spanId);
+  }
+  // If _spanIndex has the span but testId is null/undefined, it's a
+  // suite-level or generic-service span — skip the expensive model walk.
   if (testData && testData.status === 'FAIL') {
     var failExpanded = _computeFailFocusedExpanded(testData);
     for (var key in failExpanded) {
@@ -3026,7 +3194,7 @@ function _virtualHighlight(spanId) {
   _virtualExpandAncestors(spanId);
 
   // Rebuild flat list once after all expandedIds changes
-  vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+  _rebuildFlatItems(vs);
 
   // Find the item in flat list
   var idx = _findFlatIndex(spanId);
@@ -3037,7 +3205,7 @@ function _virtualHighlight(spanId) {
     if (fallbackId) {
       _virtualExpandAncestors(fallbackId);
       // Rebuild again after fallback ancestor expansion
-      vs.flatItems = _flattenTree(vs.mergedSuites, vs.filteredSpanIds, vs.expandedIds);
+      _rebuildFlatItems(vs);
       idx = _findFlatIndex(fallbackId);
       if (idx >= 0) {
         vs.highlightedSpanId = fallbackId;

@@ -1101,6 +1101,282 @@
 
     header.appendChild(searchWrapper);
 
+    // ── Service Filter + Legend (offline mode) ──
+    // Discovers services from the data model and provides checkbox filtering
+    // that impacts all three views (Gantt, tree, flow table).
+    if (!window.__RF_TRACE_LIVE__) {
+      var _svcFilterState = { active: {}, all: {}, spanCounts: {} };
+
+      // Discover services from the suite tree
+      function _discoverServices(suites) {
+        var services = {};
+        var counts = {};
+        var stack = suites ? suites.slice() : [];
+        while (stack.length > 0) {
+          var item = stack.pop();
+          // Generic service suites
+          if (item._is_generic_service && item.name) {
+            var svcKey = item.name;
+            services[svcKey] = { type: 'sut', name: svcKey };
+            counts[svcKey] = (counts[svcKey] || 0) + (item.children ? item.children.length : 0);
+          }
+          // RF suites
+          if (!item._is_generic_service && item.children !== undefined && item.keywords === undefined) {
+            // Walk children for tests and keywords
+            var children = item.children || [];
+            for (var ci = 0; ci < children.length; ci++) {
+              var child = children[ci];
+              if (child.keywords !== undefined) {
+                // Test — walk keywords for EXTERNAL spans
+                var kwStack = (child.keywords || []).slice();
+                while (kwStack.length > 0) {
+                  var kw = kwStack.pop();
+                  if (kw.keyword_type === 'EXTERNAL' && kw.service_name) {
+                    if (!services[kw.service_name]) {
+                      services[kw.service_name] = { type: 'ext', name: kw.service_name };
+                    }
+                    counts[kw.service_name] = (counts[kw.service_name] || 0) + 1;
+                  }
+                  var kwKids = kw.children || [];
+                  for (var ki = 0; ki < kwKids.length; ki++) kwStack.push(kwKids[ki]);
+                }
+              } else if (child.children !== undefined) {
+                stack.push(child);
+              }
+            }
+          }
+          // Also push nested suites
+          if (item.children && !item._is_generic_service) {
+            var ch = item.children || [];
+            for (var si = 0; si < ch.length; si++) {
+              if (ch[si].children !== undefined && ch[si].keywords === undefined) {
+                stack.push(ch[si]);
+              }
+            }
+          }
+        }
+        return { services: services, counts: counts };
+      }
+
+      var discovered = _discoverServices(data.suites || []);
+      _svcFilterState.all = discovered.services;
+      _svcFilterState.spanCounts = discovered.counts;
+      // All services start enabled
+      for (var svcName in discovered.services) {
+        _svcFilterState.active[svcName] = true;
+      }
+
+      // Determine the RF service name
+      var rfSvcName = window.__RF_SERVICE_NAME__ || data.title || 'RF';
+
+      // ── Service Color Palette ──
+      // Assigns a stable, distinct color to each non-RF service name.
+      var _svcColorPalette = [
+        { id: 'teal',    light: '#00897b', dark: '#4db6ac', gL: ['#26a69a','#00897b'], gD: ['#00897b','#00695c'], badge: ['#e0f2f1','#00695c','#00695c','#e0f2f1'] },
+        { id: 'orange',  light: '#f57c00', dark: '#ffb74d', gL: ['#fb8c00','#f57c00'], gD: ['#ef6c00','#e65100'], badge: ['#fff3e0','#e65100','#e65100','#fff3e0'] },
+        { id: 'pink',    light: '#c2185b', dark: '#f48fb1', gL: ['#e91e63','#c2185b'], gD: ['#c2185b','#880e4f'], badge: ['#fce4ec','#880e4f','#880e4f','#fce4ec'] },
+        { id: 'green',   light: '#2e7d32', dark: '#81c784', gL: ['#43a047','#2e7d32'], gD: ['#2e7d32','#1b5e20'], badge: ['#e8f5e9','#1b5e20','#1b5e20','#e8f5e9'] },
+        { id: 'purple',  light: '#7b1fa2', dark: '#ce93d8', gL: ['#9c27b0','#7b1fa2'], gD: ['#7b1fa2','#4a148c'], badge: ['#f3e5f5','#4a148c','#4a148c','#f3e5f5'] },
+        { id: 'cyan',    light: '#00838f', dark: '#4dd0e1', gL: ['#00acc1','#00838f'], gD: ['#00838f','#006064'], badge: ['#e0f7fa','#006064','#006064','#e0f7fa'] },
+        { id: 'brown',   light: '#5d4037', dark: '#bcaaa4', gL: ['#795548','#5d4037'], gD: ['#5d4037','#3e2723'], badge: ['#efebe9','#3e2723','#3e2723','#efebe9'] },
+        { id: 'indigo',  light: '#283593', dark: '#9fa8da', gL: ['#3949ab','#283593'], gD: ['#283593','#1a237e'], badge: ['#e8eaf6','#1a237e','#1a237e','#e8eaf6'] },
+      ];
+      var _svcColorMap = {};
+      var _svcColorIdx = 0;
+
+      function _getServiceColor(serviceName) {
+        if (!serviceName) return null;
+        if (_svcColorMap[serviceName]) return _svcColorMap[serviceName];
+        var entry = _svcColorPalette[_svcColorIdx % _svcColorPalette.length];
+        _svcColorIdx++;
+        _svcColorMap[serviceName] = entry;
+        return entry;
+      }
+
+      // Pre-assign colors for discovered services (sorted for stability)
+      var allSvcsSorted = Object.keys(discovered.services).sort();
+      for (var sci = 0; sci < allSvcsSorted.length; sci++) {
+        _getServiceColor(allSvcsSorted[sci]);
+      }
+
+      // Expose globally for timeline, tree, flow-table
+      window.__RF_SVC_COLORS__ = {
+        get: _getServiceColor,
+        map: _svcColorMap
+      };
+
+      // Only show the filter if there are non-RF services
+      var nonRfServiceCount = Object.keys(discovered.services).length;
+      if (nonRfServiceCount > 0) {
+        var svcFilterEl = document.createElement('div');
+        svcFilterEl.className = 'svc-filter-offline';
+
+        var svcBtn = document.createElement('button');
+        svcBtn.className = 'svc-filter-btn';
+        svcBtn.setAttribute('aria-expanded', 'false');
+        svcBtn.setAttribute('aria-haspopup', 'true');
+
+        // Button content: legend dots + "Services" label
+        var btnContent = document.createElement('span');
+        btnContent.className = 'svc-btn-content';
+        var dotRf = document.createElement('span');
+        dotRf.className = 'svc-legend-dot svc-dot-rf';
+        dotRf.title = 'RF (Robot Framework)';
+        btnContent.appendChild(dotRf);
+        // Show up to 2 service color dots from the palette
+        for (var _di = 0; _di < Math.min(allSvcsSorted.length, 2); _di++) {
+          var _dEntry = _getServiceColor(allSvcsSorted[_di]);
+          if (_dEntry) {
+            var _dDot = document.createElement('span');
+            _dDot.className = 'svc-legend-dot';
+            _dDot.style.background = _dEntry.light;
+            _dDot.title = allSvcsSorted[_di];
+            btnContent.appendChild(_dDot);
+          }
+        }
+        var btnLabel = document.createElement('span');
+        btnLabel.textContent = 'Services';
+        btnContent.appendChild(btnLabel);
+        svcBtn.appendChild(btnContent);
+
+        var svcDropdown = document.createElement('div');
+        svcDropdown.className = 'svc-filter-dropdown';
+        svcDropdown.style.display = 'none';
+
+        // Legend section at top of dropdown
+        var legendSection = document.createElement('div');
+        legendSection.className = 'svc-filter-legend';
+
+        // RF legend row (always first)
+        var rfLegendRow = document.createElement('div');
+        rfLegendRow.className = 'svc-legend-row';
+        var rfLDot = document.createElement('span');
+        rfLDot.className = 'svc-legend-dot svc-dot-rf';
+        rfLegendRow.appendChild(rfLDot);
+        var rfLText = document.createElement('span');
+        rfLText.className = 'svc-legend-label';
+        rfLText.textContent = 'RF (Robot Framework)';
+        rfLText.title = 'Test execution spans';
+        rfLegendRow.appendChild(rfLText);
+        legendSection.appendChild(rfLegendRow);
+
+        // Per-service legend rows with their assigned colors
+        for (var _li = 0; _li < allSvcsSorted.length; _li++) {
+          var _lName = allSvcsSorted[_li];
+          var _lEntry = _getServiceColor(_lName);
+          var _lRow = document.createElement('div');
+          _lRow.className = 'svc-legend-row';
+          var _lDot = document.createElement('span');
+          _lDot.className = 'svc-legend-dot';
+          if (_lEntry) _lDot.style.background = _lEntry.light;
+          _lRow.appendChild(_lDot);
+          var _lLabel = document.createElement('span');
+          _lLabel.className = 'svc-legend-label';
+          _lLabel.textContent = _lName;
+          _lRow.appendChild(_lLabel);
+          legendSection.appendChild(_lRow);
+        }
+        svcDropdown.appendChild(legendSection);
+
+        // Separator
+        var legendSep = document.createElement('div');
+        legendSep.className = 'svc-filter-sep';
+        svcDropdown.appendChild(legendSep);
+
+        // RF service (always on, not toggleable)
+        var rfLabel = document.createElement('label');
+        rfLabel.className = 'svc-filter-item svc-filter-rf';
+        var rfCb = document.createElement('input');
+        rfCb.type = 'checkbox';
+        rfCb.checked = true;
+        rfCb.disabled = true;
+        var rfDot = document.createElement('span');
+        rfDot.className = 'svc-legend-dot svc-dot-rf';
+        var rfSpan = document.createElement('span');
+        rfSpan.textContent = rfSvcName;
+        rfLabel.appendChild(rfCb);
+        rfLabel.appendChild(rfDot);
+        rfLabel.appendChild(rfSpan);
+        svcDropdown.appendChild(rfLabel);
+
+        // Non-RF services with checkboxes
+        var svcNames = Object.keys(discovered.services).sort();
+        for (var sni = 0; sni < svcNames.length; sni++) {
+          (function (name) {
+            var svc = discovered.services[name];
+            var svcLabel = document.createElement('label');
+            svcLabel.className = 'svc-filter-item';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = true;
+            var dot = document.createElement('span');
+            dot.className = 'svc-legend-dot';
+            // Apply service-based color
+            var _dotEntry = _getServiceColor(name);
+            if (_dotEntry) {
+              dot.style.background = _dotEntry.light;
+            } else {
+              dot.className += ' ' + (svc.type === 'ext' ? 'svc-dot-ext' : 'svc-dot-sut');
+            }
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = name;
+            var countSpan = document.createElement('span');
+            countSpan.className = 'svc-filter-count';
+            countSpan.textContent = (discovered.counts[name] || 0) + ' spans';
+            svcLabel.appendChild(cb);
+            svcLabel.appendChild(dot);
+            svcLabel.appendChild(nameSpan);
+            svcLabel.appendChild(countSpan);
+            svcDropdown.appendChild(svcLabel);
+
+            cb.addEventListener('change', function () {
+              if (cb.checked) {
+                _svcFilterState.active[name] = true;
+              } else {
+                delete _svcFilterState.active[name];
+              }
+              _updateSvcBtnLabel();
+              eventBus.emit('service-filter-changed', {
+                active: Object.keys(_svcFilterState.active),
+                all: Object.keys(_svcFilterState.all)
+              });
+            });
+          })(svcNames[sni]);
+        }
+
+        svcFilterEl.appendChild(svcBtn);
+        svcFilterEl.appendChild(svcDropdown);
+        header.appendChild(svcFilterEl);
+
+        function _updateSvcBtnLabel() {
+          var activeCount = Object.keys(_svcFilterState.active).length;
+          var totalCount = Object.keys(_svcFilterState.all).length;
+          if (activeCount < totalCount) {
+            btnLabel.textContent = 'Services (' + activeCount + '/' + totalCount + ')';
+          } else {
+            btnLabel.textContent = 'Services';
+          }
+        }
+
+        svcBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var open = svcDropdown.style.display !== 'none';
+          svcDropdown.style.display = open ? 'none' : 'block';
+          svcBtn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        });
+
+        document.addEventListener('click', function (e) {
+          if (!svcFilterEl.contains(e.target)) {
+            svcDropdown.style.display = 'none';
+            svcBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+
+      // Expose service filter state for views to query
+      window.__RF_SVC_FILTER__ = _svcFilterState;
+    }
+
     var toggleBtn = document.createElement('button');
     toggleBtn.className = 'theme-toggle-icon';
     toggleBtn.textContent = theme === 'dark' ? '\u2600' : '\ud83c\udf19';

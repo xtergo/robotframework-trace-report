@@ -9,6 +9,68 @@
   var _flowState = null;
   var _listenerRegistered = false;
 
+  // O(1) span lookup index: spanId → { type, ref, parentRef }
+  // type: 'test' | 'keyword' | 'suite' | 'generic-suite' | 'generic-kw' | 'suite-kw'
+  // ref: the data object itself (test, suite, or keyword)
+  // parentRef: containing test (for keywords) or suite (for suite-level keywords/generic children)
+  var _flowSpanIndex = null;
+
+  /**
+   * Build O(1) span lookup index from suites tree.
+   * Called once per data load (initFlowTable).
+   */
+  function _buildFlowSpanIndex(suites) {
+    var idx = {};
+    function walkKw(kw, parentTest) {
+      idx[kw.id] = { type: 'keyword', ref: kw, parentRef: parentTest };
+      var ch = kw.children || [];
+      for (var i = 0; i < ch.length; i++) walkKw(ch[i], parentTest);
+    }
+    function walkSuite(suite) {
+      if (suite._is_generic_service) {
+        idx[suite.id] = { type: 'generic-suite', ref: suite, parentRef: null };
+        var ch = suite.children || [];
+        for (var i = 0; i < ch.length; i++) {
+          walkGenericKw(ch[i], suite);
+        }
+        return;
+      }
+      idx[suite.id] = { type: 'suite', ref: suite, parentRef: null };
+      var children = suite.children || [];
+      for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        if (child.keyword_type !== undefined) {
+          // Suite-level keyword (setup/teardown) or generic keyword child
+          idx[child.id] = { type: 'suite-kw', ref: child, parentRef: suite };
+          var skch = child.children || [];
+          for (var k = 0; k < skch.length; k++) {
+            walkSuiteKwChildren(skch[k], suite);
+          }
+        } else if (child.keywords !== undefined) {
+          // Test
+          idx[child.id] = { type: 'test', ref: child, parentRef: suite };
+          var kws = child.keywords || [];
+          for (var j = 0; j < kws.length; j++) walkKw(kws[j], child);
+        } else {
+          // Nested suite
+          walkSuite(child);
+        }
+      }
+    }
+    function walkGenericKw(kw, genSuite) {
+      idx[kw.id] = { type: 'generic-kw', ref: kw, parentRef: genSuite };
+      var ch = kw.children || [];
+      for (var i = 0; i < ch.length; i++) walkGenericKw(ch[i], genSuite);
+    }
+    function walkSuiteKwChildren(kw, suite) {
+      idx[kw.id] = { type: 'suite-kw', ref: kw, parentRef: suite };
+      var ch = kw.children || [];
+      for (var i = 0; i < ch.length; i++) walkSuiteKwChildren(ch[i], suite);
+    }
+    for (var i = 0; i < suites.length; i++) walkSuite(suites[i]);
+    return idx;
+  }
+
   // Abbreviated badge labels for all 18 keyword types
   var BADGE_LABELS = {
     KEYWORD: 'KW',
@@ -36,15 +98,20 @@
   window.initFlowTable = function (container, data) {
     if (!container || !data) return;
 
+    // Build O(1) span index on every data load
+    _flowSpanIndex = _buildFlowSpanIndex(data.suites || []);
+
     // If pinned, just update the data reference but don't touch the UI
     if (_pinned && _pinnedTestId && _flowState) {
       _flowState.data = data;
+      _flowSpanIndex = _buildFlowSpanIndex(data.suites || []);
       return;
     }
 
     // Reuse existing state if same container, just update data
     if (_flowState && _flowState.container === container) {
       _flowState.data = data;
+      _flowSpanIndex = _buildFlowSpanIndex(data.suites || []);
       return;
     }
 
@@ -67,7 +134,88 @@
         if (!s || !evt || !evt.spanId || s.pinned) return;
         var suites = s.data.suites || [];
         var spanId = evt.spanId;
-        // 1. Direct test match — clicked on a test span
+
+        // O(1) index lookup — replaces 5 sequential O(n) tree walks
+        var entry = _flowSpanIndex ? _flowSpanIndex[spanId] : null;
+        if (entry) {
+          switch (entry.type) {
+            case 'test':
+              s.currentTestId = entry.ref.id;
+              s.highlightSpanId = null;
+              s.rows = _buildKeywordRows(entry.ref);
+              s.expandedIds = _computeFailFocusedExpanded(entry.ref);
+              _renderTable(s);
+              _scrollToHighlighted(s);
+              return;
+
+            case 'keyword':
+              // Keyword inside a test
+              var parentTest = entry.parentRef;
+              if (s.currentTestId !== parentTest.id) {
+                s.rows = _buildKeywordRows(parentTest);
+                s.expandedIds = _computeFailFocusedExpanded(parentTest);
+              }
+              s.currentTestId = parentTest.id;
+              s.highlightSpanId = spanId;
+              _expandAncestors(s, spanId);
+              _renderTable(s);
+              _scrollToHighlighted(s);
+              return;
+
+            case 'suite-kw':
+              // Suite-level keyword (setup/teardown) — show first test in parent suite
+              var kwSuite = entry.parentRef;
+              var firstTest = _findFirstTest(kwSuite);
+              if (firstTest) {
+                s.currentTestId = firstTest.id;
+                s.highlightSpanId = null;
+                s.rows = _buildKeywordRows(firstTest);
+                s.expandedIds = _computeFailFocusedExpanded(firstTest);
+                _renderTable(s);
+                _scrollToHighlighted(s);
+                return;
+              }
+              break;
+
+            case 'generic-suite':
+              s.currentTestId = entry.ref.id;
+              s.highlightSpanId = null;
+              s.rows = _buildGenericSuiteRows(entry.ref);
+              s.expandedIds = {};
+              _renderTable(s);
+              _scrollToHighlighted(s);
+              return;
+
+            case 'suite':
+              var suite = entry.ref;
+              var suiteFirstTest = _findFirstTest(suite);
+              if (suiteFirstTest || (suite.tests && suite.tests.length > 0) || (suite.suites && suite.suites.length > 0)) {
+                s.currentTestId = suite.id;
+                s.highlightSpanId = null;
+                s.rows = _buildSuiteSummaryRows(suite);
+                s.expandedIds = {};
+                _renderTable(s);
+                _scrollToHighlighted(s);
+                return;
+              }
+              break;
+
+            case 'generic-kw':
+              // Generic keyword child — show parent generic suite, highlight this span
+              var genSuite = entry.parentRef;
+              s.currentTestId = genSuite.id;
+              s.highlightSpanId = spanId;
+              s.rows = _buildGenericSuiteRows(genSuite);
+              s.expandedIds = {};
+              _expandAncestors(s, spanId);
+              _renderTable(s);
+              _scrollToHighlighted(s);
+              return;
+          }
+        }
+
+        // Fallback for spans not in index (shouldn't happen, but safe)
+        // Use the old sequential lookup approach
         var test = _findTestById(suites, spanId);
         if (test) {
           s.currentTestId = test.id;
@@ -78,7 +226,6 @@
           _scrollToHighlighted(s);
           return;
         }
-        // 2. Keyword inside a test — clicked on a keyword span
         var pt = _findTestContainingSpan(suites, spanId);
         if (pt) {
           if (s.currentTestId !== pt.id) {
@@ -87,70 +234,32 @@
           }
           s.currentTestId = pt.id;
           s.highlightSpanId = spanId;
-          // Expand ancestors of the highlighted span so it's visible
           _expandAncestors(s, spanId);
           _renderTable(s);
           _scrollToHighlighted(s);
           return;
         }
-        // 3. Suite-level keyword (setup/teardown) — find parent suite,
-        //    show the first test in that suite
-        var kwSuite = _findSuiteContainingKeyword(suites, spanId);
-        if (kwSuite) {
-          var firstTest = _findFirstTest(kwSuite);
-          if (firstTest) {
-            s.currentTestId = firstTest.id;
-            s.highlightSpanId = null;
-            s.rows = _buildKeywordRows(firstTest);
-            s.expandedIds = _computeFailFocusedExpanded(firstTest);
-            _renderTable(s);
-            _scrollToHighlighted(s);
-            return;
-          }
-        }
-        // 4. Suite span — show the first test in that suite
-        var suite = _findSuiteById(suites, spanId);
-        if (suite) {
-          // Generic service suite — build keyword rows from suite children directly
-          if (suite._is_generic_service) {
-            s.currentTestId = suite.id;
-            s.highlightSpanId = null;
-            s.rows = _buildGenericSuiteRows(suite);
-            s.expandedIds = {};
-            _renderTable(s);
-            _scrollToHighlighted(s);
-            return;
-          }
-          var suiteFirstTest = _findFirstTest(suite);
-          if (suiteFirstTest || (suite.tests && suite.tests.length > 0) || (suite.suites && suite.suites.length > 0)) {
-            s.currentTestId = suite.id;
-            s.highlightSpanId = null;
-            s.rows = _buildSuiteSummaryRows(suite);
-            s.expandedIds = {};
-            _renderTable(s);
-            _scrollToHighlighted(s);
-            return;
-          }
-        }
-        // 5. Generic suite child span — find the parent generic suite
-        var genSuite = _findGenericSuiteContainingSpan(suites, spanId);
-        if (genSuite) {
-          s.currentTestId = genSuite.id;
-          s.highlightSpanId = spanId;
-          s.rows = _buildGenericSuiteRows(genSuite);
-          s.expandedIds = {};
-          // Expand ancestors of the highlighted span
-          _expandAncestors(s, spanId);
-          _renderTable(s);
-          _scrollToHighlighted(s);
-          return;
-        }
-        // 6. Unknown span — clear the flow table
+
+        // Unknown span — clear the flow table
         s.currentTestId = null;
         s.highlightSpanId = null;
         s.rows = [];
         s.expandedIds = {};
         _renderEmpty(s);
+      });
+
+      // Listen for service filter changes (offline mode)
+      window.RFTraceViewer.on('service-filter-changed', function (evt) {
+        if (!evt || !_flowState) return;
+        var active = evt.active || [];
+        var all = evt.all || [];
+        if (active.length === all.length) {
+          _flowState._svcFilter = null;
+        } else {
+          _flowState._svcFilter = {};
+          for (var i = 0; i < active.length; i++) _flowState._svcFilter[active[i]] = true;
+        }
+        _renderTable(_flowState);
       });
     }
   };
@@ -556,8 +665,18 @@
     var visible = [];
     // Track which parent IDs are collapsed (not in expandedIds)
     var collapsedParents = {};
+    var svcFilter = state._svcFilter || null;
     for (var i = 0; i < state.rows.length; i++) {
       var row = state.rows[i];
+      // Service filter: hide EXTERNAL/GENERIC rows from unchecked services
+      // and propagate to their descendants via collapsedParents
+      if (svcFilter) {
+        var kwUp = (row.keyword_type || '').toUpperCase();
+        if ((kwUp === 'EXTERNAL' || kwUp === 'GENERIC') && row.service_name && !svcFilter[row.service_name]) {
+          collapsedParents[row.id] = true;
+          continue;
+        }
+      }
       // Check if any ancestor is collapsed
       if (row.parentId && !state.expandedIds[row.parentId]) {
         continue;
@@ -700,6 +819,13 @@
     countLabel.textContent = visibleRows.length + ' of ' + state.rows.length + ' steps';
     state.container.appendChild(countLabel);
 
+    // Virtual scrolling for large row sets (>500 rows)
+    var VIRT_THRESHOLD = 500;
+    if (visibleRows.length > VIRT_THRESHOLD) {
+      _renderTableVirtual(state, visibleRows);
+      return;
+    }
+
     var tableWrap = document.createElement('div');
     tableWrap.className = 'flow-table-container';
     var table = document.createElement('table');
@@ -723,7 +849,124 @@
     state.container.appendChild(tableWrap);
   }
 
+  /**
+   * Virtual-scrolling renderer for the flow table.
+   * Only creates DOM nodes for rows visible in the viewport + a small buffer.
+   * Handles variable row heights by using a fixed estimate and correcting on scroll.
+   */
+  function _renderTableVirtual(state, visibleRows) {
+    var ROW_HEIGHT = 32; // estimated row height in px
+    var BUFFER = 20;     // extra rows above/below viewport
+    var totalHeight = visibleRows.length * ROW_HEIGHT;
+
+    // Cache visible rows on state for scroll handler
+    state._virtRows = visibleRows;
+    state._virtRowHeight = ROW_HEIGHT;
+    state._virtRenderedStart = -1;
+    state._virtRenderedEnd = -1;
+
+    var tableWrap = document.createElement('div');
+    tableWrap.className = 'flow-table-container flow-table-virtual';
+    tableWrap.style.overflow = 'auto';
+    tableWrap.style.position = 'relative';
+
+    // Sticky table header
+    var stickyHead = document.createElement('table');
+    stickyHead.className = 'flow-table flow-table-sticky-head';
+    stickyHead.style.position = 'sticky';
+    stickyHead.style.top = '0';
+    stickyHead.style.zIndex = '2';
+    var thead = document.createElement('thead');
+    var headRow = document.createElement('tr');
+    var cols = ['Keyword', 'Line', 'Status', 'Duration'];
+    for (var h = 0; h < cols.length; h++) {
+      var th = document.createElement('th');
+      th.textContent = cols[h];
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    stickyHead.appendChild(thead);
+    tableWrap.appendChild(stickyHead);
+
+    // Sentinel for total scroll height
+    var sentinel = document.createElement('div');
+    sentinel.style.height = totalHeight + 'px';
+    sentinel.style.position = 'relative';
+    sentinel.style.width = '100%';
+
+    // Content container positioned absolutely within sentinel
+    var content = document.createElement('table');
+    content.className = 'flow-table';
+    content.style.position = 'absolute';
+    content.style.left = '0';
+    content.style.right = '0';
+    var tbody = document.createElement('tbody');
+    content.appendChild(tbody);
+    sentinel.appendChild(content);
+    tableWrap.appendChild(sentinel);
+    state.container.appendChild(tableWrap);
+
+    state._virtScrollEl = tableWrap;
+    state._virtContent = content;
+    state._virtTbody = tbody;
+    state._virtSentinel = sentinel;
+
+    function _renderVisibleFlowRows() {
+      var scrollTop = tableWrap.scrollTop;
+      var viewportH = tableWrap.clientHeight || 600;
+      var startIdx = Math.floor(scrollTop / ROW_HEIGHT) - BUFFER;
+      var endIdx = Math.ceil((scrollTop + viewportH) / ROW_HEIGHT) + BUFFER;
+      if (startIdx < 0) startIdx = 0;
+      if (endIdx > visibleRows.length) endIdx = visibleRows.length;
+
+      // Skip re-render if range hasn't changed
+      if (state._virtRenderedStart === startIdx && state._virtRenderedEnd === endIdx) return;
+      state._virtRenderedStart = startIdx;
+      state._virtRenderedEnd = endIdx;
+
+      content.style.top = (startIdx * ROW_HEIGHT) + 'px';
+      tbody.innerHTML = '';
+      var frag = document.createDocumentFragment();
+      for (var r = startIdx; r < endIdx; r++) {
+        frag.appendChild(_createRow(visibleRows[r], state.highlightSpanId, state));
+      }
+      tbody.appendChild(frag);
+    }
+
+    tableWrap.addEventListener('scroll', function () {
+      if (state._virtScrollRAF) return;
+      state._virtScrollRAF = requestAnimationFrame(function () {
+        state._virtScrollRAF = null;
+        _renderVisibleFlowRows();
+      });
+    });
+
+    // Store render function for external scroll-to
+    state._virtRenderVisible = _renderVisibleFlowRows;
+
+    // Initial render
+    _renderVisibleFlowRows();
+
+    console.log('[FlowTable] Virtual mode: ' + visibleRows.length + ' rows, ROW_HEIGHT=' + ROW_HEIGHT);
+  }
+
   function _scrollToHighlighted(state) {
+    // Virtual mode: scroll by index position
+    if (state._virtRows && state._virtScrollEl && state.highlightSpanId) {
+      for (var vi = 0; vi < state._virtRows.length; vi++) {
+        if (state._virtRows[vi].id === state.highlightSpanId) {
+          var targetTop = vi * state._virtRowHeight;
+          var viewportH = state._virtScrollEl.clientHeight || 600;
+          state._virtScrollEl.scrollTop = Math.max(0, targetTop - viewportH / 2);
+          // Force re-render at new position
+          state._virtRenderedStart = -1;
+          state._virtRenderedEnd = -1;
+          if (state._virtRenderVisible) state._virtRenderVisible();
+          return;
+        }
+      }
+    }
+
     var el = state.container.querySelector('.flow-row-highlight');
     if (el) {
       // If the highlighted row has a detail row right after it, scroll to show both
@@ -928,6 +1171,15 @@
       svcBadge.className = 'flow-svc-badge';
       svcBadge.textContent = row.service_name;
       svcBadge.title = 'Service: ' + row.service_name;
+      // Apply service-based color
+      var _fSvcC = window.__RF_SVC_COLORS__;
+      var _fSvcE = _fSvcC ? _fSvcC.get(row.service_name) : null;
+      if (_fSvcE) {
+        var _fIsDk = document.documentElement.classList.contains('theme-dark') ||
+                     document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+        svcBadge.style.background = _fIsDk ? _fSvcE.badge[2] : _fSvcE.badge[0];
+        svcBadge.style.color = _fIsDk ? _fSvcE.badge[3] : _fSvcE.badge[1];
+      }
       tdKw.appendChild(svcBadge);
     } else if (rfSvcName) {
       var rfBadge = document.createElement('span');
@@ -1085,6 +1337,62 @@
       detailTr.appendChild(detailTd);
       frag.appendChild(detailTr);
       return frag;
+    }
+
+    // For EXTERNAL/GENERIC keywords with attributes, show a detail row with full attributes
+    if ((kwTypeUpper === 'EXTERNAL' || kwTypeUpper === 'GENERIC') && row.attributes) {
+      var attrKeys = Object.keys(row.attributes);
+      if (attrKeys.length > 0) {
+        var frag = document.createDocumentFragment();
+        frag.appendChild(tr);
+
+        var attrTr = document.createElement('tr');
+        attrTr.className = 'flow-table-row flow-row-detail flow-row-attr-detail';
+        var attrTd = document.createElement('td');
+        attrTd.colSpan = 4;
+        attrTd.className = 'flow-detail-cell';
+        attrTd.style.paddingLeft = (row.depth * 20 + 30) + 'px';
+
+        var attrTable = document.createElement('table');
+        attrTable.className = 'flow-attr-table';
+
+        // Sort keys for consistent display, prioritize well-known prefixes
+        var prefixOrder = ['http.', 'url.', 'server.', 'client.', 'db.', 'rpc.', 'messaging.', 'net.'];
+        attrKeys.sort(function (a, b) {
+          var aIdx = prefixOrder.length, bIdx = prefixOrder.length;
+          for (var pi = 0; pi < prefixOrder.length; pi++) {
+            if (a.indexOf(prefixOrder[pi]) === 0) { aIdx = pi; break; }
+          }
+          for (var pj = 0; pj < prefixOrder.length; pj++) {
+            if (b.indexOf(prefixOrder[pj]) === 0) { bIdx = pj; break; }
+          }
+          if (aIdx !== bIdx) return aIdx - bIdx;
+          return a < b ? -1 : a > b ? 1 : 0;
+        });
+
+        for (var ak = 0; ak < attrKeys.length; ak++) {
+          var key = attrKeys[ak];
+          var val = row.attributes[key];
+          if (val === null || val === undefined || val === '') continue;
+          var attrRow = document.createElement('tr');
+          var keyTd = document.createElement('td');
+          keyTd.className = 'flow-attr-key';
+          keyTd.textContent = key;
+          var valTd = document.createElement('td');
+          valTd.className = 'flow-attr-val';
+          var valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
+          valTd.textContent = valStr.length > 200 ? valStr.substring(0, 197) + '...' : valStr;
+          valTd.title = valStr;
+          attrRow.appendChild(keyTd);
+          attrRow.appendChild(valTd);
+          attrTable.appendChild(attrRow);
+        }
+
+        attrTd.appendChild(attrTable);
+        attrTr.appendChild(attrTd);
+        frag.appendChild(attrTr);
+        return frag;
+      }
     }
 
     return tr;

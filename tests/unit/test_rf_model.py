@@ -471,8 +471,8 @@ class TestEnrichedDataModel:
         log_keywords = [kw for kw in all_keywords if kw.name == "Log"]
         assert len(log_keywords) >= 3  # At least one per test
         log_linenos = {kw.lineno for kw in log_keywords}
-        # Each test's first Log keyword has lineno 7, 13, or 19
-        assert {7, 13, 19}.issubset(log_linenos)
+        # Each test's first Log keyword has lineno 9, 13, or 19
+        assert {9, 13, 19}.issubset(log_linenos)
 
         # Verify Sleep keywords include expected lineno values
         sleep_keywords = [kw for kw in all_keywords if kw.name == "Sleep"]

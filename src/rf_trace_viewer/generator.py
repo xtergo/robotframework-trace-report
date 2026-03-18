@@ -123,6 +123,8 @@ KEY_MAP: dict[str, str] = {
     "library": "lb",
     "suite_name": "sn",
     "suite_source": "ss",
+    "service_name": "sv",
+    "_is_generic_service": "ig",
 }
 
 

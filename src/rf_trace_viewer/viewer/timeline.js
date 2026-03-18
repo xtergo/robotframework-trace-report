@@ -544,7 +544,7 @@
     });
 
     zoomIn.addEventListener('click', function () {
-      zoomAroundCenter(Math.min(10000, timelineState.zoom * 1.25));
+      zoomAroundCenter(Math.min(100000, timelineState.zoom * 1.25));
       syncSlider();
       _applyZoom();
     });
@@ -765,6 +765,20 @@
           }
         }
       });
+
+      // Listen for service filter changes (offline mode)
+      window.RFTraceViewer.on('service-filter-changed', function (evt) {
+        if (!evt) return;
+        var activeSet = {};
+        var active = evt.active || [];
+        for (var ai = 0; ai < active.length; ai++) activeSet[active[ai]] = true;
+        var allCount = (evt.all || []).length;
+        var showAll = active.length === allCount;
+        // Store filter state on timelineState for _render to use
+        timelineState._svcFilter = showAll ? null : activeSet;
+        _render();
+        _renderHeader();
+      });
     }
 
     // Initial sync and render (no auto-zoom — user can click "Locate Recent")
@@ -977,12 +991,18 @@
 
   /**
    * Update the visible time window after zoom change and re-render.
+   * Uses requestAnimationFrame to coalesce rapid zoom events into a
+   * single paint per frame, preventing jank on fast scroll wheels.
    */
   function _applyZoom() {
     _clampViewWindow();
-    _render();
-    _renderHeader();
-    if (timelineState._syncHScroll) timelineState._syncHScroll();
+    if (timelineState._zoomRAF) return; // already scheduled
+    timelineState._zoomRAF = requestAnimationFrame(function () {
+      timelineState._zoomRAF = null;
+      _render();
+      _renderHeader();
+      if (timelineState._syncHScroll) timelineState._syncHScroll();
+    });
   }
 
   /**
@@ -1036,7 +1056,8 @@
           worker: worker,
           children: [],
           execution_id: node.execution_id || '',
-          service_name: (node.attributes && node.attributes['service.name']) || ''
+          service_name: node.service_name || (node.attributes && node.attributes['service.name']) || '',
+          _is_generic_service: !!node._is_generic_service
         };
         allSpans.push(span);
 
@@ -1045,6 +1066,9 @@
             var child = node.children[ci];
             if (child.keywords !== undefined) {
               stack.push([child, 'test', depth + 1, worker, span]);
+            } else if (child.keyword_type) {
+              // Generic/keyword children of a service suite
+              stack.push([child, 'keyword', depth + 1, worker, span]);
             } else {
               stack.push([child, 'suite', depth + 1, worker, null]);
             }
@@ -1064,7 +1088,7 @@
           parent: parentSpan,
           children: [],
           execution_id: node.execution_id || '',
-          service_name: (node.attributes && node.attributes['service.name']) || ''
+          service_name: node.service_name || (node.attributes && node.attributes['service.name']) || ''
         };
         allSpans.push(span);
         if (parentSpan) parentSpan.children.push(span);
@@ -1076,6 +1100,7 @@
         }
       } else {
         // keyword
+        var parentSvcName = parentSpan ? parentSpan.service_name : '';
         var span = {
           id: node.id || _generateId(),
           name: node.name,
@@ -1089,7 +1114,7 @@
           worker: worker,
           parent: parentSpan,
           children: [],
-          service_name: (node.attributes && node.attributes['service.name']) || ''
+          service_name: node.service_name || (node.attributes && node.attributes['service.name']) || parentSvcName
         };
         allSpans.push(span);
         if (parentSpan) parentSpan.children.push(span);
@@ -1104,6 +1129,13 @@
 
     timelineState.spans = allSpans;
     timelineState.flatSpans = allSpans;
+
+    // Build O(1) span index: spanId → index in flatSpans
+    var _spanIdx = {};
+    for (var _si = 0; _si < allSpans.length; _si++) {
+      _spanIdx[allSpans[_si].id] = _si;
+    }
+    timelineState._spanIndex = _spanIdx;
 
     console.log('[Timeline] Processed spans: totalSpans=' + allSpans.length +
       (allSpans.length > 0 ? ', first=' + allSpans[0].name + ' type=' + allSpans[0].type : ''));
@@ -1396,6 +1428,12 @@
       }
       workers[worker].push(spans[i]);
     }
+    // Sort each worker's spans by startTime so binary search in
+    // _getSpanAtPoint works correctly for all span types (RF + GENERIC).
+    var wKeys = Object.keys(workers);
+    for (var wi = 0; wi < wKeys.length; wi++) {
+      workers[wKeys[wi]].sort(function(a, b) { return a.startTime - b.startTime; });
+    }
     timelineState.workers = workers;
     console.log('[Timeline] Detected workers:', Object.keys(workers));
   }
@@ -1459,14 +1497,14 @@
       var mouseTime = _screenXToTime(mouseX);
       var factor = e.deltaY > 0 ? 0.9 : 1.1;
       var newZoom = timelineState.zoom * factor;
-      newZoom = Math.max(0.1, Math.min(newZoom, 10000));
+      newZoom = Math.max(0.1, Math.min(newZoom, 100000));
       // Compute new view range from current view, not totalRange.
       // Using totalRange caused the view to jump when totalRange >> viewRange.
       var currentRange = timelineState.viewEnd - timelineState.viewStart;
       var newRange = currentRange / factor;
-      // Enforce minimum view range: 0.1% of total data range, hard floor 0.5s
+      // Enforce minimum view range: 0.001% of total data range, hard floor 0.01s (10ms)
       var totalDataRange = timelineState.maxTime - timelineState.minTime;
-      var MIN_VIEW_RANGE = Math.max(0.5, totalDataRange * 0.001);
+      var MIN_VIEW_RANGE = Math.max(0.01, totalDataRange * 0.00001);
       if (newRange < MIN_VIEW_RANGE) newRange = MIN_VIEW_RANGE;
       // Enforce maximum view range: never zoom out beyond the full data range
       if (totalDataRange > 0 && newRange > totalDataRange) newRange = totalDataRange;
@@ -1631,23 +1669,27 @@
         timelineState.selectionEnd = _screenXToTime(x);
         _render();
       } else {
-        // Hover detection
-        // Show ew-resize cursor when hovering near the Load Start Marker
-        if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
-          var markerHoverX = _timeToScreenX(timelineState.activeWindowStart);
-          // Clamp to left margin (same as rendering and mousedown) so hover works when marker is pinned
-          if (markerHoverX < timelineState.leftMargin) markerHoverX = timelineState.leftMargin;
-          if (Math.abs(x - markerHoverX) < 10) {
-            canvas.style.cursor = 'ew-resize';
-            return;
+        // Hover detection — throttled to avoid expensive _getSpanAtPoint on every mousemove
+        if (timelineState._hoverRAF) return;
+        var _hx = x, _hy = y;
+        timelineState._hoverRAF = requestAnimationFrame(function () {
+          timelineState._hoverRAF = null;
+          // Show ew-resize cursor when hovering near the Load Start Marker
+          if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
+            var markerHoverX = _timeToScreenX(timelineState.activeWindowStart);
+            if (markerHoverX < timelineState.leftMargin) markerHoverX = timelineState.leftMargin;
+            if (Math.abs(_hx - markerHoverX) < 10) {
+              canvas.style.cursor = 'ew-resize';
+              return;
+            }
           }
-        }
-        var hoveredSpan = _getSpanAtPoint(x, y);
-        if (hoveredSpan !== timelineState.hoveredSpan) {
-          timelineState.hoveredSpan = hoveredSpan;
-          canvas.style.cursor = hoveredSpan ? 'pointer' : 'crosshair';
-          _render();
-        }
+          var hoveredSpan = _getSpanAtPoint(_hx, _hy);
+          if (hoveredSpan !== timelineState.hoveredSpan) {
+            timelineState.hoveredSpan = hoveredSpan;
+            canvas.style.cursor = hoveredSpan ? 'pointer' : 'crosshair';
+            _render();
+          }
+        });
       }
     });
 
@@ -1719,9 +1761,40 @@
           's selectionPx=' + selectionPx.toFixed(0) + 'px pass=' + (selectionPx > 10));
         if (selectionPx > 10) {
           _clearActivePreset();
-          // Enforce minimum view range: 0.1% of total data range, hard floor 0.5s
+
+          // Auto-select the deepest (narrowest) span within the drag range.
+          // This lets users select tiny spans that are too small to click directly.
+          // Respects service filter: only considers spans from checked services.
+          var bestSpan = null;
+          var bestDur = Infinity;
+          var svcFilter = timelineState._svcFilter || null;
+          var allSpans = timelineState.flatSpans || [];
+          for (var _ds = 0; _ds < allSpans.length; _ds++) {
+            var _s = allSpans[_ds];
+            // Span must overlap the selection range
+            if (_s.endTime <= startTime || _s.startTime >= endTime) continue;
+            // Service filter check
+            if (svcFilter) {
+              var _sSvc = _s.service_name || '';
+              if (_sSvc && !svcFilter[_sSvc]) continue;
+              if (_s._is_generic_service && _s.name && !svcFilter[_s.name]) continue;
+            }
+            var _sDur = _s.endTime - _s.startTime;
+            if (_sDur < bestDur) {
+              bestDur = _sDur;
+              bestSpan = _s;
+            }
+          }
+          if (bestSpan) {
+            timelineState.selectedSpan = bestSpan;
+            _emitSpanSelected(bestSpan);
+            console.log('[Timeline] Drag-select: auto-selected deepest span "' +
+              bestSpan.name + '" (' + (bestDur * 1000).toFixed(1) + 'ms)');
+          }
+
+          // Enforce minimum view range: 0.001% of total data range, hard floor 0.01s (10ms)
           var totalDataRange = timelineState.maxTime - timelineState.minTime;
-          var MIN_VIEW_RANGE = Math.max(0.5, totalDataRange * 0.001);
+          var MIN_VIEW_RANGE = Math.max(0.01, totalDataRange * 0.00001);
           if (selectedRange < MIN_VIEW_RANGE) {
             var mid = (startTime + endTime) / 2;
             startTime = mid - MIN_VIEW_RANGE / 2;
@@ -1875,24 +1948,35 @@
         }
       }
 
-      // Scan backwards from rightIdx — check spans whose startTime <= clickTime
-      // A span contains the click if startTime <= clickTime AND endTime >= clickTime
-      // Also check Y coordinate for lane matching
-      for (var i = rightIdx; i >= 0; i--) {
+      // Scan backwards from rightIdx — collect all matching spans, then pick
+      // the narrowest (most specific) one. This ensures clicking on a child
+      // span that overlaps with its parent suite selects the child.
+      var bestSpan = null;
+      var bestDuration = Infinity;
+      // Limit backwards scan: stop after checking 2000 spans or when startTime
+      // is far enough before clickTime that remaining spans can't contain it.
+      // The maxSpanDuration heuristic: if a span starts more than 10x the current
+      // view range before clickTime, it's extremely unlikely to contain it.
+      var scanLimit = Math.max(2000, rightIdx);
+      var scanFloor = rightIdx - scanLimit;
+      if (scanFloor < 0) scanFloor = 0;
+      for (var i = rightIdx; i >= scanFloor; i--) {
         var span = workerSpans[i];
-        // Since spans are sorted by startTime, all remaining spans have startTime <= clickTime
-        // But we can stop early if the span's endTime is too far left (heuristic: won't help much
-        // for overlapping spans, but limits scan for non-overlapping cases)
-        
+
         var lane = span.lane !== undefined ? span.lane : span.depth;
         var spanY = yOffset + lane * timelineState.rowHeight;
         var spanX1 = _timeToScreenX(span.startTime);
         var spanX2 = _timeToScreenX(span.endTime);
 
         if (x >= spanX1 && x <= spanX2 && y >= spanY && y <= spanY + timelineState.rowHeight - 2) {
-          return span;
+          var dur = span.endTime - span.startTime;
+          if (dur < bestDuration) {
+            bestDuration = dur;
+            bestSpan = span;
+          }
         }
       }
+      if (bestSpan) return bestSpan;
 
       // Move to next worker lane
       var maxLane = 0;
@@ -2112,6 +2196,14 @@
       for (var i = 0; i < workerSpans.length; i++) {
         var span = workerSpans[i];
 
+        // Service filter: hide spans from unchecked services
+        if (timelineState._svcFilter) {
+          var spanSvc = span.service_name || '';
+          if (spanSvc && !timelineState._svcFilter[spanSvc]) continue;
+          // Also hide generic service suite bars
+          if (span._is_generic_service && span.name && !timelineState._svcFilter[span.name]) continue;
+        }
+
         // Y-axis culling: skip spans outside visible canvas height
         var lane = span.lane !== undefined ? span.lane : span.depth;
         var spanY = yOffset + lane * timelineState.rowHeight;
@@ -2265,8 +2357,23 @@
         var svcX = x1 + 5 + nameWidth;
         var maxSvcWidth = barWidth - 8 - nameWidth;
         if (maxSvcWidth > 20) {
-          var isNonRf = span.service_name.indexOf('rf') !== 0;
-          ctx.fillStyle = isNonRf ? '#9c27b0' : 'rgba(255,255,255,0.5)';
+          var isExternal = span.kwType === 'EXTERNAL';
+          var isGeneric = span.kwType === 'GENERIC' || span._is_generic_service;
+          var isNonRf = isExternal || isGeneric;
+          // Use service-based color if available
+          var svcColors = window.__RF_SVC_COLORS__;
+          var svcEntry = svcColors && span.service_name ? svcColors.get(span.service_name) : null;
+          if (svcEntry) {
+            var _isDark = document.documentElement.classList.contains('theme-dark') ||
+                          document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+            ctx.fillStyle = _isDark ? svcEntry.dark : svcEntry.light;
+          } else if (isExternal) {
+            ctx.fillStyle = '#f57c00';
+          } else if (isGeneric) {
+            ctx.fillStyle = '#9c27b0';
+          } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          }
           ctx.font = isNonRf ? 'bold 9px sans-serif' : '9px sans-serif';
           ctx.fillText(_truncateText(ctx, svcLabel, maxSvcWidth), svcX, y + 14);
         }
@@ -2297,7 +2404,31 @@
     var isDark = document.documentElement.classList.contains('theme-dark') ||
                  document.querySelector('.rf-trace-viewer.theme-dark') !== null;
 
+    // Service-based coloring for GENERIC and EXTERNAL spans
+    var svcColors = window.__RF_SVC_COLORS__;
+    if (svcColors && span.service_name) {
+      var svcEntry = svcColors.get(span.service_name);
+      if (svcEntry) {
+        if (span.type === 'suite' && span._is_generic_service) {
+          return isDark
+            ? { top: svcEntry.gD[0], bottom: svcEntry.gD[1], border: 'rgba(255,255,255,0.12)', text: svcEntry.badge[3] }
+            : { top: svcEntry.gL[0], bottom: svcEntry.gL[1], border: 'rgba(0,0,0,0.12)', text: '#ffffff' };
+        }
+        if (span.kwType === 'GENERIC' || span.kwType === 'EXTERNAL') {
+          return isDark
+            ? { top: svcEntry.gD[0], bottom: svcEntry.gD[1], border: 'rgba(255,255,255,0.1)', text: svcEntry.badge[3] }
+            : { top: svcEntry.gL[0], bottom: svcEntry.gL[1], border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
+        }
+      }
+    }
+
     if (span.type === 'suite') {
+      // Generic service suites without a color entry — fallback purple
+      if (span._is_generic_service) {
+        return isDark
+          ? { top: '#5e35b1', bottom: '#4527a0', border: 'rgba(255,255,255,0.12)', text: '#ede7f6' }
+          : { top: '#7e57c2', bottom: '#673ab7', border: 'rgba(0,0,0,0.12)', text: '#ffffff' };
+      }
       return isDark
         ? { top: '#1a3a5c', bottom: '#0f2440', border: 'rgba(255,255,255,0.1)', text: '#c8ddf0' }
         : { top: '#1e3a5f', bottom: '#142b47', border: 'rgba(0,0,0,0.15)', text: '#ffffff' };
@@ -2307,11 +2438,17 @@
         ? { top: '#1565c0', bottom: '#0d47a1', border: 'rgba(255,255,255,0.12)', text: '#e3f2fd' }
         : { top: '#1976d2', bottom: '#1565c0', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
     }
-    // Generic OTel spans — white/neutral theme
+    // Fallback for GENERIC without service_name
     if (span.kwType === 'GENERIC') {
       return isDark
-        ? { top: '#4a4a4a', bottom: '#3a3a3a', border: 'rgba(255,255,255,0.08)', text: '#cccccc' }
-        : { top: '#f5f5f5', bottom: '#e0e0e0', border: 'rgba(0,0,0,0.1)', text: '#555555' };
+        ? { top: '#7e57c2', bottom: '#5e35b1', border: 'rgba(255,255,255,0.1)', text: '#ede7f6' }
+        : { top: '#9575cd', bottom: '#7e57c2', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
+    }
+    // Fallback for EXTERNAL without service_name
+    if (span.kwType === 'EXTERNAL') {
+      return isDark
+        ? { top: '#ef6c00', bottom: '#e65100', border: 'rgba(255,255,255,0.12)', text: '#fff3e0' }
+        : { top: '#fb8c00', bottom: '#f57c00', border: 'rgba(0,0,0,0.1)', text: '#ffffff' };
     }
     // keyword — red for FAIL, muted purple for NOT_RUN, grey otherwise
     if (span.status === 'FAIL') {
@@ -3052,110 +3189,96 @@
   window.highlightSpanInTimeline = function (spanId) {
     console.log('[Timeline] highlightSpanInTimeline called with spanId:', spanId);
     
-    for (var i = 0; i < timelineState.flatSpans.length; i++) {
-      if (timelineState.flatSpans[i].id === spanId) {
-        console.log('[Timeline] Found span:', timelineState.flatSpans[i].name);
-        timelineState.selectedSpan = timelineState.flatSpans[i];
-        
-        // Center the span in the viewport
-        var span = timelineState.flatSpans[i];
-        var canvas = timelineState.canvas;
-        var width = canvas.width / (window.devicePixelRatio || 1);
-        var height = canvas.height / (window.devicePixelRatio || 1);
-        var centerX = width / 2;
-        
-        // Auto-zoom: ensure the span occupies at least ~40% of the visible width
-        var viewRange = timelineState.viewEnd - timelineState.viewStart;
-        var spanDuration = span.endTime - span.startTime;
-        var spanMid = (span.startTime + span.endTime) / 2;
-        if (spanDuration > 0) {
-          var spanPixels = (spanDuration / viewRange) * (width - timelineState.leftMargin - timelineState.rightMargin);
-          if (spanPixels < width * 0.2) {
-            // Zoom in so span takes ~20% of usable width
-            var targetRange = spanDuration / 0.2;
-            // Don't zoom in more than needed — cap at a reasonable minimum
-            viewRange = Math.max(targetRange, 0.5);
-          }
-        }
-
-        // Horizontal centering: adjust viewport to center the span
-        timelineState.viewStart = spanMid - viewRange / 2;
-        timelineState.viewEnd = spanMid + viewRange / 2;
-        // Clamp to data bounds
-        if (timelineState.viewStart < timelineState.minTime) {
-          timelineState.viewStart = timelineState.minTime;
-          timelineState.viewEnd = timelineState.viewStart + viewRange;
-        }
-        if (timelineState.viewEnd > timelineState.maxTime) {
-          timelineState.viewEnd = timelineState.maxTime;
-          timelineState.viewStart = timelineState.viewEnd - viewRange;
-        }
-        // Clamp viewStart to activeWindowStart in live mode
-        if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
-          if (timelineState.viewStart < timelineState.activeWindowStart) {
-            timelineState.viewStart = timelineState.activeWindowStart;
-            timelineState.viewEnd = timelineState.viewStart + viewRange;
-          }
-        }
-        
-        // Vertical scrolling: Find the span's Y position and scroll container to center it
-        var workers = Object.keys(timelineState.workers);
-        var yOffset = timelineState.topMargin;
-        var spanY = null;
-        
-        // Find which worker this span belongs to and calculate its Y position
-        for (var w = 0; w < workers.length; w++) {
-          var workerSpans = timelineState.workers[workers[w]];
-          var isInThisWorker = false;
-          
-          for (var j = 0; j < workerSpans.length; j++) {
-            if (workerSpans[j].id === spanId) {
-              isInThisWorker = true;
-              var lane = span.lane !== undefined ? span.lane : span.depth;
-              spanY = yOffset + lane * timelineState.rowHeight + timelineState.rowHeight / 2;
-              break;
-            }
-          }
-          
-          if (isInThisWorker) {
-            break;
-          }
-          
-          // Move to next worker lane
-          var maxLane = 0;
-          for (var _li = 0; _li < workerSpans.length; _li++) {
-            var _lv = workerSpans[_li].lane !== undefined ? workerSpans[_li].lane : workerSpans[_li].depth;
-            if (_lv > maxLane) maxLane = _lv;
-          }
-          yOffset += (maxLane + 2) * timelineState.rowHeight;
-        }
-        
-        // Update zoom state to match new view range
-        var totalRange = timelineState.maxTime - timelineState.minTime;
-        var newViewRange = timelineState.viewEnd - timelineState.viewStart;
-        timelineState.zoom = (totalRange > 0 && newViewRange > 0) ? totalRange / newViewRange : 1;
-        if (timelineState._syncSlider) timelineState._syncSlider();
-        if (timelineState._syncHScroll) timelineState._syncHScroll();
-
-        // Scroll the canvas container to center the span vertically
-        if (spanY !== null && canvas.parentElement) {
-          var container = canvas.parentElement;
-          var containerHeight = container.clientHeight;
-          var scrollTop = spanY - containerHeight / 2;
-          
-          // Smooth scroll to the span
-          container.scrollTo({
-            top: Math.max(0, scrollTop),
-            behavior: 'smooth'
-          });
-        }
-        
-        _render();
-        return;
+    var spanIdx = timelineState._spanIndex ? timelineState._spanIndex[spanId] : undefined;
+    if (spanIdx === undefined) {
+      // Fallback: linear scan
+      for (var i = 0; i < timelineState.flatSpans.length; i++) {
+        if (timelineState.flatSpans[i].id === spanId) { spanIdx = i; break; }
       }
     }
-    
-    console.warn('[Timeline] Span not found with id:', spanId);
+    if (spanIdx === undefined) {
+      console.warn('[Timeline] Span not found with id:', spanId);
+      return;
+    }
+
+    var span = timelineState.flatSpans[spanIdx];
+    console.log('[Timeline] Found span:', span.name);
+    timelineState.selectedSpan = span;
+
+    // Center the span in the viewport
+    var canvas = timelineState.canvas;
+    var width = canvas.width / (window.devicePixelRatio || 1);
+
+    // Auto-zoom: ensure the span occupies at least ~20% of the visible width
+    var viewRange = timelineState.viewEnd - timelineState.viewStart;
+    var spanDuration = span.endTime - span.startTime;
+    var spanMid = (span.startTime + span.endTime) / 2;
+    if (spanDuration > 0) {
+      var spanPixels = (spanDuration / viewRange) * (width - timelineState.leftMargin - timelineState.rightMargin);
+      if (spanPixels < width * 0.2) {
+        var targetRange = spanDuration / 0.2;
+        viewRange = Math.max(targetRange, 0.5);
+      }
+    }
+
+    // Horizontal centering
+    timelineState.viewStart = spanMid - viewRange / 2;
+    timelineState.viewEnd = spanMid + viewRange / 2;
+    if (timelineState.viewStart < timelineState.minTime) {
+      timelineState.viewStart = timelineState.minTime;
+      timelineState.viewEnd = timelineState.viewStart + viewRange;
+    }
+    if (timelineState.viewEnd > timelineState.maxTime) {
+      timelineState.viewEnd = timelineState.maxTime;
+      timelineState.viewStart = timelineState.viewEnd - viewRange;
+    }
+    if (window.__RF_TRACE_LIVE__ && timelineState.activeWindowStart !== null) {
+      if (timelineState.viewStart < timelineState.activeWindowStart) {
+        timelineState.viewStart = timelineState.activeWindowStart;
+        timelineState.viewEnd = timelineState.viewStart + viewRange;
+      }
+    }
+
+    // Vertical scrolling: compute span Y from its worker/lane
+    var spanY = null;
+    if (span.worker && timelineState.workers) {
+      // Direct worker lookup instead of iterating all workers
+      var workers = Object.keys(timelineState.workers);
+      var yOffset = timelineState.topMargin;
+      for (var w = 0; w < workers.length; w++) {
+        var workerSpans = timelineState.workers[workers[w]];
+        if (workers[w] === span.worker) {
+          var lane = span.lane !== undefined ? span.lane : span.depth;
+          spanY = yOffset + lane * timelineState.rowHeight + timelineState.rowHeight / 2;
+          break;
+        }
+        var maxLane = 0;
+        for (var _li = 0; _li < workerSpans.length; _li++) {
+          var _lv = workerSpans[_li].lane !== undefined ? workerSpans[_li].lane : workerSpans[_li].depth;
+          if (_lv > maxLane) maxLane = _lv;
+        }
+        yOffset += (maxLane + 2) * timelineState.rowHeight;
+      }
+    }
+
+    // Update zoom state
+    var totalRange = timelineState.maxTime - timelineState.minTime;
+    var newViewRange = timelineState.viewEnd - timelineState.viewStart;
+    timelineState.zoom = (totalRange > 0 && newViewRange > 0) ? totalRange / newViewRange : 1;
+    if (timelineState._syncSlider) timelineState._syncSlider();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
+
+    // Scroll canvas container to center the span vertically
+    if (spanY !== null && canvas.parentElement) {
+      var container = canvas.parentElement;
+      var containerHeight = container.clientHeight;
+      canvas.parentElement.scrollTo({
+        top: Math.max(0, spanY - containerHeight / 2),
+        behavior: 'smooth'
+      });
+    }
+
+    _render();
   };
 
   /**

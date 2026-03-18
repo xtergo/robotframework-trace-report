@@ -153,6 +153,8 @@
           var child = suite.children[i];
           if (child.keywords !== undefined) {
             extractFromTest(child, suite.name, suite.id);
+          } else if (child.keyword_type !== undefined) {
+            extractFromKeyword(child, suite.name, suite.id);
           } else {
             extractFromSuite(child, suite.id);
           }

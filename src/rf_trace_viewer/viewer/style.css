@@ -538,6 +538,105 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   outline-offset: 2px;
 }
 
+/* ── Service Filter (offline mode) ── */
+.rf-trace-viewer .svc-filter-offline {
+  position: relative;
+  display: inline-block;
+  margin-right: 8px;
+}
+.rf-trace-viewer .svc-filter-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rf-trace-viewer .svc-filter-btn:hover {
+  background: var(--hover-bg);
+}
+.rf-trace-viewer .svc-btn-content {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rf-trace-viewer .svc-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rf-trace-viewer .svc-dot-rf { background: #1976d2; }
+.rf-trace-viewer .svc-dot-ext { background: #f57c00; }
+.rf-trace-viewer .svc-dot-sut { background: #7e57c2; }
+.rf-trace-viewer.theme-dark .svc-dot-rf { background: #42a5f5; }
+.rf-trace-viewer.theme-dark .svc-dot-ext { background: #ffb74d; }
+.rf-trace-viewer.theme-dark .svc-dot-sut { background: #b39ddb; }
+
+.rf-trace-viewer .svc-filter-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  min-width: 260px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  padding: 8px 0;
+  margin-top: 4px;
+}
+.rf-trace-viewer .svc-filter-legend {
+  padding: 6px 12px;
+}
+.rf-trace-viewer .svc-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.rf-trace-viewer .svc-legend-label {
+  font-weight: 500;
+}
+.rf-trace-viewer .svc-filter-sep {
+  border-bottom: 1px solid var(--border-color);
+  margin: 4px 0;
+}
+.rf-trace-viewer .svc-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.rf-trace-viewer .svc-filter-item:hover {
+  background: var(--hover-bg);
+}
+.rf-trace-viewer .svc-filter-item input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+.rf-trace-viewer .svc-filter-rf {
+  opacity: 0.7;
+  cursor: default;
+}
+.rf-trace-viewer .svc-filter-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
 /* ── Statistics panel ── */
 .rf-trace-viewer .stats-overall {
   padding: 12px;
@@ -868,7 +967,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .tree-row.kw-setup .node-type { background: #e8f5e9; color: #2e7d32; }
 .rf-trace-viewer .tree-row.kw-teardown .node-type { background: #c8e6c9; color: #1b5e20; }
 /* Purple family */
-.rf-trace-viewer .tree-row.kw-external .node-type { background: #f3e5f5; color: #7b1fa2; }
+.rf-trace-viewer .tree-row.kw-external .node-type { background: #fff3e0; color: #e65100; }
 .rf-trace-viewer .tree-row.kw-for .node-type { background: #e8eaf6; color: #283593; }
 .rf-trace-viewer .tree-row.kw-iteration .node-type { background: #ede7f6; color: #4527a0; }
 .rf-trace-viewer .tree-row.kw-while .node-type { background: #e8eaf6; color: #283593; }
@@ -889,7 +988,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 /* Dark mode tree node-type badges */
 .rf-trace-viewer.theme-dark .tree-row.kw-setup .node-type { background: #1b3a1b; color: #66bb6a; }
 .rf-trace-viewer.theme-dark .tree-row.kw-teardown .node-type { background: #14301a; color: #4caf50; }
-.rf-trace-viewer.theme-dark .tree-row.kw-external .node-type { background: #2a1530; color: #ce93d8; }
+.rf-trace-viewer.theme-dark .tree-row.kw-external .node-type { background: #331a00; color: #ffb74d; }
 .rf-trace-viewer.theme-dark .tree-row.kw-for .node-type { background: #141730; color: #7986cb; }
 .rf-trace-viewer.theme-dark .tree-row.kw-iteration .node-type { background: #1a1530; color: #9575cd; }
 .rf-trace-viewer.theme-dark .tree-row.kw-while .node-type { background: #141730; color: #7986cb; }
@@ -945,7 +1044,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 /* ── External / Cross-Service Spans ── */
 
 .rf-trace-viewer .tree-row.kw-external {
-  border-left: 3px solid #7b1fa2;
+  border-left: 3px solid #f57c00;
 }
 
 /* kw-external .node-type color now handled by badge rules above */
@@ -965,15 +1064,24 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* EXTERNAL service badge — amber */
+.rf-trace-viewer .kw-external .svc-name-badge {
+  background: #f57c00;
+  color: #fff;
+}
 
 .rf-trace-viewer.theme-dark .tree-row.kw-external {
-  border-left-color: #ce93d8;
+  border-left-color: #ffb74d;
 }
 
 /* dark kw-external .node-type color now handled by badge rules above */
 
 .rf-trace-viewer.theme-dark .svc-name-badge {
   background: #9c27b0;
+}
+.rf-trace-viewer.theme-dark .kw-external .svc-name-badge {
+  background: #ef6c00;
+  color: #fff;
 }
 
 /* ── Generic OTel Spans — White / Neutral Theme ── */
@@ -2497,6 +2605,34 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 .rf-trace-viewer .flow-detail-cell {
   padding: 4px 10px 8px;
+}
+
+/* Attribute detail table for EXTERNAL/GENERIC spans */
+.rf-trace-viewer .flow-attr-table {
+  border-collapse: collapse;
+  font-size: 11px;
+  width: auto;
+  max-width: 100%;
+  margin: 2px 0;
+}
+.rf-trace-viewer .flow-attr-table tr + tr {
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+.rf-trace-viewer .flow-attr-key {
+  color: var(--text-muted, #888);
+  padding: 2px 10px 2px 0;
+  white-space: nowrap;
+  vertical-align: top;
+  font-family: monospace;
+  font-size: 10.5px;
+}
+.rf-trace-viewer .flow-attr-val {
+  color: var(--text-primary, #333);
+  padding: 2px 0;
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 10.5px;
+  max-width: 500px;
 }
 
 .rf-trace-viewer .flow-error-msg {
@@ -5532,11 +5668,11 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 /* ── EXTERNAL / SUT span row styling ── */
 .rf-trace-viewer .flow-row-external {
-  border-left: 3px solid #7b1fa2;
+  border-left: 3px solid #f57c00;
 }
 
 .rf-trace-viewer.theme-dark .flow-row-external {
-  border-left-color: #ce93d8;
+  border-left-color: #ffb74d;
 }
 
 /* Service name badge in flow table (matches tree view svc-name-badge) */
@@ -5554,20 +5690,27 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* EXTERNAL rows get amber service badge */
+.rf-trace-viewer .flow-row-external .flow-svc-badge {
+  background: #f57c00;
+}
 
 .rf-trace-viewer.theme-dark .flow-svc-badge {
   background: #9c27b0;
 }
+.rf-trace-viewer.theme-dark .flow-row-external .flow-svc-badge {
+  background: #ef6c00;
+}
 
 /* EXTERNAL type badge fallback (when no service_name) */
 .rf-trace-viewer .flow-type-external {
-  background: #f3e5f5;
-  color: #7b1fa2;
+  background: #fff3e0;
+  color: #e65100;
 }
 
 .rf-trace-viewer.theme-dark .flow-type-external {
-  background: #2a1530;
-  color: #ce93d8;
+  background: #331a00;
+  color: #ffb74d;
 }
 
 /* Inline source metadata (file:line or class.method) */
