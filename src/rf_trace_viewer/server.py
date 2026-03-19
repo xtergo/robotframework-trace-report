@@ -674,6 +674,15 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 "orphan_count": orphan_count,
                 "total_count": len(view_model.spans),
             }
+
+            # Debug: log how many spans have log counts attached
+            spans_with_logs = sum(1 for s in view_model.spans if s._log_count > 0)
+            if spans_with_logs > 0:
+                logger.info(
+                    "Poll response: %d spans, %d with logs",
+                    len(view_model.spans),
+                    spans_with_logs,
+                )
             # Include earliest DB span timestamp (cheap — cached 5 min)
             if hasattr(provider, "get_earliest_span_ns"):
                 try:
