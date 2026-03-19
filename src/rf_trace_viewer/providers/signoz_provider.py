@@ -957,14 +957,13 @@ class SigNozProvider(TraceProvider):
             return {}
         try:
             query = self._build_log_count_query(trace_ids)
-            logger.info(
-                "Log count query: %d trace_ids, first=%s",
-                len(trace_ids),
-                next(iter(trace_ids), "?"),
+            print(
+                f"[log-count] Query: {len(trace_ids)} trace_ids, "
+                f"first={next(iter(trace_ids), '?')}"
             )
             response = self._api_request("/api/v3/query_range", query, timeout=5)
             rows = self._parse_aggregate_rows(response)
-            logger.info("Log count response: %d rows", len(rows))
+            print(f"[log-count] Response: {len(rows)} rows")
             counts: dict[str, dict[str, int]] = {}
             for row in rows:
                 span_id = row.get("span_id", "")
@@ -974,10 +973,10 @@ class SigNozProvider(TraceProvider):
                     if span_id not in counts:
                         counts[span_id] = {}
                     counts[span_id][severity] = counts[span_id].get(severity, 0) + count
-            logger.info("Log counts result: %d spans with logs", len(counts))
+            print(f"[log-count] Result: {len(counts)} spans with logs")
             return counts
-        except Exception:
-            logger.warning("Aggregate log count query failed", exc_info=True)
+        except Exception as exc:
+            print(f"[log-count] Query FAILED: {exc}")
             return {}
 
     def get_logs(self, span_id: str, trace_id: str) -> list[dict]:
