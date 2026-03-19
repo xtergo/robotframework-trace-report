@@ -1235,10 +1235,10 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
         }
         ancestor = ancestor.parentElement;
       }
-      // Scroll the highlighted node into view
+      // Keep the highlighted node visible without jumping the viewport
       requestAnimationFrame(function () {
         var row = restoredNode.querySelector(':scope > .tree-row') || restoredNode;
-        row.scrollIntoView({ block: 'center', behavior: 'instant' });
+        row.scrollIntoView({ block: 'nearest', behavior: 'instant' });
       });
     }
   }
@@ -1376,18 +1376,32 @@ function _renderTreeVirtual(container, model, filteredSpanIds) {
   // Remember the highlighted span so we can keep it visible after rebuild.
   var savedHighlightId = isReRender ? _virtualState.highlightedSpanId : null;
 
+  // Remember the highlighted span's visual offset before rebuilding the flat
+  // list so we can pin it in place after new spans shift indices around.
+  var savedScrollTop = null;
+  var savedHlOffset = null;
+  if (isReRender && savedHighlightId) {
+    var oldIdx = _findFlatIndex(savedHighlightId);
+    if (oldIdx >= 0) {
+      savedScrollTop = _virtualState.scrollEl.scrollTop;
+      savedHlOffset = oldIdx * _virtualState.ROW_HEIGHT - savedScrollTop;
+    }
+  }
+
   _rebuildFlatItems(_virtualState);
 
-  // After rebuild, if a span is highlighted, scroll so it stays visible.
-  // New spans may have been inserted above it, shifting its position.
+  // After rebuild, anchor the scroll so the highlighted span stays at the
+  // same visual position.  New spans may have been inserted above it.
   if (isReRender && savedHighlightId) {
     var hlIdx = _findFlatIndex(savedHighlightId);
     if (hlIdx >= 0) {
       var hlPixel = hlIdx * _virtualState.ROW_HEIGHT;
-      var vpHeight = _virtualState.scrollEl.clientHeight || 800;
-      var curScroll = _virtualState.scrollEl.scrollTop;
-      // Only adjust if the highlighted span scrolled out of the viewport
-      if (hlPixel < curScroll || hlPixel > curScroll + vpHeight - _virtualState.ROW_HEIGHT) {
+      if (savedHlOffset !== null) {
+        // Pin the span at the same pixel offset from the viewport top
+        _virtualState.scrollEl.scrollTop = hlPixel - savedHlOffset;
+      } else {
+        // Span wasn't visible before — bring it into the top third
+        var vpHeight = _virtualState.scrollEl.clientHeight || 800;
         _virtualState.scrollEl.scrollTop = Math.max(0, hlPixel - vpHeight / 3);
       }
     }

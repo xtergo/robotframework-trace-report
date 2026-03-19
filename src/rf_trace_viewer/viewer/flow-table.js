@@ -973,7 +973,7 @@
         if (state._virtRows[vi].id === state.highlightSpanId) {
           var targetTop = vi * state._virtRowHeight;
           var viewportH = state._virtScrollEl.clientHeight || 600;
-          state._virtScrollEl.scrollTop = Math.max(0, targetTop - viewportH / 2);
+          state._virtScrollEl.scrollTop = Math.max(0, targetTop - 40);
           // Force re-render at new position
           state._virtRenderedStart = -1;
           state._virtRenderedEnd = -1;
@@ -985,13 +985,8 @@
 
     var el = state.container.querySelector('.flow-row-highlight');
     if (el) {
-      // If the highlighted row has a detail row right after it, scroll to show both
-      var next = el.nextElementSibling;
-      if (next && next.classList.contains('flow-row-detail')) {
-        next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } else {
-        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
+      // Scroll highlighted row to the top of the visible area
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
       return;
     }
     // No highlighted row — scroll to first detail row if present
