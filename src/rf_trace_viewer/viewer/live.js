@@ -1260,7 +1260,8 @@
         end_time: endNs,
         status_code: statusCode,
         attributes: attrs,
-        events: s.events || []
+        events: s.events || [],
+        _log_count: s._log_count || 0
       });
 
       // Track cached span count per service
