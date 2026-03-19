@@ -2104,8 +2104,9 @@ function _renderLogsContainer(panel, logs) {
  * @param {string} traceId - The trace ID for the span
  */
 function _fetchAndRenderLogs(panel, spanId, traceId) {
-  // Check cache first
-  if (_logCache[spanId]) {
+  // Check cache first — only use cache if it has actual entries.
+  // Empty arrays are NOT cached so we can retry on next poll.
+  if (_logCache[spanId] && _logCache[spanId].length > 0) {
     _renderLogsContainer(panel, _logCache[spanId]);
     return;
   }
@@ -2140,17 +2141,41 @@ function _fetchAndRenderLogs(panel, spanId, traceId) {
   xhr.open('GET', url, true);
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) return;
-    // Remove loading indicator
-    var loadingEl = panel.querySelector('.log-loading');
-    if (loadingEl) loadingEl.parentNode.removeChild(loadingEl);
+
+    // The original panel reference may have been destroyed by a live
+    // re-render (container.innerHTML = '').  Find the current panel.
+    var livePanel = panel;
+    if (!livePanel.isConnected) {
+      // Panel was removed from DOM — find the new one via span ID
+      var liveNode = document.querySelector('.tree-node[data-span-id="' + spanId + '"]');
+      if (liveNode) {
+        livePanel = liveNode.querySelector(':scope > .detail-panel');
+      }
+    }
+
+    // Remove loading indicator (from whichever panel is live)
+    if (livePanel) {
+      var loadingEl = livePanel.querySelector('.log-loading');
+      if (loadingEl) loadingEl.parentNode.removeChild(loadingEl);
+    }
 
     if (xhr.status >= 200 && xhr.status < 300) {
       try {
         var logs = JSON.parse(xhr.responseText);
-        _logCache[spanId] = logs;
-        _renderLogsContainer(panel, logs);
+        // Only cache non-empty results so empty responses can be retried
+        if (logs && logs.length > 0) {
+          _logCache[spanId] = logs;
+        }
+        console.log('[Tree] Fetched logs for ' + spanId + ': ' + (logs ? logs.length : 0) + ' entries');
+        if (livePanel && logs && logs.length > 0) {
+          // Ensure the detail panel is expanded so logs are visible
+          if (!livePanel.classList.contains('expanded')) {
+            livePanel.classList.add('expanded');
+          }
+          _renderLogsContainer(livePanel, logs);
+        }
       } catch (e) {
-        _showLogError(panel, 'Failed to parse log response');
+        if (livePanel) _showLogError(livePanel, 'Failed to parse log response');
       }
     } else {
       var errMsg = 'Failed to fetch logs';
@@ -2160,13 +2185,20 @@ function _fetchAndRenderLogs(panel, spanId, traceId) {
       } catch (e) {
         // use default message
       }
-      _showLogError(panel, errMsg + ' (HTTP ' + xhr.status + ')');
+      if (livePanel) _showLogError(livePanel, errMsg + ' (HTTP ' + xhr.status + ')');
     }
   };
   xhr.onerror = function () {
-    var loadingEl = panel.querySelector('.log-loading');
-    if (loadingEl) loadingEl.parentNode.removeChild(loadingEl);
-    _showLogError(panel, 'Network error fetching logs');
+    var livePanel = panel;
+    if (!livePanel.isConnected) {
+      var liveNode = document.querySelector('.tree-node[data-span-id="' + spanId + '"]');
+      if (liveNode) livePanel = liveNode.querySelector(':scope > .detail-panel');
+    }
+    if (livePanel) {
+      var loadingEl = livePanel.querySelector('.log-loading');
+      if (loadingEl) loadingEl.parentNode.removeChild(loadingEl);
+      _showLogError(livePanel, 'Network error fetching logs');
+    }
   };
   xhr.send();
 }
@@ -2208,6 +2240,7 @@ function _renderLogsButton(panel, data) {
 
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
+    console.log('[Tree] Logs button clicked: spanId=' + data.id + ', traceId=' + data.trace_id + ', panelConnected=' + panel.isConnected);
     _logsOpenIds[data.id] = true;
     _fetchAndRenderLogs(panel, data.id, data.trace_id);
   });
