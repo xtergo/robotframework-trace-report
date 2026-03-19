@@ -22,6 +22,9 @@ var _failuresOnlyActive = false;
 var _filterListenerRegistered = false;
 var _activeServiceFilter = null; // null = show all, otherwise { svcName: true }
 
+// Track which nodes have their detail panel expanded (survives re-renders)
+var _expandedNodeIds = {};
+
 // Virtual scrolling state — only used when span count > VIRTUAL_THRESHOLD
 var _virtualState = null;
 var VIRTUAL_THRESHOLD = 5000;
@@ -1291,6 +1294,47 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
         var row = restoredNode.querySelector(':scope > .tree-row') || restoredNode;
         row.scrollIntoView({ block: 'nearest', behavior: 'instant' });
       });
+    }
+  }
+
+  // Restore expanded nodes that were open before the re-render
+  // (e.g. user expanded a detail panel, then live update rebuilt the tree)
+  var expandedKeys = Object.keys(_expandedNodeIds);
+  for (var ek = 0; ek < expandedKeys.length; ek++) {
+    var expId = expandedKeys[ek];
+    var expNode = container.querySelector('.tree-node[data-span-id="' + expId + '"]');
+    if (expNode) {
+      // Materialize lazy children if needed
+      if (expNode._lazyChildren) {
+        _materializeChildren(expNode);
+      }
+      var expChildren = expNode.querySelector(':scope > .tree-children');
+      var expDetail = expNode.querySelector(':scope > .detail-panel');
+      var expToggle = expNode.querySelector(':scope > .tree-row > .tree-toggle');
+      if (expChildren) expChildren.classList.add('expanded');
+      if (expDetail) expDetail.classList.add('expanded');
+      if (expToggle) {
+        expToggle.textContent = '\u25bc';
+        expToggle.setAttribute('aria-label', 'Collapse');
+      }
+      // Expand ancestors so the node is visible
+      var expAnc = expNode.parentElement;
+      while (expAnc && expAnc !== container) {
+        if (expAnc.classList && expAnc.classList.contains('tree-children')) {
+          expAnc.classList.add('expanded');
+        }
+        if (expAnc.classList && expAnc.classList.contains('tree-node')) {
+          var ancToggle = expAnc.querySelector(':scope > .tree-row > .tree-toggle');
+          if (ancToggle) {
+            ancToggle.textContent = '\u25bc';
+            ancToggle.setAttribute('aria-label', 'Collapse');
+          }
+        }
+        expAnc = expAnc.parentElement;
+      }
+    } else {
+      // Node no longer exists (span removed) — clean up tracking
+      delete _expandedNodeIds[expId];
     }
   }
 
@@ -3196,6 +3240,7 @@ function _toggleNode(nodeEl) {
   var childrenEl = nodeEl.querySelector(':scope > .tree-children');
   var detailEl = nodeEl.querySelector(':scope > .detail-panel');
   var toggleBtn = nodeEl.querySelector(':scope > .tree-row > .tree-toggle');
+  var spanId = nodeEl.getAttribute('data-span-id');
   // Need either children or detail panel to toggle
   if (!childrenEl && !detailEl) return;
 
@@ -3208,6 +3253,7 @@ function _toggleNode(nodeEl) {
       toggleBtn.textContent = '\u25b6'; // ▶
       toggleBtn.setAttribute('aria-label', 'Expand');
     }
+    if (spanId) delete _expandedNodeIds[spanId];
   } else {
     // Materialize lazy children on first expand
     if (nodeEl._lazyChildren) {
@@ -3219,6 +3265,7 @@ function _toggleNode(nodeEl) {
       toggleBtn.textContent = '\u25bc'; // ▼
       toggleBtn.setAttribute('aria-label', 'Collapse');
     }
+    if (spanId) _expandedNodeIds[spanId] = true;
     // Scroll so the clicked node is at the top of the visible area,
     // revealing its newly expanded children below.
     // Only scrolls if the node would otherwise be near the bottom;
@@ -3248,6 +3295,11 @@ function _setAllExpanded(container, expand) {
   if (_virtualState) {
     _virtualSetAllExpanded(expand);
     return;
+  }
+
+  // Clear expanded tracking when collapsing all
+  if (!expand) {
+    _expandedNodeIds = {};
   }
 
   // Original mode — DOM-based expand/collapse
