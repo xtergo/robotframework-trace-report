@@ -206,6 +206,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             "/api/spans",
             "/api/executions",
             "/api/metrics",
+            "/api/logs",
         ):
             if self._check_rate_limit(request_id):
                 return
@@ -244,6 +245,10 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/metrics":
             self._serve_metrics(request_id, query)
+            return
+
+        if path == "/api/logs":
+            self._serve_logs(request_id, query)
             return
 
         if path == "/api/v1/resources":
@@ -309,6 +314,42 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_json_response(200, snapshot, request_id)
         except Exception as exc:
             self._send_json_response(502, {"error": f"SigNoz query failed: {exc}"}, request_id)
+
+    def _serve_logs(self, request_id: str, query: dict) -> None:
+        """Serve correlated log records for a span."""
+        span_id = query.get("span_id", [None])[0]
+        trace_id = query.get("trace_id", [None])[0]
+
+        if not span_id:
+            self._send_json_response(
+                400, {"error": "Missing required parameter: span_id"}, request_id
+            )
+            return
+        if not trace_id:
+            self._send_json_response(
+                400, {"error": "Missing required parameter: trace_id"}, request_id
+            )
+            return
+
+        provider = getattr(self.server, "provider", None)
+        if provider is None or not hasattr(provider, "get_logs"):
+            self._send_json_response(200, [], request_id)
+            return
+
+        try:
+            logs = provider.get_logs(span_id, trace_id)
+            payload = json.dumps(logs).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self._send_request_id_header(request_id)
+            self.end_headers()
+            self.wfile.write(payload)
+            self._metrics_response_bytes += len(payload)
+        except ProviderError as exc:
+            self._send_json_response(
+                502, {"error": f"Failed to fetch logs from SigNoz: {exc}"}, request_id
+            )
 
     def _serve_viewer(self, request_id: str = "") -> None:
         """Serve the HTML viewer page with live mode flag (no embedded data)."""
