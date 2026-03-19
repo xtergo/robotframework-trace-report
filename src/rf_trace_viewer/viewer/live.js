@@ -1530,7 +1530,8 @@
             events: _mapEvents(child.events),
             children: buildKeywords(child.span_id),
             _log_count: child._log_count || 0,
-            _log_severity_counts: child._log_severity_counts || {}
+            _log_severity_counts: child._log_severity_counts || {},
+            trace_id: child.trace_id || ''
           };
           // Extract source metadata if present
           var srcClass = ca['app.source.class'] || '';
@@ -1570,7 +1571,8 @@
             attributes: ca,
             children: buildKeywords(child.span_id),
             _log_count: child._log_count || 0,
-            _log_severity_counts: child._log_severity_counts || {}
+            _log_severity_counts: child._log_severity_counts || {},
+            trace_id: child.trace_id || ''
           });
           // Extract source metadata for EXTERNAL spans
           var extSrcClass = ca['app.source.class'] || '';
@@ -1640,7 +1642,8 @@
           execution_id: ca[_execAttr] || '',
           attributes: ca,
           _log_count: child._log_count || 0,
-          _log_severity_counts: child._log_severity_counts || {}
+          _log_severity_counts: child._log_severity_counts || {},
+          trace_id: child.trace_id || ''
         };
         tests.push(test);
       }
@@ -1692,7 +1695,8 @@
             events: _mapEvents(kChild.events),
             children: buildKeywords(kChild.span_id),
             _log_count: kChild._log_count || 0,
-            _log_severity_counts: kChild._log_severity_counts || {}
+            _log_severity_counts: kChild._log_severity_counts || {},
+            trace_id: kChild.trace_id || ''
           });
           // Extract source metadata if present (suite-level keywords)
           var srcClass = ka['app.source.class'] || '';
@@ -1750,7 +1754,8 @@
         execution_id: sa[_execAttr] || '',
         attributes: sa,
         _log_count: suiteSpan._log_count || 0,
-        _log_severity_counts: suiteSpan._log_severity_counts || {}
+        _log_severity_counts: suiteSpan._log_severity_counts || {},
+        trace_id: suiteSpan.trace_id || ''
       };
     }
 
@@ -1825,7 +1830,8 @@
             events: _mapEvents(gSpan.events),
             children: buildKeywords(gSpan.span_id),
             _log_count: gSpan._log_count || 0,
-            _log_severity_counts: gSpan._log_severity_counts || {}
+            _log_severity_counts: gSpan._log_severity_counts || {},
+            trace_id: gSpan.trace_id || ''
           });
         }
 
