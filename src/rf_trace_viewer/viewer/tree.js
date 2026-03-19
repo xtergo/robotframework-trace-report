@@ -3144,7 +3144,7 @@ function _createTreeNode(opts) {
       }
 
       // Render severity badges in priority order: ERROR, WARN, INFO, others
-      var sevOrder = ['ERROR', 'WARN', 'INFO'];
+      var sevOrder = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
       var rendered = {};
       var _renderSevBadge = function (sev, count, isDirect) {
         var badge = document.createElement('span');
