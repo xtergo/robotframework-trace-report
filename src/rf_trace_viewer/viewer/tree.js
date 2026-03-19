@@ -1972,6 +1972,13 @@ function _fetchAndRenderLogs(panel, spanId, traceId) {
     return;
   }
 
+  // Check for embedded log data (static/offline reports)
+  if (window.__RF_LOG_DATA__ && window.__RF_LOG_DATA__[spanId]) {
+    _logCache[spanId] = window.__RF_LOG_DATA__[spanId];
+    _renderLogsContainer(panel, _logCache[spanId]);
+    return;
+  }
+
   // Show loading indicator
   var existingLoading = panel.querySelector('.log-loading');
   if (existingLoading) existingLoading.parentNode.removeChild(existingLoading);

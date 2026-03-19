@@ -113,3 +113,7 @@ class TraceProvider(ABC):
     @abstractmethod
     def poll_new_spans(self, since_ns: int, service_name: str | None = None) -> TraceViewModel:
         """Fetch spans newer than since_ns. For live poll mode."""
+
+    def get_logs(self, span_id: str, trace_id: str) -> list[dict]:
+        """Return log records for a span. Default: empty list."""
+        return []

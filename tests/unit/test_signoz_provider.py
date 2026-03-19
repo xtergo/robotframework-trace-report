@@ -445,7 +445,7 @@ class TestDeduplication:
             with patch.object(provider, "_api_request", return_value=resp) as mock_req:
                 provider.poll_new_spans(since_ns=1_000_000_000, service_name="robot-framework")
 
-            payload = mock_req.call_args[0][1]
+            payload = mock_req.call_args_list[0][0][1]
             filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
             assert len(filters) == 1
             f = filters[0]
@@ -462,7 +462,7 @@ class TestDeduplication:
             with patch.object(provider, "_api_request", return_value=resp) as mock_req:
                 provider.poll_new_spans(since_ns=1_000_000_000)
 
-            payload = mock_req.call_args[0][1]
+            payload = mock_req.call_args_list[0][0][1]
             filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
             assert len(filters) == 0
 
@@ -478,7 +478,7 @@ class TestDeduplication:
             with patch.object(provider, "_api_request", return_value=resp) as mock_req:
                 provider.poll_new_spans(since_ns=1_000_000_000)
 
-            payload = mock_req.call_args[0][1]
+            payload = mock_req.call_args_list[0][0][1]
             filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
             assert len(filters) == 0
 
@@ -490,6 +490,6 @@ class TestDeduplication:
             with patch.object(provider, "_api_request", return_value=resp) as mock_req:
                 provider.poll_new_spans(since_ns=1_000_000_000, service_name="user-override")
 
-            payload = mock_req.call_args[0][1]
+            payload = mock_req.call_args_list[0][0][1]
             filters = payload["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
             assert filters[0]["value"] == "user-override"

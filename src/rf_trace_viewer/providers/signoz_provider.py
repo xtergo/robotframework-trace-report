@@ -11,7 +11,7 @@ import logging
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -347,6 +347,15 @@ class SigNozProvider(TraceProvider):
         response = self._api_request("/api/v3/query_range", query)
         spans = self._parse_spans(response)
 
+        # Attach _log_count to each span that has correlated logs
+        trace_ids = {s.trace_id for s in spans if s.trace_id}
+        if trace_ids:
+            log_counts = self._fetch_log_counts(trace_ids)
+            for span in spans:
+                count = log_counts.get(span.span_id)
+                if count is not None:
+                    span._log_count = count  # type: ignore[attr-defined]
+
         return TraceViewModel(spans=spans)
 
     def fetch_spans_by_trace_ids(self, trace_ids: set[str], limit: int = 10_000) -> list[TraceSpan]:
@@ -373,19 +382,19 @@ class SigNozProvider(TraceProvider):
     # HTTP client
     # ------------------------------------------------------------------
 
-    def _api_request(self, path: str, payload: dict) -> dict:
+    def _api_request(self, path: str, payload: dict, *, timeout: int = 30) -> dict:
         """Make authenticated HTTP POST to SigNoz API.
 
         On 401, attempts automatic token refresh and retries once.
         """
         try:
-            return self._do_request(path, payload)
+            return self._do_request(path, payload, timeout=timeout)
         except AuthenticationError:
             if self._auth.refresh_token():
-                return self._do_request(path, payload)
+                return self._do_request(path, payload, timeout=timeout)
             raise
 
-    def _do_request(self, path: str, payload: dict) -> dict:
+    def _do_request(self, path: str, payload: dict, *, timeout: int = 30) -> dict:
         """Execute a single authenticated HTTP POST to SigNoz API."""
         url = self._config.endpoint.rstrip("/") + path
         data = json.dumps(payload).encode("utf-8")
@@ -398,7 +407,7 @@ class SigNozProvider(TraceProvider):
         operation = path.strip("/").replace("/", "_") or "unknown"
         start = time.monotonic()
         try:
-            with urlopen(req, timeout=30) as resp:
+            with urlopen(req, timeout=timeout) as resp:
                 resp_data = resp.read()
                 duration_ms = (time.monotonic() - start) * 1000
                 record_dep_call(
@@ -924,6 +933,70 @@ class SigNozProvider(TraceProvider):
             "end": now_s,
             "step": 60,
         }
+
+    # ------------------------------------------------------------------
+    # Log fetchers
+    # ------------------------------------------------------------------
+
+    def _fetch_log_counts(self, trace_ids: set[str]) -> dict[str, int]:
+        """Execute aggregate log count query with 5-second timeout.
+
+        Returns ``{span_id: count}`` mapping.  Catches ALL exceptions
+        (network errors, timeouts, non-200 responses) and returns ``{}``
+        on failure so the poll response is never blocked by log queries.
+        """
+        if not trace_ids:
+            return {}
+        try:
+            query = self._build_log_count_query(trace_ids)
+            response = self._api_request("/api/v3/query_range", query, timeout=5)
+            rows = self._parse_aggregate_rows(response)
+            counts: dict[str, int] = {}
+            for row in rows:
+                span_id = row.get("span_id", "")
+                count = int(row.get("count", 0))
+                if span_id and count > 0:
+                    counts[span_id] = count
+            return counts
+        except Exception:
+            logger.warning("Aggregate log count query failed", exc_info=True)
+            return {}
+
+    def get_logs(self, span_id: str, trace_id: str) -> list[dict]:
+        """Fetch log records from SigNoz for a specific span.
+
+        Returns a list of ``{timestamp, severity, body, attributes}`` dicts
+        ordered by timestamp ascending.
+        """
+        query = self._build_log_query(span_id, trace_id)
+        response = self._api_request("/api/v3/query_range", query)
+        result_container = response.get("data") or response
+        result = result_container.get("result") or []
+        logs: list[dict] = []
+        for series in result:
+            for row in series.get("list") or []:
+                data = row.get("data") or {}
+                ts_raw = row.get("timestamp") or data.get("timestamp", "")
+                severity = data.get("severity_text", "")
+                body = data.get("body", "")
+                # Collect all attributes except known top-level fields
+                known_keys = {"timestamp", "severity_text", "body", "id", "span_id", "trace_id"}
+                attributes = {k: str(v) for k, v in data.items() if k not in known_keys and v}
+                # Format timestamp as ISO 8601 if it's a nanosecond integer
+                timestamp_str = str(ts_raw)
+                ts_ns = _parse_timestamp(ts_raw)
+                if ts_ns > 0:
+                    dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc)
+                    timestamp_str = dt.isoformat()
+                logs.append(
+                    {
+                        "timestamp": timestamp_str,
+                        "severity": severity,
+                        "body": body,
+                        "attributes": attributes,
+                    }
+                )
+        return logs
 
     # ------------------------------------------------------------------
     # Response parsers

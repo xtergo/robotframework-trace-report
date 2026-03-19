@@ -54,6 +54,8 @@ class RFSuite:
     metadata: dict[str, str] = field(default_factory=dict)
     children: list[RFSuite | RFTest | RFKeyword] = field(default_factory=list)
     _is_generic_service: bool = False
+    _log_count: int = 0
+    trace_id: str = ""
 
 
 @dataclass
@@ -72,6 +74,8 @@ class RFTest:
     has_setup: bool = False
     has_teardown: bool = False
     status_message: str = ""
+    _log_count: int = 0
+    trace_id: str = ""
 
 
 @dataclass
@@ -96,6 +100,8 @@ class RFKeyword:
     source_metadata: SourceMetadata | None = None
     service_name: str = ""
     attributes: dict[str, Any] = field(default_factory=dict)
+    _log_count: int = 0
+    trace_id: str = ""
 
 
 @dataclass
@@ -266,6 +272,7 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
         children=children,
         library=str(attrs.get("rf.keyword.library", "")),
         source_metadata=extract_source_metadata(attrs),
+        trace_id=node.span.trace_id,
     )
 
 
@@ -292,6 +299,7 @@ def _build_test(node: SpanNode) -> RFTest:
         has_setup=str(attrs.get("rf.test.has_setup", "")).lower() == "true",
         has_teardown=str(attrs.get("rf.test.has_teardown", "")).lower() == "true",
         status_message=node.span.status.get("message", ""),
+        trace_id=node.span.trace_id,
     )
 
 
@@ -335,6 +343,7 @@ def _build_suite(node: SpanNode) -> RFSuite:
         has_teardown=str(attrs.get("rf.suite.has_teardown", "")).lower() == "true",
         metadata=metadata,
         children=children,
+        trace_id=node.span.trace_id,
     )
 
 
@@ -385,6 +394,7 @@ def _build_generic_keyword(node: SpanNode, all_span_ids: set[str]) -> RFKeyword:
         children=children,
         service_name=svc_name,
         attributes=dict(attrs),
+        trace_id=node.span.trace_id,
     )
 
 

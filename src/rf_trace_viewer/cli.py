@@ -11,7 +11,7 @@ from rf_trace_viewer.exceptions import ConfigurationError
 from rf_trace_viewer.generator import ReportOptions, generate_report
 from rf_trace_viewer.parser import RawSpan, parse_file
 from rf_trace_viewer.providers.base import TraceProvider, TraceSpan
-from rf_trace_viewer.rf_model import interpret_tree
+from rf_trace_viewer.rf_model import RFRunModel, interpret_tree
 from rf_trace_viewer.tree import build_tree
 
 
@@ -339,6 +339,41 @@ def _is_xml_input(path: str) -> bool:
     return path.endswith(".xml")
 
 
+def _attach_log_counts_to_model(model: RFRunModel, log_count_map: dict[str, int]) -> None:
+    """Walk the model tree and set ``_log_count`` on nodes that have logs."""
+    from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest
+
+    stack: list = list(model.suites)
+    while stack:
+        node = stack.pop()
+        count = log_count_map.get(node.id, 0)
+        if count > 0:
+            node._log_count = count
+        if isinstance(node, RFSuite):
+            stack.extend(node.children)
+        elif isinstance(node, RFTest):
+            stack.extend(node.keywords)
+        elif isinstance(node, RFKeyword):
+            stack.extend(node.children)
+
+
+def _collect_embedded_logs(provider: TraceProvider) -> dict[str, list[dict]]:
+    """Collect all log data from a provider for embedding in static HTML.
+
+    Returns a dict keyed by span_id with lists of log record dicts.
+    Only works for providers that have a ``_log_index`` (i.e. JsonProvider).
+    """
+    log_index = getattr(provider, "_log_index", None)
+    if not log_index:
+        return {}
+    result: dict[str, list[dict]] = {}
+    for span_id, records in log_index.items():
+        if not records:
+            continue
+        result[span_id] = provider.get_logs(span_id, "")
+    return result
+
+
 def _run_provider_pipeline(config: AppConfig, report_options: ReportOptions) -> int:
     """Run the provider-based static report pipeline. Returns exit code."""
     from rf_trace_viewer.robot_semantics import RobotSemanticsLayer
@@ -350,12 +385,25 @@ def _run_provider_pipeline(config: AppConfig, report_options: ReportOptions) -> 
     vm = provider.fetch_all()
     vm = semantics.enrich(vm)
 
+    # Build log_count map from TraceSpan._log_count (set by provider)
+    log_count_map: dict[str, int] = {}
+    for ts in vm.spans:
+        count = getattr(ts, "_log_count", 0)
+        if count > 0:
+            log_count_map[ts.span_id] = count
+
     # Convert TraceSpan → RawSpan for existing pipeline
     raw_spans = [_trace_span_to_raw_span(ts) for ts in vm.spans]
     roots = build_tree(raw_spans)
     model = interpret_tree(roots)
 
-    html = generate_report(model, report_options)
+    # Attach log counts to model nodes
+    _attach_log_counts_to_model(model, log_count_map)
+
+    # Collect embedded log data for static HTML (no server to fetch from)
+    embedded_logs = _collect_embedded_logs(provider)
+
+    html = generate_report(model, report_options, embedded_logs=embedded_logs)
 
     output_path = config.output_path
     with open(output_path, "w", encoding="utf-8") as f:
@@ -365,10 +413,11 @@ def _run_provider_pipeline(config: AppConfig, report_options: ReportOptions) -> 
     passed = model.statistics.passed
     failed = model.statistics.failed
     skipped = model.statistics.skipped
+    log_msg = f" with {sum(log_count_map.values())} logs" if log_count_map else ""
     print(
         f"Report generated: {output_path} "
         f"({len(raw_spans)} spans, {test_count} tests: "
-        f"{passed} passed, {failed} failed, {skipped} skipped)"
+        f"{passed} passed, {failed} failed, {skipped} skipped{log_msg})"
     )
     return 0
 
@@ -588,7 +637,9 @@ def main() -> int:
 
         # For json provider, use the direct pipeline for backward compatibility
         # (parse_file → build_tree → interpret_tree → generate_report)
-        if config.provider == "json":
+        # When --logs-file is provided, use the provider pipeline so logs
+        # are parsed and _log_count is attached to spans.
+        if config.provider == "json" and not config.logs_path:
             if _is_xml_input(config.input_path):
                 print("Detected RF output.xml, converting to OTel format...")
                 spans = _parse_xml_input(config.input_path)

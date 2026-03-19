@@ -6009,3 +6009,180 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer.theme-dark .flow-styled-detail .detail-badge-not_run,
 .rf-trace-viewer.theme-dark .flow-styled-detail .detail-badge-skip { background: #5d4e00; color: #fff9c4; }
 .rf-trace-viewer.theme-dark .flow-styled-detail .detail-badge-running { background: #0d47a1; color: #bbdefb; }
+
+/* ── Correlated Logs (Detail Panel) ── */
+
+.rf-trace-viewer .logs-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.rf-trace-viewer .logs-button:hover {
+  background: var(--hover-bg);
+  border-color: var(--text-muted);
+}
+
+.rf-trace-viewer .logs-button:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.rf-trace-viewer .logs-container {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 4px 0 8px;
+  padding: 4px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+}
+
+.rf-trace-viewer .log-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.rf-trace-viewer .log-row:last-child {
+  border-bottom: none;
+}
+
+.rf-trace-viewer .log-row:hover {
+  background: var(--hover-bg);
+}
+
+.rf-trace-viewer .log-timestamp {
+  flex-shrink: 0;
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-trace-viewer .log-severity {
+  flex-shrink: 0;
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1.6;
+}
+
+.rf-trace-viewer .log-severity-error {
+  background: var(--status-fail-bg);
+  color: var(--status-fail);
+}
+
+.rf-trace-viewer .log-severity-warn {
+  background: var(--status-skip-bg);
+  color: var(--status-skip);
+}
+
+.rf-trace-viewer .log-severity-info {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.rf-trace-viewer .log-severity-debug {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
+/* Dark mode severity overrides */
+.rf-trace-viewer.theme-dark .log-severity-info {
+  background: #0d2137;
+  color: #64b5f6;
+}
+
+.rf-trace-viewer .log-body {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.rf-trace-viewer .log-attributes-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rf-trace-viewer .log-attributes-toggle:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .log-attributes-toggle:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 1px;
+}
+
+.rf-trace-viewer .log-attributes {
+  width: 100%;
+  padding: 4px 8px 4px 16px;
+  font-size: 11px;
+}
+
+.rf-trace-viewer .log-attr-row {
+  display: flex;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.rf-trace-viewer .log-attr-key {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.rf-trace-viewer .log-attr-value {
+  color: var(--text-primary);
+  word-break: break-word;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.rf-trace-viewer .log-loading {
+  padding: 6px 10px;
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.rf-trace-viewer .log-error {
+  padding: 6px 10px;
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--status-fail);
+  background: var(--status-fail-bg);
+  border-radius: 3px;
+  border: 1px solid var(--status-fail);
+}

@@ -246,10 +246,17 @@ def embed_viewer_assets() -> tuple[str, str]:
     return "\n".join(js_parts), "\n".join(css_parts)
 
 
-def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> str:
+def generate_report(
+    model: RFRunModel,
+    options: ReportOptions | None = None,
+    embedded_logs: dict[str, list[dict]] | None = None,
+) -> str:
     """Generate a self-contained HTML5 report string.
 
     The output contains all data, JS, and CSS inline — no external dependencies.
+
+    When *embedded_logs* is provided, the log data is embedded as
+    ``window.__RF_LOG_DATA__`` so the viewer can display logs without a server.
     """
     if options is None:
         options = ReportOptions()
@@ -272,6 +279,12 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
         data_script = f'window.__RF_TRACE_DATA_GZ__ = "{b64_string}";\n'
     else:
         data_script = f"window.__RF_TRACE_DATA__ = {data_json};\n"
+
+    # Embed log data for static/offline reports
+    logs_script = ""
+    if embedded_logs:
+        logs_json = json.dumps(embedded_logs, separators=(",", ":"))
+        logs_script = f"window.__RF_LOG_DATA__ = {logs_json};\n"
 
     # Resolve and embed logo as data URI
     if options.logo_path:
@@ -302,6 +315,7 @@ def generate_report(model: RFRunModel, options: ReportOptions | None = None) -> 
         '<div class="rf-trace-viewer"></div>\n'
         "<script>\n"
         f"{data_script}"
+        f"{logs_script}"
         f"{logo_script}"
         f'window.__RF_VERSION__ = "{_escape_html(__version__)} ({_escape_html(__git_sha__)})";\n'
         "</script>\n"
