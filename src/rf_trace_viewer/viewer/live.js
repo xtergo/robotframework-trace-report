@@ -1526,7 +1526,8 @@
             status_message: ca['rf.status_message'] || '',
             message: ca['rf.message'] || '',
             events: _mapEvents(child.events),
-            children: buildKeywords(child.span_id)
+            children: buildKeywords(child.span_id),
+            _log_count: child._log_count || 0
           };
           // Extract source metadata if present
           var srcClass = ca['app.source.class'] || '';
@@ -1564,7 +1565,8 @@
             status_message: ca['rf.status_message'] || '',
             events: _mapEvents(child.events),
             attributes: ca,
-            children: buildKeywords(child.span_id)
+            children: buildKeywords(child.span_id),
+            _log_count: child._log_count || 0
           });
           // Extract source metadata for EXTERNAL spans
           var extSrcClass = ca['app.source.class'] || '';
@@ -1632,7 +1634,8 @@
           has_teardown: ca['rf.test.has_teardown'] === 'true',
           status_message: ca['rf.status_message'] || '',
           execution_id: ca[_execAttr] || '',
-          attributes: ca
+          attributes: ca,
+          _log_count: child._log_count || 0
         };
         tests.push(test);
       }
@@ -1682,7 +1685,8 @@
             status_message: ka['rf.status_message'] || '',
             message: ka['rf.message'] || '',
             events: _mapEvents(kChild.events),
-            children: buildKeywords(kChild.span_id)
+            children: buildKeywords(kChild.span_id),
+            _log_count: kChild._log_count || 0
           });
           // Extract source metadata if present (suite-level keywords)
           var srcClass = ka['app.source.class'] || '';
@@ -1738,7 +1742,8 @@
         metadata: {},
         children: children,
         execution_id: sa[_execAttr] || '',
-        attributes: sa
+        attributes: sa,
+        _log_count: suiteSpan._log_count || 0
       };
     }
 
@@ -1811,7 +1816,8 @@
             id: gSpan.span_id,
             attributes: gAttrs,
             events: _mapEvents(gSpan.events),
-            children: buildKeywords(gSpan.span_id)
+            children: buildKeywords(gSpan.span_id),
+            _log_count: gSpan._log_count || 0
           });
         }
 

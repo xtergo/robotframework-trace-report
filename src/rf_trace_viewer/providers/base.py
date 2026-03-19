@@ -42,6 +42,7 @@ class TraceSpan:
     events: list[dict] = field(default_factory=list)
     status_message: str = ""
     name: str = ""
+    _log_count: int = 0
 
     def __post_init__(self) -> None:
         if not self.span_id:

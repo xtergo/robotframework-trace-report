@@ -223,7 +223,7 @@ class TestPollNewSpansLogCount:
         by_id = {s.span_id: s for s in vm.spans}
         assert by_id["s1"]._log_count == 5
         assert by_id["s3"]._log_count == 2
-        assert not hasattr(by_id["s2"], "_log_count")
+        assert by_id["s2"]._log_count == 0
 
     def test_no_log_count_when_aggregate_fails(self):
         provider = SigNozProvider(_make_config())
@@ -240,7 +240,7 @@ class TestPollNewSpansLogCount:
         with patch.object(provider, "_api_request", side_effect=fake_api):
             vm = provider.poll_new_spans(since_ns=1_000_000_000)
         for span in vm.spans:
-            assert not hasattr(span, "_log_count")
+            assert span._log_count == 0
 
     def test_no_log_count_query_when_no_spans(self):
         provider = SigNozProvider(_make_config())

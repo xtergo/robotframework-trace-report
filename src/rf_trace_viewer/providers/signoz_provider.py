@@ -354,7 +354,7 @@ class SigNozProvider(TraceProvider):
             for span in spans:
                 count = log_counts.get(span.span_id)
                 if count is not None:
-                    span._log_count = count  # type: ignore[attr-defined]
+                    span._log_count = count
 
         return TraceViewModel(spans=spans)
 

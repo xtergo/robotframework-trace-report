@@ -266,6 +266,32 @@ function _createIndentControl() {
 }
 
 /**
+ * Compute _descendant_log_count on each node by walking the tree post-order.
+ * This is needed for live mode where the server only sets _log_count on
+ * individual spans but doesn't compute the bubble-up count.
+ * @param {Array} suites - Array of suite data objects
+ */
+function _computeDescendantLogCounts(suites) {
+  function walk(node) {
+    var direct = node._log_count || 0;
+    var total = direct;
+    var children = node.children || [];
+    for (var i = 0; i < children.length; i++) {
+      total += walk(children[i]);
+    }
+    var keywords = node.keywords || [];
+    for (var j = 0; j < keywords.length; j++) {
+      total += walk(keywords[j]);
+    }
+    node._descendant_log_count = total - direct;
+    return total;
+  }
+  for (var i = 0; i < suites.length; i++) {
+    walk(suites[i]);
+  }
+}
+
+/**
  * Render the tree view into the given container.
  * @param {HTMLElement} container
  * @param {Object} model - RFRunModel with suites array
@@ -276,6 +302,10 @@ function renderTree(container, model) {
   _treeContainer = container;
   _currentFilteredSpanIds = null; // null = show all
   _logCache = {}; // Clear log cache on data reset
+
+  // Compute _descendant_log_count for parent nodes (needed for live mode
+  // where the server only provides _log_count on individual spans)
+  _computeDescendantLogCounts(model.suites || []);
   
   _renderTreeWithFilter(container, model, null);
 

@@ -205,7 +205,7 @@ class TestJsonProviderLogCount:
         vm = provider.fetch_all()
 
         span = vm.spans[0]
-        assert not hasattr(span, "_log_count")
+        assert not hasattr(span, "_log_count") or span._log_count == 0
 
     def test_log_count_via_fetch_spans(self):
         content = "\n".join(
