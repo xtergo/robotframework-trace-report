@@ -1052,10 +1052,15 @@
           window.highlightNodeInTree(item.id);
         }
       } else if (item.type === 'suite') {
-        // Switch to Report tab, set suite filter
-        _switchTab('report');
-        if (typeof window.RFTraceViewer !== 'undefined') {
-          eventBus.emit('set-suite-filter', { suiteName: item.name });
+        if (window.__RF_TRACE_LIVE__) {
+          // No Report tab in live mode — stay on Explorer
+          _switchTab('explorer');
+        } else {
+          // Switch to Report tab, set suite filter
+          _switchTab('report');
+          if (typeof window.RFTraceViewer !== 'undefined') {
+            eventBus.emit('set-suite-filter', { suiteName: item.name });
+          }
         }
       } else if (item.type === 'keyword') {
         // Switch to Explorer tab, highlight first occurrence
@@ -1750,9 +1755,11 @@
     tabNav.className = 'tab-nav';
     
     var tabs = [
-      { id: 'explorer', label: 'Explorer' },
-      { id: 'report', label: 'Report' }
+      { id: 'explorer', label: 'Explorer' }
     ];
+    if (!window.__RF_TRACE_LIVE__) {
+      tabs.push({ id: 'report', label: 'Report' });
+    }
     
     tabs.forEach(function(tab) {
       var tabBtn = document.createElement('button');
@@ -1899,15 +1906,16 @@
     body.appendChild(filterSidebar);
     explorerTab.appendChild(body);
 
-    // Report tab (consolidated test report view)
-    var reportTab = document.createElement('div');
-    reportTab.className = 'tab-pane';
-    reportTab.setAttribute('data-tab-pane', 'report');
-    var reportContainer = document.createElement('div');
-    reportContainer.className = 'report-page';
-    reportTab.appendChild(reportContainer);
-    
-    tabContent.appendChild(reportTab);
+    // Report tab (consolidated test report view) — not applicable in live mode
+    if (!window.__RF_TRACE_LIVE__) {
+      var reportTab = document.createElement('div');
+      reportTab.className = 'tab-pane';
+      reportTab.setAttribute('data-tab-pane', 'report');
+      var reportContainer = document.createElement('div');
+      reportContainer.className = 'report-page';
+      reportTab.appendChild(reportContainer);
+      tabContent.appendChild(reportTab);
+    }
     tabContent.appendChild(explorerTab);
 
     // Initialize views

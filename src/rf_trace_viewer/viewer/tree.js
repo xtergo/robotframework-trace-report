@@ -2305,7 +2305,7 @@ function _addStatusRow(panel, status) {
   labelEl.textContent = 'Status:';
   var badge = document.createElement('span');
   badge.className = 'detail-badge ' + _statusClass(status);
-  badge.textContent = status || 'NOT_RUN';
+  badge.textContent = status || '';
   row.appendChild(labelEl);
   row.appendChild(badge);
   panel.appendChild(row);
@@ -2592,7 +2592,7 @@ function _createTreeNode(opts) {
   var statusIcon = document.createElement('span');
   statusIcon.className = 'tree-status-icon ' + _statusClass(opts.status);
   statusIcon.textContent = _statusIcon(opts.status);
-  statusIcon.setAttribute('aria-label', opts.status || 'NOT_RUN');
+  statusIcon.setAttribute('aria-label', opts.status || (opts.kwType === 'GENERIC' || opts.kwType === 'EXTERNAL' ? 'PASS' : 'NOT_RUN'));
   row.appendChild(statusIcon);
 
   // Name

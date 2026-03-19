@@ -1556,7 +1556,7 @@
             keyword_type: 'EXTERNAL',
             service_name: svcName,
             args: '',
-            status: _mapStatus(child),
+            status: _mapStatus(child, true),
             start_time: child.start_time,
             end_time: child.end_time,
             elapsed_time: _elapsedMs(child.start_time, child.end_time),
@@ -1794,7 +1794,7 @@
             }
           }
 
-          var gStatus = _mapStatus(gSpan);
+          var gStatus = _mapStatus(gSpan, true);
           if (gStatus === 'FAIL') suiteHasFail = true;
           if (gSpan.start_time && gSpan.start_time < suiteMinStart) suiteMinStart = gSpan.start_time;
           if (gSpan.end_time && gSpan.end_time > suiteMaxEnd) suiteMaxEnd = gSpan.end_time;
@@ -1888,21 +1888,25 @@
     return count;
   }
 
-  /** Map rf.status attribute or OTLP status code → PASS/FAIL/SKIP/NOT_RUN. */
-  function _mapStatus(span) {
+  /** Map rf.status attribute or OTLP status code → PASS/FAIL/SKIP/NOT_RUN.
+   *  @param {boolean} [isGeneric] – true for non-RF spans; suppresses NOT_RUN
+   *    (a Robot Framework concept) and returns PASS for unset/unknown status.
+   */
+  function _mapStatus(span, isGeneric) {
     var rfStatus = span.attributes['rf.status'];
     if (rfStatus) {
       var upper = String(rfStatus).toUpperCase();
       if (upper === 'PASS') return 'PASS';
       if (upper === 'FAIL') return 'FAIL';
       if (upper === 'SKIP') return 'SKIP';
-      if (upper === 'NOT_RUN' || upper === 'NOT RUN') return 'NOT_RUN';
+      if (upper === 'NOT_RUN' || upper === 'NOT RUN') return isGeneric ? 'PASS' : 'NOT_RUN';
       return upper;
     }
     // Fall back to OTLP status code
     if (span.status_code === 'STATUS_CODE_OK') return 'PASS';
     if (span.status_code === 'STATUS_CODE_ERROR') return 'FAIL';
-    return 'NOT_RUN';
+    // NOT_RUN is RF-specific; generic spans treat unset as PASS
+    return isGeneric ? 'PASS' : 'NOT_RUN';
   }
 
   /** Elapsed time in milliseconds from nanosecond timestamps. */
