@@ -6,8 +6,11 @@ import gzip
 import json
 import sys
 import warnings
+from collections import namedtuple
 from dataclasses import dataclass, field
-from typing import IO, Any
+from typing import IO, Any, overload
+
+ParseResult = namedtuple("ParseResult", ["spans", "logs"])
 
 
 @dataclass
@@ -213,6 +216,33 @@ def parse_log_line(line: str) -> list[RawLogRecord]:
     return records
 
 
+def parse_line_any(line: str) -> tuple[list[RawSpan], list[RawLogRecord]]:
+    """Parse a single NDJSON line, dispatching to spans or logs.
+
+    Returns a tuple of ``(spans, logs)``. Exactly one list will be
+    non-empty depending on whether the line contains ``resourceSpans``
+    or ``resourceLogs``.  Lines that match neither are silently ignored
+    (both lists empty).
+    """
+    data = json.loads(line)
+
+    if not isinstance(data, dict):
+        return [], []
+
+    has_spans = "resource_spans" in data or "resourceSpans" in data
+    has_logs = "resource_logs" in data or "resourceLogs" in data
+
+    spans: list[RawSpan] = []
+    logs: list[RawLogRecord] = []
+
+    if has_spans:
+        spans = parse_line(line)
+    if has_logs:
+        logs = parse_log_line(line)
+
+    return spans, logs
+
+
 def _parse_raw_log_record(raw: dict[str, Any], resource_attrs: dict[str, Any]) -> RawLogRecord:
     """Convert a raw log record dict into a RawLogRecord dataclass instance."""
     trace_id = normalize_id(raw.get("trace_id") or raw.get("traceId", ""))
@@ -281,12 +311,26 @@ def _parse_raw_span(raw: dict[str, Any], resource_attrs: dict[str, Any]) -> RawS
     )
 
 
-def parse_stream(stream: IO) -> list[RawSpan]:
+@overload
+def parse_stream(stream: IO, *, include_logs: bool = ...) -> list[RawSpan]: ...
+
+
+@overload
+def parse_stream(stream: IO, *, include_logs: bool) -> ParseResult: ...
+
+
+def parse_stream(stream: IO, *, include_logs: bool = False):
     """Parse an NDJSON stream, returning all extracted spans.
+
+    When *include_logs* is ``True``, also extracts log records and
+    returns a :class:`ParseResult` named tuple with ``spans`` and
+    ``logs`` fields.  The default (``False``) returns ``list[RawSpan]``
+    for backward compatibility.
 
     Skips malformed lines with warnings. Handles empty streams.
     """
     spans: list[RawSpan] = []
+    logs: list[RawLogRecord] = []
     for line_num, line in enumerate(stream, start=1):
         if isinstance(line, bytes):
             line = line.decode("utf-8", errors="replace")
@@ -294,13 +338,20 @@ def parse_stream(stream: IO) -> list[RawSpan]:
         if not line:
             continue
         try:
-            line_spans = parse_line(line)
-            spans.extend(line_spans)
+            if include_logs:
+                line_spans, line_logs = parse_line_any(line)
+                spans.extend(line_spans)
+                logs.extend(line_logs)
+            else:
+                line_spans = parse_line(line)
+                spans.extend(line_spans)
         except (json.JSONDecodeError, ValueError) as exc:
             warnings.warn(
                 f"Skipping malformed line {line_num}: {exc}",
                 stacklevel=2,
             )
+    if include_logs:
+        return ParseResult(spans=spans, logs=logs)
     return spans
 
 
@@ -312,30 +363,43 @@ def _parse_whole_json(path: str) -> list[RawSpan]:
     return parse_line(json.dumps(data))
 
 
-def parse_file(path: str) -> list[RawSpan]:
+@overload
+def parse_file(path: str, *, include_logs: bool = ...) -> list[RawSpan]: ...
+
+
+@overload
+def parse_file(path: str, *, include_logs: bool) -> ParseResult: ...
+
+
+def parse_file(path: str, *, include_logs: bool = False):
     """Parse a trace file (NDJSON or standard OTLP JSON, plain or gzip).
+
+    When *include_logs* is ``True``, also extracts log records and
+    returns a :class:`ParseResult` named tuple.  The default (``False``)
+    returns ``list[RawSpan]`` for backward compatibility.
 
     Tries whole-file OTLP JSON first (handles pretty-printed exports from
     SigNoz/Jaeger). Falls back to NDJSON line-by-line parsing.
     """
     if path == "-":
-        return parse_stream(sys.stdin)
+        return parse_stream(sys.stdin, include_logs=include_logs)
 
     # Try whole-file JSON first (avoids noisy warnings on pretty-printed files)
-    try:
-        spans = _parse_whole_json(path)
-        if spans:
-            return spans
-    except (json.JSONDecodeError, ValueError, OSError):
-        pass
+    if not include_logs:
+        try:
+            spans = _parse_whole_json(path)
+            if spans:
+                return spans
+        except (json.JSONDecodeError, ValueError, OSError):
+            pass
 
     # Fall back to NDJSON line-by-line parsing
     if path.endswith(".gz"):
         with gzip.open(path, "rt", encoding="utf-8") as f:
-            return parse_stream(f)
+            return parse_stream(f, include_logs=include_logs)
 
     with open(path, encoding="utf-8") as f:
-        return parse_stream(f)
+        return parse_stream(f, include_logs=include_logs)
 
 
 def parse_incremental(path: str, offset: int = 0) -> tuple[list[RawSpan], int]:
