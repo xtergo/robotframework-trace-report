@@ -794,6 +794,138 @@ class SigNozProvider(TraceProvider):
         }
 
     # ------------------------------------------------------------------
+    # Log query builders
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_log_count_query(trace_ids: set[str]) -> dict:
+        """Build aggregate count query for logs grouped by span_id.
+
+        Returns a query_range payload with ``dataSource: "logs"``,
+        ``aggregateOperator: "count"``, ``groupBy: [span_id]``, and a
+        ``trace_id IN (...)`` filter covering all provided trace IDs.
+        """
+        now_s = int(time.time())
+        return {
+            "compositeQuery": {
+                "builderQueries": {
+                    "A": {
+                        "queryName": "A",
+                        "expression": "A",
+                        "dataSource": "logs",
+                        "aggregateOperator": "count",
+                        "groupBy": [
+                            {
+                                "key": "span_id",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            }
+                        ],
+                        "filters": {
+                            "items": [
+                                {
+                                    "key": {
+                                        "key": "trace_id",
+                                        "dataType": "string",
+                                        "type": "",
+                                        "isColumn": True,
+                                    },
+                                    "op": "in",
+                                    "value": sorted(trace_ids),
+                                }
+                            ],
+                            "op": "AND",
+                        },
+                        "selectColumns": [],
+                        "orderBy": [],
+                    }
+                },
+                "panelType": "graph",
+                "queryType": "builder",
+            },
+            "start": now_s - 86400 * 30,
+            "end": now_s,
+            "step": 60,
+        }
+
+    @staticmethod
+    def _build_log_query(span_id: str, trace_id: str) -> dict:
+        """Build list query for fetching log records for a specific span.
+
+        Returns a query_range payload with ``dataSource: "logs"``,
+        ``panelType: "list"``, filters on ``span_id`` and ``trace_id``,
+        ``selectColumns`` for ``timestamp``, ``severity_text``, ``body``,
+        and ``orderBy`` timestamp ascending.
+        """
+        now_s = int(time.time())
+        return {
+            "compositeQuery": {
+                "builderQueries": {
+                    "A": {
+                        "queryName": "A",
+                        "expression": "A",
+                        "dataSource": "logs",
+                        "aggregateOperator": "noop",
+                        "filters": {
+                            "items": [
+                                {
+                                    "key": {
+                                        "key": "trace_id",
+                                        "dataType": "string",
+                                        "type": "",
+                                        "isColumn": True,
+                                    },
+                                    "op": "=",
+                                    "value": trace_id,
+                                },
+                                {
+                                    "key": {
+                                        "key": "span_id",
+                                        "dataType": "string",
+                                        "type": "",
+                                        "isColumn": True,
+                                    },
+                                    "op": "=",
+                                    "value": span_id,
+                                },
+                            ],
+                            "op": "AND",
+                        },
+                        "selectColumns": [
+                            {
+                                "key": "timestamp",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            },
+                            {
+                                "key": "severity_text",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            },
+                            {
+                                "key": "body",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            },
+                        ],
+                        "orderBy": [{"columnName": "timestamp", "order": "asc"}],
+                        "limit": 1000,
+                        "offset": 0,
+                    }
+                },
+                "panelType": "list",
+                "queryType": "builder",
+            },
+            "start": now_s - 86400 * 30,
+            "end": now_s,
+            "step": 60,
+        }
+
+    # ------------------------------------------------------------------
     # Response parsers
     # ------------------------------------------------------------------
 
