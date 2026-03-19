@@ -24,6 +24,8 @@ var _activeServiceFilter = null; // null = show all, otherwise { svcName: true }
 
 // Track which nodes have their detail panel expanded (survives re-renders)
 var _expandedNodeIds = {};
+// Track which spans have their logs section open (survives re-renders)
+var _logsOpenIds = {};
 
 // Virtual scrolling state — only used when span count > VIRTUAL_THRESHOLD
 var _virtualState = null;
@@ -319,7 +321,9 @@ function renderTree(container, model) {
   _originalModel = model;
   _treeContainer = container;
   _currentFilteredSpanIds = null; // null = show all
-  _logCache = {}; // Clear log cache on data reset
+  // Don't clear _logCache on live re-renders — cached logs are still valid.
+  // The cache is keyed by span_id and fetched via XHR; clearing it forces
+  // unnecessary re-fetches every 10 seconds.
 
   // Compute _descendant_log_count for parent nodes (needed for live mode
   // where the server only provides _log_count on individual spans)
@@ -1317,6 +1321,10 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
         expToggle.textContent = '\u25bc';
         expToggle.setAttribute('aria-label', 'Collapse');
       }
+      // If the user had logs open for this span, re-render them from cache
+      if (expDetail && _logsOpenIds[expId] && _logCache[expId]) {
+        _renderLogsContainer(expDetail, _logCache[expId]);
+      }
       // Expand ancestors so the node is visible
       var expAnc = expNode.parentElement;
       while (expAnc && expAnc !== container) {
@@ -2161,6 +2169,7 @@ function _renderLogsButton(panel, data) {
 
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
+    _logsOpenIds[data.id] = true;
     _fetchAndRenderLogs(panel, data.id, data.trace_id);
   });
 
@@ -3253,7 +3262,10 @@ function _toggleNode(nodeEl) {
       toggleBtn.textContent = '\u25b6'; // ▶
       toggleBtn.setAttribute('aria-label', 'Expand');
     }
-    if (spanId) delete _expandedNodeIds[spanId];
+    if (spanId) {
+      delete _expandedNodeIds[spanId];
+      delete _logsOpenIds[spanId];
+    }
   } else {
     // Materialize lazy children on first expand
     if (nodeEl._lazyChildren) {
@@ -3300,6 +3312,7 @@ function _setAllExpanded(container, expand) {
   // Clear expanded tracking when collapsing all
   if (!expand) {
     _expandedNodeIds = {};
+    _logsOpenIds = {};
   }
 
   // Original mode — DOM-based expand/collapse
