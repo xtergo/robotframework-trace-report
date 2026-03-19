@@ -338,13 +338,13 @@ function renderTree(container, model) {
   _computeDescendantLogCounts(model.suites || []);
 
   // Guard: prevent filter-changed listener from triggering a redundant
-  // _renderTreeWithFilter while we are already inside renderTree.
-  // initSearch (called right after renderTree in live mode) fires
-  // filter-changed which would destroy and rebuild the tree a second time,
-  // wiping out the expanded-node restoration we just performed.
+  // _renderTreeWithFilter.  In live mode, _renderAllViews calls renderTree
+  // and then initSearch — initSearch fires filter-changed synchronously,
+  // which would destroy and rebuild the tree a second time.  The guard
+  // must stay active until the current JS turn completes (setTimeout 0).
   _treeRenderInProgress = true;
   _renderTreeWithFilter(container, model, null);
-  _treeRenderInProgress = false;
+  setTimeout(function () { _treeRenderInProgress = false; }, 0);
 
   // Set up synchronization with timeline
   setupTreeSynchronization();
