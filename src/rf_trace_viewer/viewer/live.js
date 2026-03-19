@@ -2034,6 +2034,11 @@
     var newSpanCount = _countModelSpans(model);
     console.log('[live] _renderAllViews: suites=' + suiteCount + ', modelSpans=' + newSpanCount);
 
+    // Preserve page scroll position — DOM mutations during render can cause
+    // the browser to auto-adjust the page scroll (sentinel height changes,
+    // innerHTML clears, etc.).  We restore it after all views are updated.
+    var savedPageScroll = document.documentElement.scrollTop || document.body.scrollTop;
+
     // Track whether this call performs the first timeline init (for deferred auto-compact)
     var didFirstTimelineInit = false;
 
@@ -2097,6 +2102,13 @@
     if (window.RFTraceViewer && window.RFTraceViewer.emit) {
       window.RFTraceViewer.emit('live-update', { model: model });
     }
+
+    // Restore page scroll position after all DOM mutations are done.
+    // Use requestAnimationFrame so the browser finishes layout first.
+    requestAnimationFrame(function () {
+      document.documentElement.scrollTop = savedPageScroll;
+      document.body.scrollTop = savedPageScroll; // Safari fallback
+    });
   }
 
   /* ── 8. Service filter ────────────────────────────────────────── */
