@@ -340,9 +340,14 @@ def _is_xml_input(path: str) -> bool:
 
 
 def _attach_log_counts_to_model(model: RFRunModel, log_count_map: dict[str, int]) -> None:
-    """Walk the model tree and set ``_log_count`` on nodes that have logs."""
+    """Walk the model tree and set ``_log_count`` on nodes that have logs.
+
+    Also computes ``_descendant_log_count`` on parent nodes so the tree
+    row can show an indicator when children have logs.
+    """
     from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest
 
+    # First pass: set direct _log_count
     stack: list = list(model.suites)
     while stack:
         node = stack.pop()
@@ -355,6 +360,24 @@ def _attach_log_counts_to_model(model: RFRunModel, log_count_map: dict[str, int]
             stack.extend(node.keywords)
         elif isinstance(node, RFKeyword):
             stack.extend(node.children)
+
+    # Second pass: bubble up descendant log counts (post-order)
+    def _bubble(node: RFSuite | RFTest | RFKeyword) -> int:
+        total = node._log_count
+        children: list = []
+        if isinstance(node, RFSuite):
+            children = node.children
+        elif isinstance(node, RFTest):
+            children = node.keywords
+        elif isinstance(node, RFKeyword):
+            children = node.children
+        for child in children:
+            total += _bubble(child)
+        node._descendant_log_count = total - node._log_count
+        return total
+
+    for suite in model.suites:
+        _bubble(suite)
 
 
 def _collect_embedded_logs(provider: TraceProvider) -> dict[str, list[dict]]:

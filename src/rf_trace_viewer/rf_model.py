@@ -56,6 +56,7 @@ class RFSuite:
     _is_generic_service: bool = False
     _log_count: int = 0
     trace_id: str = ""
+    _descendant_log_count: int = 0
 
 
 @dataclass
@@ -76,6 +77,7 @@ class RFTest:
     status_message: str = ""
     _log_count: int = 0
     trace_id: str = ""
+    _descendant_log_count: int = 0
 
 
 @dataclass
@@ -102,6 +104,7 @@ class RFKeyword:
     attributes: dict[str, Any] = field(default_factory=dict)
     _log_count: int = 0
     trace_id: str = ""
+    _descendant_log_count: int = 0
 
 
 @dataclass

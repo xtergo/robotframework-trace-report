@@ -6010,6 +6010,36 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer.theme-dark .flow-styled-detail .detail-badge-skip { background: #5d4e00; color: #fff9c4; }
 .rf-trace-viewer.theme-dark .flow-styled-detail .detail-badge-running { background: #0d47a1; color: #bbdefb; }
 
+/* ── Correlated Logs (Tree Row Indicator) ── */
+
+.rf-trace-viewer .tree-log-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rf-trace-viewer .tree-log-direct {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.rf-trace-viewer .tree-log-direct:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: var(--text-primary);
+}
+
+.rf-trace-viewer .tree-log-descendant {
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
 /* ── Correlated Logs (Detail Panel) ── */
 
 .rf-trace-viewer .logs-button {

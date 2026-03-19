@@ -2941,6 +2941,37 @@ function _createTreeNode(opts) {
   durEl.textContent = formatDuration(opts.elapsed || 0);
   row.appendChild(durEl);
 
+  // Log indicator badge on tree row
+  if (opts.data) {
+    var directLogs = opts.data._log_count || 0;
+    var descendantLogs = opts.data._descendant_log_count || 0;
+    if (directLogs > 0) {
+      var logBadge = document.createElement('span');
+      logBadge.className = 'tree-log-badge tree-log-direct';
+      logBadge.textContent = '\ud83d\udccb ' + directLogs;
+      logBadge.title = directLogs + ' log record' + (directLogs > 1 ? 's' : '') + ' on this span';
+      logBadge.addEventListener('click', function (e) {
+        e.stopPropagation();
+        // Open the node and auto-click the logs button
+        var detailEl = wrapper.querySelector(':scope > .detail-panel');
+        if (detailEl && detailEl.style.display === 'none') {
+          _toggleNode(wrapper);
+        }
+        setTimeout(function () {
+          var logsBtn = wrapper.querySelector(':scope > .detail-panel .logs-button');
+          if (logsBtn) logsBtn.click();
+        }, 50);
+      });
+      row.appendChild(logBadge);
+    } else if (descendantLogs > 0) {
+      var descBadge = document.createElement('span');
+      descBadge.className = 'tree-log-badge tree-log-descendant';
+      descBadge.textContent = '\ud83d\udccb \u2193';
+      descBadge.title = descendantLogs + ' log record' + (descendantLogs > 1 ? 's' : '') + ' in children';
+      row.appendChild(descBadge);
+    }
+  }
+
   // Mini-timeline sparkline for test nodes
   if (opts.type === 'test' && opts.maxSiblingDuration > 0) {
     var sparkline = document.createElement('span');
