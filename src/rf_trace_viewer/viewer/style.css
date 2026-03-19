@@ -989,7 +989,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer .tree-row.kw-try .node-type { background: #e0f2f1; color: #00695c; }
 .rf-trace-viewer .tree-row.kw-except .node-type { background: #e0f7fa; color: #00838f; }
 .rf-trace-viewer .tree-row.kw-finally .node-type { background: #e0f7fa; color: #00838f; }
-.rf-trace-viewer .tree-row.kw-generic .node-type { background: #e0f2f1; color: #00695c; }
+.rf-trace-viewer .tree-row.kw-generic .node-type { background: #e0f2f1; color: #212121; }
 /* Indigo */
 .rf-trace-viewer .tree-row.kw-group .node-type { background: #e8eaf6; color: #1a237e; }
 /* Red */
@@ -1008,7 +1008,7 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 .rf-trace-viewer.theme-dark .tree-row.kw-try .node-type { background: #0a2924; color: #4db6ac; }
 .rf-trace-viewer.theme-dark .tree-row.kw-except .node-type { background: #0a2a30; color: #4dd0e1; }
 .rf-trace-viewer.theme-dark .tree-row.kw-finally .node-type { background: #0a2a30; color: #4dd0e1; }
-.rf-trace-viewer.theme-dark .tree-row.kw-generic .node-type { background: #0a2924; color: #4db6ac; }
+.rf-trace-viewer.theme-dark .tree-row.kw-generic .node-type { background: #0a2924; color: #e0f2f1; }
 .rf-trace-viewer.theme-dark .tree-row.kw-group .node-type { background: #141730; color: #9fa8da; }
 .rf-trace-viewer.theme-dark .tree-row.kw-error .node-type { background: #3a1b1b; color: #ef5350; }
 
