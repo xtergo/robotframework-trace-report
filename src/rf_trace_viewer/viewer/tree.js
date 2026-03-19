@@ -2977,6 +2977,26 @@ function _extractEventMessage(evt) {
   // Fallback to event name
   return evt.name || '';
 }
+/**
+ * Walk the data subtree depth-first and return the span ID of the first
+ * node that has direct logs of the given severity.
+ */
+function _findFirstWithSeverity(data, severity) {
+  if (data._log_severity_counts && data._log_severity_counts[severity] > 0) {
+    return data.id;
+  }
+  var kids = data.children || [];
+  for (var i = 0; i < kids.length; i++) {
+    var r = _findFirstWithSeverity(kids[i], severity);
+    if (r) return r;
+  }
+  var kws = data.keywords || [];
+  for (var j = 0; j < kws.length; j++) {
+    var r2 = _findFirstWithSeverity(kws[j], severity);
+    if (r2) return r2;
+  }
+  return null;
+}
 
 /**
  * Create a single tree node DOM element.
@@ -3155,8 +3175,17 @@ function _createTreeNode(opts) {
         badge.textContent = count;
         badge.title = count + ' ' + sev + ' log' + (count > 1 ? 's' : '') +
           (isDirect ? '' : ' (in children)');
+        badge.style.cursor = 'pointer';
         badge.addEventListener('click', function (e) {
           e.stopPropagation();
+          // Navigate to first descendant (or self) with this severity
+          var targetId = _findFirstWithSeverity(opts.data, sev);
+          if (targetId) {
+            highlightNodeInTree(targetId);
+            if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+              window.RFTraceViewer.emit('navigate-to-span', { spanId: targetId, source: 'tree' });
+            }
+          }
         });
         row.appendChild(badge);
       };
@@ -3188,7 +3217,20 @@ function _createTreeNode(opts) {
         fallbackBadge.title = (directLogs + descendantLogs) + ' log record' +
           ((directLogs + descendantLogs) > 1 ? 's' : '') +
           (hasDirect ? '' : ' (in children)');
-        fallbackBadge.addEventListener('click', function (e) { e.stopPropagation(); });
+        fallbackBadge.style.cursor = 'pointer';
+        fallbackBadge.addEventListener('click', function (e) {
+          e.stopPropagation();
+          // Fallback: navigate to first descendant with any logs
+          var targetId = _findFirstWithSeverity(opts.data, 'INFO') ||
+                         _findFirstWithSeverity(opts.data, 'WARN') ||
+                         _findFirstWithSeverity(opts.data, 'ERROR');
+          if (targetId) {
+            highlightNodeInTree(targetId);
+            if (window.RFTraceViewer && window.RFTraceViewer.emit) {
+              window.RFTraceViewer.emit('navigate-to-span', { spanId: targetId, source: 'tree' });
+            }
+          }
+        });
         row.appendChild(fallbackBadge);
       }
     }

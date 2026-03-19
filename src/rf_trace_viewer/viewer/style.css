@@ -6052,6 +6052,11 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   opacity: 0.5;
 }
 
+.rf-trace-viewer .tree-log-sev:hover {
+  opacity: 0.85;
+  filter: brightness(1.15);
+}
+
 /* Dark theme adjustments */
 .rf-trace-viewer.theme-dark .tree-log-sev-error {
   background: rgba(239, 68, 68, 0.25);
