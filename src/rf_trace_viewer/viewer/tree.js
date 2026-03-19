@@ -32,6 +32,9 @@ var VIRTUAL_BUFFER = 20;
 // Built once per model load, avoids O(n) tree walks on every navigate-to-span.
 var _spanIndex = null;
 
+// Client-side log cache: { span_id: [{ timestamp, severity, body, attributes }] }
+var _logCache = {};
+
 function _buildSpanIndex(suites) {
   var idx = {};
   function walkKw(kw, parentId, testId) {
@@ -272,6 +275,7 @@ function renderTree(container, model) {
   _originalModel = model;
   _treeContainer = container;
   _currentFilteredSpanIds = null; // null = show all
+  _logCache = {}; // Clear log cache on data reset
   
   _renderTreeWithFilter(container, model, null);
 
@@ -1824,6 +1828,247 @@ function _formatTimestamp(nanos) {
   return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds + '.' + millis;
 }
 
+// ── Log Rendering Helpers ──
+
+/**
+ * Format a log timestamp as HH:MM:SS.mmm.
+ * @param {string} isoStr - ISO 8601 timestamp string
+ * @returns {string} Formatted time string
+ */
+function _formatLogTimestamp(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  var hours = ('0' + d.getHours()).slice(-2);
+  var minutes = ('0' + d.getMinutes()).slice(-2);
+  var seconds = ('0' + d.getSeconds()).slice(-2);
+  var millis = ('00' + d.getMilliseconds()).slice(-3);
+  return hours + ':' + minutes + ':' + seconds + '.' + millis;
+}
+
+/**
+ * Map severity string to CSS class suffix.
+ * @param {string} severity - Log severity (ERROR, FATAL, WARN, INFO, DEBUG, TRACE)
+ * @returns {string} CSS class name
+ */
+function _getSeverityClass(severity) {
+  var s = (severity || '').toUpperCase();
+  if (s === 'ERROR' || s === 'FATAL') return 'log-severity-error';
+  if (s === 'WARN' || s === 'WARNING') return 'log-severity-warn';
+  if (s === 'INFO') return 'log-severity-info';
+  return 'log-severity-debug';
+}
+
+/**
+ * Render a single log row element.
+ * @param {Object} log - { timestamp, severity, body, attributes }
+ * @returns {HTMLElement} The log row div
+ */
+function _renderLogRow(log) {
+  var row = document.createElement('div');
+  row.className = 'log-row';
+
+  var timeEl = document.createElement('span');
+  timeEl.className = 'log-timestamp';
+  timeEl.textContent = _formatLogTimestamp(log.timestamp);
+  row.appendChild(timeEl);
+
+  var sevEl = document.createElement('span');
+  sevEl.className = 'log-severity ' + _getSeverityClass(log.severity);
+  sevEl.textContent = log.severity || 'UNKNOWN';
+  row.appendChild(sevEl);
+
+  var bodyEl = document.createElement('span');
+  bodyEl.className = 'log-body';
+  bodyEl.textContent = log.body || '';
+  row.appendChild(bodyEl);
+
+  // Expandable attributes toggle (only when attributes non-empty)
+  var attrs = log.attributes;
+  if (attrs && typeof attrs === 'object' && Object.keys(attrs).length > 0) {
+    var toggleBtn = document.createElement('button');
+    toggleBtn.className = 'log-attributes-toggle';
+    toggleBtn.textContent = '\u25b6 attrs';
+    toggleBtn.setAttribute('aria-expanded', 'false');
+
+    var attrDiv = document.createElement('div');
+    attrDiv.className = 'log-attributes';
+    attrDiv.style.display = 'none';
+
+    var keys = Object.keys(attrs).sort();
+    for (var i = 0; i < keys.length; i++) {
+      var kv = document.createElement('div');
+      kv.className = 'log-attr-row';
+      var kEl = document.createElement('span');
+      kEl.className = 'log-attr-key';
+      kEl.textContent = keys[i] + ':';
+      var vEl = document.createElement('span');
+      vEl.className = 'log-attr-value';
+      var val = attrs[keys[i]];
+      vEl.textContent = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      kv.appendChild(kEl);
+      kv.appendChild(vEl);
+      attrDiv.appendChild(kv);
+    }
+
+    toggleBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var hidden = attrDiv.style.display === 'none';
+      attrDiv.style.display = hidden ? 'block' : 'none';
+      toggleBtn.textContent = (hidden ? '\u25bc' : '\u25b6') + ' attrs';
+      toggleBtn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+    });
+
+    row.appendChild(toggleBtn);
+    row.appendChild(attrDiv);
+  }
+
+  return row;
+}
+
+/**
+ * Render the logs container with log rows inside the detail panel.
+ * @param {HTMLElement} panel - The detail panel element
+ * @param {Array} logs - Array of log record objects
+ */
+function _renderLogsContainer(panel, logs) {
+  // Remove any existing logs container or loading/error indicators
+  var existing = panel.querySelector('.logs-container');
+  if (existing) existing.parentNode.removeChild(existing);
+  var existingLoading = panel.querySelector('.log-loading');
+  if (existingLoading) existingLoading.parentNode.removeChild(existingLoading);
+  var existingError = panel.querySelector('.log-error');
+  if (existingError) existingError.parentNode.removeChild(existingError);
+
+  if (!logs || logs.length === 0) return;
+
+  var container = document.createElement('div');
+  container.className = 'logs-container';
+
+  for (var i = 0; i < logs.length; i++) {
+    container.appendChild(_renderLogRow(logs[i]));
+  }
+
+  // Insert after the logs button
+  var logsBtn = panel.querySelector('.logs-button');
+  if (logsBtn && logsBtn.nextSibling) {
+    panel.insertBefore(container, logsBtn.nextSibling);
+  } else {
+    panel.appendChild(container);
+  }
+}
+
+/**
+ * Fetch logs from the server and render them in the detail panel.
+ * Uses _logCache to avoid redundant requests.
+ * @param {HTMLElement} panel - The detail panel element
+ * @param {string} spanId - The span ID to fetch logs for
+ * @param {string} traceId - The trace ID for the span
+ */
+function _fetchAndRenderLogs(panel, spanId, traceId) {
+  // Check cache first
+  if (_logCache[spanId]) {
+    _renderLogsContainer(panel, _logCache[spanId]);
+    return;
+  }
+
+  // Show loading indicator
+  var existingLoading = panel.querySelector('.log-loading');
+  if (existingLoading) existingLoading.parentNode.removeChild(existingLoading);
+  var existingError = panel.querySelector('.log-error');
+  if (existingError) existingError.parentNode.removeChild(existingError);
+  var existingContainer = panel.querySelector('.logs-container');
+  if (existingContainer) existingContainer.parentNode.removeChild(existingContainer);
+
+  var loading = document.createElement('div');
+  loading.className = 'log-loading';
+  loading.textContent = 'Loading logs\u2026';
+  var logsBtn = panel.querySelector('.logs-button');
+  if (logsBtn && logsBtn.nextSibling) {
+    panel.insertBefore(loading, logsBtn.nextSibling);
+  } else {
+    panel.appendChild(loading);
+  }
+
+  var url = '/api/logs?span_id=' + encodeURIComponent(spanId) + '&trace_id=' + encodeURIComponent(traceId);
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    // Remove loading indicator
+    var loadingEl = panel.querySelector('.log-loading');
+    if (loadingEl) loadingEl.parentNode.removeChild(loadingEl);
+
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        var logs = JSON.parse(xhr.responseText);
+        _logCache[spanId] = logs;
+        _renderLogsContainer(panel, logs);
+      } catch (e) {
+        _showLogError(panel, 'Failed to parse log response');
+      }
+    } else {
+      var errMsg = 'Failed to fetch logs';
+      try {
+        var errData = JSON.parse(xhr.responseText);
+        if (errData.error) errMsg = errData.error;
+      } catch (e) {
+        // use default message
+      }
+      _showLogError(panel, errMsg + ' (HTTP ' + xhr.status + ')');
+    }
+  };
+  xhr.onerror = function () {
+    var loadingEl = panel.querySelector('.log-loading');
+    if (loadingEl) loadingEl.parentNode.removeChild(loadingEl);
+    _showLogError(panel, 'Network error fetching logs');
+  };
+  xhr.send();
+}
+
+/**
+ * Show an inline error message in the detail panel for log fetch failures.
+ * @param {HTMLElement} panel - The detail panel element
+ * @param {string} message - Error message to display
+ */
+function _showLogError(panel, message) {
+  var existing = panel.querySelector('.log-error');
+  if (existing) existing.parentNode.removeChild(existing);
+
+  var errEl = document.createElement('div');
+  errEl.className = 'log-error';
+  errEl.textContent = message;
+
+  var logsBtn = panel.querySelector('.logs-button');
+  if (logsBtn && logsBtn.nextSibling) {
+    panel.insertBefore(errEl, logsBtn.nextSibling);
+  } else {
+    panel.appendChild(errEl);
+  }
+}
+
+/**
+ * Render a "📋 Logs (N)" button in the detail panel when data._log_count > 0.
+ * On click, fetches and renders logs (or shows cached logs).
+ * @param {HTMLElement} panel - The detail panel element
+ * @param {Object} data - Span data object with _log_count, id, trace_id
+ */
+function _renderLogsButton(panel, data) {
+  if (!data || !data._log_count || data._log_count <= 0) return;
+
+  var btn = document.createElement('button');
+  btn.className = 'logs-button';
+  btn.textContent = '\ud83d\udccb Logs (' + data._log_count + ')';
+  btn.setAttribute('aria-label', 'Show ' + data._log_count + ' correlated logs');
+
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    _fetchAndRenderLogs(panel, data.id, data.trace_id);
+  });
+
+  panel.appendChild(btn);
+}
+
 /**
  * Render a detail panel for a tree node based on its type.
  * Only renders fields that have actual content.
@@ -1883,6 +2128,7 @@ function _renderSuiteDetail(panel, data) {
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
+  _renderLogsButton(panel, data);
 }
 
 /** Render test-specific detail rows. */
@@ -1933,6 +2179,7 @@ function _renderTestDetail(panel, data) {
       panel.appendChild(summary);
     }
   }
+  _renderLogsButton(panel, data);
 }
 
 /**
@@ -2034,6 +2281,7 @@ function _renderKeywordDetail(panel, data) {
     if (data.status === 'FAIL' && data.status_message) {
       _addErrorBlock(panel, data.status_message);
     }
+    _renderLogsButton(panel, data);
     return;
   }
 
@@ -2095,6 +2343,7 @@ function _renderKeywordDetail(panel, data) {
   if (data.status === 'FAIL' && data.status_message) {
     _addErrorBlock(panel, data.status_message);
   }
+  _renderLogsButton(panel, data);
   if (data.events && data.events.length > 0) {
     var eventsWrap = document.createElement('div');
     eventsWrap.setAttribute('data-field', 'events');
