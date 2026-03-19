@@ -40,6 +40,14 @@ var _spanIndex = null;
 // Client-side log cache: { span_id: [{ timestamp, severity, body, attributes }] }
 var _logCache = {};
 
+// Guard flag: true while renderTree is executing, prevents filter-changed
+// listener from triggering a redundant _renderTreeWithFilter call.
+var _treeRenderInProgress = false;
+
+// True after the first _autoExpandFirstFailure call — prevents re-running
+// auto-expand on every live re-render (which fights with user state).
+var _initialExpandDone = false;
+
 function _buildSpanIndex(suites) {
   var idx = {};
   function walkKw(kw, parentId, testId) {
@@ -328,8 +336,15 @@ function renderTree(container, model) {
   // Compute _descendant_log_count for parent nodes (needed for live mode
   // where the server only provides _log_count on individual spans)
   _computeDescendantLogCounts(model.suites || []);
-  
+
+  // Guard: prevent filter-changed listener from triggering a redundant
+  // _renderTreeWithFilter while we are already inside renderTree.
+  // initSearch (called right after renderTree in live mode) fires
+  // filter-changed which would destroy and rebuild the tree a second time,
+  // wiping out the expanded-node restoration we just performed.
+  _treeRenderInProgress = true;
   _renderTreeWithFilter(container, model, null);
+  _treeRenderInProgress = false;
 
   // Set up synchronization with timeline
   setupTreeSynchronization();
@@ -338,6 +353,9 @@ function renderTree(container, model) {
   if (!_filterListenerRegistered && window.RFTraceViewer && window.RFTraceViewer.on) {
     _filterListenerRegistered = true;
     window.RFTraceViewer.on('filter-changed', function (data) {
+      // Skip if renderTree is currently executing — it already called
+      // _renderTreeWithFilter and we don't want to destroy that work.
+      if (_treeRenderInProgress) return;
       var filteredSpanIds = null;
       if (data.filteredSpans && data.resultCounts &&
           data.filteredSpans.length < data.resultCounts.total) {
@@ -1269,8 +1287,24 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   }
   container.appendChild(treeRoot);
 
-  // Auto-expand failure path or root suites on initial load
-  _autoExpandFirstFailure(treeRoot, suites);
+  // Auto-expand failure path or root suites on initial load only.
+  // On live re-renders, _expandedNodeIds handles restoration — running
+  // _autoExpandFirstFailure again would fight with user-expanded state
+  // and cause unnecessary scrolling.
+  if (!_initialExpandDone) {
+    _autoExpandFirstFailure(treeRoot, suites);
+    _initialExpandDone = true;
+    // Seed _expandedNodeIds with the auto-expanded nodes so they survive
+    // future re-renders without needing _autoExpandFirstFailure again.
+    var autoExpanded = treeRoot.querySelectorAll('.tree-children.expanded');
+    for (var ae = 0; ae < autoExpanded.length; ae++) {
+      var aeNode = autoExpanded[ae].parentElement;
+      if (aeNode && aeNode.getAttribute) {
+        var aeId = aeNode.getAttribute('data-span-id');
+        if (aeId) _expandedNodeIds[aeId] = true;
+      }
+    }
+  }
 
   // If a span was highlighted before the rebuild, re-highlight it and
   // scroll it into view so the user doesn't lose sight of it.
@@ -1304,6 +1338,9 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
   // Restore expanded nodes that were open before the re-render
   // (e.g. user expanded a detail panel, then live update rebuilt the tree)
   var expandedKeys = Object.keys(_expandedNodeIds);
+  if (expandedKeys.length > 0) {
+    console.log('[Tree] Restoring ' + expandedKeys.length + ' expanded nodes:', expandedKeys.join(', '));
+  }
   for (var ek = 0; ek < expandedKeys.length; ek++) {
     var expId = expandedKeys[ek];
     var expNode = container.querySelector('.tree-node[data-span-id="' + expId + '"]');
@@ -1321,9 +1358,11 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
         expToggle.textContent = '\u25bc';
         expToggle.setAttribute('aria-label', 'Collapse');
       }
+      console.log('[Tree] Restored node ' + expId + ': children=' + !!expChildren + ', detail=' + !!expDetail + ', logsOpen=' + !!_logsOpenIds[expId] + ', logsCached=' + !!_logCache[expId]);
       // If the user had logs open for this span, re-render them from cache
       if (expDetail && _logsOpenIds[expId] && _logCache[expId]) {
         _renderLogsContainer(expDetail, _logCache[expId]);
+        console.log('[Tree] Restored logs for ' + expId + ': ' + _logCache[expId].length + ' entries');
       }
       // Expand ancestors so the node is visible
       var expAnc = expNode.parentElement;
@@ -3278,6 +3317,7 @@ function _toggleNode(nodeEl) {
       toggleBtn.setAttribute('aria-label', 'Collapse');
     }
     if (spanId) _expandedNodeIds[spanId] = true;
+    console.log('[Tree] _toggleNode expand: ' + spanId + ', tracked=' + Object.keys(_expandedNodeIds).length);
     // Scroll so the clicked node is at the top of the visible area,
     // revealing its newly expanded children below.
     // Only scrolls if the node would otherwise be near the bottom;
