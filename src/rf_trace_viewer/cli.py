@@ -184,6 +184,12 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="<path>",
         help="Path to a custom SVG logo file for the viewer header",
     )
+    parser.add_argument(
+        "--logs-file",
+        default=None,
+        metavar="<path>",
+        help="Path to a separate NDJSON file containing OTLP log records (resourceLogs)",
+    )
 
 
 def _args_to_cli_dict(args: argparse.Namespace) -> dict:
@@ -218,6 +224,7 @@ def _args_to_cli_dict(args: argparse.Namespace) -> dict:
         "service_name": "service_name",
         "signoz_jwt_secret": "signoz_jwt_secret",
         "logo_path": "logo_path",
+        "logs_file": "logs_path",
     }
     result = {}
     for arg_name, config_name in mapping.items():
@@ -243,6 +250,18 @@ def _build_report_options(args: argparse.Namespace, logo_path: str | None = None
         max_spans=args.max_spans,
         logo_path=logo_path,
     )
+
+
+def _validate_logs_file(args: argparse.Namespace) -> int | None:
+    """Validate --logs-file exists if provided. Returns exit code on error, None on success."""
+    logs_file = getattr(args, "logs_file", None)
+    if logs_file is not None:
+        import os
+
+        if not os.path.exists(logs_file):
+            print(f"Error: logs file not found: {logs_file}", file=sys.stderr)
+            return 1
+    return None
 
 
 def _trace_span_to_raw_span(ts: TraceSpan) -> RawSpan:
@@ -294,7 +313,7 @@ def _build_provider(config: AppConfig) -> TraceProvider:
     else:
         from rf_trace_viewer.providers import JsonProvider
 
-        return JsonProvider(path=config.input_path)
+        return JsonProvider(path=config.input_path, logs_path=config.logs_path)
 
 
 def _parse_xml_input(path: str) -> list[RawSpan]:
@@ -532,11 +551,19 @@ def main() -> int:
         # Strip 'serve' from argv before parsing
         args = parser.parse_args(sys.argv[2:])
         args.live = True
+        err = _validate_logs_file(args)
+        if err is not None:
+            return err
         return _run_live_server(args)
 
     # Default (legacy) parser
     parser = _build_default_parser()
     args = parser.parse_args()
+
+    # Validate --logs-file early
+    err = _validate_logs_file(args)
+    if err is not None:
+        return err
 
     # Receiver mode implies live mode
     if args.receiver:

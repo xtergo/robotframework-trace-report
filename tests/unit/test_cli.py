@@ -1292,3 +1292,152 @@ class TestServeSubcommandEndToEnd:
             config = mock_build.call_args[0][0]
             assert config.signoz_endpoint == "http://localhost:3301"
             mock_build.assert_called_once()
+
+
+class TestLogsFileArgument:
+    """Test --logs-file CLI argument parsing and validation."""
+
+    def test_logs_file_argument_accepted_default_command(self, monkeypatch, tmp_path):
+        """--logs-file should be accepted and parsed correctly on the default command."""
+        logs_file = tmp_path / "logs.json"
+        logs_file.write_text("")
+        output_file = tmp_path / "report.html"
+
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "tests/fixtures/simple_trace.json",
+                "--logs-file",
+                str(logs_file),
+                "-o",
+                str(output_file),
+            ],
+        )
+
+        with (
+            patch("rf_trace_viewer.cli.parse_file") as mock_parse,
+            patch("rf_trace_viewer.cli.build_tree") as mock_tree,
+            patch("rf_trace_viewer.cli.interpret_tree") as mock_interpret,
+            patch("rf_trace_viewer.cli.generate_report") as mock_generate,
+        ):
+            mock_parse.return_value = []
+            mock_tree.return_value = []
+            mock_model = MagicMock()
+            mock_model.statistics.total_tests = 0
+            mock_model.statistics.passed = 0
+            mock_model.statistics.failed = 0
+            mock_model.statistics.skipped = 0
+            mock_interpret.return_value = mock_model
+            mock_generate.return_value = "<html></html>"
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    def test_logs_file_argument_accepted_serve_subcommand(self, monkeypatch, tmp_path):
+        """--logs-file should be accepted on the serve subcommand."""
+        logs_file = tmp_path / "logs.json"
+        logs_file.write_text("")
+
+        monkeypatch.setattr(
+            "sys.argv",
+            ["rf-trace-report", "serve", "--logs-file", str(logs_file)],
+        )
+
+        with patch("rf_trace_viewer.server.LiveServer") as mock_server_cls:
+            mock_server = MagicMock()
+            mock_server_cls.return_value = mock_server
+
+            exit_code = main()
+
+            assert exit_code == 0
+
+    def test_logs_file_nonexistent_exits_with_error(self, monkeypatch, capsys):
+        """--logs-file with non-existent file should print error and exit with code 1."""
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "tests/fixtures/simple_trace.json",
+                "--logs-file",
+                "/nonexistent/path/logs.json",
+            ],
+        )
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Error:" in captured.err
+        assert "logs file not found" in captured.err
+        assert "/nonexistent/path/logs.json" in captured.err
+
+    def test_logs_file_nonexistent_serve_exits_with_error(self, monkeypatch, capsys):
+        """--logs-file with non-existent file on serve subcommand should exit with code 1."""
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "serve",
+                "--logs-file",
+                "/nonexistent/path/logs.json",
+            ],
+        )
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Error:" in captured.err
+        assert "logs file not found" in captured.err
+
+    def test_logs_file_passed_to_json_provider(self, monkeypatch, tmp_path):
+        """--logs-file should be passed through to JsonProvider via config."""
+        logs_file = tmp_path / "logs.json"
+        logs_file.write_text("")
+        output_file = tmp_path / "report.html"
+
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "--logs-file",
+                str(logs_file),
+                "-o",
+                str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+            main()
+            config = mock_pipeline.call_args[0][0]
+            assert config.logs_path == str(logs_file)
+
+    def test_logs_file_default_is_none(self, monkeypatch, tmp_path):
+        """Without --logs-file, logs_path should be None in config."""
+        output_file = tmp_path / "report.html"
+
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "rf-trace-report",
+                "--provider",
+                "signoz",
+                "--signoz-endpoint",
+                "https://signoz.example.com",
+                "-o",
+                str(output_file),
+            ],
+        )
+
+        with patch("rf_trace_viewer.cli._run_provider_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = 0
+            main()
+            config = mock_pipeline.call_args[0][0]
+            assert config.logs_path is None

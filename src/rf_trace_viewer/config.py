@@ -64,6 +64,7 @@ class AppConfig:
     base_url: str | None = None
     lookback: str | None = None  # e.g. "10m", "1h", "30s" — only fetch recent spans in live mode
     logo_path: str | None = None  # path to custom SVG logo file
+    logs_path: str | None = None  # path to separate NDJSON logs file
 
     # K8s deployment settings
     log_format: str = "text"  # "text" | "json"
