@@ -347,14 +347,15 @@ class SigNozProvider(TraceProvider):
         response = self._api_request("/api/v3/query_range", query)
         spans = self._parse_spans(response)
 
-        # Attach _log_count to each span that has correlated logs
+        # Attach _log_count and _log_severity_counts to each span
         trace_ids = {s.trace_id for s in spans if s.trace_id}
         if trace_ids:
             log_counts = self._fetch_log_counts(trace_ids)
             for span in spans:
-                count = log_counts.get(span.span_id)
-                if count is not None:
-                    span._log_count = count
+                sev_map = log_counts.get(span.span_id)
+                if sev_map:
+                    span._log_severity_counts = sev_map
+                    span._log_count = sum(sev_map.values())
 
         return TraceViewModel(spans=spans)
 
@@ -808,11 +809,11 @@ class SigNozProvider(TraceProvider):
 
     @staticmethod
     def _build_log_count_query(trace_ids: set[str]) -> dict:
-        """Build aggregate count query for logs grouped by span_id.
+        """Build aggregate count query for logs grouped by span_id and severity.
 
         Returns a query_range payload with ``dataSource: "logs"``,
-        ``aggregateOperator: "count"``, ``groupBy: [span_id]``, and a
-        ``trace_id IN (...)`` filter covering all provided trace IDs.
+        ``aggregateOperator: "count"``, ``groupBy: [span_id, severity_text]``,
+        and a ``trace_id IN (...)`` filter covering all provided trace IDs.
         """
         now_s = int(time.time())
         return {
@@ -829,7 +830,13 @@ class SigNozProvider(TraceProvider):
                                 "dataType": "string",
                                 "type": "",
                                 "isColumn": True,
-                            }
+                            },
+                            {
+                                "key": "severity_text",
+                                "dataType": "string",
+                                "type": "",
+                                "isColumn": True,
+                            },
                         ],
                         "filters": {
                             "items": [
@@ -938,12 +945,13 @@ class SigNozProvider(TraceProvider):
     # Log fetchers
     # ------------------------------------------------------------------
 
-    def _fetch_log_counts(self, trace_ids: set[str]) -> dict[str, int]:
+    def _fetch_log_counts(self, trace_ids: set[str]) -> dict[str, dict[str, int]]:
         """Execute aggregate log count query with 5-second timeout.
 
-        Returns ``{span_id: count}`` mapping.  Catches ALL exceptions
-        (network errors, timeouts, non-200 responses) and returns ``{}``
-        on failure so the poll response is never blocked by log queries.
+        Returns ``{span_id: {severity: count}}`` mapping.  Catches ALL
+        exceptions (network errors, timeouts, non-200 responses) and
+        returns ``{}`` on failure so the poll response is never blocked
+        by log queries.
         """
         if not trace_ids:
             return {}
@@ -951,12 +959,15 @@ class SigNozProvider(TraceProvider):
             query = self._build_log_count_query(trace_ids)
             response = self._api_request("/api/v3/query_range", query, timeout=5)
             rows = self._parse_aggregate_rows(response)
-            counts: dict[str, int] = {}
+            counts: dict[str, dict[str, int]] = {}
             for row in rows:
                 span_id = row.get("span_id", "")
+                severity = row.get("severity_text", "") or "UNSPECIFIED"
                 count = int(row.get("count", 0))
                 if span_id and count > 0:
-                    counts[span_id] = count
+                    if span_id not in counts:
+                        counts[span_id] = {}
+                    counts[span_id][severity] = counts[span_id].get(severity, 0) + count
             return counts
         except Exception:
             logger.warning("Aggregate log count query failed", exc_info=True)

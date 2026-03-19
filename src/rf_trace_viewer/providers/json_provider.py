@@ -117,11 +117,17 @@ class JsonProvider(TraceProvider):
         )
 
     def _attach_log_counts(self, spans: list[TraceSpan]) -> list[TraceSpan]:
-        """Set ``_log_count`` on each span that has correlated logs."""
+        """Set ``_log_count`` and ``_log_severity_counts`` on each span."""
         for span in spans:
-            count = len(self._log_index.get(span.span_id, []))
+            logs = self._log_index.get(span.span_id, [])
+            count = len(logs)
             if count > 0:
                 span._log_count = count  # type: ignore[attr-defined]
+                sev: dict[str, int] = {}
+                for log in logs:
+                    s = log.severity_text or "UNSPECIFIED"
+                    sev[s] = sev.get(s, 0) + 1
+                span._log_severity_counts = sev  # type: ignore[attr-defined]
         return spans
 
     # ------------------------------------------------------------------

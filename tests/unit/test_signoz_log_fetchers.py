@@ -43,16 +43,31 @@ def _make_span_response(span_ids: list[str], trace_id: str = "trace001") -> dict
     return {"result": [{"list": rows}]}
 
 
-def _make_log_count_response(counts: dict[str, int]) -> dict:
-    """Build a SigNoz aggregate response for log counts (table format)."""
+def _make_log_count_response(counts: dict[str, int | dict[str, int]]) -> dict:
+    """Build a SigNoz aggregate response for log counts (table format).
+
+    ``counts`` can be either ``{span_id: total}`` (legacy) or
+    ``{span_id: {severity: count}}`` (new severity-grouped format).
+    """
     series_list = []
-    for span_id, count in counts.items():
-        series_list.append(
-            {
-                "labels": {"span_id": span_id},
-                "values": [{"timestamp": 0, "value": str(count)}],
-            }
-        )
+    for span_id, value in counts.items():
+        if isinstance(value, dict):
+            # severity-grouped: one series entry per (span_id, severity)
+            for severity, count in value.items():
+                series_list.append(
+                    {
+                        "labels": {"span_id": span_id, "severity_text": severity},
+                        "values": [{"timestamp": 0, "value": str(count)}],
+                    }
+                )
+        else:
+            # Legacy: single count, use UNSPECIFIED severity
+            series_list.append(
+                {
+                    "labels": {"span_id": span_id, "severity_text": "UNSPECIFIED"},
+                    "values": [{"timestamp": 0, "value": str(value)}],
+                }
+            )
     return {"data": {"result": [{"queryName": "A", "series": series_list}]}}
 
 
@@ -80,14 +95,22 @@ def _make_log_list_response(logs: list[dict]) -> dict:
 
 
 class TestFetchLogCountsSuccess:
-    """Verify _fetch_log_counts returns correct span_id -> count mapping."""
+    """Verify _fetch_log_counts returns correct span_id -> {severity: count} mapping."""
 
     def test_returns_counts_from_aggregate_response(self):
         provider = SigNozProvider(_make_config())
-        response = _make_log_count_response({"span-a": 3, "span-b": 1})
+        response = _make_log_count_response(
+            {
+                "span-a": {"INFO": 2, "ERROR": 1},
+                "span-b": {"WARN": 1},
+            }
+        )
         with patch.object(provider, "_api_request", return_value=response):
             result = provider._fetch_log_counts({"trace-1"})
-        assert result == {"span-a": 3, "span-b": 1}
+        assert result == {
+            "span-a": {"INFO": 2, "ERROR": 1},
+            "span-b": {"WARN": 1},
+        }
 
     def test_empty_trace_ids_returns_empty(self):
         provider = SigNozProvider(_make_config())
@@ -96,10 +119,16 @@ class TestFetchLogCountsSuccess:
 
     def test_skips_zero_count_entries(self):
         provider = SigNozProvider(_make_config())
-        response = _make_log_count_response({"span-a": 5, "span-b": 0})
+        response = _make_log_count_response(
+            {
+                "span-a": {"INFO": 5},
+                "span-b": {"INFO": 0},
+            }
+        )
         with patch.object(provider, "_api_request", return_value=response):
             result = provider._fetch_log_counts({"trace-1"})
-        assert result == {"span-a": 5}
+        assert "span-a" in result
+        assert result["span-a"] == {"INFO": 5}
         assert "span-b" not in result
 
 

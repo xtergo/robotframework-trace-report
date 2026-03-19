@@ -339,21 +339,31 @@ def _is_xml_input(path: str) -> bool:
     return path.endswith(".xml")
 
 
-def _attach_log_counts_to_model(model: RFRunModel, log_count_map: dict[str, int]) -> None:
+def _attach_log_counts_to_model(
+    model: RFRunModel,
+    log_count_map: dict[str, int],
+    log_severity_map: dict[str, dict[str, int]] | None = None,
+) -> None:
     """Walk the model tree and set ``_log_count`` on nodes that have logs.
 
-    Also computes ``_descendant_log_count`` on parent nodes so the tree
-    row can show an indicator when children have logs.
+    Also computes ``_descendant_log_count`` and severity breakdowns on
+    parent nodes so the tree row can show per-severity indicators.
     """
     from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest
 
-    # First pass: set direct _log_count
+    if log_severity_map is None:
+        log_severity_map = {}
+
+    # First pass: set direct _log_count and _log_severity_counts
     stack: list = list(model.suites)
     while stack:
         node = stack.pop()
         count = log_count_map.get(node.id, 0)
         if count > 0:
             node._log_count = count
+        sev = log_severity_map.get(node.id)
+        if sev:
+            node._log_severity_counts = dict(sev)
         if isinstance(node, RFSuite):
             stack.extend(node.children)
         elif isinstance(node, RFTest):
@@ -362,8 +372,9 @@ def _attach_log_counts_to_model(model: RFRunModel, log_count_map: dict[str, int]
             stack.extend(node.children)
 
     # Second pass: bubble up descendant log counts (post-order)
-    def _bubble(node: RFSuite | RFTest | RFKeyword) -> int:
+    def _bubble(node: RFSuite | RFTest | RFKeyword) -> tuple[int, dict[str, int]]:
         total = node._log_count
+        agg_sev: dict[str, int] = {}
         children: list = []
         if isinstance(node, RFSuite):
             children = node.children
@@ -372,9 +383,19 @@ def _attach_log_counts_to_model(model: RFRunModel, log_count_map: dict[str, int]
         elif isinstance(node, RFKeyword):
             children = node.children
         for child in children:
-            total += _bubble(child)
+            child_total, child_sev = _bubble(child)
+            total += child_total
+            for k, v in child_sev.items():
+                agg_sev[k] = agg_sev.get(k, 0) + v
         node._descendant_log_count = total - node._log_count
-        return total
+        # Descendant severity = aggregated children severity (excludes own)
+        node._descendant_log_severity_counts = dict(agg_sev)
+        # Return total including own severity for parent aggregation
+        own_sev = node._log_severity_counts or {}
+        merged: dict[str, int] = dict(agg_sev)
+        for k, v in own_sev.items():
+            merged[k] = merged.get(k, 0) + v
+        return total, merged
 
     for suite in model.suites:
         _bubble(suite)
@@ -410,10 +431,14 @@ def _run_provider_pipeline(config: AppConfig, report_options: ReportOptions) -> 
 
     # Build log_count map from TraceSpan._log_count (set by provider)
     log_count_map: dict[str, int] = {}
+    log_severity_map: dict[str, dict[str, int]] = {}
     for ts in vm.spans:
         count = getattr(ts, "_log_count", 0)
         if count > 0:
             log_count_map[ts.span_id] = count
+        sev = getattr(ts, "_log_severity_counts", None)
+        if sev:
+            log_severity_map[ts.span_id] = dict(sev)
 
     # Convert TraceSpan → RawSpan for existing pipeline
     raw_spans = [_trace_span_to_raw_span(ts) for ts in vm.spans]
@@ -421,7 +446,7 @@ def _run_provider_pipeline(config: AppConfig, report_options: ReportOptions) -> 
     model = interpret_tree(roots)
 
     # Attach log counts to model nodes
-    _attach_log_counts_to_model(model, log_count_map)
+    _attach_log_counts_to_model(model, log_count_map, log_severity_map)
 
     # Collect embedded log data for static HTML (no server to fetch from)
     embedded_logs = _collect_embedded_logs(provider)

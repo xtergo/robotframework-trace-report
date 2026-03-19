@@ -43,6 +43,7 @@ class TraceSpan:
     status_message: str = ""
     name: str = ""
     _log_count: int = 0
+    _log_severity_counts: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.span_id:

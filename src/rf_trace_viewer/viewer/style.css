@@ -6012,6 +6012,58 @@ html[data-theme="dark"], html[data-theme="dark"] body {
 
 /* ── Correlated Logs (Tree Row Indicator) ── */
 
+.rf-trace-viewer .tree-log-sev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 3px;
+  padding: 0 4px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 16px;
+}
+
+.rf-trace-viewer .tree-log-sev-error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.rf-trace-viewer .tree-log-sev-warn {
+  background: rgba(234, 179, 8, 0.2);
+  color: #ca8a04;
+}
+
+.rf-trace-viewer .tree-log-sev-info {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--text-muted);
+}
+
+.rf-trace-viewer .tree-log-sev-inherited {
+  opacity: 0.5;
+}
+
+/* Dark theme adjustments */
+.rf-trace-viewer.theme-dark .tree-log-sev-error {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.rf-trace-viewer.theme-dark .tree-log-sev-warn {
+  background: rgba(234, 179, 8, 0.25);
+  color: #fde047;
+}
+
+.rf-trace-viewer.theme-dark .tree-log-sev-info {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+/* Keep old class names working for backward compat */
 .rf-trace-viewer .tree-log-badge {
   display: inline-flex;
   align-items: center;

@@ -25,9 +25,11 @@ class TestBuildLogCountQuery:
     def test_group_by_span_id(self):
         query = SigNozProvider._build_log_count_query({"trace-1"})
         bq = query["compositeQuery"]["builderQueries"]["A"]
-        assert len(bq["groupBy"]) == 1
+        assert len(bq["groupBy"]) == 2
         assert bq["groupBy"][0]["key"] == "span_id"
         assert bq["groupBy"][0]["isColumn"] is True
+        assert bq["groupBy"][1]["key"] == "severity_text"
+        assert bq["groupBy"][1]["isColumn"] is True
 
     def test_filter_trace_id_in(self):
         trace_ids = {"trace-a", "trace-b", "trace-c"}

@@ -275,16 +275,31 @@ function _computeDescendantLogCounts(suites) {
   function walk(node) {
     var direct = node._log_count || 0;
     var total = direct;
+    var aggSev = {};
     var children = node.children || [];
     for (var i = 0; i < children.length; i++) {
-      total += walk(children[i]);
+      var childResult = walk(children[i]);
+      total += childResult.total;
+      for (var k in childResult.sev) {
+        aggSev[k] = (aggSev[k] || 0) + childResult.sev[k];
+      }
     }
     var keywords = node.keywords || [];
     for (var j = 0; j < keywords.length; j++) {
-      total += walk(keywords[j]);
+      var kwResult = walk(keywords[j]);
+      total += kwResult.total;
+      for (var k2 in kwResult.sev) {
+        aggSev[k2] = (aggSev[k2] || 0) + kwResult.sev[k2];
+      }
     }
     node._descendant_log_count = total - direct;
-    return total;
+    node._descendant_log_severity_counts = aggSev;
+    // Merge own + children for parent aggregation
+    var ownSev = node._log_severity_counts || {};
+    var merged = {};
+    for (var m in aggSev) { merged[m] = aggSev[m]; }
+    for (var o in ownSev) { merged[o] = (merged[o] || 0) + ownSev[o]; }
+    return { total: total, sev: merged };
   }
   for (var i = 0; i < suites.length; i++) {
     walk(suites[i]);
@@ -1024,7 +1039,9 @@ function _createVirtualRow(item, index) {
   }
 
   // Add click handler to row for toggle + navigate
-  newRow.addEventListener('click', function () {
+  newRow.addEventListener('click', function (e) {
+    // Ignore clicks on log severity badges (they are informational only)
+    if (e.target && e.target.getAttribute && e.target.getAttribute('data-log-badge')) return;
     // Emit navigate-to-span BEFORE toggle (toggle rebuilds DOM)
     if (item.id && window.RFTraceViewer && window.RFTraceViewer.emit) {
       window.RFTraceViewer.emit('navigate-to-span', { spanId: item.id, source: 'tree' });
@@ -2095,7 +2112,7 @@ function _renderLogsButton(panel, data) {
 
   var btn = document.createElement('button');
   btn.className = 'logs-button';
-  btn.textContent = '\ud83d\udccb Logs (' + data._log_count + ')';
+  btn.textContent = '\ud83d\uddd2 Logs (' + data._log_count + ')';
   btn.setAttribute('aria-label', 'Show ' + data._log_count + ' correlated logs');
 
   btn.addEventListener('click', function (e) {
@@ -2965,42 +2982,90 @@ function _createTreeNode(opts) {
   }
   row.appendChild(nameEl);
 
+  // Log severity indicator badges — placed BEFORE duration
+  // Shows per-severity counts (ERROR in red, WARN in yellow, INFO in blue)
+  // For parent nodes with no direct logs, shows aggregated descendant counts
+  if (opts.data) {
+    var directLogs = opts.data._log_count || 0;
+    var descendantLogs = opts.data._descendant_log_count || 0;
+    var directSev = opts.data._log_severity_counts || {};
+    var descSev = opts.data._descendant_log_severity_counts || {};
+
+    // Merge direct + descendant severity for display
+    var displaySev = {};
+    var hasDirect = directLogs > 0;
+    var hasDescendant = descendantLogs > 0;
+
+    if (hasDirect || hasDescendant) {
+      // Combine own + descendant severity counts for the badge display
+      var sevSource = hasDirect ? directSev : {};
+      var sevDesc = hasDescendant ? descSev : {};
+      // Always show combined (own + children) so parent nodes show totals
+      var allKeys = {};
+      var sk;
+      for (sk in directSev) { allKeys[sk] = true; }
+      for (sk in descSev) { allKeys[sk] = true; }
+
+      for (sk in allKeys) {
+        displaySev[sk] = (directSev[sk] || 0) + (descSev[sk] || 0);
+      }
+
+      // Render severity badges in priority order: ERROR, WARN, INFO, others
+      var sevOrder = ['ERROR', 'WARN', 'INFO'];
+      var rendered = {};
+      var _renderSevBadge = function (sev, count, isDirect) {
+        var badge = document.createElement('span');
+        var sevLower = sev.toLowerCase();
+        badge.className = 'tree-log-sev tree-log-sev-' + sevLower;
+        if (!isDirect) badge.classList.add('tree-log-sev-inherited');
+        badge.setAttribute('data-log-badge', '1');
+        badge.textContent = count;
+        badge.title = count + ' ' + sev + ' log' + (count > 1 ? 's' : '') +
+          (isDirect ? '' : ' (in children)');
+        badge.addEventListener('click', function (e) {
+          e.stopPropagation();
+        });
+        row.appendChild(badge);
+      };
+
+      for (var si = 0; si < sevOrder.length; si++) {
+        var sevName = sevOrder[si];
+        if (displaySev[sevName] && displaySev[sevName] > 0) {
+          _renderSevBadge(sevName, displaySev[sevName], !!directSev[sevName]);
+          rendered[sevName] = true;
+        }
+      }
+      // Render any remaining severities
+      for (sk in displaySev) {
+        if (!rendered[sk] && displaySev[sk] > 0) {
+          _renderSevBadge(sk, displaySev[sk], !!directSev[sk]);
+        }
+      }
+
+      // If we have severity data but it's empty (old data without severity),
+      // fall back to a simple total count badge
+      var hasSevData = false;
+      for (sk in displaySev) { if (displaySev[sk] > 0) { hasSevData = true; break; } }
+      if (!hasSevData && (directLogs > 0 || descendantLogs > 0)) {
+        var fallbackBadge = document.createElement('span');
+        fallbackBadge.className = 'tree-log-sev tree-log-sev-info';
+        if (!hasDirect) fallbackBadge.classList.add('tree-log-sev-inherited');
+        fallbackBadge.setAttribute('data-log-badge', '1');
+        fallbackBadge.textContent = directLogs + descendantLogs;
+        fallbackBadge.title = (directLogs + descendantLogs) + ' log record' +
+          ((directLogs + descendantLogs) > 1 ? 's' : '') +
+          (hasDirect ? '' : ' (in children)');
+        fallbackBadge.addEventListener('click', function (e) { e.stopPropagation(); });
+        row.appendChild(fallbackBadge);
+      }
+    }
+  }
+
   // Duration
   var durEl = document.createElement('span');
   durEl.className = 'tree-duration';
   durEl.textContent = formatDuration(opts.elapsed || 0);
   row.appendChild(durEl);
-
-  // Log indicator badge on tree row
-  if (opts.data) {
-    var directLogs = opts.data._log_count || 0;
-    var descendantLogs = opts.data._descendant_log_count || 0;
-    if (directLogs > 0) {
-      var logBadge = document.createElement('span');
-      logBadge.className = 'tree-log-badge tree-log-direct';
-      logBadge.textContent = '\ud83d\udccb ' + directLogs;
-      logBadge.title = directLogs + ' log record' + (directLogs > 1 ? 's' : '') + ' on this span';
-      logBadge.addEventListener('click', function (e) {
-        e.stopPropagation();
-        // Open the node and auto-click the logs button
-        var detailEl = wrapper.querySelector(':scope > .detail-panel');
-        if (detailEl && detailEl.style.display === 'none') {
-          _toggleNode(wrapper);
-        }
-        setTimeout(function () {
-          var logsBtn = wrapper.querySelector(':scope > .detail-panel .logs-button');
-          if (logsBtn) logsBtn.click();
-        }, 50);
-      });
-      row.appendChild(logBadge);
-    } else if (descendantLogs > 0) {
-      var descBadge = document.createElement('span');
-      descBadge.className = 'tree-log-badge tree-log-descendant';
-      descBadge.textContent = '\ud83d\udccb \u2193';
-      descBadge.title = descendantLogs + ' log record' + (descendantLogs > 1 ? 's' : '') + ' in children';
-      row.appendChild(descBadge);
-    }
-  }
 
   // Mini-timeline sparkline for test nodes
   if (opts.type === 'test' && opts.maxSiblingDuration > 0) {

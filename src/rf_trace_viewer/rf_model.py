@@ -57,6 +57,8 @@ class RFSuite:
     _log_count: int = 0
     trace_id: str = ""
     _descendant_log_count: int = 0
+    _log_severity_counts: dict[str, int] = field(default_factory=dict)
+    _descendant_log_severity_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -78,6 +80,8 @@ class RFTest:
     _log_count: int = 0
     trace_id: str = ""
     _descendant_log_count: int = 0
+    _log_severity_counts: dict[str, int] = field(default_factory=dict)
+    _descendant_log_severity_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -105,6 +109,8 @@ class RFKeyword:
     _log_count: int = 0
     trace_id: str = ""
     _descendant_log_count: int = 0
+    _log_severity_counts: dict[str, int] = field(default_factory=dict)
+    _descendant_log_severity_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
