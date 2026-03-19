@@ -27,6 +27,19 @@ class RawSpan:
     resource_attributes: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class RawLogRecord:
+    """A single log record extracted from an OTLP NDJSON log export."""
+
+    trace_id: str
+    span_id: str
+    timestamp_unix_nano: int
+    severity_text: str
+    body: str
+    attributes: dict[str, Any] = field(default_factory=dict)
+    resource_attributes: dict[str, Any] = field(default_factory=dict)
+
+
 def flatten_attributes(attrs: list[dict] | None) -> dict[str, Any]:
     """Convert OTLP attribute list to a flat dict.
 
@@ -146,6 +159,89 @@ def parse_line(line: str) -> list[RawSpan]:
                     continue
 
     return spans
+
+
+def parse_log_line(line: str) -> list[RawLogRecord]:
+    """Parse a single NDJSON line containing ``resourceLogs``.
+
+    Returns a list of RawLogRecord objects extracted from the line.
+    Raises ValueError if the JSON is malformed or doesn't contain
+    a valid ``resourceLogs`` structure.
+    """
+    data = json.loads(line)
+
+    if not isinstance(data, dict):
+        raise ValueError("Line is not a JSON object")
+
+    resource_logs = data.get("resource_logs", data.get("resourceLogs"))
+    if resource_logs is None or not isinstance(resource_logs, list):
+        raise ValueError("Missing or invalid resourceLogs")
+
+    records: list[RawLogRecord] = []
+
+    for rl in resource_logs:
+        if not isinstance(rl, dict):
+            continue
+
+        resource = rl.get("resource", {})
+        resource_attrs = flatten_attributes(
+            resource.get("attributes") if isinstance(resource, dict) else None
+        )
+
+        scope_logs = rl.get("scope_logs") or rl.get("scopeLogs") or []
+        if not isinstance(scope_logs, list):
+            continue
+
+        for sl in scope_logs:
+            if not isinstance(sl, dict):
+                continue
+            log_records = sl.get("log_records") or sl.get("logRecords") or []
+            if not isinstance(log_records, list):
+                continue
+
+            for raw in log_records:
+                if not isinstance(raw, dict):
+                    continue
+                try:
+                    record = _parse_raw_log_record(raw, resource_attrs)
+                    if not record.trace_id or not record.span_id:
+                        continue
+                    records.append(record)
+                except (KeyError, TypeError, ValueError):
+                    continue
+
+    return records
+
+
+def _parse_raw_log_record(raw: dict[str, Any], resource_attrs: dict[str, Any]) -> RawLogRecord:
+    """Convert a raw log record dict into a RawLogRecord dataclass instance."""
+    trace_id = normalize_id(raw.get("trace_id") or raw.get("traceId", ""))
+    span_id = normalize_id(raw.get("span_id") or raw.get("spanId", ""))
+
+    ts = raw.get("time_unix_nano") or raw.get("timeUnixNano", 0)
+    timestamp_unix_nano = int(ts)
+
+    severity_text = raw.get("severity_text") or raw.get("severityText") or ""
+
+    body_obj = raw.get("body", {})
+    if isinstance(body_obj, dict):
+        body = body_obj.get("string_value") or body_obj.get("stringValue") or ""
+    elif isinstance(body_obj, str):
+        body = body_obj
+    else:
+        body = ""
+
+    attributes = flatten_attributes(raw.get("attributes"))
+
+    return RawLogRecord(
+        trace_id=trace_id,
+        span_id=span_id,
+        timestamp_unix_nano=timestamp_unix_nano,
+        severity_text=severity_text,
+        body=body,
+        attributes=attributes,
+        resource_attributes=resource_attrs,
+    )
 
 
 def _parse_raw_span(raw: dict[str, Any], resource_attrs: dict[str, Any]) -> RawSpan:
