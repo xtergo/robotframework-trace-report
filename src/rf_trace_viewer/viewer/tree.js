@@ -1230,6 +1230,10 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
     prevHighlightId = prevHighlighted.getAttribute('data-span-id');
   }
 
+  // Save tree panel scroll position before destroying the DOM.
+  // container.innerHTML = '' resets scrollTop to 0; we restore it after rebuild.
+  var savedTreeScroll = container.scrollTop;
+
   // Original path for small trees
   container.innerHTML = '';
 
@@ -1327,11 +1331,9 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
         }
         ancestor = ancestor.parentElement;
       }
-      // Keep the highlighted node visible without jumping the viewport
-      requestAnimationFrame(function () {
-        var row = restoredNode.querySelector(':scope > .tree-row') || restoredNode;
-        row.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-      });
+      // Don't scroll to highlighted node on live re-renders — the user's
+      // scroll position is restored separately.  Only scroll on first render
+      // or explicit user navigation (handled by highlightNodeInTree).
     }
   }
 
@@ -1384,6 +1386,12 @@ function _renderTreeWithFilter(container, model, filteredSpanIds) {
       delete _expandedNodeIds[expId];
     }
   }
+
+  // Restore tree panel scroll position after all DOM mutations.
+  // Use requestAnimationFrame so the browser finishes layout first.
+  requestAnimationFrame(function () {
+    container.scrollTop = savedTreeScroll;
+  });
 
   var elapsed2 = Date.now() - t0;
   console.log('[Tree] Rendered ' + spanCount + ' spans in ' + elapsed2 + 'ms (lazy children enabled)');
@@ -3351,10 +3359,8 @@ function _toggleNode(nodeEl) {
     }
     if (spanId) _expandedNodeIds[spanId] = true;
     console.log('[Tree] _toggleNode expand: ' + spanId + ', tracked=' + Object.keys(_expandedNodeIds).length);
-    // Scroll so the clicked node is at the top of the visible area,
-    // revealing its newly expanded children below.
-    // Only scrolls if the node would otherwise be near the bottom;
-    // never scrolls the node above the top of the scroll container.
+    // Gentle scroll: only scroll if the node is mostly below the visible area.
+    // Avoids jarring jumps when the node is already reasonably visible.
     requestAnimationFrame(function () {
       var row = nodeEl.querySelector(':scope > .tree-row');
       if (!row) return;
@@ -3362,9 +3368,9 @@ function _toggleNode(nodeEl) {
       if (!scrollParent) return;
       var containerRect = scrollParent.getBoundingClientRect();
       var rowRect = row.getBoundingClientRect();
-      // If the row is in the bottom half of the container, scroll it to the top
-      if (rowRect.top > containerRect.top + containerRect.height * 0.4) {
-        var offset = rowRect.top - containerRect.top + scrollParent.scrollTop;
+      // Only scroll if the row is below the bottom 20% of the container
+      if (rowRect.top > containerRect.top + containerRect.height * 0.8) {
+        var offset = rowRect.top - containerRect.top + scrollParent.scrollTop - containerRect.height * 0.3;
         scrollParent.scrollTo({ top: offset, behavior: 'smooth' });
       }
     });
