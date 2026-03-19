@@ -44,11 +44,16 @@ def _make_span_response(span_ids: list[str], trace_id: str = "trace001") -> dict
 
 
 def _make_log_count_response(counts: dict[str, int]) -> dict:
-    """Build a SigNoz aggregate response for log counts (series/graph format)."""
+    """Build a SigNoz aggregate response for log counts (table format)."""
     series_list = []
     for span_id, count in counts.items():
-        series_list.append({"labels": {"span_id": span_id}, "values": [[1700000000, count]]})
-    return {"result": [{"series": series_list}]}
+        series_list.append(
+            {
+                "labels": {"span_id": span_id},
+                "values": [{"timestamp": 0, "value": str(count)}],
+            }
+        )
+    return {"data": {"result": [{"queryName": "A", "series": series_list}]}}
 
 
 def _make_log_list_response(logs: list[dict]) -> dict:

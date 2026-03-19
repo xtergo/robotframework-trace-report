@@ -47,9 +47,9 @@ class TestBuildLogCountQuery:
         items = query["compositeQuery"]["builderQueries"]["A"]["filters"]["items"]
         assert items[0]["value"] == sorted(trace_ids)
 
-    def test_panel_type_is_graph(self):
+    def test_panel_type_is_table(self):
         query = SigNozProvider._build_log_count_query({"t1"})
-        assert query["compositeQuery"]["panelType"] == "graph"
+        assert query["compositeQuery"]["panelType"] == "table"
 
     def test_query_type_is_builder(self):
         query = SigNozProvider._build_log_count_query({"t1"})

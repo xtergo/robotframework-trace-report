@@ -850,7 +850,7 @@ class SigNozProvider(TraceProvider):
                         "orderBy": [],
                     }
                 },
-                "panelType": "graph",
+                "panelType": "table",
                 "queryType": "builder",
             },
             "start": now_s - 86400 * 30,
@@ -1108,14 +1108,22 @@ class SigNozProvider(TraceProvider):
                 columns = [c.get("name", "") for c in (table.get("columns") or [])]
                 for trow in table.get("rows") or []:
                     rows.append(dict(zip(columns, trow, strict=False)))
-            # "series" (graph) format: [{labels: {k: v}, values: [[ts, val], ...]}, ...]
+            # "series" format: [{labels: {k: v}, values: [...]}, ...]
+            # Values can be [[ts, val], ...] (graph) or [{"timestamp":..,"value":..}, ...] (table)
             for ts_series in series.get("series") or []:
                 labels = ts_series.get("labels") or {}
                 values = ts_series.get("values") or []
-                # Sum all time-step values to get the total count
-                total = sum(v for _, v in values if isinstance(v, (int, float)))
+                total = 0
+                for entry in values:
+                    if isinstance(entry, dict):
+                        v = entry.get("value", 0)
+                        total += int(float(v)) if v else 0
+                    elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                        v = entry[1]
+                        if isinstance(v, (int, float)):
+                            total += int(v)
                 row_data = dict(labels)
-                row_data["count"] = int(total)
+                row_data["count"] = total
                 rows.append(row_data)
         return rows
 
