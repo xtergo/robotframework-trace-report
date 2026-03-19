@@ -3585,6 +3585,7 @@ function highlightNodeInTree(spanId) {
         if (ancestorNode) {
           _materializeIfNeeded(ancestorNode);
           _expandNodeOnly(ancestorNode);
+          _expandedNodeIds[ancestorPath[a]] = true;
           var chEl = ancestorNode.querySelector(':scope > .tree-children');
           if (chEl) chEl.classList.add('expanded');
         }
@@ -3605,6 +3606,7 @@ function highlightNodeInTree(spanId) {
           if (faNode) {
             _materializeIfNeeded(faNode);
             _expandNodeOnly(faNode);
+            _expandedNodeIds[fallbackAncestors[fa]] = true;
             var faChEl = faNode.querySelector(':scope > .tree-children');
             if (faChEl) faChEl.classList.add('expanded');
           }
@@ -3628,6 +3630,7 @@ function highlightNodeInTree(spanId) {
       if (testDomNode) {
         _materializeIfNeeded(testDomNode);
         _expandNodeOnly(testDomNode);
+        _expandedNodeIds[testData.id] = true;
         var testChildrenEl = testDomNode.querySelector(':scope > .tree-children');
         if (testChildrenEl) {
           testChildrenEl.classList.add('expanded');
@@ -3644,6 +3647,7 @@ function highlightNodeInTree(spanId) {
             if (failExpanded[qId]) {
               _materializeIfNeeded(qNode);
               _expandNodeOnly(qNode);
+              _expandedNodeIds[qId] = true;
               var qChildren = qNode.querySelector(':scope > .tree-children');
               if (qChildren) {
                 qChildren.classList.add('expanded');
@@ -3678,6 +3682,8 @@ function highlightNodeInTree(spanId) {
       var parentNode = parent.parentElement;
       if (parentNode && parentNode.classList.contains('tree-node')) {
         _materializeIfNeeded(parentNode);
+        var pnId = parentNode.getAttribute('data-span-id');
+        if (pnId) _expandedNodeIds[pnId] = true;
         var detailEl = parentNode.querySelector(':scope > .detail-panel');
         if (detailEl) detailEl.classList.add('expanded');
         var toggleBtn = parentNode.querySelector(':scope > .tree-row > .tree-toggle');
@@ -3692,6 +3698,8 @@ function highlightNodeInTree(spanId) {
 
   // Highlight the target node
   targetNode.classList.add('highlighted');
+  var targetId = targetNode.getAttribute('data-span-id');
+  if (targetId) _expandedNodeIds[targetId] = true;
 
   // Scroll only within the tree panel container (not the whole page)
   var treePanel = document.querySelector('.panel-tree');
