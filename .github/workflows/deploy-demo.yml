@@ -39,6 +39,7 @@ jobs:
           rf-trace-report \
             tests/fixtures/diverse_suite.json \
             --logs-file tests/fixtures/diverse_suite_logs.json \
+            --logo-path docs/demo/empty-logo.svg \
             --title "RF Trace Report — Interactive Demo" \
             -o _site/index.html
 
