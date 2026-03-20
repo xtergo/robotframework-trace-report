@@ -2,7 +2,7 @@
 
 ## Overview
 
-`rf-trace-report` generates interactive, self-contained HTML reports from OpenTelemetry (OTLP) trace files produced by [robotframework-tracer](https://github.com/robocorp/robotframework-tracer). It supports static report generation, live mode with auto-refresh, OTLP receiver mode, and querying traces from a SigNoz backend.
+`rf-trace-report` generates interactive, self-contained HTML reports from OpenTelemetry (OTLP) trace files produced by [robotframework-tracer](https://github.com/robocorp/robotframework-tracer), Robot Framework `output.xml` files, or traces queried from a SigNoz backend. It supports static report generation, live mode with auto-refresh, OTLP receiver mode, and querying traces from a SigNoz backend.
 
 ## Getting Started
 
@@ -10,7 +10,9 @@
 
 - Python 3.10+
 - `rf-trace-report` installed (`pip install rf-trace-report`)
-- A trace file produced by `robotframework-tracer` (OTLP NDJSON format, `.json` or `.json.gz`)
+- One of:
+  - A trace file produced by `robotframework-tracer` (OTLP NDJSON format, `.json` or `.json.gz`)
+  - A Robot Framework `output.xml` file (no tracer needed)
 
 ### Step-by-Step Workflow
 
@@ -22,10 +24,16 @@
 
    This produces a trace file (e.g., `output/traces.json`) in OTLP NDJSON format.
 
+   Alternatively, use a standard Robot Framework `output.xml` — no tracer required.
+
 2. Generate an HTML report from the trace file:
 
    ```bash
+   # From OTLP traces
    rf-trace-report traces.json -o report.html
+
+   # From RF output.xml (auto-detected)
+   rf-trace-report output.xml -o report.html
    ```
 
 3. Open the report in your browser:
@@ -57,13 +65,31 @@ Starts the live HTTP server without requiring an input file. Use this for receiv
 
 The `serve` subcommand accepts all the same options as the default command except `input` and `--live` (live mode is always implied).
 
+### `convert` Subcommand
+
+```
+rf-trace-report convert <input.xml> [-o <output>]
+```
+
+Converts a Robot Framework `output.xml` file to OTLP NDJSON format (gzip-compressed by default). The output file can then be used as input to the default command or shared with other OTLP-compatible tools.
+
+```bash
+# Convert output.xml to OTLP NDJSON (default: output.json.gz)
+rf-trace-report convert output.xml
+
+# Specify output path
+rf-trace-report convert output.xml -o traces.json.gz
+```
+
 ### Input/Output Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `input` | *(required for json provider)* | Trace file path (`.json` or `.json.gz`), or `-` for stdin. Not required when using `--receiver` or `--provider signoz`. |
+| `input` | *(required for json provider)* | Trace file path (`.json`, `.json.gz`, or `.xml`), or `-` for stdin. RF `output.xml` files are auto-detected and converted on-the-fly. Not required when using `--receiver` or `--provider signoz`. |
 | `-o`, `--output` | `trace-report.html` | Output HTML file path. In receiver mode, a static report is also generated here on shutdown. |
 | `--config <path>` | *(none)* | Path to a JSON configuration file. Settings in the config file override environment variables but are overridden by CLI arguments. |
+| `--logs-file <path>` | *(none)* | Path to a separate OTLP NDJSON logs file. Log records are matched to spans by `span_id` and displayed inline with level badges (TRACE/DEBUG/INFO/WARN/ERROR). |
+| `--logo-path <path>` | *(default logo)* | Path to a custom SVG logo file to embed in the report header. |
 | `--version` | | Show the program version and exit. |
 
 ### Live Mode Options

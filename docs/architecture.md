@@ -2,44 +2,48 @@
 
 ## Overview
 
-`rf-trace-report` is a Python CLI tool that reads OpenTelemetry (OTLP) trace files produced by [robotframework-tracer](https://github.com/robocorp/robotframework-tracer) and generates interactive, self-contained HTML reports. It supports static report generation, live mode with auto-refresh, OTLP receiver mode, and querying traces from a SigNoz backend.
+`rf-trace-report` is a Python CLI tool that reads OpenTelemetry (OTLP) trace files produced by [robotframework-tracer](https://github.com/robocorp/robotframework-tracer), Robot Framework `output.xml` files, or traces from a SigNoz backend, and generates interactive, self-contained HTML reports. It supports static report generation, live mode with auto-refresh, OTLP receiver mode, and querying traces from a SigNoz backend.
 
-The tool has no runtime dependency on `robotframework-tracer` — it reads standard OTLP NDJSON files and interprets Robot Framework-specific span attributes (`rf.*`) to reconstruct the suite/test/keyword hierarchy.
+The tool has no runtime dependency on `robotframework-tracer` — it reads standard OTLP NDJSON files and interprets Robot Framework-specific span attributes (`rf.*`) to reconstruct the suite/test/keyword hierarchy. It can also convert RF `output.xml` files to OTLP format on-the-fly.
 
 ## Data Pipeline
 
 The core data pipeline transforms raw OTLP trace data into an interactive HTML report:
 
 ```
-OTLP NDJSON file
-       │
-       ▼
-┌─────────────┐
-│   Parser     │  parser.py — reads NDJSON lines, extracts flat span list
-│  (NDJSON)    │
-└──────┬──────┘
-       │ List[RawSpan]
-       ▼
-┌─────────────┐
-│  Span Tree   │  tree.py — groups by trace_id, links parent→child
-│  Builder     │
-└──────┬──────┘
-       │ List[SpanNode]  (tree roots)
-       ▼
-┌─────────────┐
-│ RF Attribute │  rf_model.py — classifies spans as suite/test/keyword,
-│ Interpreter  │  extracts RF-specific fields, computes statistics
-└──────┬──────┘
-       │ RFRunModel
-       ▼
-┌─────────────┐
-│   Report     │  generator.py — serializes model to JSON, embeds JS/CSS,
-│  Generator   │  produces self-contained HTML
-└──────┬──────┘
-       │ HTML string
-       ▼
-  trace-report.html
+OTLP NDJSON file ─────────────────────┐
+                                      │
+RF output.xml ──► output_xml_converter┤
+                                      │
+                                      ▼
+                               ┌─────────────┐
+                               │   Parser     │  parser.py — reads NDJSON lines, extracts flat span list
+                               │  (NDJSON)    │
+                               └──────┬──────┘
+                                      │ List[RawSpan]
+                                      ▼
+                               ┌─────────────┐
+                               │  Span Tree   │  tree.py — groups by trace_id, links parent→child
+                               │  Builder     │
+                               └──────┬──────┘
+                                      │ List[SpanNode]  (tree roots)
+                                      ▼
+                               ┌─────────────┐
+                               │ RF Attribute │  rf_model.py — classifies spans as suite/test/keyword,
+                               │ Interpreter  │  extracts RF-specific fields, computes statistics
+                               └──────┬──────┘
+                                      │ RFRunModel
+                                      ▼
+                               ┌─────────────┐
+                               │   Report     │  generator.py — serializes model to JSON, embeds JS/CSS,
+                               │  Generator   │  produces self-contained HTML
+                               └──────┬──────┘
+                                      │ HTML string
+                                      ▼
+                                 trace-report.html
 ```
+
+Optional OTLP logs (`--logs-file`) are parsed separately and attached to spans by `span_id` for inline display in the viewer.
 
 In live mode, the Python server serves the raw trace file and the JS viewer handles parsing, tree building, and rendering entirely in the browser.
 
@@ -119,15 +123,18 @@ Minimal HTTP server for live trace viewing.
 
 ### CLI Entry Point (`cli.py`)
 
-Command-line interface with two modes: default command and `serve` subcommand.
+Command-line interface with three modes: default command, `serve` subcommand, and `convert` subcommand.
 
-- **Default command**: `rf-trace-report <input> [options]` — static report generation or live mode with `--live`
+- **Default command**: `rf-trace-report <input> [options]` — static report generation or live mode with `--live`. Accepts OTLP NDJSON (`.json`, `.json.gz`) or RF `output.xml` files (auto-detected by extension).
 - **Serve subcommand**: `rf-trace-report serve [options]` — starts live server without requiring an input file (for receiver/SigNoz modes)
+- **Convert subcommand**: `rf-trace-report convert <input.xml> [-o output.json.gz]` — converts RF `output.xml` to OTLP NDJSON format
 - **Key behaviors**:
   - Shared argument set between default and serve parsers
   - Three-tier config precedence: CLI args > config file (`--config`) > environment variables
   - Provider selection: `--provider json` (default, file-based) or `--provider signoz` (SigNoz API)
   - Receiver mode (`--receiver`) implies live mode
+  - `--logs-file` attaches a separate OTLP NDJSON logs file for inline log display
+  - `--logo-path` embeds a custom SVG logo in the report header
 
 ### Configuration (`config.py`)
 
@@ -222,17 +229,21 @@ The viewer is a vanilla JavaScript application embedded in the generated HTML re
 
 | File | Responsibility |
 |------|---------------|
-| `stats.js` | Statistics panel — pass/fail/skip counts, duration charts |
+| `flatpickr.min.js` | Date/time picker library for date range filter |
 | `tree.js` | Tree view — expandable suite/test/keyword hierarchy with inline details |
+| `date-range-picker.js` | Date range picker component for time-based filtering |
 | `timeline.js` | Timeline/Gantt view — zoom, pan, time range selection, worker lanes, seconds grid |
 | `keyword-stats.js` | Keyword statistics — aggregated keyword execution metrics |
-| `search.js` | Search and filter — text search, status filter, tag filter, duration filter, time range filter |
+| `report-page.js` | Report page — summary dashboard, test results table, tag statistics, keyword insights, failure triage, keyword drill-down |
+| `search.js` | Search and filter — text search, status filter, tag filter, duration filter, time range filter, service name filter |
 | `deep-link.js` | Deep linking — encodes/decodes viewer state in URL hash for shareable links |
 | `theme.js` | Theme management — light/dark mode toggle, system preference detection, CSS custom properties |
 | `flow-table.js` | Execution flow table — code-like indented keyword view with type badges, sticky suite/test headers, and 4-column layout (Keyword, Line, Status, Duration) |
 | `live.js` | Live mode — polling loop, incremental data fetching, NDJSON parsing in browser |
-| `app.js` | Main application — initialization, event bus, view coordination, service health dashboard |
+| `service-health.js` | Service health dashboard — real-time sparkline charts for server and client metrics |
+| `app.js` | Main application — initialization, event bus, view coordination |
 | `style.css` | Styles — light and dark themes via CSS custom properties, responsive layout |
+| `flatpickr.min.css` | Date/time picker styles |
 
 ### Service Health Dashboard
 
@@ -264,9 +275,10 @@ When the client cap is reached, a dismissible banner appears and polling pauses.
 
 The generator concatenates files in this specific order (defined in `_JS_FILES` tuple in `generator.py`):
 
-1. `stats.js`, `tree.js`, `timeline.js`, `keyword-stats.js`, `search.js` — define functions used by `app.js`
-2. `deep-link.js`, `theme.js`, `flow-table.js`, `live.js` — independent modules
-3. `app.js` — main entry point, initializes all components
+1. `flatpickr.min.js` — date picker library
+2. `tree.js`, `date-range-picker.js`, `timeline.js`, `keyword-stats.js`, `report-page.js`, `search.js` — define functions used by `app.js`
+3. `deep-link.js`, `theme.js`, `flow-table.js`, `live.js`, `service-health.js` — independent modules
+4. `app.js` — main entry point, initializes all components
 
 ### Event Bus
 
@@ -530,11 +542,12 @@ robotframework-trace-report/
 ├── src/
 │   └── rf_trace_viewer/
 │       ├── __init__.py              # Package init, version
-│       ├── cli.py                   # CLI entry point (default + serve subcommand)
+│       ├── cli.py                   # CLI entry point (default + serve + convert subcommands)
 │       ├── config.py                # Three-tier config loader
 │       ├── exceptions.py            # Custom exception classes
 │       ├── generator.py             # HTML report generator
-│       ├── parser.py                # NDJSON trace file parser
+│       ├── output_xml_converter.py  # RF output.xml → OTLP NDJSON converter
+│       ├── parser.py                # NDJSON trace file parser (traces + logs)
 │       ├── rf_model.py              # RF attribute interpreter + data models
 │       ├── robot_semantics.py       # Provider-agnostic attribute normalization
 │       ├── server.py                # Live mode HTTP server
@@ -542,21 +555,26 @@ robotframework-trace-report/
 │       └── providers/
 │           ├── __init__.py          # Provider exports
 │           ├── base.py              # TraceProvider interface + data models
-│           ├── json_provider.py     # Local NDJSON file provider
+│           ├── json_provider.py     # Local NDJSON file provider (traces + logs)
 │           ├── signoz_auth.py       # SigNoz authentication (JWT, API key)
 │           └── signoz_provider.py   # SigNoz API provider
 │       └── viewer/
 │           ├── app.js               # Main viewer application
+│           ├── date-range-picker.js # Date range picker component
 │           ├── deep-link.js         # URL state encoding/decoding
+│           ├── flatpickr.min.js     # Date picker library
+│           ├── flatpickr.min.css    # Date picker styles
 │           ├── flow-table.js        # Execution flow table
 │           ├── keyword-stats.js     # Keyword statistics
 │           ├── live.js              # Live mode polling
+│           ├── report-page.js       # Report page (summary, test results, tag stats, failure triage)
 │           ├── search.js            # Search and filter
-│           ├── stats.js             # Statistics panel
+│           ├── service-health.js    # Service health dashboard
 │           ├── style.css            # Light + dark theme styles
 │           ├── theme.js             # Theme management
 │           ├── timeline.js          # Timeline/Gantt renderer
-│           └── tree.js              # Tree view renderer
+│           ├── tree.js              # Tree view renderer
+│           └── default-logo.svg     # Default logo
 ├── tests/
 │   ├── unit/                        # Unit + property-based tests
 │   ├── browser/                     # Browser tests (RF + Playwright)
