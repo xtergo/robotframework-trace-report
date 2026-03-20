@@ -63,6 +63,9 @@ flowchart LR
 ### Explorer View
 ![Explorer View](docs/screenshots/explorer-view-nologo.png)
 
+### Explorer View with OTLP Log Correlation
+![Explorer with Logs](docs/screenshots/explorer-logs-view.png)
+
 ### Report View
 ![Report View](docs/screenshots/report-view-nologo.png)
 
