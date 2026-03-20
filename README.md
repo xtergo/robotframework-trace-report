@@ -10,6 +10,8 @@ Interactive HTML report generator and live trace viewer for Robot Framework, pow
 
 ## How It Works
 
+Each input type works independently — pick whichever fits your workflow. OTLP traces are the primary input; `output.xml` and OTLP logs are optional alternatives or additions.
+
 ### Static Report (offline)
 
 ```mermaid
