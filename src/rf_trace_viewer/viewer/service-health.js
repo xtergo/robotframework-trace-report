@@ -556,174 +556,6 @@
     }
   }
 
-  /* ── Diagnostics Panel (collapsible pipeline metrics) ──────────── */
-
-  var _diagPanelEl = null;
-  var _diagCardEls = {};  // card key → { valueEl, cardEl, sparklineEl }
-  var _diagHistory = {
-    p95_latency_ms: [],
-    error_rate_pct: [],
-    dep_p95_latency_ms: []
-  };
-
-  function _createDiagCard(metric) {
-    var card = document.createElement('div');
-    card.className = 'sh-card';
-    var cardKey = metric.section + '.' + metric.key;
-    card.setAttribute('data-metric', cardKey);
-
-    var label = document.createElement('div');
-    label.className = 'sh-card-label';
-    label.textContent = metric.label;
-    card.appendChild(label);
-
-    var value = document.createElement('div');
-    value.className = 'sh-card-value';
-    value.textContent = '\u2014';
-    card.appendChild(value);
-
-    var sparkline = document.createElement('div');
-    sparkline.className = 'sh-card-sparkline';
-    card.appendChild(sparkline);
-
-    _diagCardEls[cardKey] = { valueEl: value, cardEl: card, sparklineEl: sparkline };
-    return card;
-  }
-
-  function _renderDiagnosticsPanel(snapshot) {
-    if (!snapshot) return;
-
-    // Lazily create the diagnostics panel on first render
-    if (!_diagPanelEl) {
-      _diagPanelEl = document.createElement('div');
-      _diagPanelEl.className = 'sh-diagnostics-panel';
-
-      var diagHeader = document.createElement('div');
-      diagHeader.className = 'sh-diagnostics-header';
-      var diagTitle = document.createElement('span');
-      diagTitle.className = 'sh-diagnostics-title';
-      diagTitle.textContent = 'Service Diagnostics';
-      diagHeader.appendChild(diagTitle);
-      var diagToggle = document.createElement('button');
-      diagToggle.className = 'sh-diagnostics-toggle';
-      diagToggle.textContent = '\u25bc';
-      diagToggle.setAttribute('aria-label', 'Expand service diagnostics');
-      diagHeader.appendChild(diagToggle);
-
-      var content = document.createElement('div');
-      content.className = 'sh-diagnostics-content';
-      content.style.display = 'none';
-
-      diagHeader.style.cursor = 'pointer';
-      diagHeader.addEventListener('click', function () {
-        var isOpen = content.style.display !== 'none';
-        if (isOpen) {
-          content.style.display = 'none';
-          diagToggle.textContent = '\u25bc';
-          diagToggle.setAttribute('aria-label', 'Expand service diagnostics');
-        } else {
-          content.style.display = '';
-          diagToggle.textContent = '\u25b2';
-          diagToggle.setAttribute('aria-label', 'Collapse service diagnostics');
-        }
-      });
-
-      _diagPanelEl.appendChild(diagHeader);
-
-      // HTTP section
-      var httpSection = document.createElement('div');
-      httpSection.className = 'sh-section';
-      var httpTitle = document.createElement('h3');
-      httpTitle.className = 'sh-section-title';
-      httpTitle.textContent = 'HTTP Metrics';
-      httpSection.appendChild(httpTitle);
-      var httpGrid = document.createElement('div');
-      httpGrid.className = 'sh-card-grid';
-      HTTP_METRICS.forEach(function (m) {
-        httpGrid.appendChild(_createDiagCard(m));
-      });
-      httpSection.appendChild(httpGrid);
-      content.appendChild(httpSection);
-
-      // Dependency section
-      var depSection = document.createElement('div');
-      depSection.className = 'sh-section';
-      var depTitle = document.createElement('h3');
-      depTitle.className = 'sh-section-title';
-      depTitle.textContent = 'Dependency Metrics';
-      depSection.appendChild(depTitle);
-      var depGrid = document.createElement('div');
-      depGrid.className = 'sh-card-grid';
-      DEP_METRICS.forEach(function (m) {
-        depGrid.appendChild(_createDiagCard(m));
-      });
-      depSection.appendChild(depGrid);
-      content.appendChild(depSection);
-
-      _diagPanelEl.appendChild(content);
-
-      // Insert after the header (not inside it)
-      var header = document.querySelector('.rf-trace-viewer .viewer-header');
-      if (header && header.parentNode) {
-        header.parentNode.insertBefore(_diagPanelEl, header.nextSibling);
-      } else if (_tabPane) {
-        _tabPane.insertBefore(_diagPanelEl, _tabPane.firstChild);
-      }
-    }
-
-    // Update card values from snapshot
-    ALL_METRICS.forEach(function (m) {
-      var cardKey = m.section + '.' + m.key;
-      var entry = _diagCardEls[cardKey];
-      if (!entry) return;
-
-      var sectionData = snapshot[m.section];
-      var rawValue = sectionData ? sectionData[m.key] : null;
-      entry.valueEl.textContent = (rawValue !== null && rawValue !== undefined)
-        ? m.format(rawValue)
-        : formatValue(rawValue);
-
-      // Apply threshold class for error rate
-      entry.cardEl.classList.remove('sh-card-warning', 'sh-card-critical');
-      if (m.threshold) {
-        var cls = getThresholdClass(rawValue);
-        if (cls === 'warning') entry.cardEl.classList.add('sh-card-warning');
-        if (cls === 'critical') entry.cardEl.classList.add('sh-card-critical');
-      }
-    });
-
-    // Update diagnostics sparkline history from series data
-    var series = snapshot.series || {};
-    var seriesKeys = Object.keys(_diagHistory);
-    for (var i = 0; i < seriesKeys.length; i++) {
-      var sKey = seriesKeys[i];
-      var newPoints = series[sKey];
-      if (newPoints && newPoints.length > 0) {
-        for (var j = 0; j < newPoints.length; j++) {
-          _diagHistory[sKey].push(newPoints[j]);
-        }
-        if (_diagHistory[sKey].length > SPARKLINE_MAX_POINTS) {
-          _diagHistory[sKey] = _diagHistory[sKey].slice(_diagHistory[sKey].length - SPARKLINE_MAX_POINTS);
-        }
-      }
-    }
-
-    // Render sparklines on diagnostics cards
-    var cardKeys = Object.keys(SPARKLINE_METRICS);
-    for (var c = 0; c < cardKeys.length; c++) {
-      var cardKey = cardKeys[c];
-      var historyKey = SPARKLINE_METRICS[cardKey];
-      var entry = _diagCardEls[cardKey];
-      if (entry && entry.sparklineEl) {
-        renderSparkline(entry.sparklineEl, _diagHistory[historyKey]);
-      }
-    }
-  }
-
-  // Expose for testing
-  window._serviceHealthRenderDiagnosticsPanel = _renderDiagnosticsPanel;
-
-
   // Expose for testing
   window._serviceHealthRenderRfMetricsSection = _renderRfMetricsSection;
   window._serviceHealthGetTabLabel = function () { return _tabBtn ? _tabBtn.textContent : null; };
@@ -744,10 +576,6 @@
         // Hide pipeline cards in primary tab area
         if (pipelineCardsEl) pipelineCardsEl.style.display = 'none';
 
-        // Show pipeline metrics in the collapsible diagnostics panel
-        _renderDiagnosticsPanel(snapshot);
-        if (_diagPanelEl) _diagPanelEl.style.display = '';
-
         // Show RF metrics as primary content
         _renderRfMetricsSection(snapshot);
       } else {
@@ -756,9 +584,6 @@
 
         // Show pipeline cards in primary tab area
         if (pipelineCardsEl) pipelineCardsEl.style.display = '';
-
-        // Hide diagnostics panel if it exists
-        if (_diagPanelEl) _diagPanelEl.style.display = 'none';
 
         // Update pipeline card values
         ALL_METRICS.forEach(function (m) {

@@ -3408,47 +3408,6 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   gap: 10px;
 }
 
-/* ── Service Health Diagnostics Panel (collapsible) ── */
-.rf-trace-viewer .sh-diagnostics-panel {
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  font-size: 13px;
-}
-
-.rf-trace-viewer .sh-diagnostics-header {
-  display: flex;
-  align-items: center;
-  padding: 8px 16px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.rf-trace-viewer .sh-diagnostics-title {
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  flex: 1;
-}
-
-.rf-trace-viewer .sh-diagnostics-toggle {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0 4px;
-}
-
-.rf-trace-viewer .sh-diagnostics-content {
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  border-top: 1px solid var(--border-color);
-}
-
 /* Individual card */
 .rf-trace-viewer .sh-card {
   background: var(--sh-card-bg);
