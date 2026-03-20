@@ -35,6 +35,7 @@ jobs:
 
       - name: Generate demo report
         run: |
+          mkdir -p _site
           rf-trace-report \
             tests/fixtures/diverse_suite.json \
             --logs-file tests/fixtures/diverse_suite_logs.json \
