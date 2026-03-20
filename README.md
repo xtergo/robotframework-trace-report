@@ -61,12 +61,21 @@ flowchart LR
 ## Screenshots
 
 ### Explorer View
+
+Hierarchical suite → test → keyword tree with inline detail panels, type badges, arguments, and timing. This view, along with the timeline, is available both in live mode (auto-refreshing during test execution) and in the self-contained HTML report.
+
 ![Explorer View](docs/screenshots/explorer-view-nologo.png)
 
 ### Explorer View with OTLP Log Correlation
+
+Robot Framework keyword execution correlated with OpenTelemetry trace spans and log records in a single view. Expand any keyword to see its OTLP logs with severity badges (ERROR, WARN, INFO, DEBUG) and messages — bridging test automation and observability.
+
 ![Explorer with Logs](docs/screenshots/explorer-logs-view.png)
 
 ### Report View
+
+Summary dashboard with test results, tag statistics, keyword insights, and failure triage with error breadcrumbs.
+
 ![Report View](docs/screenshots/report-view-nologo.png)
 
 ## Installation
