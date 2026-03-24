@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - 2026-03-24
 
+### Planned (v0.5.0)
+- Explorer: show backend/service spans nested under the RF keyword that triggered them, using parent-child span relationships from the distributed trace
+- Explorer: use service-colored badges for non-RF spans, matching the timeline lane colors, so the originating service is instantly visible
+
 ### Added
 - MCP Trace Analyzer: AI-assisted Robot Framework trace analysis via Model Context Protocol
   - 9 analysis tools: `load_run`, `list_tests`, `get_test_keywords`, `get_span_logs`, `analyze_failures`, `compare_runs`, `correlate_timerange`, `get_latency_anomalies`, `get_failure_chain`
