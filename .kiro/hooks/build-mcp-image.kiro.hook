@@ -1,13 +1,13 @@
 {
   "enabled": true,
   "name": "Build MCP Trace Analyzer",
-  "description": "Builds and installs the mcp-trace-analyzer Docker image so the MCP server works in Kiro. Uses the agent to check for issues and handle errors flexibly.",
+  "description": "Builds the mcp-trace-analyzer Docker image and verifies the MCP server is ready for Kiro.",
   "version": "1",
   "when": {
     "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Build the MCP Trace Analyzer Docker image by running: docker build -f Dockerfile.mcp -t mcp-trace-analyzer:latest . — If the build fails, diagnose the issue and try to fix it. After a successful build, verify the image exists with docker images and confirm the MCP server should now be available in Kiro."
+    "prompt": "Build the MCP Trace Analyzer Docker image:\n1. Run: docker build -f Dockerfile.mcp -t mcp-trace-analyzer:latest .\n2. If the build fails, diagnose and fix the issue.\n3. After a successful build, verify the server works by piping an MCP initialize request via: echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1\"}}}' | docker run -i --rm mcp-trace-analyzer:latest\n4. Verify .kiro/settings/mcp.json exists and has the correct config.\n5. Tell the user to check the Kiro sidebar panel (click the Kiro icon) for the MCP Servers section. If they don't see it, suggest using the command palette to search for 'MCP: List Servers' or 'Developer: Reload Window'."
   }
 }

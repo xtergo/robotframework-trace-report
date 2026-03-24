@@ -6,8 +6,6 @@
         "run",
         "-i",
         "--rm",
-        "-v",
-        "${workspaceFolder}:/data",
         "mcp-trace-analyzer:latest"
       ],
       "disabled": false,
