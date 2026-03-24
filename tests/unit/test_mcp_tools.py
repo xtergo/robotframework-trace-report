@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from rf_trace_viewer.mcp.session import AliasNotFoundError, Session, TestNotFoundError
-from rf_trace_viewer.mcp.tools import get_span_logs, get_test_keywords
+from rf_trace_viewer.mcp.tools import analyze_failures, get_span_logs, get_test_keywords
 from rf_trace_viewer.parser import RawLogRecord
 from rf_trace_viewer.rf_model import (
     RFKeyword,
@@ -365,3 +365,232 @@ class TestGetSpanLogs:
 
         result = get_span_logs(session, "run1", "span-1")
         assert result["logs"][0]["attributes"] == {"key": "value", "count": 42}
+
+
+# ---------------------------------------------------------------------------
+# analyze_failures tests
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyzeFailures:
+    """Tests for the analyze_failures tool function."""
+
+    def test_all_tests_passing_returns_empty_patterns(self):
+        t1 = _make_test(name="Test A", status=Status.PASS)
+        t2 = _make_test(name="Test B", status=Status.PASS)
+        session = _make_session_with_tests([t1, t2])
+
+        result = analyze_failures(session, "run1")
+
+        assert result["patterns"] == []
+        assert "passed" in result["message"].lower()
+
+    def test_raises_alias_not_found_error(self):
+        session = Session()
+
+        with pytest.raises(AliasNotFoundError):
+            analyze_failures(session, "missing")
+
+    def test_common_library_keyword_pattern(self):
+        """Two failed tests both fail in SeleniumLibrary.Click Element."""
+        kw1 = _make_keyword(
+            name="Click Element",
+            library="SeleniumLibrary",
+            status=Status.FAIL,
+            status_message="Element not found",
+        )
+        kw2 = _make_keyword(
+            name="Click Element",
+            library="SeleniumLibrary",
+            status=Status.FAIL,
+            status_message="Element not found",
+        )
+        t1 = _make_test(
+            name="Test Login",
+            status=Status.FAIL,
+            keywords=[kw1],
+            status_message="fail",
+        )
+        t2 = _make_test(
+            name="Test Checkout",
+            status=Status.FAIL,
+            keywords=[kw2],
+            status_message="fail",
+        )
+        session = _make_session_with_tests([t1, t2])
+
+        result = analyze_failures(session, "run1")
+
+        lib_patterns = [
+            p for p in result["patterns"] if p["pattern_type"] == "common_library_keyword"
+        ]
+        assert len(lib_patterns) >= 1
+        p = lib_patterns[0]
+        assert "SeleniumLibrary.Click Element" in p["description"]
+        assert set(p["affected_tests"]) == {"Test Login", "Test Checkout"}
+        assert p["confidence"] == 1.0
+
+    def test_common_tag_pattern(self):
+        """Two of three failed tests share the 'smoke' tag."""
+        t1 = _make_test(name="Test A", status=Status.FAIL, tags=["smoke", "login"])
+        t2 = _make_test(name="Test B", status=Status.FAIL, tags=["smoke"])
+        t3 = _make_test(name="Test C", status=Status.FAIL, tags=["regression"])
+        session = _make_session_with_tests([t1, t2, t3])
+
+        result = analyze_failures(session, "run1")
+
+        tag_patterns = [p for p in result["patterns"] if p["pattern_type"] == "common_tag"]
+        smoke_patterns = [p for p in tag_patterns if "smoke" in p["description"]]
+        assert len(smoke_patterns) == 1
+        p = smoke_patterns[0]
+        assert set(p["affected_tests"]) == {"Test A", "Test B"}
+        assert p["confidence"] == pytest.approx(2 / 3)
+
+    def test_temporal_cluster_pattern(self):
+        """Tests with overlapping execution windows form a cluster."""
+        t1 = _make_test(name="Test A", status=Status.FAIL)
+        t2 = _make_test(name="Test B", status=Status.FAIL)
+        # Set overlapping times (within 5s window)
+        t1.start_time = 1_000_000_000_000_000_000
+        t1.end_time = 1_002_000_000_000_000_000
+        t2.start_time = 1_001_000_000_000_000_000
+        t2.end_time = 1_003_000_000_000_000_000
+        session = _make_session_with_tests([t1, t2])
+
+        result = analyze_failures(session, "run1")
+
+        temporal = [p for p in result["patterns"] if p["pattern_type"] == "temporal_cluster"]
+        assert len(temporal) == 1
+        assert set(temporal[0]["affected_tests"]) == {"Test A", "Test B"}
+        assert temporal[0]["confidence"] == 1.0
+
+    def test_common_error_substring_pattern(self):
+        """Two tests share a common error message substring."""
+        kw1 = _make_keyword(
+            status=Status.FAIL,
+            status_message="Connection refused: server at db.example.com:5432",
+        )
+        kw2 = _make_keyword(
+            status=Status.FAIL,
+            status_message="Connection refused: server at db.example.com:5432 timed out",
+        )
+        t1 = _make_test(
+            name="Test A",
+            status=Status.FAIL,
+            keywords=[kw1],
+            status_message="Connection refused: server at db.example.com:5432",
+        )
+        t2 = _make_test(
+            name="Test B",
+            status=Status.FAIL,
+            keywords=[kw2],
+            status_message="Connection refused: server at db.example.com:5432 timed out",
+        )
+        session = _make_session_with_tests([t1, t2])
+
+        result = analyze_failures(session, "run1")
+
+        err_patterns = [
+            p for p in result["patterns"] if p["pattern_type"] == "common_error_substring"
+        ]
+        assert len(err_patterns) >= 1
+        assert set(err_patterns[0]["affected_tests"]) == {"Test A", "Test B"}
+
+    def test_patterns_sorted_by_confidence_then_count(self):
+        """Patterns are sorted by confidence descending, then count descending."""
+        kw_sel = _make_keyword(name="Click", library="SeleniumLibrary", status=Status.FAIL)
+        t1 = _make_test(name="T1", status=Status.FAIL, tags=["smoke"], keywords=[kw_sel])
+        t2 = _make_test(
+            name="T2",
+            status=Status.FAIL,
+            tags=["smoke"],
+            keywords=[_make_keyword(name="Click", library="SeleniumLibrary", status=Status.FAIL)],
+        )
+        t3 = _make_test(
+            name="T3",
+            status=Status.FAIL,
+            tags=["smoke"],
+            keywords=[_make_keyword(name="Other", library="OtherLib", status=Status.FAIL)],
+        )
+        session = _make_session_with_tests([t1, t2, t3])
+
+        result = analyze_failures(session, "run1")
+        patterns = result["patterns"]
+
+        # Verify descending confidence order
+        for i in range(len(patterns) - 1):
+            assert patterns[i]["confidence"] >= patterns[i + 1]["confidence"]
+            if patterns[i]["confidence"] == patterns[i + 1]["confidence"]:
+                assert len(patterns[i]["affected_tests"]) >= len(patterns[i + 1]["affected_tests"])
+
+    def test_confidence_is_fraction_of_failed_tests(self):
+        """Confidence = len(affected_tests) / total_failed_tests."""
+        kw = _make_keyword(name="Click", library="SeleniumLibrary", status=Status.FAIL)
+        t1 = _make_test(name="T1", status=Status.FAIL, keywords=[kw])
+        t2 = _make_test(
+            name="T2",
+            status=Status.FAIL,
+            keywords=[_make_keyword(name="Click", library="SeleniumLibrary", status=Status.FAIL)],
+        )
+        t3 = _make_test(
+            name="T3",
+            status=Status.FAIL,
+            keywords=[_make_keyword(name="Other", library="OtherLib", status=Status.FAIL)],
+        )
+        session = _make_session_with_tests([t1, t2, t3])
+
+        result = analyze_failures(session, "run1")
+
+        for p in result["patterns"]:
+            expected = len(p["affected_tests"]) / 3
+            assert p["confidence"] == pytest.approx(expected)
+
+    def test_single_failure_no_patterns(self):
+        """A single failed test cannot form patterns (needs ≥2)."""
+        kw = _make_keyword(name="Click", library="SeleniumLibrary", status=Status.FAIL)
+        t1 = _make_test(name="T1", status=Status.FAIL, keywords=[kw], tags=["unique"])
+        session = _make_session_with_tests([t1])
+
+        result = analyze_failures(session, "run1")
+
+        # Single test can't form library/tag/temporal patterns (need ≥2)
+        for p in result["patterns"]:
+            assert len(p["affected_tests"]) >= 2
+
+    def test_nested_fail_keywords_detected(self):
+        """Fail keywords nested deep in the tree are still detected."""
+        leaf = _make_keyword(name="Execute SQL", library="DatabaseLibrary", status=Status.FAIL)
+        mid = _make_keyword(
+            name="Setup DB", library="CustomLib", status=Status.FAIL, children=[leaf]
+        )
+        root_kw = _make_keyword(name="Init", library="", status=Status.FAIL, children=[mid])
+
+        t1 = _make_test(name="T1", status=Status.FAIL, keywords=[root_kw])
+        t2 = _make_test(
+            name="T2",
+            status=Status.FAIL,
+            keywords=[
+                _make_keyword(
+                    name="Wrapper",
+                    library="",
+                    status=Status.FAIL,
+                    children=[
+                        _make_keyword(
+                            name="Execute SQL",
+                            library="DatabaseLibrary",
+                            status=Status.FAIL,
+                        )
+                    ],
+                )
+            ],
+        )
+        session = _make_session_with_tests([t1, t2])
+
+        result = analyze_failures(session, "run1")
+
+        lib_patterns = [
+            p for p in result["patterns"] if p["pattern_type"] == "common_library_keyword"
+        ]
+        db_patterns = [p for p in lib_patterns if "DatabaseLibrary" in p["description"]]
+        assert len(db_patterns) >= 1
+        assert set(db_patterns[0]["affected_tests"]) == {"T1", "T2"}
