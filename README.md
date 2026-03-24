@@ -260,4 +260,4 @@ Apache License 2.0
 
 ## Status
 
-**Version:** 0.3.0 · **Development Status:** Pre-Alpha
+**Version:** 0.4.0 · **Development Status:** Pre-Alpha

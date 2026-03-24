@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README overhaul: Mermaid diagrams for static and live mode data flows, Explorer and Report view screenshots, expanded Quick Start with output.xml/convert/logs examples
 - Updated docs/architecture.md and docs/user-guide.md with output.xml input, `convert` subcommand, `--logs-file`, `--logo-path`, and current viewer file inventory
 
-## [Unreleased]
+## [0.4.0] - 2026-03-24
 
 ### Added
 - MCP Trace Analyzer: AI-assisted Robot Framework trace analysis via Model Context Protocol
