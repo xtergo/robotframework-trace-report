@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "mcp-trace-analyzer-stdio": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "${workspaceFolder}:/data",
+        "mcp-trace-analyzer:latest"
+      ]
+    },
+    "mcp-trace-analyzer-sse": {
+      "url": "http://localhost:8080/sse",
+      "_comment": "Start the container first: docker run -p 8080:8080 mcp-trace-analyzer:latest --transport sse"
+    },
+    "mcp-trace-analyzer-rest": {
+      "url": "http://localhost:8080/api/v1",
+      "_comment": "Start the container first: docker run -p 8080:8080 mcp-trace-analyzer:latest --transport rest --port 8080"
+    }
+  }
+}
