@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Build MCP Trace Analyzer",
+  "description": "Builds and installs the mcp-trace-analyzer Docker image so the MCP server works in Kiro. Uses the agent to check for issues and handle errors flexibly.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Build the MCP Trace Analyzer Docker image by running: docker build -f Dockerfile.mcp -t mcp-trace-analyzer:latest . — If the build fails, diagnose the issue and try to fix it. After a successful build, verify the image exists with docker images and confirm the MCP server should now be available in Kiro."
+  }
+}
