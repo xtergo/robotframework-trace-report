@@ -66,6 +66,15 @@ Release process guardrails. Covers:
 - Checklist of files that contain the version string
 - How to avoid publishing a Docker image with stale version metadata
 
+### mcp-trace-analyzer.md
+**Inclusion:** Auto (always active)
+
+MCP Trace Analyzer developer setup. Covers:
+- First-time setup: building the `mcp-trace-analyzer:latest` Docker image
+- One-click build via the "Build MCP Trace Analyzer" agent hook
+- When to rebuild (after changes to `src/rf_trace_viewer/mcp/` or `Dockerfile.mcp`)
+- Architecture overview of the 9 analysis tools
+
 ### troubleshooting-guide.md
 **Inclusion:** Manual (reference with `#troubleshooting-guide` in chat)
 
