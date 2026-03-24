@@ -1,11 +1,12 @@
-"""Unit tests for MCP tool functions — get_test_keywords."""
+"""Unit tests for MCP tool functions — get_test_keywords, get_span_logs."""
 
 from __future__ import annotations
 
 import pytest
 
 from rf_trace_viewer.mcp.session import AliasNotFoundError, Session, TestNotFoundError
-from rf_trace_viewer.mcp.tools import get_test_keywords
+from rf_trace_viewer.mcp.tools import get_span_logs, get_test_keywords
+from rf_trace_viewer.parser import RawLogRecord
 from rf_trace_viewer.rf_model import (
     RFKeyword,
     RFRunModel,
@@ -221,3 +222,146 @@ class TestGetTestKeywords:
         assert kw["children"][0]["name"] == "Mid"
         assert kw["children"][0]["children"][0]["name"] == "Leaf"
         assert kw["children"][0]["children"][0]["children"] == []
+
+
+def _make_log_record(
+    span_id: str = "span-1",
+    trace_id: str = "trace-1",
+    timestamp_unix_nano: int = 1_700_000_000_000_000_000,
+    severity_text: str = "INFO",
+    body: str = "log message",
+    attributes: dict | None = None,
+) -> RawLogRecord:
+    return RawLogRecord(
+        trace_id=trace_id,
+        span_id=span_id,
+        timestamp_unix_nano=timestamp_unix_nano,
+        severity_text=severity_text,
+        body=body,
+        attributes=attributes or {},
+    )
+
+
+def _make_session_with_logs(
+    logs: list[RawLogRecord],
+    log_index: dict[str, list[RawLogRecord]] | None = None,
+) -> Session:
+    """Build a Session with logs and a log_index."""
+    from rf_trace_viewer.mcp.session import RunData
+
+    if log_index is None:
+        from collections import defaultdict
+
+        idx: dict[str, list[RawLogRecord]] = defaultdict(list)
+        for r in logs:
+            idx[r.span_id].append(r)
+        log_index = dict(idx)
+
+    suite = RFSuite(
+        name="Suite",
+        id="suite-1",
+        source="/path",
+        status=Status.PASS,
+        start_time=0,
+        end_time=10000,
+        elapsed_time=10.0,
+        children=[],
+    )
+    model = RFRunModel(
+        title="Test Run",
+        run_id="run-1",
+        rf_version="7.0",
+        start_time=0,
+        end_time=10000,
+        suites=[suite],
+        statistics=RunStatistics(
+            total_tests=0, passed=0, failed=0, skipped=0, total_duration_ms=0.0
+        ),
+    )
+    run_data = RunData(
+        alias="run1",
+        spans=[],
+        logs=logs,
+        roots=[],
+        model=model,
+        log_index=log_index,
+    )
+    session = Session()
+    session.runs["run1"] = run_data
+    return session
+
+
+class TestGetSpanLogs:
+    """Tests for the get_span_logs tool function."""
+
+    def test_returns_logs_sorted_by_timestamp(self):
+        r1 = _make_log_record(timestamp_unix_nano=3_000_000_000_000_000_000, body="third")
+        r2 = _make_log_record(timestamp_unix_nano=1_000_000_000_000_000_000, body="first")
+        r3 = _make_log_record(timestamp_unix_nano=2_000_000_000_000_000_000, body="second")
+        session = _make_session_with_logs([r1, r2, r3])
+
+        result = get_span_logs(session, "run1", "span-1")
+
+        assert len(result["logs"]) == 3
+        assert result["logs"][0]["body"] == "first"
+        assert result["logs"][1]["body"] == "second"
+        assert result["logs"][2]["body"] == "third"
+
+    def test_each_record_has_required_fields(self):
+        r = _make_log_record(
+            severity_text="ERROR",
+            body="something broke",
+            attributes={"http.method": "GET"},
+        )
+        session = _make_session_with_logs([r])
+
+        result = get_span_logs(session, "run1", "span-1")
+        log = result["logs"][0]
+
+        assert "timestamp" in log
+        assert "T" in log["timestamp"]  # ISO 8601
+        assert log["severity"] == "ERROR"
+        assert log["body"] == "something broke"
+        assert log["attributes"] == {"http.method": "GET"}
+
+    def test_returns_empty_when_no_logs_for_span(self):
+        r = _make_log_record(span_id="other-span")
+        session = _make_session_with_logs([r])
+
+        result = get_span_logs(session, "run1", "span-1")
+
+        assert result["logs"] == []
+        assert "message" in result
+
+    def test_returns_empty_when_no_log_file_loaded(self):
+        session = _make_session_with_logs(logs=[], log_index={})
+
+        result = get_span_logs(session, "run1", "span-1")
+
+        assert result["logs"] == []
+        assert "no log file" in result["message"].lower()
+
+    def test_raises_alias_not_found_error(self):
+        session = Session()
+
+        with pytest.raises(AliasNotFoundError):
+            get_span_logs(session, "missing", "span-1")
+
+    def test_timestamp_is_iso8601(self):
+        # 2023-11-14T12:00:00 UTC in nanoseconds
+        ts_ns = 1_699_963_200_000_000_000
+        r = _make_log_record(timestamp_unix_nano=ts_ns)
+        session = _make_session_with_logs([r])
+
+        result = get_span_logs(session, "run1", "span-1")
+        ts = result["logs"][0]["timestamp"]
+
+        assert "2023-11-14" in ts
+        assert "T" in ts
+
+    def test_attributes_are_plain_dict(self):
+        r = _make_log_record(attributes={"key": "value", "count": 42})
+        session = _make_session_with_logs([r])
+
+        result = get_span_logs(session, "run1", "span-1")
+        assert result["logs"][0]["attributes"] == {"key": "value", "count": 42}

@@ -6,6 +6,8 @@ arguments, returning a JSON-serialisable dict.  No transport awareness.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from rf_trace_viewer.mcp.session import AliasNotFoundError, Session, TestNotFoundError, ToolError
 from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest, Status
 
@@ -146,3 +148,44 @@ def get_test_keywords(
 
     available = [t.name for t, _ in tests]
     raise TestNotFoundError(test_name, available)
+
+
+def get_span_logs(
+    session: Session,
+    alias: str,
+    span_id: str,
+) -> dict:
+    """Return log records correlated to a specific span.
+
+    Raises :class:`AliasNotFoundError` when *alias* is not loaded.
+    Returns an empty list with a message when no logs exist for the span
+    or no log file was loaded for the run.
+    """
+    try:
+        run_data = session.get_run(alias)
+    except KeyError:
+        raise AliasNotFoundError(f"Run alias {alias!r} not loaded.") from None
+
+    if not run_data.logs:
+        return {"span_id": span_id, "logs": [], "message": "No log file was loaded for this run."}
+
+    records = run_data.log_index.get(span_id, [])
+    if not records:
+        return {"span_id": span_id, "logs": [], "message": f"No logs found for span {span_id!r}."}
+
+    sorted_records = sorted(records, key=lambda r: r.timestamp_unix_nano)
+    return {
+        "span_id": span_id,
+        "logs": [
+            {
+                "timestamp": datetime.fromtimestamp(
+                    r.timestamp_unix_nano / 1_000_000_000,
+                    tz=timezone.utc,
+                ).isoformat(),
+                "severity": r.severity_text,
+                "body": r.body,
+                "attributes": dict(r.attributes),
+            }
+            for r in sorted_records
+        ],
+    }
