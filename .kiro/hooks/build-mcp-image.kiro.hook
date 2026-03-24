@@ -1,13 +1,13 @@
 {
   "enabled": true,
   "name": "Build MCP Trace Analyzer",
-  "description": "Builds the mcp-trace-analyzer Docker image and verifies the MCP server is ready for Kiro.",
+  "description": "Builds the mcp-trace-analyzer Docker image from local source for development and testing.",
   "version": "1",
   "when": {
     "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Build the MCP Trace Analyzer Docker image:\n1. Run: docker build -f Dockerfile.mcp -t mcp-trace-analyzer:latest .\n2. If the build fails, diagnose and fix the issue.\n3. After a successful build, verify the server works by piping an MCP initialize request via: echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1\"}}}' | docker run -i --rm mcp-trace-analyzer:latest\n4. Verify .kiro/settings/mcp.json exists and has the correct config.\n5. Tell the user to check the Kiro sidebar panel (click the Kiro icon) for the MCP Servers section. If they don't see it, suggest using the command palette to search for 'MCP: List Servers' or 'Developer: Reload Window'."
+    "prompt": "Build the MCP Trace Analyzer Docker image for local development:\n1. Run: docker build -f Dockerfile.mcp -t mcp-trace-analyzer:latest .\n2. If the build fails, diagnose and fix the issue.\n3. After a successful build, verify the server responds by piping an MCP initialize request.\n4. Remind the user that .kiro/settings/mcp.json points to the GHCR image by default. For local development, they should temporarily change it to use mcp-trace-analyzer:latest instead of ghcr.io/xtergo/robotframework-trace-report-mcp:latest."
   }
 }

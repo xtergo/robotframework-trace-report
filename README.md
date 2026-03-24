@@ -140,6 +140,67 @@ rf-trace-report serve --provider signoz --signoz-endpoint http://signoz:8080
 - **Custom branding** — `--logo-path` for custom SVG logo in the report header
 - **Kubernetes ready** — Kustomize overlays, health probes, structured logging, Flux GitOps support
 - **Docker Compose stacks** — pre-built stacks for local dev and full SigNoz observability
+- **MCP Trace Analyzer** — AI-assisted trace analysis via Model Context Protocol (stdio, SSE, REST)
+
+## MCP Trace Analyzer (AI Integration)
+
+An MCP server that lets AI assistants analyze Robot Framework test execution data. Load trace files, investigate failures, compare runs, and detect patterns — all through natural language in your IDE.
+
+### Install via Docker (recommended)
+
+```bash
+docker pull ghcr.io/xtergo/robotframework-trace-report-mcp:latest
+```
+
+### Install via pip
+
+```bash
+pip install robotframework-trace-report[mcp]
+python -m rf_trace_viewer.mcp  # starts stdio transport
+```
+
+### IDE Configuration (Kiro / VS Code)
+
+Add to your MCP config (`.kiro/settings/mcp.json` or equivalent):
+
+```json
+{
+  "mcpServers": {
+    "mcp-trace-analyzer": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-v", "/path/to/traces:/data",
+               "ghcr.io/xtergo/robotframework-trace-report-mcp:latest"]
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `load_run` | Load trace/log files into memory under an alias |
+| `list_tests` | List tests with status, duration, tags — filterable and sorted |
+| `get_test_keywords` | Full keyword execution tree for a test |
+| `get_span_logs` | OTLP log records correlated to a span |
+| `analyze_failures` | Detect common patterns across failed tests |
+| `compare_runs` | Diff two runs (status, duration, errors, keywords) |
+| `correlate_timerange` | Query all events within a time window |
+| `get_latency_anomalies` | Find keywords that got slower vs a baseline |
+| `get_failure_chain` | Trace error propagation from test root to deepest failure |
+
+### Transport Modes
+
+```bash
+# stdio (default) — for IDE integration
+docker run -i --rm -v /traces:/data ghcr.io/xtergo/robotframework-trace-report-mcp:latest
+
+# SSE — for remote MCP clients
+docker run -p 8080:8080 ghcr.io/xtergo/robotframework-trace-report-mcp:latest --transport sse
+
+# REST — for scripts, dashboards, CI pipelines
+docker run -p 8080:8080 ghcr.io/xtergo/robotframework-trace-report-mcp:latest --transport rest
+```
 
 ## Deployment Scenarios
 
@@ -152,6 +213,7 @@ rf-trace-report serve --provider signoz --signoz-endpoint http://signoz:8080
 | **Docker Compose** | Pre-built stacks for RF+tracer or SigNoz+OTel setups | [Architecture Guide](docs/architecture.md) |
 | **Kubernetes** | Production deployment with Kustomize overlays, health probes, structured logging | [K8s Deployment Guide](docs/kubernetes.md) |
 | **Flux GitOps** | Declarative deployment via Flux CD | [K8s Deployment Guide](docs/kubernetes.md) |
+| **MCP Trace Analyzer** | AI-assisted trace analysis via MCP protocol | [README — MCP section](#mcp-trace-analyzer-ai-integration) |
 
 See the [User Guide](docs/user-guide.md) for step-by-step setup instructions for each scenario.
 

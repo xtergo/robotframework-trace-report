@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MCP Trace Analyzer: AI-assisted Robot Framework trace analysis via Model Context Protocol
+  - 9 analysis tools: `load_run`, `list_tests`, `get_test_keywords`, `get_span_logs`, `analyze_failures`, `compare_runs`, `correlate_timerange`, `get_latency_anomalies`, `get_failure_chain`
+  - Three transport modes: stdio (IDE integration), SSE (remote MCP clients), REST (scripts/CI)
+  - Docker image published to GHCR as `robotframework-trace-report-mcp`
+  - PyPI extras: `pip install robotframework-trace-report[mcp]`
+  - `Dockerfile.mcp` for containerized deployment
+  - `[mcp]` optional dependency group in `pyproject.toml`
+
 ### Fixed
 - Service name filter: no checkboxes selected by default — all spans visible without filtering
 - Service names populate dynamically as spans arrive; checking one or more acts as a filter

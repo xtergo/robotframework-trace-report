@@ -28,8 +28,16 @@ When creating a new release, the version bump commit **must** be part of the tag
 - [ ] `src/rf_trace_viewer/__init__.py` `__version__` matches the release tag
 - [ ] Tag is created on the version bump commit (not before it)
 - [ ] GitHub release is created after the tag is pushed
+- [ ] `publish-oci.yml` builds both viewer and MCP images on release
 
 ### Files that contain the version
 
 - `pyproject.toml` — `version = "X.Y.Z"` (package metadata, PyPI)
 - `src/rf_trace_viewer/__init__.py` — `__version__ = "X.Y.Z"` (runtime, injected into UI via `server.py`)
+
+### Published artifacts
+
+On each GitHub release, `publish-oci.yml` builds and pushes two Docker images:
+
+- `ghcr.io/xtergo/robotframework-trace-report:X.Y.Z` — live trace viewer (from `Dockerfile`)
+- `ghcr.io/xtergo/robotframework-trace-report-mcp:X.Y.Z` — MCP trace analyzer (from `Dockerfile.mcp`)

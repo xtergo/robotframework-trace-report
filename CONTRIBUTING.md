@@ -122,6 +122,14 @@ src/rf_trace_viewer/
 │   ├── json_provider.py      # JSON file provider
 │   ├── signoz_auth.py        # SigNoz authentication
 │   └── signoz_provider.py    # SigNoz API provider
+├── mcp/
+│   ├── __init__.py
+│   ├── __main__.py            # CLI entrypoint (--transport, --port)
+│   ├── server.py              # MCP server (stdio/SSE transport)
+│   ├── rest_app.py            # FastAPI REST transport
+│   ├── tools.py               # 9 analysis tool implementations
+│   ├── session.py             # Session and RunData management
+│   └── serialization.py       # Dataclass-to-JSON conversion
 └── viewer/
     ├── app.js                # Main application entry
     ├── tree.js               # Tree view component

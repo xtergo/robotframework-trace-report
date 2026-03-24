@@ -50,7 +50,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push OCI image
+      - name: Build and push viewer OCI image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -63,3 +63,22 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push MCP trace analyzer image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.mcp
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            ghcr.io/${{ github.repository }}-mcp:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}-mcp:sha-${{ steps.version.outputs.short_sha }}
+            ghcr.io/${{ github.repository }}-mcp:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=MCP Trace Analyzer
+            org.opencontainers.image.description=MCP server for AI-assisted Robot Framework trace analysis

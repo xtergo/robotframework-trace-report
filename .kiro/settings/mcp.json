@@ -6,7 +6,7 @@
         "run",
         "-i",
         "--rm",
-        "mcp-trace-analyzer:latest"
+        "ghcr.io/xtergo/robotframework-trace-report-mcp:latest"
       ],
       "disabled": false,
       "autoApprove": []
