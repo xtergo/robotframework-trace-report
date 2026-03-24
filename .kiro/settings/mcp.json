@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "mcp-trace-analyzer": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "${workspaceFolder}:/data",
+        "mcp-trace-analyzer:latest"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
