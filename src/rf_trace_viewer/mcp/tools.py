@@ -6,8 +6,8 @@ arguments, returning a JSON-serialisable dict.  No transport awareness.
 
 from __future__ import annotations
 
-from rf_trace_viewer.mcp.session import AliasNotFoundError, Session, ToolError
-from rf_trace_viewer.rf_model import RFSuite, RFTest, Status
+from rf_trace_viewer.mcp.session import AliasNotFoundError, Session, TestNotFoundError, ToolError
+from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest, Status
 
 
 def load_run(
@@ -96,3 +96,53 @@ def list_tests(
         }
         for t, suite_name in tests
     ]
+
+
+def _serialize_keyword(kw: RFKeyword) -> dict:
+    """Recursively convert an :class:`RFKeyword` to a JSON-serialisable dict."""
+    return {
+        "name": kw.name,
+        "keyword_type": kw.keyword_type,
+        "library": kw.library,
+        "status": kw.status.value,
+        "duration_ms": kw.elapsed_time,
+        "args": kw.args,
+        "error_message": kw.status_message,
+        "children": [_serialize_keyword(c) for c in kw.children],
+        "events": kw.events,
+    }
+
+
+def get_test_keywords(
+    session: Session,
+    alias: str,
+    test_name: str,
+) -> dict:
+    """Return the keyword tree for a specific test, serialized recursively.
+
+    Raises :class:`AliasNotFoundError` when *alias* is not loaded.
+    Raises :class:`TestNotFoundError` when *test_name* doesn't match any test.
+    """
+    try:
+        run_data = session.get_run(alias)
+    except KeyError:
+        raise AliasNotFoundError(f"Run alias {alias!r} not loaded.") from None
+
+    # Collect all tests from the suite tree
+    tests: list[tuple[RFTest, str]] = []
+    for suite in run_data.model.suites:
+        tests.extend(_collect_tests(suite.children, suite.name))
+
+    # Find the matching test
+    for test, suite_name in tests:
+        if test.name == test_name:
+            return {
+                "test_name": test.name,
+                "suite": suite_name,
+                "status": test.status.value,
+                "duration_ms": test.elapsed_time,
+                "keywords": [_serialize_keyword(kw) for kw in test.keywords],
+            }
+
+    available = [t.name for t, _ in tests]
+    raise TestNotFoundError(test_name, available)
