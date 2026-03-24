@@ -258,12 +258,17 @@ def _elapsed_ms(span: RawSpan) -> float:
     return (span.end_time_unix_nano - span.start_time_unix_nano) / 1_000_000
 
 
-def _build_keyword(node: SpanNode) -> RFKeyword:
+def _build_keyword(node: SpanNode, all_span_ids: set[str]) -> RFKeyword:
     """Convert a keyword SpanNode to an RFKeyword."""
     attrs = node.span.attributes
-    children = [
-        _build_keyword(c) for c in node.children if classify_span(c.span) == SpanType.KEYWORD
-    ]
+    children: list[RFKeyword] = []
+    for c in node.children:
+        ctype = classify_span(c.span)
+        if ctype == SpanType.KEYWORD:
+            children.append(_build_keyword(c, all_span_ids))
+        elif ctype == SpanType.GENERIC:
+            children.append(_build_generic_keyword(c, all_span_ids))
+    children.sort(key=lambda k: k.start_time)
     return RFKeyword(
         name=attrs.get("rf.keyword.name") or node.span.name,
         keyword_type=attrs.get("rf.keyword.type", "KEYWORD"),
@@ -285,12 +290,17 @@ def _build_keyword(node: SpanNode) -> RFKeyword:
     )
 
 
-def _build_test(node: SpanNode) -> RFTest:
+def _build_test(node: SpanNode, all_span_ids: set[str]) -> RFTest:
     """Convert a test SpanNode to an RFTest."""
     attrs = node.span.attributes
-    keywords = [
-        _build_keyword(c) for c in node.children if classify_span(c.span) == SpanType.KEYWORD
-    ]
+    keywords: list[RFKeyword] = []
+    for c in node.children:
+        ctype = classify_span(c.span)
+        if ctype == SpanType.KEYWORD:
+            keywords.append(_build_keyword(c, all_span_ids))
+        # GENERIC children of TEST are NOT nested here (Req 1.5) —
+        # they are collected as generic roots by _collect_generic_roots()
+    keywords.sort(key=lambda k: k.start_time)
     tags_raw = attrs.get("rf.test.tags", [])
     tags = tags_raw if isinstance(tags_raw, list) else []
     return RFTest(
@@ -312,20 +322,20 @@ def _build_test(node: SpanNode) -> RFTest:
     )
 
 
-def _build_suite(node: SpanNode) -> RFSuite:
+def _build_suite(node: SpanNode, all_span_ids: set[str]) -> RFSuite:
     """Convert a suite SpanNode to an RFSuite."""
     attrs = node.span.attributes
     children: list[RFSuite | RFTest | RFKeyword] = []
     for child in node.children:
         span_type = classify_span(child.span)
         if span_type == SpanType.SUITE:
-            children.append(_build_suite(child))
+            children.append(_build_suite(child, all_span_ids))
         elif span_type == SpanType.TEST:
-            children.append(_build_test(child))
+            children.append(_build_test(child, all_span_ids))
         elif span_type == SpanType.KEYWORD:
             kw_type = child.span.attributes.get("rf.keyword.type", "KEYWORD")
             if kw_type in ("SETUP", "TEARDOWN"):
-                kw = _build_keyword(child)
+                kw = _build_keyword(child, all_span_ids)
                 kw.suite_name = attrs.get("rf.suite.name") or node.span.name
                 kw.suite_source = str(attrs.get("rf.suite.source", ""))
                 children.append(kw)
@@ -450,6 +460,25 @@ def _build_generic_service_suites(
     return suites
 
 
+def _collect_generic_roots(node: SpanNode, out: list[SpanNode]) -> None:
+    """Collect GENERIC children of SUITE/TEST nodes as generic roots.
+
+    Per Req 1.5, Generic spans whose parent is a SUITE or TEST span (not
+    KEYWORD) are treated as Generic_Root_Spans and grouped into Service
+    Suites.  This helper walks the SpanNode tree and collects them.
+    """
+    parent_type = classify_span(node.span)
+    for child in node.children:
+        child_type = classify_span(child.span)
+        if child_type == SpanType.GENERIC and parent_type in (
+            SpanType.SUITE,
+            SpanType.TEST,
+        ):
+            out.append(child)
+        else:
+            _collect_generic_roots(child, out)
+
+
 def interpret_tree(roots: list[SpanNode]) -> RFRunModel:
     """Convert span tree into RF model objects.
 
@@ -487,7 +516,9 @@ def interpret_tree(roots: list[SpanNode]) -> RFRunModel:
     for root in roots:
         span_type = classify_span(root.span)
         if span_type == SpanType.SUITE:
-            suites.append(_build_suite(root))
+            suites.append(_build_suite(root, all_span_ids))
+            # Collect GENERIC children of SUITE/TEST nodes (Req 1.5)
+            _collect_generic_roots(root, generic_roots)
         elif span_type == SpanType.GENERIC:
             # Only treat as generic root if parent is not in our span set
             pid = root.span.parent_span_id

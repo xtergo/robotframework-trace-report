@@ -75,9 +75,10 @@ class TestKeywordTypes:
         roots = build_tree(spans)
         model = interpret_tree(roots)
 
-        # Get the test and its keywords
-        assert len(model.suites) == 1
-        suite = model.suites[0]
+        # Get the RF suite (exclude generic service suites)
+        rf_suites = [s for s in model.suites if not s._is_generic_service]
+        assert len(rf_suites) == 1
+        suite = rf_suites[0]
         # Suite has 2 children: signal span (classified as test) and actual test
         assert len(suite.children) == 2
         # Get the actual test (the one with keywords)
@@ -219,9 +220,10 @@ class TestInterpretation:
         assert model.run_id == "all-types-run-001"
         assert model.rf_version == "7.4.1"
 
-        # Check suite structure
-        assert len(model.suites) == 1
-        suite = model.suites[0]
+        # Check suite structure (RF suite + generic service suite for orphan generic span)
+        rf_suites = [s for s in model.suites if not s._is_generic_service]
+        assert len(rf_suites) == 1
+        suite = rf_suites[0]
         assert isinstance(suite, RFSuite)
         assert suite.name == "All Types Suite"
         assert suite.id == "1000000000000001"  # Uses span_id, not rf.suite.id
@@ -348,10 +350,9 @@ class TestStatistics:
         # Check duration (should be positive)
         assert stats.total_duration_ms > 0
 
-        # Check suite stats
-        assert len(stats.suite_stats) == 1
-        suite_stat = stats.suite_stats[0]
-        assert suite_stat.suite_name == "All Types Suite"
+        # Check suite stats (RF suite + generic service suite)
+        assert len(stats.suite_stats) == 2
+        suite_stat = next(s for s in stats.suite_stats if s.suite_name == "All Types Suite")
         assert suite_stat.total == 2
         assert suite_stat.passed == 1
         assert suite_stat.failed == 0
@@ -401,15 +402,15 @@ class TestEdgeCases:
         assert model.statistics.total_tests == 0
 
     def test_generic_span_not_in_model(self):
-        """Test that generic spans are not included in the RF model."""
+        """Test that generic spans are not nested under RF tests/keywords."""
         spans = parse_file("tests/fixtures/all_types_trace.json")
         roots = build_tree(spans)
         model = interpret_tree(roots)
 
-        # Generic HTTP Request span should not appear in the model
-        # (it's not a suite, test, or keyword under a test)
-        suite = model.suites[0]
-        test = suite.children[0]
+        # Generic HTTP Request span should not appear under the RF suite's tests
+        # (its parent is the SUITE, so it goes to a Service Suite instead)
+        rf_suite = next(s for s in model.suites if not s._is_generic_service)
+        test = rf_suite.children[0]
 
         # No keyword should be named "Generic HTTP Request"
         keyword_names = [kw.name for kw in test.keywords]
@@ -523,7 +524,7 @@ class TestEnrichedDataModel:
             events=events,
         )
         node = SpanNode(span=span)
-        kw = _build_keyword(node)
+        kw = _build_keyword(node, set())
 
         assert kw.events == events
         assert len(kw.events) == 1
@@ -547,7 +548,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         node = SpanNode(span=span)
-        kw = _build_keyword(node)
+        kw = _build_keyword(node, set())
 
         assert kw.events == []
 
@@ -595,7 +596,7 @@ class TestEnrichedDataModel:
             status={"message": "Expected 1 but got 0", "code": "STATUS_CODE_ERROR"},
         )
         node = SpanNode(span=span)
-        kw = _build_keyword(node)
+        kw = _build_keyword(node, set())
 
         assert kw.status_message == "Expected 1 but got 0"
         assert kw.status == Status.FAIL
@@ -618,7 +619,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         node = SpanNode(span=span)
-        kw = _build_keyword(node)
+        kw = _build_keyword(node, set())
 
         assert kw.status_message == ""
 
@@ -640,7 +641,7 @@ class TestEnrichedDataModel:
             status={"message": "Test assertion failed", "code": "STATUS_CODE_ERROR"},
         )
         node = SpanNode(span=span)
-        test = _build_test(node)
+        test = _build_test(node, set())
 
         assert test.status_message == "Test assertion failed"
         assert test.status == Status.FAIL
@@ -692,7 +693,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         node = SpanNode(span=span)
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
 
         assert suite.metadata == {
             "Version": "1.2.3",
@@ -719,7 +720,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         node = SpanNode(span=span)
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
 
         assert suite.metadata == {}
 
@@ -804,7 +805,7 @@ class TestEnrichedDataModel:
         test_node = SpanNode(span=test_span, parent=suite_node)
         suite_node.children = [setup_node, test_node, teardown_node]
 
-        suite = _build_suite(suite_node)
+        suite = _build_suite(suite_node, set())
 
         # Should have 3 children: SETUP keyword, test, TEARDOWN keyword
         assert len(suite.children) == 3
@@ -861,7 +862,7 @@ class TestEnrichedDataModel:
         kw_node = SpanNode(span=regular_kw_span, parent=suite_node)
         suite_node.children = [kw_node]
 
-        suite = _build_suite(suite_node)
+        suite = _build_suite(suite_node, set())
 
         # Regular keywords should NOT be in suite children
         assert len(suite.children) == 0
@@ -888,7 +889,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         node = SpanNode(span=span)
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
 
         assert suite.doc == "This suite tests documentation features."
 
@@ -922,7 +923,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         node = SpanNode(span=span)
-        kw = _build_keyword(node)
+        kw = _build_keyword(node, set())
 
         assert kw.doc == "This keyword does something useful."
 
@@ -959,7 +960,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         node = SpanNode(span=span)
-        test = _build_test(node)
+        test = _build_test(node, set())
 
         assert test.doc == "This test verifies login flow."
 
@@ -984,7 +985,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         kw_node = SpanNode(span=kw_span)
-        kw = _build_keyword(kw_node)
+        kw = _build_keyword(kw_node, set())
 
         assert kw.lineno == 0
         assert kw.doc == ""
@@ -1008,7 +1009,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         test_node = SpanNode(span=test_span)
-        test = _build_test(test_node)
+        test = _build_test(test_node, set())
 
         assert test.doc == ""
         assert test.status_message == ""
@@ -1031,7 +1032,7 @@ class TestEnrichedDataModel:
             status={"code": "STATUS_CODE_OK"},
         )
         suite_node = SpanNode(span=suite_span)
-        suite = _build_suite(suite_node)
+        suite = _build_suite(suite_node, set())
 
         assert suite.doc == ""
         assert suite.metadata == {}
