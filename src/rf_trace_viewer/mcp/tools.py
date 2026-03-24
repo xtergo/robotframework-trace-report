@@ -6,7 +6,8 @@ arguments, returning a JSON-serialisable dict.  No transport awareness.
 
 from __future__ import annotations
 
-from rf_trace_viewer.mcp.session import Session, ToolError
+from rf_trace_viewer.mcp.session import AliasNotFoundError, Session, ToolError
+from rf_trace_viewer.rf_model import RFSuite, RFTest, Status
 
 
 def load_run(
@@ -34,3 +35,64 @@ def load_run(
         "failed": run_data.model.statistics.failed,
         "skipped": run_data.model.statistics.skipped,
     }
+
+
+_STATUS_PRIORITY = {Status.FAIL: 0, Status.SKIP: 1, Status.PASS: 2}
+
+
+def _collect_tests(
+    children: list[RFSuite | RFTest | object],
+    suite_name: str,
+) -> list[tuple[RFTest, str]]:
+    """Recursively collect ``(test, parent_suite_name)`` pairs from the suite tree."""
+    result: list[tuple[RFTest, str]] = []
+    for child in children:
+        if isinstance(child, RFTest):
+            result.append((child, suite_name))
+        elif isinstance(child, RFSuite):
+            result.extend(_collect_tests(child.children, child.name))
+    return result
+
+
+def list_tests(
+    session: Session,
+    alias: str,
+    status: str | None = None,
+    tag: str | None = None,
+) -> list[dict]:
+    """Return filtered and sorted test summaries for a loaded run.
+
+    Raises :class:`AliasNotFoundError` when *alias* is not loaded.
+    """
+    try:
+        run_data = session.get_run(alias)
+    except KeyError:
+        raise AliasNotFoundError(f"Run alias {alias!r} not loaded.") from None
+
+    # Collect all tests with their parent suite name
+    tests: list[tuple[RFTest, str]] = []
+    for suite in run_data.model.suites:
+        tests.extend(_collect_tests(suite.children, suite.name))
+
+    # Apply optional status filter
+    if status is not None:
+        tests = [(t, s) for t, s in tests if t.status.value == status]
+
+    # Apply optional tag filter
+    if tag is not None:
+        tests = [(t, s) for t, s in tests if tag in t.tags]
+
+    # Sort: status priority (FAIL=0, SKIP=1, PASS=2), then duration descending
+    tests.sort(key=lambda pair: (_STATUS_PRIORITY.get(pair[0].status, 3), -pair[0].elapsed_time))
+
+    return [
+        {
+            "name": t.name,
+            "status": t.status.value,
+            "duration_ms": t.elapsed_time,
+            "suite": suite_name,
+            "tags": t.tags,
+            "error_message": t.status_message if t.status == Status.FAIL else "",
+        }
+        for t, suite_name in tests
+    ]
