@@ -175,7 +175,7 @@ class TestProperty10FieldExtraction:
         # Import the internal builder function
         from rf_trace_viewer.rf_model import _build_suite
 
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
 
         # Verify all required fields are present and match input
         assert isinstance(suite, RFSuite)
@@ -198,7 +198,7 @@ class TestProperty10FieldExtraction:
         # Import the internal builder function
         from rf_trace_viewer.rf_model import _build_test
 
-        test = _build_test(node)
+        test = _build_test(node, set())
 
         # Verify all required fields are present and match input
         assert isinstance(test, RFTest)
@@ -221,7 +221,7 @@ class TestProperty10FieldExtraction:
         # Import the internal builder function
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
 
         # Verify all required fields are present and match input
         assert isinstance(keyword, RFKeyword)
@@ -243,7 +243,7 @@ class TestProperty10FieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_test
 
-        test = _build_test(node)
+        test = _build_test(node, set())
 
         # If tags were in the input, they should be in the output
         tags_raw = raw_span.attributes.get("rf.test.tags", [])
@@ -261,7 +261,7 @@ class TestProperty10FieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
 
         # Keyword type should match input or default to "KEYWORD"
         expected_type = raw_span.attributes.get("rf.keyword.type", "KEYWORD")
@@ -525,7 +525,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
 
         expected_lineno = int(raw_span.attributes.get("rf.keyword.lineno", 0))
         assert keyword.lineno == expected_lineno
@@ -539,7 +539,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
 
         expected_doc = str(raw_span.attributes.get("rf.keyword.doc", ""))
         assert keyword.doc == expected_doc
@@ -555,7 +555,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
         assert keyword.doc == doc_text
 
     @given(rf_keyword_span())
@@ -578,7 +578,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
         assert keyword.events == events
 
     @given(rf_keyword_span())
@@ -590,7 +590,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
         assert keyword.events == []
 
     @given(rf_keyword_span(), st.text(min_size=1, max_size=200))
@@ -602,7 +602,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
         assert keyword.status_message == message
 
     @given(rf_keyword_span())
@@ -614,7 +614,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
         assert keyword.status_message == ""
 
     @given(rf_test_span(), st.text(min_size=0, max_size=200))
@@ -626,7 +626,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_test
 
-        test = _build_test(node)
+        test = _build_test(node, set())
         assert test.doc == doc_text
 
     @given(rf_test_span())
@@ -637,7 +637,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_test
 
-        test = _build_test(node)
+        test = _build_test(node, set())
         expected_doc = str(raw_span.attributes.get("rf.test.doc", ""))
         assert test.doc == expected_doc
 
@@ -650,7 +650,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_test
 
-        test = _build_test(node)
+        test = _build_test(node, set())
         assert test.status_message == message
 
     @given(rf_suite_span(), st.text(min_size=0, max_size=200))
@@ -662,7 +662,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_suite
 
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
         assert suite.doc == doc_text
 
     @given(rf_suite_span())
@@ -673,7 +673,7 @@ class TestProperty27EnrichedModelFieldExtraction:
 
         from rf_trace_viewer.rf_model import _build_suite
 
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
         expected_doc = str(raw_span.attributes.get("rf.suite.doc", ""))
         assert suite.doc == expected_doc
 
@@ -714,7 +714,7 @@ class TestProperty28SuiteMetadataCollection:
 
         from rf_trace_viewer.rf_model import _build_suite
 
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
 
         # Every metadata key should be present with prefix stripped
         for key, value in metadata.items():
@@ -736,7 +736,7 @@ class TestProperty28SuiteMetadataCollection:
 
         from rf_trace_viewer.rf_model import _build_suite
 
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
 
         # Filter out any metadata that came from randomly generated attributes
         # (the strategy might generate keys starting with rf.suite.metadata. by chance)
@@ -769,7 +769,7 @@ class TestProperty28SuiteMetadataCollection:
 
         from rf_trace_viewer.rf_model import _build_suite
 
-        suite = _build_suite(node)
+        suite = _build_suite(node, set())
 
         assert key in suite.metadata
         assert suite.metadata[key] == str(int_value)
@@ -792,7 +792,7 @@ class TestProperty29StatusMessagePassthrough:
 
         from rf_trace_viewer.rf_model import _build_keyword
 
-        keyword = _build_keyword(node)
+        keyword = _build_keyword(node, set())
         assert keyword.status_message == message
 
     @given(rf_test_span(), st.text(min_size=1, max_size=300))
@@ -804,7 +804,7 @@ class TestProperty29StatusMessagePassthrough:
 
         from rf_trace_viewer.rf_model import _build_test
 
-        test = _build_test(node)
+        test = _build_test(node, set())
         assert test.status_message == message
 
     @given(
@@ -819,9 +819,9 @@ class TestProperty29StatusMessagePassthrough:
         from rf_trace_viewer.rf_model import _build_keyword, _build_test
 
         if "rf.keyword.name" in raw_span.attributes:
-            model = _build_keyword(node)
+            model = _build_keyword(node, set())
         else:
-            model = _build_test(node)
+            model = _build_test(node, set())
 
         assert model.status_message == ""
 
@@ -839,8 +839,8 @@ class TestProperty29StatusMessagePassthrough:
         from rf_trace_viewer.rf_model import _build_keyword, _build_test
 
         if "rf.keyword.name" in raw_span.attributes:
-            model = _build_keyword(node)
+            model = _build_keyword(node, set())
         else:
-            model = _build_test(node)
+            model = _build_test(node, set())
 
         assert model.status_message == message
