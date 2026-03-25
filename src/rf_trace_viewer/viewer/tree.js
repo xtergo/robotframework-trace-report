@@ -3118,22 +3118,21 @@ function _createTreeNode(opts) {
     var _gcIsDark = document.documentElement.classList.contains('theme-dark') ||
                     document.querySelector('.rf-trace-viewer.theme-dark') !== null;
     var _gcColor = null;
+    var _gcSvcColors = window.__RF_SVC_COLORS__;
 
-    if (opts.data._is_generic_service) {
-      // Generic service suite — use service colour palette
-      var _gcSvcColors = window.__RF_SVC_COLORS__;
-      var _gcSvcName = opts.data.name;
-      if (_gcSvcColors && _gcSvcName) {
-        var _gcEntry = _gcSvcColors.get(_gcSvcName);
-        if (_gcEntry) {
-          _gcColor = _gcIsDark ? _gcEntry.gD[1] : _gcEntry.gL[1];
-        }
+    // Determine the service name for colour lookup
+    var _gcSvcName = opts.data._is_generic_service ? opts.data.name
+                   : (opts.type === 'suite' ? (window.__RF_SERVICE_NAME__ || '') : null);
+    if (_gcSvcColors && _gcSvcName) {
+      var _gcEntry = _gcSvcColors.get(_gcSvcName);
+      if (_gcEntry) {
+        _gcColor = _gcIsDark ? _gcEntry.gD[1] : _gcEntry.gL[1];
       }
-      if (!_gcColor) {
-        _gcColor = _gcIsDark ? '#4527a0' : '#673ab7';
-      }
-    } else if (opts.type === 'suite') {
-      // RF suite — use the same blue as svc-dot-rf in the service legend
+    }
+    // Fallbacks
+    if (!_gcColor && opts.data._is_generic_service) {
+      _gcColor = _gcIsDark ? '#4527a0' : '#673ab7';
+    } else if (!_gcColor && opts.type === 'suite') {
       _gcColor = _gcIsDark ? '#42a5f5' : '#1976d2';
     }
 

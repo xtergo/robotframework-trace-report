@@ -1107,23 +1107,32 @@
     header.appendChild(searchWrapper);
 
     // ── Service Color Palette (shared: offline + live) ──
-    // Assigns a stable, distinct color to each non-RF service name.
+    // Assigns a stable, distinct color to each service name.
+    // Blue is reserved for the RF service; other services rotate through the palette.
     var _svcColorPalette = [
-      { id: 'teal',    light: '#00897b', dark: '#4db6ac', gL: ['#26a69a','#00897b'], gD: ['#00897b','#00695c'], badge: ['#e0f2f1','#00695c','#00695c','#e0f2f1'] },
       { id: 'orange',  light: '#f57c00', dark: '#ffb74d', gL: ['#fb8c00','#f57c00'], gD: ['#ef6c00','#e65100'], badge: ['#fff3e0','#e65100','#e65100','#fff3e0'] },
-      { id: 'pink',    light: '#c2185b', dark: '#f48fb1', gL: ['#e91e63','#c2185b'], gD: ['#c2185b','#880e4f'], badge: ['#fce4ec','#880e4f','#880e4f','#fce4ec'] },
       { id: 'green',   light: '#2e7d32', dark: '#81c784', gL: ['#43a047','#2e7d32'], gD: ['#2e7d32','#1b5e20'], badge: ['#e8f5e9','#1b5e20','#1b5e20','#e8f5e9'] },
+      { id: 'pink',    light: '#c2185b', dark: '#f48fb1', gL: ['#e91e63','#c2185b'], gD: ['#c2185b','#880e4f'], badge: ['#fce4ec','#880e4f','#880e4f','#fce4ec'] },
+      { id: 'teal',    light: '#00897b', dark: '#4db6ac', gL: ['#26a69a','#00897b'], gD: ['#00897b','#00695c'], badge: ['#e0f2f1','#00695c','#00695c','#e0f2f1'] },
       { id: 'purple',  light: '#7b1fa2', dark: '#ce93d8', gL: ['#9c27b0','#7b1fa2'], gD: ['#7b1fa2','#4a148c'], badge: ['#f3e5f5','#4a148c','#4a148c','#f3e5f5'] },
-      { id: 'cyan',    light: '#00838f', dark: '#4dd0e1', gL: ['#00acc1','#00838f'], gD: ['#00838f','#006064'], badge: ['#e0f7fa','#006064','#006064','#e0f7fa'] },
       { id: 'brown',   light: '#5d4037', dark: '#bcaaa4', gL: ['#795548','#5d4037'], gD: ['#5d4037','#3e2723'], badge: ['#efebe9','#3e2723','#3e2723','#efebe9'] },
+      { id: 'cyan',    light: '#00838f', dark: '#4dd0e1', gL: ['#00acc1','#00838f'], gD: ['#00838f','#006064'], badge: ['#e0f7fa','#006064','#006064','#e0f7fa'] },
       { id: 'indigo',  light: '#283593', dark: '#9fa8da', gL: ['#3949ab','#283593'], gD: ['#283593','#1a237e'], badge: ['#e8eaf6','#1a237e','#1a237e','#e8eaf6'] },
     ];
+    // Reserved blue for the RF service — matches svc-dot-rf in CSS
+    var _rfServiceColor = { id: 'blue', light: '#1976d2', dark: '#42a5f5', gL: ['#1e88e5','#1565c0'], gD: ['#1565c0','#0d47a1'], badge: ['#e3f2fd','#0d47a1','#0d47a1','#e3f2fd'] };
     var _svcColorMap = {};
     var _svcColorIdx = 0;
 
     function _getServiceColor(serviceName) {
       if (!serviceName) return null;
       if (_svcColorMap[serviceName]) return _svcColorMap[serviceName];
+      // RF service gets reserved blue
+      var rfName = window.__RF_SERVICE_NAME__ || '';
+      if (rfName && serviceName === rfName) {
+        _svcColorMap[serviceName] = _rfServiceColor;
+        return _rfServiceColor;
+      }
       var entry = _svcColorPalette[_svcColorIdx % _svcColorPalette.length];
       _svcColorIdx++;
       _svcColorMap[serviceName] = entry;
