@@ -602,6 +602,75 @@ robotframework-trace-report/
 └── TODO.md                          # Development roadmap
 ```
 
+## Live Timeline Update Flow
+
+In live mode, the timeline view is driven entirely by actual span data — never by wall-clock speculation. The `advanceTimelineNow` timer is disabled (early return when `window.__RF_TRACE_LIVE__` is true) because `maxTime` is now derived from the latest span `endTime` arriving via poll cycles, not from `Date.now()`. The `setInterval` in `live.js` still fires but the function is a no-op.
+
+### Two-Branch Update Flow
+
+`updateTimelineData` uses a linear two-branch design instead of the previous 5+ code paths:
+
+```mermaid
+flowchart TD
+    A[Poll arrives: updateTimelineData called] --> B{isDraggingMarker?}
+    B -->|Yes| C[Queue data, return]
+    B -->|No| D[Save view state snapshot]
+    D --> E[Call _processSpans - computes data extent]
+    E --> F[Record actualDataMax from _processSpans]
+    F --> G{First data load?}
+    G -->|Yes| H[_autoZoomToRecentCluster]
+    G -->|No| I{_userInteracted?}
+    I -->|No: Auto-scroll| J[Shift view to data edge + padding]
+    I -->|Yes| K{View at data edge? tail-follow}
+    K -->|Yes| L[Extend viewEnd to new data edge + padding]
+    K -->|No| M[Preserve exact saved view]
+    H --> N[Sync scrollbar, slider, render]
+    J --> N
+    L --> N
+    M --> N
+```
+
+The key steps on each poll:
+
+1. Jog shuttle guard — if `isDraggingMarker`, queue data in `_jogPendingData` and return
+2. Snapshot current view state (`viewStart`, `viewEnd`, `zoom`, `panY`, `selectedSpan`, `hadSpans`)
+3. `_processSpans(data)` recomputes spans and sets `minTime`/`maxTime` from actual span data
+4. Record `actualDataMax = timelineState.maxTime`
+5. Two-branch view management:
+   - **First data load** → `_autoZoomToRecentCluster()`
+   - **No user interaction** → auto-scroll: `viewEnd = actualDataMax + 5% padding`, shift `viewStart` to maintain view width
+   - **User interacted + at data edge** → tail-follow: extend `viewEnd` to new data edge
+   - **User interacted + not at edge** → preserve exact saved view
+6. Ensure `maxTime` encompasses view (for scrollbar), recompute `zoom`, restore `panY`/`selectedSpan`, render
+
+### Tail-Follow Detection
+
+Tail-follow uses a simple edge-proximity check:
+
+```javascript
+var wasAtEdge = Math.abs(saved.viewEnd - prevDataMax) < 2;
+```
+
+The 2-second tolerance accounts for nanosecond-to-second conversion rounding. The previous `viewCoverage` heuristic was removed — if the user's view edge is within 2 seconds of the data edge, they want to see the latest data regardless of zoom level.
+
+### Interaction Matrix
+
+This matrix documents how every view-state mutator interacts with the update flow:
+
+| Mutator | Modifies | Sets `_userInteracted` | Resolution |
+|---------|----------|----------------------|------------|
+| `_processSpans` | minTime, maxTime, viewStart, viewEnd | No | View is set AFTER `_processSpans`, not restored over it |
+| `updateTimelineData` | viewStart, viewEnd, zoom, maxTime | No | Two-branch flow, single authority |
+| Wheel zoom | viewStart, viewEnd, zoom | Yes | Next poll preserves view |
+| Drag pan | viewStart, viewEnd | Yes | Next poll preserves view |
+| Drag-to-zoom | viewStart, viewEnd, zoom | Yes | Next poll preserves view |
+| Scrollbar drag | viewStart, viewEnd | Yes | Next poll preserves view |
+| `_applyPreset` | viewStart, viewEnd, zoom | Clears (false) | Preset sets initial view, then auto-scroll takes over |
+| Nav undo/redo | viewStart, viewEnd, zoom | Yes | Next poll preserves restored view |
+| `_applyTimePicker` | viewStart, viewEnd | Yes | Next poll preserves picker range |
+| `_handleFilterChanged` | workers, filteredSpans, lanes | No | Deduped: skips if span count unchanged |
+| `advanceTimelineNow` | (none in live mode) | No | Disabled — early return when `__RF_TRACE_LIVE__` is true |
+
 ## Related Documentation
 
 - [User Guide](user-guide.md) — CLI options, deployment instructions, viewer features

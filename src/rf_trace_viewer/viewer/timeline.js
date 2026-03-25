@@ -65,7 +65,9 @@
     _locateRecentPending: false,
     _presetBtns: [],
     _dateRangePicker: null,
-    _fetchingDuration: null
+    _fetchingDuration: null,
+    _lastFilterCount: undefined,
+    _lastTotalCount: undefined
   };
 
   // Navigation history state (undo/redo stack)
@@ -133,6 +135,7 @@
     timelineState.viewStart = s.viewStart;
     timelineState.viewEnd = s.viewEnd;
     timelineState.zoom = s.zoom;
+    timelineState._userInteracted = true;
     _syncNavButtons();
     _render();
     _renderHeader();
@@ -151,6 +154,7 @@
     timelineState.viewStart = s.viewStart;
     timelineState.viewEnd = s.viewEnd;
     timelineState.zoom = s.zoom;
+    timelineState._userInteracted = true;
     _syncNavButtons();
     _render();
     _renderHeader();
@@ -881,6 +885,7 @@
    * (i.e. hasn't manually panned/zoomed away from it).
    */
   window.advanceTimelineNow = function () {
+    if (window.__RF_TRACE_LIVE__) return;
     var nowSec = Date.now() / 1000;
     var oldMaxTime = timelineState.maxTime;
     // Always extend maxTime to now
@@ -3103,6 +3108,15 @@
   function _handleFilterChanged(event) {
     var filteredSpans = event.filteredSpans || [];
     var totalFlat = timelineState.flatSpans ? timelineState.flatSpans.length : 0;
+
+    // Early-exit guard: skip duplicate fires with same span counts (Req 5.1)
+    if (filteredSpans.length === timelineState._lastFilterCount &&
+        totalFlat === timelineState._lastTotalCount) {
+      return;
+    }
+    timelineState._lastFilterCount = filteredSpans.length;
+    timelineState._lastTotalCount = totalFlat;
+
     console.log('[Timeline] Filter changed: filteredSpans=' + filteredSpans.length +
       ', timelineFlatSpans=' + totalFlat +
       ', timeRange=' + (event.filterState ? event.filterState.timeRangeStart + '/' + event.filterState.timeRangeEnd : 'n/a'));
@@ -3385,260 +3399,105 @@
   window.updateTimelineData = function (data) {
     if (!timelineState.canvas || !timelineState.ctx) return;
 
-    // While the jog shuttle is active, defer data updates to avoid
-    // fighting with the continuous scroll. Queue the data and process
-    // it when the drag ends.
+    // 1. Jog shuttle guard — defer data updates while marker is being dragged
     if (timelineState.isDraggingMarker) {
       timelineState._jogPendingData = data;
       return;
     }
 
-    // Cancel any pending marker settle timer. When new data arrives (especially
-    // on first data load), a stale settle timer can fire load-window-changed
-    // after _autoZoomToRecentCluster has set up the view, causing a cascade of
-    // prune → rebuild → view reset. Cancelling it here breaks that cycle.
+    // Cancel any pending marker settle timer to prevent stale fire after
+    // _autoZoomToRecentCluster sets up the view on first data load.
     if (timelineState._markerSettleTimer) {
       clearTimeout(timelineState._markerSettleTimer);
       timelineState._markerSettleTimer = null;
       timelineState._markerPendingFetch = false;
     }
 
-    // Save current zoom/pan state
-    var savedZoom = timelineState.zoom;
-    var savedViewStart = timelineState.viewStart;
-    var savedViewEnd = timelineState.viewEnd;
-    var savedPanY = timelineState.panY;
-    var savedSelected = timelineState.selectedSpan;
-    var savedMaxTime = timelineState.maxTime;
-    var savedMinTime = timelineState.minTime;
-    var wasUserZoomed = savedZoom > 1.01 || savedZoom < 0.99;
-    var hadSpansBefore = timelineState.flatSpans.length > 0;
+    // 2. Snapshot current view state
+    var saved = {
+      viewStart: timelineState.viewStart,
+      viewEnd: timelineState.viewEnd,
+      zoom: timelineState.zoom,
+      panY: timelineState.panY,
+      selectedSpan: timelineState.selectedSpan,
+      hadSpans: timelineState.flatSpans.length > 0
+    };
 
-    // Detect if user's viewEnd was tracking the data edge (tail-follow mode).
-    // Allow 2-second tolerance for rounding.
-    // When _userInteracted is false (auto-zoom from _locateRecent), always
-    // allow tail-follow if viewEnd is at the edge — the coverage check only
-    // applies to manual user zoom to avoid unwanted scrolling.
-    var viewCoverage = (savedMaxTime > savedMinTime)
-      ? (savedViewEnd - savedViewStart) / (savedMaxTime - savedMinTime) : 1;
-    var wasTailFollowing = hadSpansBefore &&
-      Math.abs(savedViewEnd - savedMaxTime) < 2 &&
-      (viewCoverage > 0.25 || !timelineState._userInteracted);
+    // 3. Record previous data edge
+    var prevDataMax = timelineState._actualDataMax || timelineState.maxTime;
 
-    // Re-process spans with new data
+    // 4. Reprocess spans (sets minTime/maxTime from data)
     try {
       _processSpans(data);
     } catch (e) {
       console.error('[Timeline] _processSpans error in updateTimelineData:', e.message, e.stack);
+      // Restore saved view state on error
+      timelineState.viewStart = saved.viewStart;
+      timelineState.viewEnd = saved.viewEnd;
+      timelineState.zoom = saved.zoom;
+      timelineState.panY = saved.panY;
+      timelineState.selectedSpan = saved.selectedSpan;
       return;
     }
 
-    // Refresh allWorkers snapshot so _handleFilterChanged doesn't overwrite
-    // workers with a stale copy that's missing newly discovered services.
+    // 5. Record actual data edge
+    var actualDataMax = timelineState.maxTime;
+    timelineState._actualDataMax = actualDataMax;
+
+    // 6. Refresh allWorkers snapshot
     timelineState.allWorkers = {};
     var _awKeys = Object.keys(timelineState.workers);
     for (var _aw = 0; _aw < _awKeys.length; _aw++) {
       timelineState.allWorkers[_awKeys[_aw]] = timelineState.workers[_awKeys[_aw]].slice();
     }
 
-    // Capture the ACTUAL data edge from _processSpans before any view
-    // management code inflates maxTime with padding. This is critical for
-    // tail-follow: we must compare actual data edges, not padded ones.
-    var actualDataMax = timelineState.maxTime;
-    // The previous actual data edge is stored on timelineState so it
-    // survives across polls (savedMaxTime may be inflated by padding).
-    var prevDataMax = timelineState._actualDataMax || savedMaxTime;
+    // 7. Two-branch view management
+    if (!saved.hadSpans && timelineState.flatSpans.length > 0) {
+      // FIRST DATA LOAD: auto-zoom to recent cluster
+      _autoZoomToRecentCluster();
+      timelineState._locateRecentPending = false;
+    } else if (saved.hadSpans) {
+      var savedViewWidth = saved.viewEnd - saved.viewStart;
+      var padding = savedViewWidth * 0.05;
 
-    // Restore zoom/view BEFORE resizing canvas (which triggers _render).
-    // _processSpans resets viewStart/viewEnd to full range; we must fix that
-    // before any render happens.
-    var _shouldAutoZoom = false;
-    // When user has manually interacted (zoom, pan, Locate Recent),
-    // preserve their exact view — don't let poll updates move the camera.
-    if (timelineState._locateRecentPending) {
-      // Locate Recent was clicked during pagination — re-run it now that
-      // we have more data so it targets the true latest cluster.
-      _locateRecent();
-      console.log('[Timeline] updateData: _locateRecentPending, re-ran _locateRecent → view ' +
-        _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
-    } else if (timelineState._userInteracted) {
-      timelineState.zoom = savedZoom;
-      timelineState.viewStart = savedViewStart;
-      timelineState.viewEnd = savedViewEnd;
-      if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-      if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
+      if (timelineState._locateRecentPending) {
+        // Re-run locate recent with new data
+        _locateRecent();
+      } else if (!timelineState._userInteracted) {
+        // AUTO-SCROLL: shift view to track data edge
+        timelineState.viewEnd = actualDataMax + padding;
+        timelineState.viewStart = timelineState.viewEnd - savedViewWidth;
+        if (timelineState.viewStart < timelineState.minTime) {
+          timelineState.viewStart = timelineState.minTime;
+        }
+      } else {
+        // USER INTERACTED: preserve exact saved view
+        timelineState.viewStart = saved.viewStart;
+        timelineState.viewEnd = saved.viewEnd;
 
-      // Tail-follow: if actual data grew, the user's viewEnd was near the
-      // previous data edge, AND we're in live mode, extend viewEnd so the
-      // bar visibly grows. Compare actual data edges (not padded maxTime)
-      // to avoid the padding masking real growth.
-      var dataEdgeMovedFwd = actualDataMax > prevDataMax;
-      var viewWasAtEdge = Math.abs(savedViewEnd - prevDataMax) < 2 ||
-        (prevDataMax > 0 && savedViewEnd >= prevDataMax);
-      if (dataEdgeMovedFwd && viewWasAtEdge && window.__RF_TRACE_LIVE__) {
-        var dataGrowth = actualDataMax - prevDataMax;
-        // Keep the same right padding ratio: viewEnd = actualDataMax + padding
-        var liveVR = savedViewEnd - savedViewStart;
-        var livePad = liveVR * 0.15;
-        timelineState.viewEnd = actualDataMax + livePad;
+        // Tail-follow: if view was at data edge, extend viewEnd
+        var wasAtEdge = Math.abs(saved.viewEnd - prevDataMax) < 2;
+        if (wasAtEdge && actualDataMax > prevDataMax) {
+          timelineState.viewEnd = actualDataMax + padding;
+        }
+      }
+
+      // 8. Ensure maxTime encompasses view (for scrollbar)
+      if (timelineState.viewEnd > timelineState.maxTime) {
         timelineState.maxTime = timelineState.viewEnd;
-        var totalR = timelineState.maxTime - timelineState.minTime;
-        var viewR = timelineState.viewEnd - timelineState.viewStart;
-        if (totalR > 0 && viewR > 0) {
-          timelineState.zoom = totalR / viewR;
-        }
-        console.log('[Timeline] updateData: _userInteracted tail-follow, data grew ' +
-          dataGrowth.toFixed(1) + 's → viewEnd=' + _fmtEpoch(timelineState.viewEnd) +
-          ' (dataEdge=' + _fmtEpoch(actualDataMax) + ')');
-      } else {
-        console.log('[Timeline] updateData: _userInteracted=true, preserving view ' +
-          _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
-          ' (dataEdge=' + _fmtEpoch(actualDataMax) + ', prevEdge=' + _fmtEpoch(prevDataMax) + ')');
-      }
-    } else if (!hadSpansBefore && timelineState.flatSpans.length > 0) {
-      // First data load: if a preset is active, use the rolling window (now - preset → now)
-      // so new spans that just arrived are visible. Otherwise keep the saved view.
-      if (timelineState._activePreset) {
-        var nowSec = Date.now() / 1000;
-        var presetSec = timelineState._activePreset;
-        timelineState.viewEnd = nowSec;
-        timelineState.viewStart = nowSec - presetSec;
-        if (timelineState.viewStart < timelineState.minTime) timelineState.minTime = timelineState.viewStart;
-        if (timelineState.viewEnd > timelineState.maxTime) timelineState.maxTime = timelineState.viewEnd;
-      } else {
-        timelineState.viewStart = savedViewStart;
-        timelineState.viewEnd = savedViewEnd;
-        if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-        if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-      }
-      var totalRange = timelineState.maxTime - timelineState.minTime;
-      var viewRange = timelineState.viewEnd - timelineState.viewStart;
-      timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
-      // In live mode, auto-zoom to the recent cluster so spans are visible
-      // at a useful zoom level instead of a 900s overview where everything
-      // is sub-pixel. _autoZoomToRecentCluster adds 15% padding so the bar
-      // can visibly grow on subsequent polls.
-      if (window.__RF_TRACE_LIVE__) {
-        _autoZoomToRecentCluster();
-        // Clear the pending flag so subsequent polls don't keep re-running
-        // _locateRecent — we want the view to stay stable and let the bar
-        // visibly grow into the padding.
-        timelineState._locateRecentPending = false;
-      }
-      console.log('[Timeline] updateData: first data load, view ' +
-        _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
-    } else if (wasUserZoomed) {
-      // Check if the saved view still overlaps with the (possibly pruned) data range.
-      // After pruning, the data range can shrink so the old view points at empty space.
-      var viewOverlapsData = timelineState.flatSpans.length > 0 &&
-        savedViewEnd > timelineState.minTime && savedViewStart < timelineState.maxTime;
-      if (timelineState.flatSpans.length === 0 && timelineState._activePreset) {
-        // No spans at all but a preset is active — keep the rolling window
-        // (now - preset → now) so the time axis shows the correct range.
-        var nowSecEmpty = Date.now() / 1000;
-        var presetSecEmpty = timelineState._activePreset;
-        timelineState.viewEnd = nowSecEmpty;
-        timelineState.viewStart = nowSecEmpty - presetSecEmpty;
-        var trEmpty = timelineState.viewEnd - timelineState.viewStart;
-        timelineState.zoom = trEmpty > 0 ? (trEmpty / trEmpty) : 1; // zoom = 1 for exact preset
-        // Ensure min/max encompass the view so the axis renders correctly
-        if (timelineState.viewStart < timelineState.minTime) timelineState.minTime = timelineState.viewStart;
-        if (timelineState.viewEnd > timelineState.maxTime) timelineState.maxTime = timelineState.viewEnd;
-        console.log('[Timeline] updateData: empty data with preset, view ' +
-          _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
-      } else if (!viewOverlapsData && timelineState.flatSpans.length > 0) {
-        // Saved view is completely outside the current data.
-        // If a preset is active, snap to the rolling window so spans are visible.
-        // Otherwise keep the saved view — user can click "Locate Recent".
-        if (timelineState._activePreset) {
-          var nowSec2 = Date.now() / 1000;
-          var presetSec2 = timelineState._activePreset;
-          timelineState.viewEnd = nowSec2;
-          timelineState.viewStart = nowSec2 - presetSec2;
-          if (timelineState.viewStart < timelineState.minTime) timelineState.minTime = timelineState.viewStart;
-          if (timelineState.viewEnd > timelineState.maxTime) timelineState.maxTime = timelineState.viewEnd;
-          var tr = timelineState.maxTime - timelineState.minTime;
-          var vr = timelineState.viewEnd - timelineState.viewStart;
-          timelineState.zoom = (tr > 0 && vr > 0) ? tr / vr : 1;
-        } else {
-          timelineState.zoom = savedZoom;
-          timelineState.viewStart = savedViewStart;
-          timelineState.viewEnd = savedViewEnd;
-          if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-          if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-        }
-        console.log('[Timeline] updateData: no overlap, view ' +
-          _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
-      } else {
-        timelineState.zoom = savedZoom;
-        timelineState.viewStart = savedViewStart;
-        timelineState.viewEnd = savedViewEnd;
-
-        // Tail-follow: use actual data edges (not padded) to detect growth.
-        var dataEdgeMoved = actualDataMax > prevDataMax;
-        var dataStartMoved = timelineState.minTime < (savedMinTime || timelineState.minTime);
-        if (wasTailFollowing && dataEdgeMoved && !dataStartMoved && window.__RF_TRACE_LIVE__) {
-          var dataGrowth2 = actualDataMax - prevDataMax;
-          var liveViewRange = savedViewEnd - savedViewStart;
-          var livePad = liveViewRange * 0.15;
-          timelineState.viewEnd = actualDataMax + livePad;
-          timelineState.maxTime = timelineState.viewEnd;
-          var totalRange = timelineState.maxTime - timelineState.minTime;
-          var viewRange = timelineState.viewEnd - timelineState.viewStart;
-          if (totalRange > 0 && viewRange > 0) {
-            timelineState.zoom = totalRange / viewRange;
-          }
-        } else if (wasTailFollowing && dataEdgeMoved && !dataStartMoved) {
-          var extension = actualDataMax - prevDataMax;
-          timelineState.viewEnd += extension;
-          var totalRange = timelineState.maxTime - timelineState.minTime;
-          var viewRange = timelineState.viewEnd - timelineState.viewStart;
-          if (totalRange > 0 && viewRange > 0) {
-            timelineState.zoom = totalRange / viewRange;
-          }
-        }
-        console.log('[Timeline] updateData: restoring zoom=' + timelineState.zoom.toFixed(1) +
-          ', view=' + _fmtEpoch(timelineState.viewStart) + ' → ' + _fmtEpoch(timelineState.viewEnd));
-      }
-    } else {
-      // Not zoomed (zoom ≈ 1.0). If we already had spans, keep the current
-      // view — this prevents repeated updateData calls from resetting the
-      // view after _autoZoomToRecentCluster or marker drag set it up.
-      if (hadSpansBefore) {
-        timelineState.viewStart = savedViewStart;
-        timelineState.viewEnd = savedViewEnd;
-        if (savedViewStart < timelineState.minTime) timelineState.minTime = savedViewStart;
-        if (savedViewEnd > timelineState.maxTime) timelineState.maxTime = savedViewEnd;
-
-        // Tail-follow: when data grows past the current viewEnd, extend
-        // the view so new spans are visible. Keep the same view width and
-        // add 15% padding so the bar can keep growing into the next poll.
-        var stableDataGrew = actualDataMax > prevDataMax;
-        var stableDataPastView = actualDataMax > savedViewEnd;
-        if (stableDataGrew && stableDataPastView && window.__RF_TRACE_LIVE__) {
-          var stableVR = savedViewEnd - savedViewStart;
-          var stablePad = stableVR * 0.15;
-          timelineState.viewEnd = actualDataMax + stablePad;
-          timelineState.maxTime = timelineState.viewEnd;
-          var stableTR = timelineState.maxTime - timelineState.minTime;
-          var stableNewVR = timelineState.viewEnd - timelineState.viewStart;
-          if (stableTR > 0 && stableNewVR > 0) {
-            timelineState.zoom = stableTR / stableNewVR;
-          }
-          console.log('[Timeline] updateData: stable tail-follow, data past viewEnd → ' +
-            _fmtEpoch(timelineState.viewEnd) + ' (dataEdge=' + _fmtEpoch(actualDataMax) + ')');
-        } else {
-          console.log('[Timeline] updateData: keeping stable view ' +
-            _fmtEpoch(savedViewStart) + ' → ' + _fmtEpoch(savedViewEnd) +
-            ' (data edge at ' + _fmtEpoch(actualDataMax) + ')');
-        }
-      } else {
-        console.log('[Timeline] updateData: not zoomed (zoom=' + savedZoom.toFixed(2) +
-          '), showing full range');
       }
     }
 
-    // Recalculate canvas height for new content
+    // 9. Recompute zoom from totalRange / viewRange
+    var totalRange = timelineState.maxTime - timelineState.minTime;
+    var viewRange = timelineState.viewEnd - timelineState.viewStart;
+    timelineState.zoom = (totalRange > 0 && viewRange > 0) ? totalRange / viewRange : 1;
+
+    // 10. Restore panY and selectedSpan
+    timelineState.panY = saved.panY;
+    timelineState.selectedSpan = saved.selectedSpan;
+
+    // 11. Resize and render
     var requiredHeight = _calculateRequiredHeight();
     var canvas = timelineState.canvas;
     canvas.style.height = requiredHeight + 'px';
@@ -3647,24 +3506,17 @@
       _resizeHeaderCanvas(timelineState.headerCanvas);
     }
 
-    timelineState.panY = savedPanY;
-    timelineState.selectedSpan = savedSelected;
-
-    // Store the actual data edge (before padding) for next poll's comparison
-    timelineState._actualDataMax = actualDataMax;
-
     // Re-apply compact packing if layout mode is compact (processSpans resets to baseline lanes)
     if (timelineState.layoutMode === 'compact') {
-      // Clear stale original lanes — _processSpans rebuilt all span objects
       timelineState._originalLanes = null;
       _compactLanes(timelineState.workers);
-      // Recalculate canvas height after compact changed lane assignments
       var compactHeight = _calculateRequiredHeight();
       canvas.style.height = compactHeight + 'px';
       _resizeCanvas(canvas);
     }
 
     if (timelineState._syncSlider) timelineState._syncSlider();
+    if (timelineState._syncHScroll) timelineState._syncHScroll();
     _render();
     _renderHeader();
   };
