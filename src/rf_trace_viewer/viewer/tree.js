@@ -3127,11 +3127,15 @@ function _createTreeNode(opts) {
   }
 
   // Bubble-up service dots: show colored dots for EXTERNAL/GENERIC descendants
-  // Only on RF keywords (not EXTERNAL/GENERIC which already have full badges)
-  // and on tests/suites that contain external activity
-  if (opts.data && opts.type !== 'suite' &&
-      opts.kwType !== 'EXTERNAL' && opts.kwType !== 'GENERIC') {
+  // For RF keywords: show all descendant external services
+  // For EXTERNAL/GENERIC keywords: show descendant services OTHER than own service
+  if (opts.data && opts.type !== 'suite') {
+    var _ownSvc = (opts.kwType === 'EXTERNAL' || opts.kwType === 'GENERIC') ? (opts.data.service_name || '') : '';
     var descSvcs = _collectDescendantServices(opts.data);
+    // Filter out own service for EXTERNAL/GENERIC nodes (already shown in badge)
+    if (_ownSvc) {
+      descSvcs = descSvcs.filter(function(s) { return s !== _ownSvc; });
+    }
     if (descSvcs.length > 0) {
       var _svcColors = window.__RF_SVC_COLORS__;
       var _isDkDots = document.documentElement.classList.contains('theme-dark') ||
