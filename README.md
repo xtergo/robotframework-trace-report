@@ -144,7 +144,7 @@ rf-trace-report serve --provider signoz --signoz-endpoint http://signoz:8080
 
 ## MCP Trace Analyzer (AI Integration)
 
-An MCP server that lets AI assistants analyze Robot Framework test execution data. Load trace files, investigate failures, compare runs, and detect patterns — all through natural language in your IDE.
+An MCP server that lets AI assistants analyze Robot Framework test execution data. Connect to a live viewer, load trace files, investigate failures, compare runs, and detect patterns — all through natural language in your IDE.
 
 ### Install via Docker (recommended)
 
@@ -168,17 +168,32 @@ Add to your MCP config (`.kiro/settings/mcp.json` or equivalent):
   "mcpServers": {
     "mcp-trace-analyzer": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "/path/to/traces:/data",
-               "ghcr.io/xtergo/robotframework-trace-report-mcp:latest"]
+      "args": ["run", "-i", "--rm", "--network", "host",
+               "ghcr.io/xtergo/robotframework-trace-report-mcp:latest"],
+      "autoApprove": ["load_run", "load_live", "list_tests",
+                       "get_test_keywords", "get_span_logs",
+                       "analyze_failures", "compare_runs",
+                       "correlate_timerange", "get_latency_anomalies",
+                       "get_failure_chain"]
     }
   }
 }
+```
+
+`--network host` is required so the MCP container can reach a live viewer running on the host (default port 8077).
+
+For offline-only analysis (trace files), replace `--network host` with a volume mount:
+
+```json
+"args": ["run", "-i", "--rm", "-v", "/path/to/traces:/data",
+         "ghcr.io/xtergo/robotframework-trace-report-mcp:latest"]
 ```
 
 ### Available Tools
 
 | Tool | Description |
 |------|-------------|
+| `load_live` | Auto-connect to a running RF Trace Viewer (tries ports 8077, 8000, 8080) |
 | `load_run` | Load trace/log files into memory under an alias |
 | `list_tests` | List tests with status, duration, tags — filterable and sorted |
 | `get_test_keywords` | Full keyword execution tree for a test |
@@ -189,11 +204,13 @@ Add to your MCP config (`.kiro/settings/mcp.json` or equivalent):
 | `get_latency_anomalies` | Find keywords that got slower vs a baseline |
 | `get_failure_chain` | Trace error propagation from test root to deepest failure |
 
+All query tools accept an optional `alias` parameter. If omitted, the MCP auto-connects to a live viewer — no manual `load_live` needed. If no viewer is found, it suggests using `load_run` for offline analysis.
+
 ### Transport Modes
 
 ```bash
 # stdio (default) — for IDE integration
-docker run -i --rm -v /traces:/data ghcr.io/xtergo/robotframework-trace-report-mcp:latest
+docker run -i --rm --network host ghcr.io/xtergo/robotframework-trace-report-mcp:latest
 
 # SSE — for remote MCP clients
 docker run -p 8080:8080 ghcr.io/xtergo/robotframework-trace-report-mcp:latest --transport sse
