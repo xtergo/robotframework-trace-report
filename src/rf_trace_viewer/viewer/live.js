@@ -2302,7 +2302,9 @@
         var _svcC = window.__RF_SVC_COLORS__;
         var _svcE = _svcC ? _svcC.get(name) : null;
         if (_svcE) {
-          dot.style.background = _svcE.light;
+          var _isDkLive = document.documentElement.classList.contains('theme-dark') ||
+                          document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+          dot.style.background = _isDkLive ? _svcE.badge[2] : _svcE.badge[0];
         }
 
         label.appendChild(cb);

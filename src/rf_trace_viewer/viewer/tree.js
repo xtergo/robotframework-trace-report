@@ -3038,13 +3038,13 @@ function _createTreeNode(opts) {
     row.classList.add('kw-teardown');
   } else if (opts.kwType === 'EXTERNAL') {
     row.classList.add('kw-external');
-    // Apply service-based border color
+    // Apply service-based border color (use badge palette for consistency)
     var _svcCBorder = window.__RF_SVC_COLORS__;
     var _svcEBorder = _svcCBorder && opts.data && opts.data.service_name ? _svcCBorder.get(opts.data.service_name) : null;
     if (_svcEBorder) {
       var _isDkB = document.documentElement.classList.contains('theme-dark') ||
                    document.querySelector('.rf-trace-viewer.theme-dark') !== null;
-      row.style.borderLeftColor = _isDkB ? _svcEBorder.dark : _svcEBorder.light;
+      row.style.borderLeftColor = _isDkB ? _svcEBorder.badge[2] : _svcEBorder.badge[0];
     }
   } else if (opts.kwType === 'GENERIC') {
     row.classList.add('kw-generic');
@@ -3053,7 +3053,7 @@ function _createTreeNode(opts) {
     if (_svcEBorder2) {
       var _isDkB2 = document.documentElement.classList.contains('theme-dark') ||
                     document.querySelector('.rf-trace-viewer.theme-dark') !== null;
-      row.style.borderLeftColor = _isDkB2 ? _svcEBorder2.dark : _svcEBorder2.light;
+      row.style.borderLeftColor = _isDkB2 ? _svcEBorder2.badge[2] : _svcEBorder2.badge[0];
     }
   } else if (opts.kwType === 'ERROR') {
     row.classList.add('kw-error');

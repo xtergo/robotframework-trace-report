@@ -1319,7 +1319,9 @@
             // Apply service-based color
             var _dotEntry = _getServiceColor(name);
             if (_dotEntry) {
-              dot.style.background = _dotEntry.light;
+              var _isDkDot = document.documentElement.classList.contains('theme-dark') ||
+                             document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+              dot.style.background = _isDkDot ? _dotEntry.badge[2] : _dotEntry.badge[0];
             } else {
               dot.className += ' ' + (svc.type === 'ext' ? 'svc-dot-ext' : 'svc-dot-sut');
             }
