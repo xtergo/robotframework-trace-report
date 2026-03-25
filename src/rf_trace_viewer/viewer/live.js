@@ -1402,24 +1402,11 @@
   /* ── 6. Model building ─────────────────────────────────────────── */
 
   function _rebuildAndRender() {
-    // Client-side service visibility: filter allSpans to only active services
-    var active = _activeServices;
-    var total = Object.keys(_knownServices).length;
-    var activeCount = Object.keys(active).length;
-    var visibleSpans;
-    if (activeCount === 0 || activeCount === total) {
-      // All services visible (or none checked = show all)
-      visibleSpans = allSpans;
-    } else {
-      visibleSpans = [];
-      for (var i = 0; i < allSpans.length; i++) {
-        var svc = allSpans[i].attributes ? (allSpans[i].attributes['service.name'] || '') : '';
-        if (active[svc] || !svc) visibleSpans.push(allSpans[i]);
-      }
-    }
-    var model = _buildModel(visibleSpans);
+    // Always build the model from ALL spans so cross-service nesting works.
+    // Service visibility is handled at the rendering layer (tree.js, timeline.js)
+    // via _activeServiceFilter / _svcFilter.
+    var model = _buildModel(allSpans);
     console.log('[live] rebuildAndRender: allSpans=' + allSpans.length +
-      ', visibleSpans=' + visibleSpans.length +
       ', rootSuites=' + model.suites.length +
       ', stats.total_tests=' + (model.statistics ? model.statistics.total_tests : '?'));
     _renderAllViews(model);

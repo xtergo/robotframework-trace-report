@@ -395,7 +395,9 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             roots.sort(key=lambda s: s.start_time_ns)
 
             def _build_node(s):
-                svc = s.resource_attributes.get("service.name", "")
+                svc = s.resource_attributes.get("service.name", "") or s.attributes.get(
+                    "service.name", ""
+                )
                 has_rf = any(k.startswith("rf.") for k in s.attributes)
                 node = {
                     "span_id": s.span_id,
