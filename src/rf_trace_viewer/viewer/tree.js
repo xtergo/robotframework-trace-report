@@ -3111,18 +3111,16 @@ function _createTreeNode(opts) {
   else if (opts.type === 'test') typeLabel.classList.add('type-test');
   nameEl.appendChild(typeLabel);
 
-  // Gantt colour dot for top-level nodes (depth 0) — visual link to timeline bar
-  if (opts.depth === 0 && opts.data) {
+  // Gantt colour dot for top-level generic service nodes — visual link to timeline bar
+  if (opts.depth === 0 && opts.data && opts.data._is_generic_service) {
     var _gcDot = document.createElement('span');
     _gcDot.className = 'gantt-color-dot';
     var _gcIsDark = document.documentElement.classList.contains('theme-dark') ||
                     document.querySelector('.rf-trace-viewer.theme-dark') !== null;
     var _gcColor = null;
     var _gcSvcColors = window.__RF_SVC_COLORS__;
-    // Match _getSpanColors logic from timeline.js
     // For generic service suites, the service name is in .name, not .service_name
-    var _gcSvcName = opts.data.service_name ||
-                     (opts.data._is_generic_service ? opts.data.name : null);
+    var _gcSvcName = opts.data.name;
     if (_gcSvcColors && _gcSvcName) {
       var _gcEntry = _gcSvcColors.get(_gcSvcName);
       if (_gcEntry) {
@@ -3130,18 +3128,10 @@ function _createTreeNode(opts) {
       }
     }
     if (!_gcColor) {
-      if (opts.type === 'suite' && opts.data._is_generic_service) {
-        _gcColor = _gcIsDark ? '#4527a0' : '#673ab7';
-      } else if (opts.type === 'suite') {
-        _gcColor = _gcIsDark ? '#0f2440' : '#142b47';
-      } else if (opts.type === 'test') {
-        _gcColor = _gcIsDark ? '#0d47a1' : '#1565c0';
-      }
+      _gcColor = _gcIsDark ? '#4527a0' : '#673ab7';
     }
-    if (_gcColor) {
-      _gcDot.style.background = _gcColor;
-      nameEl.appendChild(_gcDot);
-    }
+    _gcDot.style.background = _gcColor;
+    nameEl.appendChild(_gcDot);
   }
 
   // Service badge (always second — consistent position for RF and external)
