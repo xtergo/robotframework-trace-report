@@ -1127,9 +1127,9 @@
     function _getServiceColor(serviceName) {
       if (!serviceName) return null;
       if (_svcColorMap[serviceName]) return _svcColorMap[serviceName];
-      // RF service gets reserved blue
-      var rfName = window.__RF_SERVICE_NAME__ || '';
-      if (rfName && serviceName === rfName) {
+      // RF service gets reserved blue — match by --service-name config or default "rf"
+      var rfName = window.__RF_SERVICE_NAME__ || 'rf';
+      if (serviceName === rfName) {
         _svcColorMap[serviceName] = _rfServiceColor;
         return _rfServiceColor;
       }
