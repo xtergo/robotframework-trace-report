@@ -251,6 +251,10 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._serve_logs(request_id, query)
             return
 
+        if path == "/api/v1/trace-tree":
+            self._serve_trace_tree(request_id, query)
+            return
+
         if path == "/api/v1/resources":
             provider = getattr(self.server, "provider", None)
             db_spans = 0
@@ -350,6 +354,73 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             self._send_json_response(
                 502, {"error": f"Failed to fetch logs from SigNoz: {exc}"}, request_id
             )
+
+    def _serve_trace_tree(self, request_id: str, query: dict) -> None:
+        """Return the parent-child span tree for a trace ID.
+
+        GET /api/v1/trace-tree?trace_id=<hex>
+        Response: JSON tree showing service, name, span_id, parent, and children.
+        """
+        trace_id = query.get("trace_id", [None])[0]
+        if not trace_id:
+            self._send_json_response(
+                400, {"error": "Missing required parameter: trace_id"}, request_id
+            )
+            return
+
+        provider = getattr(self.server, "provider", None)
+        if provider is None or not hasattr(provider, "fetch_spans_by_trace_ids"):
+            self._send_json_response(
+                404, {"error": "Provider does not support trace lookup"}, request_id
+            )
+            return
+
+        try:
+            spans = provider.fetch_spans_by_trace_ids({trace_id})
+            if not spans:
+                self._send_json_response(200, {"trace_id": trace_id, "roots": []}, request_id)
+                return
+
+            # Build parent→children map
+            by_id = {}
+            children_of = {}
+            for s in spans:
+                by_id[s.span_id] = s
+                pid = s.parent_span_id
+                if pid:
+                    children_of.setdefault(pid, []).append(s.span_id)
+
+            # Find roots (no parent or parent not in set)
+            roots = [s for s in spans if not s.parent_span_id or s.parent_span_id not in by_id]
+            roots.sort(key=lambda s: s.start_time_unix_nano)
+
+            def _build_node(s):
+                svc = s.resource_attributes.get("service.name", "")
+                has_rf = any(k.startswith("rf.") for k in s.attributes)
+                node = {
+                    "span_id": s.span_id,
+                    "parent_span_id": s.parent_span_id or "",
+                    "service": svc,
+                    "name": s.name,
+                    "has_rf_attrs": has_rf,
+                    "start_ns": s.start_time_unix_nano,
+                    "end_ns": s.end_time_unix_nano,
+                }
+                kids = children_of.get(s.span_id, [])
+                kids_sorted = sorted(kids, key=lambda sid: by_id[sid].start_time_unix_nano)
+                if kids_sorted:
+                    node["children"] = [_build_node(by_id[sid]) for sid in kids_sorted]
+                return node
+
+            tree = {
+                "trace_id": trace_id,
+                "span_count": len(spans),
+                "roots": [_build_node(r) for r in roots],
+            }
+            self._send_json_response(200, tree, request_id)
+
+        except Exception as exc:
+            self._send_json_response(502, {"error": f"Failed to fetch trace: {exc}"}, request_id)
 
     def _serve_viewer(self, request_id: str = "") -> None:
         """Serve the HTML viewer page with live mode flag (no embedded data)."""
