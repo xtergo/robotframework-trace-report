@@ -6,6 +6,9 @@ arguments, returning a JSON-serialisable dict.  No transport awareness.
 
 from __future__ import annotations
 
+import json
+import logging
+import urllib.request
 from datetime import datetime, timezone
 
 from rf_trace_viewer.mcp.session import (
@@ -14,9 +17,17 @@ from rf_trace_viewer.mcp.session import (
     TestNotFoundError,
     ToolError,
 )
-from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest, Status
+from rf_trace_viewer.parser import RawSpan
+from rf_trace_viewer.rf_model import RFKeyword, RFSuite, RFTest, Status, interpret_tree
+from rf_trace_viewer.tree import build_tree
+
+logger = logging.getLogger(__name__)
 
 _STATUS_PRIORITY = {Status.FAIL: 0, Status.SKIP: 1, Status.PASS: 2}
+
+# Ports to probe when auto-discovering a live viewer
+_LIVE_PORTS = [8077, 8000, 8080]
+_LIVE_ALIAS = "live"
 
 
 def _collect_tests(
@@ -39,6 +50,153 @@ def _get_run(session: Session, alias: str):
         return session.get_run(alias)
     except KeyError:
         raise AliasNotFoundError(f"Run alias {alias!r} not loaded.") from None
+
+
+def _api_span_to_raw(span_dict: dict) -> RawSpan:
+    """Convert a live API span dict to a RawSpan."""
+    start_ns = span_dict.get("start_time_ns", 0)
+    duration_ns = span_dict.get("duration_ns", 0)
+    status_str = span_dict.get("status", "UNSET")
+    status_code = {"UNSET": 0, "OK": 1, "ERROR": 2}.get(status_str, 0)
+    return RawSpan(
+        trace_id=span_dict.get("trace_id", ""),
+        span_id=span_dict.get("span_id", ""),
+        parent_span_id=span_dict.get("parent_span_id", ""),
+        name=span_dict.get("name", ""),
+        kind="SPAN_KIND_INTERNAL",
+        start_time_unix_nano=start_ns,
+        end_time_unix_nano=start_ns + duration_ns,
+        attributes=span_dict.get("attributes", {}),
+        status={"code": status_code, "message": span_dict.get("status_message", "")},
+        events=span_dict.get("events", []),
+        resource_attributes=span_dict.get("resource_attributes", {}),
+    )
+
+
+def _discover_live_viewer(host: str = "localhost") -> str | None:
+    """Try to find a live viewer on common ports. Returns the base URL or None."""
+    # Also try host.docker.internal for Docker-to-host connectivity
+    hosts = [host]
+    if host == "localhost":
+        hosts.append("host.docker.internal")
+
+    for h in hosts:
+        for port in _LIVE_PORTS:
+            url = f"http://{h}:{port}/api/spans?since_ns=0"
+            try:
+                req = urllib.request.Request(url, method="GET")
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    if resp.status == 200:
+                        logger.info("Found live viewer at %s:%d", h, port)
+                        return f"http://{h}:{port}"
+            except Exception:
+                continue
+    return None
+
+
+def _fetch_live_spans(base_url: str) -> list[RawSpan]:
+    """Fetch all spans from the live viewer API."""
+    url = f"{base_url}/api/spans?since_ns=0"
+    req = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+    api_spans = data.get("spans", [])
+    return [_api_span_to_raw(s) for s in api_spans]
+
+
+def load_live(
+    session: Session,
+    host: str = "localhost",
+    port: int | None = None,
+) -> dict:
+    """Connect to a live viewer and load its spans.
+
+    If *port* is given, connects directly. Otherwise auto-discovers
+    by probing common ports (8077, 8000, 8080).
+    """
+    messages: list[str] = []
+
+    if port is not None:
+        base_url = f"http://{host}:{port}"
+        messages.append(f"Connecting to {base_url}...")
+        try:
+            spans = _fetch_live_spans(base_url)
+        except Exception as exc:
+            raise ToolError(f"Cannot connect to live viewer at {base_url}: {exc}") from exc
+    else:
+        messages.append(f"Discovering live viewer on {host}...")
+        base_url = _discover_live_viewer(host)
+        if base_url is None:
+            raise ToolError(
+                "No live viewer found. Tried ports "
+                + ", ".join(str(p) for p in _LIVE_PORTS)
+                + " on localhost and host.docker.internal. "
+                + "Use load_run with a trace file for offline analysis."
+            )
+        messages.append(f"Found viewer at {base_url}")
+        spans = _fetch_live_spans(base_url)
+
+    messages.append(f"Fetched {len(spans)} spans")
+
+    # Build the model
+    roots = build_tree(spans)
+    model = interpret_tree(roots)
+
+    from rf_trace_viewer.mcp.session import RunData
+
+    run_data = RunData(
+        alias=_LIVE_ALIAS,
+        spans=spans,
+        logs=[],
+        roots=roots,
+        model=model,
+        log_index={},
+    )
+    session.runs[_LIVE_ALIAS] = run_data
+
+    messages.append(f"Loaded as alias '{_LIVE_ALIAS}'")
+
+    return {
+        "alias": _LIVE_ALIAS,
+        "source": base_url,
+        "span_count": len(spans),
+        "test_count": model.statistics.total_tests,
+        "passed": model.statistics.passed,
+        "failed": model.statistics.failed,
+        "skipped": model.statistics.skipped,
+        "messages": messages,
+    }
+
+
+def _ensure_run(session: Session, alias: str | None) -> str:
+    """Resolve alias: if None/empty and no runs loaded, try live auto-connect.
+
+    Returns the resolved alias to use.
+    """
+    # If alias provided and exists, use it
+    if alias:
+        if alias in session.runs:
+            return alias
+        raise AliasNotFoundError(f"Run alias {alias!r} not loaded. Loaded: {sorted(session.runs)}")
+
+    # No alias — check if live is already loaded
+    if _LIVE_ALIAS in session.runs:
+        return _LIVE_ALIAS
+
+    # No alias, no runs — try auto-connect
+    if not session.runs:
+        try:
+            load_live(session)
+            return _LIVE_ALIAS
+        except ToolError:
+            raise ToolError(
+                "No runs loaded and no live viewer found. "
+                "Use load_live to connect to a running viewer, "
+                "or load_run with a trace file for offline analysis."
+            ) from None
+
+    # No alias but runs exist — use the first one
+    return next(iter(session.runs))
 
 
 # ---------------------------------------------------------------------------
@@ -69,10 +227,11 @@ def load_run(session: Session, trace_path: str, alias: str, log_path: str | None
 
 
 def list_tests(
-    session: Session, alias: str, status: str | None = None, tag: str | None = None
+    session: Session, alias: str | None = None, status: str | None = None, tag: str | None = None
 ) -> list[dict]:
     """Return filtered and sorted test summaries for a loaded run."""
-    run_data = _get_run(session, alias)
+    resolved = _ensure_run(session, alias)
+    run_data = session.get_run(resolved)
     tests: list[tuple[RFTest, str]] = []
     for suite in run_data.model.suites:
         tests.extend(_collect_tests(suite.children, suite.name))
@@ -113,9 +272,10 @@ def _serialize_keyword(kw: RFKeyword) -> dict:
     }
 
 
-def get_test_keywords(session: Session, alias: str, test_name: str) -> dict:
+def get_test_keywords(session: Session, alias: str | None = None, test_name: str = "") -> dict:
     """Return the keyword tree for a specific test."""
-    run_data = _get_run(session, alias)
+    resolved = _ensure_run(session, alias)
+    run_data = session.get_run(resolved)
     tests: list[tuple[RFTest, str]] = []
     for suite in run_data.model.suites:
         tests.extend(_collect_tests(suite.children, suite.name))
@@ -137,9 +297,10 @@ def get_test_keywords(session: Session, alias: str, test_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def get_span_logs(session: Session, alias: str, span_id: str) -> dict:
+def get_span_logs(session: Session, alias: str | None = None, span_id: str = "") -> dict:
     """Return log records correlated to a specific span."""
-    run_data = _get_run(session, alias)
+    resolved = _ensure_run(session, alias)
+    run_data = session.get_run(resolved)
     if not run_data.logs:
         return {"span_id": span_id, "logs": [], "message": "No log file was loaded for this run."}
     records = run_data.log_index.get(span_id, [])
@@ -240,9 +401,10 @@ def _longest_common_substring(a: str, b: str) -> str:
 _TEMPORAL_WINDOW_NS = 5_000_000_000
 
 
-def analyze_failures(session: Session, alias: str) -> dict:
+def analyze_failures(session: Session, alias: str | None = None) -> dict:
     """Detect common failure patterns across all FAIL tests."""
-    run_data = _get_run(session, alias)
+    resolved = _ensure_run(session, alias)
+    run_data = session.get_run(resolved)
     all_tests: list[tuple[RFTest, str]] = []
     for suite in run_data.model.suites:
         all_tests.extend(_collect_tests(suite.children, suite.name))
@@ -400,8 +562,8 @@ def compare_runs(
     test_name: str | None = None,
 ) -> dict:
     """Compare two loaded runs, optionally scoped to a single test."""
-    baseline = _get_run(session, baseline_alias)
-    target = _get_run(session, target_alias)
+    baseline = session.get_run(_ensure_run(session, baseline_alias))
+    target = session.get_run(_ensure_run(session, target_alias))
     if test_name is not None:
         return _compare_single_test(baseline, target, test_name)
     return _compare_all_tests(baseline, target)
@@ -586,9 +748,12 @@ def _collect_keywords_flat(
     return result
 
 
-def correlate_timerange(session: Session, alias: str, start: str | int, end: str | int) -> dict:
+def correlate_timerange(
+    session: Session, alias: str | None = None, start: str | int = 0, end: str | int = 0
+) -> dict:
     """Return events overlapping [start, end] grouped by data source."""
-    run_data = _get_run(session, alias)
+    resolved = _ensure_run(session, alias)
+    run_data = session.get_run(resolved)
     start_ns = _normalize_timestamp_ns(start)
     end_ns = _normalize_timestamp_ns(end)
 
@@ -688,8 +853,8 @@ def get_latency_anomalies(
     """Identify keywords whose duration deviates from baseline by more than threshold %."""
     if threshold is None:
         threshold = _DEFAULT_LATENCY_THRESHOLD_PCT
-    baseline = _get_run(session, baseline_alias)
-    target = _get_run(session, target_alias)
+    baseline = session.get_run(_ensure_run(session, baseline_alias))
+    target = session.get_run(_ensure_run(session, target_alias))
 
     b_map = {pos: (kw, tn) for pos, kw, tn in _collect_all_keywords_with_test(baseline)}
     t_map = {pos: (kw, tn) for pos, kw, tn in _collect_all_keywords_with_test(target)}
@@ -762,9 +927,10 @@ def _build_chain(kw: RFKeyword, log_index: dict[str, list], depth: int = 0) -> l
     return chain
 
 
-def get_failure_chain(session: Session, alias: str, test_name: str) -> dict:
+def get_failure_chain(session: Session, alias: str | None = None, test_name: str = "") -> dict:
     """Trace the error propagation path from test root to deepest FAIL keyword."""
-    run_data = _get_run(session, alias)
+    resolved = _ensure_run(session, alias)
+    run_data = session.get_run(resolved)
     tests: list[tuple[RFTest, str]] = []
     for suite in run_data.model.suites:
         tests.extend(_collect_tests(suite.children, suite.name))

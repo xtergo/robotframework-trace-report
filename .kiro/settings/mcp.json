@@ -6,10 +6,14 @@
         "run",
         "-i",
         "--rm",
+        "--network", "host",
         "ghcr.io/xtergo/robotframework-trace-report-mcp:latest"
       ],
       "disabled": false,
-      "autoApprove": []
+      "autoApprove": [
+        "load_run",
+        "load_run"
+      ]
     }
   }
 }

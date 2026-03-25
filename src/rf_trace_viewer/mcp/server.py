@@ -53,17 +53,40 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "load_live",
+        "description": (
+            "Connect to a running RF Trace Viewer and load its live span data. "
+            "Auto-discovers the viewer on default port 8077, or specify host/port. "
+            "Data is stored under the 'live' alias. If no viewer is found, "
+            "suggests using load_run for offline analysis."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "description": "Hostname of the viewer (default: localhost).",
+                },
+                "port": {
+                    "type": "number",
+                    "description": "Port number. If omitted, auto-discovers on 8077, 8000, 8080.",
+                },
+            },
+        },
+    },
+    {
         "name": "list_tests",
         "description": (
             "List tests in a loaded run with status, duration, suite, and tags. "
-            "Optionally filter by status or tag."
+            "Optionally filter by status or tag. If no alias is given, "
+            "auto-connects to a live viewer."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "alias": {
                     "type": "string",
-                    "description": "Run alias to query.",
+                    "description": "Run alias to query. If omitted, auto-connects to live viewer.",
                 },
                 "status": {
                     "type": "string",
@@ -75,7 +98,6 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "description": "Filter by tag name.",
                 },
             },
-            "required": ["alias"],
         },
     },
     {
@@ -90,14 +112,14 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "alias": {
                     "type": "string",
-                    "description": "Run alias to query.",
+                    "description": "Run alias to query. If omitted, auto-connects to live viewer.",
                 },
                 "test_name": {
                     "type": "string",
                     "description": "Exact name of the test.",
                 },
             },
-            "required": ["alias", "test_name"],
+            "required": ["test_name"],
         },
     },
     {
@@ -111,14 +133,14 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "alias": {
                     "type": "string",
-                    "description": "Run alias to query.",
+                    "description": "Run alias to query. If omitted, auto-connects to live viewer.",
                 },
                 "span_id": {
                     "type": "string",
                     "description": "The span ID to look up logs for.",
                 },
             },
-            "required": ["alias", "span_id"],
+            "required": ["span_id"],
         },
     },
     {
@@ -133,10 +155,9 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "alias": {
                     "type": "string",
-                    "description": "Run alias to analyze.",
+                    "description": "Run alias to analyze. If omitted, auto-connects to live viewer.",
                 },
             },
-            "required": ["alias"],
         },
     },
     {
@@ -175,7 +196,7 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "alias": {
                     "type": "string",
-                    "description": "Run alias to query.",
+                    "description": "Run alias to query. If omitted, auto-connects to live viewer.",
                 },
                 "start": {
                     "description": "Start of the time window (ISO 8601 string or Unix nanoseconds).",
@@ -223,7 +244,7 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "alias": {
                     "type": "string",
-                    "description": "Run alias to query.",
+                    "description": "Run alias to query. If omitted, auto-connects to live viewer.",
                 },
                 "test_name": {
                     "type": "string",
