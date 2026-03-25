@@ -3111,6 +3111,36 @@ function _createTreeNode(opts) {
   else if (opts.type === 'test') typeLabel.classList.add('type-test');
   nameEl.appendChild(typeLabel);
 
+  // Gantt colour dot for top-level nodes (depth 0) — visual link to timeline bar
+  if (opts.depth === 0 && opts.data) {
+    var _gcDot = document.createElement('span');
+    _gcDot.className = 'gantt-color-dot';
+    var _gcIsDark = document.documentElement.classList.contains('theme-dark') ||
+                    document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+    var _gcColor = null;
+    var _gcSvcColors = window.__RF_SVC_COLORS__;
+    // Match _getSpanColors logic from timeline.js
+    if (_gcSvcColors && opts.data.service_name) {
+      var _gcEntry = _gcSvcColors.get(opts.data.service_name);
+      if (_gcEntry) {
+        _gcColor = _gcIsDark ? _gcEntry.gD[1] : _gcEntry.gL[1];
+      }
+    }
+    if (!_gcColor) {
+      if (opts.type === 'suite' && opts.data._is_generic_service) {
+        _gcColor = _gcIsDark ? '#4527a0' : '#673ab7';
+      } else if (opts.type === 'suite') {
+        _gcColor = _gcIsDark ? '#0f2440' : '#142b47';
+      } else if (opts.type === 'test') {
+        _gcColor = _gcIsDark ? '#0d47a1' : '#1565c0';
+      }
+    }
+    if (_gcColor) {
+      _gcDot.style.background = _gcColor;
+      nameEl.appendChild(_gcDot);
+    }
+  }
+
   // Service badge (always second — consistent position for RF and external)
   var rfSvcName = window.__RF_SERVICE_NAME__ || '';
   if (opts.data && opts.data.service_name && (opts.kwType === 'EXTERNAL' || opts.kwType === 'GENERIC')) {

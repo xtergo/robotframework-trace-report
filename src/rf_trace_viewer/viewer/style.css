@@ -1186,6 +1186,18 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   margin-right: 6px;
 }
 
+/* Gantt colour dot — visual link between tree node and timeline bar */
+.rf-trace-viewer .gantt-color-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-left: 5px;
+  margin-right: 2px;
+  vertical-align: middle;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
 /* ── Root Cause UX ── */
 
 /* De-emphasize control flow wrapper FAIL keywords */
