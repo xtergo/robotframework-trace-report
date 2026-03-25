@@ -3147,7 +3147,7 @@ function _createTreeNode(opts) {
         var dotColor = null;
         if (_svcColors) {
           var _de = _svcColors.get(descSvcs[_di]);
-          if (_de) dotColor = _isDkDots ? _de.dark : _de.light;
+          if (_de) dotColor = _isDkDots ? _de.badge[2] : _de.badge[0];
         }
         dot.style.background = dotColor || '#9e9e9e';
         nameEl.appendChild(dot);
