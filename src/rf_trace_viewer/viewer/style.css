@@ -1182,6 +1182,9 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   vertical-align: middle;
   opacity: 0.85;
 }
+.rf-trace-viewer .svc-descendant-dot:last-of-type {
+  margin-right: 6px;
+}
 
 /* ── Root Cause UX ── */
 
