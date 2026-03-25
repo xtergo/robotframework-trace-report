@@ -1172,6 +1172,17 @@ html[data-theme="dark"], html[data-theme="dark"] body {
   color: #1e1e1e;
 }
 
+/* Descendant service dots — bubble-up indicators for EXTERNAL activity */
+.rf-trace-viewer .svc-descendant-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-left: 3px;
+  vertical-align: middle;
+  opacity: 0.85;
+}
+
 /* ── Root Cause UX ── */
 
 /* De-emphasize control flow wrapper FAIL keywords */

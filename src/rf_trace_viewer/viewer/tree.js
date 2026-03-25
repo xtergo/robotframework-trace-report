@@ -2999,6 +2999,25 @@ function _findFirstWithSeverity(data, severity) {
 }
 
 /**
+ * Collect unique service names from EXTERNAL/GENERIC descendants of a keyword.
+ * Used to render bubble-up service dots on RF keywords.
+ */
+function _collectDescendantServices(data) {
+  var services = {};
+  var stack = (data.children || []).concat(data.keywords || []).slice();
+  while (stack.length > 0) {
+    var node = stack.pop();
+    var kwType = (node.keyword_type || '').toUpperCase();
+    if ((kwType === 'EXTERNAL' || kwType === 'GENERIC') && node.service_name) {
+      services[node.service_name] = true;
+    }
+    var kids = (node.children || []).concat(node.keywords || []);
+    for (var i = 0; i < kids.length; i++) stack.push(kids[i]);
+  }
+  return Object.keys(services);
+}
+
+/**
  * Create a single tree node DOM element.
  * @param {Object} opts - { type, name, status, elapsed, hasChildren, depth, kwType?, kwArgs?, id?, data? }
  */
@@ -3105,6 +3124,31 @@ function _createTreeNode(opts) {
     rfBadge.textContent = rfSvcName;
     rfBadge.title = 'RF Service: ' + rfSvcName;
     nameEl.appendChild(rfBadge);
+  }
+
+  // Bubble-up service dots: show colored dots for EXTERNAL/GENERIC descendants
+  // Only on RF keywords (not EXTERNAL/GENERIC which already have full badges)
+  // and on tests/suites that contain external activity
+  if (opts.data && opts.type !== 'suite' &&
+      opts.kwType !== 'EXTERNAL' && opts.kwType !== 'GENERIC') {
+    var descSvcs = _collectDescendantServices(opts.data);
+    if (descSvcs.length > 0) {
+      var _svcColors = window.__RF_SVC_COLORS__;
+      var _isDkDots = document.documentElement.classList.contains('theme-dark') ||
+                      document.querySelector('.rf-trace-viewer.theme-dark') !== null;
+      for (var _di = 0; _di < descSvcs.length; _di++) {
+        var dot = document.createElement('span');
+        dot.className = 'svc-descendant-dot';
+        dot.title = descSvcs[_di];
+        var dotColor = null;
+        if (_svcColors) {
+          var _de = _svcColors.get(descSvcs[_di]);
+          if (_de) dotColor = _isDkDots ? _de.dark : _de.light;
+        }
+        dot.style.background = dotColor || '#9e9e9e';
+        nameEl.appendChild(dot);
+      }
+    }
   }
 
   // Library prefix (e.g. "BuiltIn . Set Variable")
