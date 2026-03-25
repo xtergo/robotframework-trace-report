@@ -3111,27 +3111,36 @@ function _createTreeNode(opts) {
   else if (opts.type === 'test') typeLabel.classList.add('type-test');
   nameEl.appendChild(typeLabel);
 
-  // Gantt colour dot for top-level generic service nodes — visual link to timeline bar
-  if (opts.depth === 0 && opts.data && opts.data._is_generic_service) {
+  // Gantt colour dot for top-level service nodes — visual link to timeline bar and service legend
+  if (opts.depth === 0 && opts.data) {
     var _gcDot = document.createElement('span');
     _gcDot.className = 'gantt-color-dot';
     var _gcIsDark = document.documentElement.classList.contains('theme-dark') ||
                     document.querySelector('.rf-trace-viewer.theme-dark') !== null;
     var _gcColor = null;
-    var _gcSvcColors = window.__RF_SVC_COLORS__;
-    // For generic service suites, the service name is in .name, not .service_name
-    var _gcSvcName = opts.data.name;
-    if (_gcSvcColors && _gcSvcName) {
-      var _gcEntry = _gcSvcColors.get(_gcSvcName);
-      if (_gcEntry) {
-        _gcColor = _gcIsDark ? _gcEntry.gD[1] : _gcEntry.gL[1];
+
+    if (opts.data._is_generic_service) {
+      // Generic service suite — use service colour palette
+      var _gcSvcColors = window.__RF_SVC_COLORS__;
+      var _gcSvcName = opts.data.name;
+      if (_gcSvcColors && _gcSvcName) {
+        var _gcEntry = _gcSvcColors.get(_gcSvcName);
+        if (_gcEntry) {
+          _gcColor = _gcIsDark ? _gcEntry.gD[1] : _gcEntry.gL[1];
+        }
       }
+      if (!_gcColor) {
+        _gcColor = _gcIsDark ? '#4527a0' : '#673ab7';
+      }
+    } else if (opts.type === 'suite') {
+      // RF suite — use the same blue as svc-dot-rf in the service legend
+      _gcColor = _gcIsDark ? '#42a5f5' : '#1976d2';
     }
-    if (!_gcColor) {
-      _gcColor = _gcIsDark ? '#4527a0' : '#673ab7';
+
+    if (_gcColor) {
+      _gcDot.style.background = _gcColor;
+      nameEl.appendChild(_gcDot);
     }
-    _gcDot.style.background = _gcColor;
-    nameEl.appendChild(_gcDot);
   }
 
   // Service badge (always second — consistent position for RF and external)
