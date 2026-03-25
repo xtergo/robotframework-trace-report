@@ -1591,6 +1591,14 @@
               display_symbol: (extSrcClass && extSrcMethod) ? extShortClass + '.' + extSrcMethod : ''
             };
           }
+        } else {
+          // Same-service non-RF span (e.g. HTTP client instrumentation from
+          // the RF runner).  Skip the span itself but recurse into its children
+          // so cross-service spans deeper in the call chain are discovered.
+          var passThrough = buildKeywords(child.span_id);
+          for (var pt = 0; pt < passThrough.length; pt++) {
+            result.push(passThrough[pt]);
+          }
         }
       }
       // Sort by start_time
