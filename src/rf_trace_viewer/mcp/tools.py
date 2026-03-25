@@ -58,6 +58,19 @@ def _api_span_to_raw(span_dict: dict) -> RawSpan:
     duration_ns = span_dict.get("duration_ns", 0)
     status_str = span_dict.get("status", "UNSET")
     status_code = {"UNSET": 0, "OK": 1, "ERROR": 2}.get(status_str, 0)
+    attrs = dict(span_dict.get("attributes", {}))
+
+    # Infer rf.type from rf.* attributes if not already set.
+    # Some instrumentations set rf.suite.name / rf.test.name / rf.keyword.name
+    # but omit rf.type — the tree builder needs it to classify spans.
+    if "rf.type" not in attrs:
+        if "rf.keyword.name" in attrs:
+            attrs["rf.type"] = "keyword"
+        elif "rf.test.name" in attrs:
+            attrs["rf.type"] = "test"
+        elif "rf.suite.name" in attrs:
+            attrs["rf.type"] = "suite"
+
     return RawSpan(
         trace_id=span_dict.get("trace_id", ""),
         span_id=span_dict.get("span_id", ""),
@@ -66,7 +79,7 @@ def _api_span_to_raw(span_dict: dict) -> RawSpan:
         kind="SPAN_KIND_INTERNAL",
         start_time_unix_nano=start_ns,
         end_time_unix_nano=start_ns + duration_ns,
-        attributes=span_dict.get("attributes", {}),
+        attributes=attrs,
         status={"code": status_code, "message": span_dict.get("status_message", "")},
         events=span_dict.get("events", []),
         resource_attributes=span_dict.get("resource_attributes", {}),
@@ -95,13 +108,28 @@ def _discover_live_viewer(host: str = "localhost") -> str | None:
 
 
 def _fetch_live_spans(base_url: str) -> list[RawSpan]:
-    """Fetch all spans from the live viewer API."""
-    url = f"{base_url}/api/spans?since_ns=0"
-    req = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read())
-    api_spans = data.get("spans", [])
-    return [_api_span_to_raw(s) for s in api_spans]
+    """Fetch spans from the live viewer API using pagination."""
+    all_spans: list[RawSpan] = []
+    since_ns = 0
+
+    # Paginate: the API returns up to 10000 spans per request.
+    # Keep fetching until we get fewer than 10000 (last page).
+    for _ in range(20):  # safety limit: max 200k spans
+        url = f"{base_url}/api/spans?since_ns={since_ns}"
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        page_spans = data.get("spans", [])
+        if not page_spans:
+            break
+        all_spans.extend(_api_span_to_raw(s) for s in page_spans)
+        # Next page starts after the latest span in this page
+        max_ns = max(s.get("start_time_ns", 0) + s.get("duration_ns", 0) for s in page_spans)
+        since_ns = max_ns
+        if len(page_spans) < 10000:
+            break  # last page
+
+    return all_spans
 
 
 def load_live(
