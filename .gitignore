@@ -59,6 +59,9 @@ ENV/
 # Ruff
 .ruff_cache/
 
+# Node.js (JS property tests)
+node_modules/
+
 # Generated reports
 *.html
 !src/rf_trace_viewer/viewer/*.html

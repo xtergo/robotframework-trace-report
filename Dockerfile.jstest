@@ -1,0 +1,17 @@
+# Lightweight Dockerfile for JavaScript property tests (vitest + fast-check)
+FROM node:20-slim
+
+WORKDIR /workspace
+
+# Copy package manifest and install deps first (layer caching)
+COPY package.json ./
+RUN npm install --ignore-scripts
+
+# Copy vitest config (needs to be in the image for module resolution)
+COPY vitest.config.js ./
+
+# Create test directory mount point so vitest glob can resolve it
+RUN mkdir -p tests/js
+
+# Default: run tests
+CMD ["npx", "vitest", "run", "tests/js/"]

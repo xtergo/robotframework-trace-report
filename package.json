@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "name": "rf-trace-viewer-tests",
+  "description": "Property-based tests for the RF Trace Viewer timeline",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "fast-check": "^3.22.0",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
+  }
+}

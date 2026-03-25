@@ -8,7 +8,7 @@
 #   dev-test:        6 GB  (quick run, no coverage)
 #   dev-test-file:   3 GB  (single file, may include slow tests)
 
-.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties test-full format lint check clean itest-up itest-run itest-down itest verify-oci verify-flux verify-all
+.PHONY: help test test-unit test-slow test-browser test-integration-signoz test-properties test-full test-js format lint check clean itest-up itest-run itest-down itest verify-oci verify-flux verify-all
 
 help: ## Show this help message
 	@echo "robotframework-trace-report - Docker-based development commands"
@@ -89,6 +89,14 @@ dev-test-file: ## Run specific test file (usage: make dev-test-file FILE=tests/u
 	@echo "Running $(FILE) in Docker..."
 	@docker run --rm --memory=3g --memory-swap=3g -v $$(pwd):/workspace -w /workspace rf-trace-test:latest bash -c "\
 		PYTHONPATH=src HYPOTHESIS_PROFILE=dev pytest $(FILE) --skip-slow -v"
+
+test-js: ## Run JavaScript property tests (vitest + fast-check) in Docker
+	@echo "Running JS property tests in Docker..."
+	@docker build -f Dockerfile.jstest -t rf-trace-jstest:latest .
+	@docker run --rm \
+		-v $(CURDIR)/src:/workspace/src:ro \
+		-v $(CURDIR)/tests/js:/workspace/tests/js:ro \
+		rf-trace-jstest:latest npx vitest run tests/js/
 
 # CI targets
 ci-test: check test-full ## Run all CI checks (format, lint, full unit tests)
