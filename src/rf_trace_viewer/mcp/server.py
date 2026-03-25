@@ -268,25 +268,30 @@ _TOOL_DISPATCH: dict[str, Any] = {
         kw.get("alias", ""),
         kw.get("log_path"),
     ),
+    "load_live": lambda session, **kw: tool_funcs.load_live(
+        session,
+        kw.get("host", "localhost"),
+        kw.get("port"),
+    ),
     "list_tests": lambda session, **kw: tool_funcs.list_tests(
         session,
-        kw["alias"],
+        kw.get("alias"),
         kw.get("status"),
         kw.get("tag"),
     ),
     "get_test_keywords": lambda session, **kw: tool_funcs.get_test_keywords(
         session,
-        kw["alias"],
-        kw["test_name"],
+        kw.get("alias"),
+        kw.get("test_name", ""),
     ),
     "get_span_logs": lambda session, **kw: tool_funcs.get_span_logs(
         session,
-        kw["alias"],
-        kw["span_id"],
+        kw.get("alias"),
+        kw.get("span_id", ""),
     ),
     "analyze_failures": lambda session, **kw: tool_funcs.analyze_failures(
         session,
-        kw["alias"],
+        kw.get("alias"),
     ),
     "compare_runs": lambda session, **kw: tool_funcs.compare_runs(
         session,
@@ -296,9 +301,9 @@ _TOOL_DISPATCH: dict[str, Any] = {
     ),
     "correlate_timerange": lambda session, **kw: tool_funcs.correlate_timerange(
         session,
-        kw["alias"],
-        kw["start"],
-        kw["end"],
+        kw.get("alias"),
+        kw.get("start", 0),
+        kw.get("end", 0),
     ),
     "get_latency_anomalies": lambda session, **kw: tool_funcs.get_latency_anomalies(
         session,
@@ -308,8 +313,8 @@ _TOOL_DISPATCH: dict[str, Any] = {
     ),
     "get_failure_chain": lambda session, **kw: tool_funcs.get_failure_chain(
         session,
-        kw["alias"],
-        kw["test_name"],
+        kw.get("alias"),
+        kw.get("test_name", ""),
     ),
 }
 
