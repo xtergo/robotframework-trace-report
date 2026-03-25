@@ -392,7 +392,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
             # Find roots (no parent or parent not in set)
             roots = [s for s in spans if not s.parent_span_id or s.parent_span_id not in by_id]
-            roots.sort(key=lambda s: s.start_time_unix_nano)
+            roots.sort(key=lambda s: s.start_time_ns)
 
             def _build_node(s):
                 svc = s.resource_attributes.get("service.name", "")
@@ -403,11 +403,11 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                     "service": svc,
                     "name": s.name,
                     "has_rf_attrs": has_rf,
-                    "start_ns": s.start_time_unix_nano,
-                    "end_ns": s.end_time_unix_nano,
+                    "start_ns": s.start_time_ns,
+                    "end_ns": s.start_time_ns + s.duration_ns,
                 }
                 kids = children_of.get(s.span_id, [])
-                kids_sorted = sorted(kids, key=lambda sid: by_id[sid].start_time_unix_nano)
+                kids_sorted = sorted(kids, key=lambda sid: by_id[sid].start_time_ns)
                 if kids_sorted:
                     node["children"] = [_build_node(by_id[sid]) for sid in kids_sorted]
                 return node
