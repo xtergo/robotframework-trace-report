@@ -2201,6 +2201,10 @@
     var isNew = !_knownServices[svcName];
     _knownServices[svcName] = true;
     var state = _getServiceState(svcName);
+    // Pre-register colour so dots are available immediately
+    if (window.__RF_SVC_COLORS__) {
+      window.__RF_SVC_COLORS__.get(svcName);
+    }
     // Auto-enable if "Show All Services" is on, or if this is a brand new
     // service that hasn't been explicitly disabled by the user.
     if (_showAllServices || (isNew && !state.enabled)) {
@@ -2353,20 +2357,22 @@
       var active = Object.keys(_activeServices);
       var total = Object.keys(_knownServices).length;
 
-      // Build button content with colour dots (matching offline mode)
+      // Build button content with colour dots
       btn.innerHTML = '';
       var btnContent = document.createElement('span');
       btnContent.className = 'svc-btn-content';
 
-      // Show up to 3 service colour dots
+      // Show a colour dot for each known service (up to 5)
       var svcC = window.__RF_SVC_COLORS__;
       var sortedNames = Object.keys(_knownServices).sort();
-      for (var di = 0; di < Math.min(sortedNames.length, 3); di++) {
+      for (var di = 0; di < Math.min(sortedNames.length, 5); di++) {
         var dEntry = svcC ? svcC.get(sortedNames[di]) : null;
         if (dEntry) {
+          var _isDkBtn = document.documentElement.classList.contains('theme-dark') ||
+                         document.querySelector('.rf-trace-viewer.theme-dark') !== null;
           var dDot = document.createElement('span');
           dDot.className = 'svc-legend-dot';
-          dDot.style.background = dEntry.light;
+          dDot.style.background = _isDkBtn ? dEntry.badge[2] : dEntry.badge[0];
           dDot.title = sortedNames[di];
           btnContent.appendChild(dDot);
         }
@@ -2374,13 +2380,10 @@
 
       var labelSpan = document.createElement('span');
       if (active.length === 0 || active.length === total) {
-        labelSpan.textContent = 'Services';
+        labelSpan.textContent = '\u25be'; // ▾ dropdown arrow only
         btn.classList.remove('has-filter');
-      } else if (active.length === 1) {
-        labelSpan.textContent = active[0];
-        btn.classList.add('has-filter');
       } else {
-        labelSpan.textContent = active.length + '/' + total + ' services';
+        labelSpan.textContent = active.length + '/' + total + ' \u25be';
         btn.classList.add('has-filter');
       }
       btnContent.appendChild(labelSpan);
