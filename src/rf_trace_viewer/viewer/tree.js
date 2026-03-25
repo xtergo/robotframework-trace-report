@@ -29,7 +29,7 @@ var _logsOpenIds = {};
 
 // Virtual scrolling state — only used when span count > VIRTUAL_THRESHOLD
 var _virtualState = null;
-var VIRTUAL_THRESHOLD = 5000;
+var VIRTUAL_THRESHOLD = 50000;
 var VIRTUAL_ROW_HEIGHT = 28;
 var VIRTUAL_BUFFER = 20;
 
@@ -1004,7 +1004,7 @@ function _createVirtualRow(item, index) {
     kwType: item.data.keyword_type,
     kwArgs: item.data.args,
     maxSiblingDuration: item.maxSiblingDuration || 0,
-    skipDetailPanel: true  // Virtual mode: detail panel is removed anyway
+    skipDetailPanel: true  // Virtual mode: fixed-height rows can't contain detail panels
   });
 
   // Apply wrapper de-emphasis in virtual mode
