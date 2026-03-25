@@ -3458,7 +3458,7 @@
       timelineState._locateRecentPending = false;
     } else if (saved.hadSpans) {
       var savedViewWidth = saved.viewEnd - saved.viewStart;
-      var padding = savedViewWidth * 0.05;
+      var padding = Math.min(savedViewWidth * 0.05, 60);
 
       if (timelineState._locateRecentPending) {
         // Re-run locate recent with new data
