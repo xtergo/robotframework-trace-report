@@ -3120,8 +3120,11 @@ function _createTreeNode(opts) {
     var _gcColor = null;
     var _gcSvcColors = window.__RF_SVC_COLORS__;
     // Match _getSpanColors logic from timeline.js
-    if (_gcSvcColors && opts.data.service_name) {
-      var _gcEntry = _gcSvcColors.get(opts.data.service_name);
+    // For generic service suites, the service name is in .name, not .service_name
+    var _gcSvcName = opts.data.service_name ||
+                     (opts.data._is_generic_service ? opts.data.name : null);
+    if (_gcSvcColors && _gcSvcName) {
+      var _gcEntry = _gcSvcColors.get(_gcSvcName);
       if (_gcEntry) {
         _gcColor = _gcIsDark ? _gcEntry.gD[1] : _gcEntry.gL[1];
       }
