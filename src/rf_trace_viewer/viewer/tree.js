@@ -2248,8 +2248,18 @@ function _renderLogsButton(panel, data) {
 
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
+    // Toggle: if logs are already open, close them
+    if (_logsOpenIds[data.id]) {
+      delete _logsOpenIds[data.id];
+      var existing = panel.querySelector('.logs-container');
+      if (existing) existing.remove();
+      btn.textContent = '\ud83d\uddd2 Logs (' + data._log_count + ')';
+      console.log('[Tree] Logs toggled closed: spanId=' + data.id);
+      return;
+    }
     console.log('[Tree] Logs button clicked: spanId=' + data.id + ', traceId=' + data.trace_id + ', panelConnected=' + panel.isConnected);
     _logsOpenIds[data.id] = true;
+    btn.textContent = '\ud83d\uddd2 Logs (' + data._log_count + ') \u25b2';
     _fetchAndRenderLogs(panel, data.id, data.trace_id);
   });
 
