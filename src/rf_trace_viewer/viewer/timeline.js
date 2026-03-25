@@ -3046,6 +3046,11 @@
           laneEnds.push(span.endTime);
         }
       }
+
+      // Re-sort by startTime so binary search in _getSpanAtPoint works correctly.
+      // The depth-first sort above is needed for lane assignment but breaks the
+      // startTime ordering that hit detection relies on.
+      spans.sort(function (a, b) { return a.startTime - b.startTime; });
     }
   }
 
