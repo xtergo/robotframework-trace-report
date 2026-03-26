@@ -757,6 +757,15 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
             record_items_returned("/api/v1/spans", "query_spans", len(view_model.spans))
+
+            # Add clickhouse_direct flag when the direct path was used
+            if getattr(provider, "_last_query_used_clickhouse", False):
+                result["clickhouse_direct"] = True
+
+            # Add fallback flag when a CH-eligible request fell back to SigNoz API
+            if getattr(provider, "_last_query_fell_back", False):
+                result["fallback"] = True
+
             body = json.dumps(result).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

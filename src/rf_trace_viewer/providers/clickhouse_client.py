@@ -108,11 +108,7 @@ class ClickHouseClient:
         req.add_header("Content-Type", "text/plain; charset=utf-8")
 
         if self.user is not None and self.password is not None:
-            credentials = (
-                base64.b64encode(f"{self.user}:{self.password}".encode())
-                .decode("ascii")
-                .decode("ascii")
-            )
+            credentials = base64.b64encode(f"{self.user}:{self.password}".encode()).decode("ascii")
             req.add_header("Authorization", f"Basic {credentials}")
 
         try:

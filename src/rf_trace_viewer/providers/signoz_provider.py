@@ -27,12 +27,18 @@ from .base import (
     TraceSpan,
     TraceViewModel,
 )
+from .clickhouse_client import ClickHouseClient
 from .signoz_auth import SigNozAuth
 
 logger = logging.getLogger(__name__)
 
 # SigNoz status code mapping: 0=UNSET, 1=OK, 2=ERROR
 _STATUS_MAP = {"0": "UNSET", "1": "OK", "2": "ERROR"}
+
+# ClickHouse routing constants
+CH_MAX_FAILURES: int = 3
+CH_COOLDOWN_SECONDS: float = 60.0
+CH_TIME_THRESHOLD_NS: int = 15 * 60 * 1_000_000_000  # 15 minutes in nanoseconds
 
 
 def _parse_timestamp(value: object) -> int:
@@ -96,6 +102,13 @@ class SigNozProvider(TraceProvider):
             org_id=config.signoz_org_id,
             email=config.signoz_email,
         )
+
+        # ClickHouse direct-query state (set externally via cli.py)
+        self._ch_client: ClickHouseClient | None = None
+        self._ch_failure_count: int = 0
+        self._ch_disabled_until: float = 0.0  # time.monotonic() deadline
+        self._last_query_used_clickhouse: bool = False
+        self._last_query_fell_back: bool = False
 
     # ------------------------------------------------------------------
     # TraceProvider interface
@@ -281,7 +294,29 @@ class SigNozProvider(TraceProvider):
         multi-page pagination (~10s+ for large time ranges).
 
         If service_name is provided, only spans from that service.name are returned.
+
+        When a ClickHouseClient is configured and the time range exceeds
+        15 minutes, routes to the direct ClickHouse path for faster bulk
+        fetches.  Falls back to the SigNoz API on any ClickHouse error.
         """
+        self._last_query_used_clickhouse = False
+        self._last_query_fell_back = False
+
+        # --- ClickHouse direct path (bulk fetches) ---
+        if self._should_use_clickhouse(since_ns):
+            try:
+                result = self._poll_new_spans_direct(since_ns)
+                return result
+            except Exception:
+                self._record_ch_failure()
+                self._last_query_fell_back = True
+                logger.warning(
+                    "ClickHouse direct query failed, falling back to SigNoz API",
+                    exc_info=True,
+                )
+                # fall through to SigNoz API path
+
+        # --- SigNoz API path (default / fallback) ---
         if since_ns > 0:
             query_start_ns = since_ns
         else:
@@ -379,6 +414,187 @@ class SigNozProvider(TraceProvider):
         query = self._build_span_query(filters=filters, offset=0, limit=limit)
         response = self._api_request("/api/v3/query_range", query)
         return self._parse_spans(response)
+
+    # ------------------------------------------------------------------
+    # ClickHouse routing & circuit breaker
+    # ------------------------------------------------------------------
+
+    def _should_use_clickhouse(self, since_ns: int, until_ns: int | None = None) -> bool:
+        """Return True when the direct ClickHouse path should be used.
+
+        All three conditions must hold:
+        1. A ClickHouseClient is configured (non-None)
+        2. The circuit breaker is not tripped
+        3. The computed time range exceeds 15 minutes
+        """
+        if self._ch_client is None:
+            return False
+        if time.monotonic() < self._ch_disabled_until:
+            return False
+        now_ns = int(time.time() * 1_000_000_000)
+        if until_ns is not None:
+            range_ns = until_ns - since_ns
+        else:
+            range_ns = now_ns - since_ns
+        return range_ns > CH_TIME_THRESHOLD_NS
+
+    def _record_ch_failure(self) -> None:
+        """Increment failure counter; disable CH for 60s after 3 consecutive failures."""
+        self._ch_failure_count += 1
+        if self._ch_failure_count >= CH_MAX_FAILURES:
+            self._ch_disabled_until = time.monotonic() + CH_COOLDOWN_SECONDS
+            logger.warning(
+                "ClickHouse circuit breaker tripped after %d consecutive failures; "
+                "disabling direct path for %.0fs",
+                self._ch_failure_count,
+                CH_COOLDOWN_SECONDS,
+            )
+
+    def _record_ch_success(self) -> None:
+        """Reset failure counter on successful CH query."""
+        self._ch_failure_count = 0
+
+    def _poll_new_spans_direct(self, since_ns: int, until_ns: int | None = None) -> TraceViewModel:
+        """Query ClickHouse directly and return TraceSpan list.
+
+        Builds a SQL query against ``distributed_signoz_index_v3`` with
+        ``ts_bucket_start`` range predicate for partition pruning and
+        ``timestamp`` nanosecond filter for precise results.  Uses
+        ClickHouse parameterized timestamps for injection safety.
+        """
+        now_ns = until_ns if until_ns is not None else int(time.time() * 1_000_000_000)
+        start_ts = since_ns // 1_000_000_000
+        end_ts = now_ns // 1_000_000_000
+
+        sql = """\
+SELECT
+    spanID,
+    parentSpanID,
+    traceID,
+    serviceName,
+    name,
+    durationNano,
+    statusCode,
+    timestamp,
+    attributes_string['rf.type'] AS rf_type,
+    attributes_string['rf.status'] AS rf_status,
+    attributes_string['rf.suite.name'] AS rf_suite_name,
+    attributes_string['rf.suite.source'] AS rf_suite_source,
+    attributes_string['rf.test.name'] AS rf_test_name,
+    attributes_string['rf.keyword.name'] AS rf_keyword_name,
+    attributes_string['rf.keyword.type'] AS rf_keyword_type,
+    attributes_string['rf.keyword.libname'] AS rf_keyword_libname,
+    attributes_string['rf.keyword.status'] AS rf_keyword_status,
+    attributes_string['rf.keyword.assign'] AS rf_keyword_assign,
+    attributes_string['rf.item_index'] AS rf_item_index,
+    attributes_string['rf.message'] AS rf_message,
+    attributes_string['rf.suite.lineno'] AS rf_suite_lineno,
+    attributes_string['rf.test.lineno'] AS rf_test_lineno,
+    attributes_string['rf.test.source'] AS rf_test_source,
+    attributes_string['rf.suite.has_setup'] AS rf_suite_has_setup,
+    attributes_string['rf.suite.has_teardown'] AS rf_suite_has_teardown,
+    attributes_string['rf.test.has_setup'] AS rf_test_has_setup,
+    attributes_string['rf.test.has_teardown'] AS rf_test_has_teardown
+FROM signoz_traces.distributed_signoz_index_v3
+WHERE
+    ts_bucket_start >= toDateTime({start_ts:UInt64})
+    AND ts_bucket_start <= toDateTime({end_ts:UInt64})
+    AND timestamp >= {start_ns:UInt64}
+    AND timestamp <= {end_ns:UInt64}
+ORDER BY timestamp ASC"""
+
+        params = {
+            "start_ts": str(start_ts),
+            "end_ts": str(end_ts),
+            "start_ns": str(since_ns),
+            "end_ns": str(now_ns),
+        }
+
+        assert self._ch_client is not None  # guarded by _should_use_clickhouse
+        rows = self._ch_client.query(sql, params)
+        spans = self._parse_clickhouse_rows(rows)
+        self._last_query_used_clickhouse = True
+        self._record_ch_success()
+        return TraceViewModel(spans=spans)
+
+    @staticmethod
+    def _parse_clickhouse_rows(rows: list[dict]) -> list[TraceSpan]:
+        """Convert ClickHouse JSONEachRow dicts to TraceSpan objects.
+
+        Maps columns from ``distributed_signoz_index_v3`` to canonical
+        :class:`TraceSpan` fields.  Rows missing ``spanID`` are skipped
+        with a warning.
+        """
+        # ClickHouse statusCode is an integer: 0=UNSET, 1=OK, 2=ERROR
+        ch_status_map = {0: "UNSET", 1: "OK", 2: "ERROR"}
+
+        # rf_* alias → rf.* attribute key
+        rf_alias_map = {
+            "rf_type": "rf.type",
+            "rf_status": "rf.status",
+            "rf_suite_name": "rf.suite.name",
+            "rf_suite_source": "rf.suite.source",
+            "rf_test_name": "rf.test.name",
+            "rf_keyword_name": "rf.keyword.name",
+            "rf_keyword_type": "rf.keyword.type",
+            "rf_keyword_libname": "rf.keyword.libname",
+            "rf_keyword_status": "rf.keyword.status",
+            "rf_keyword_assign": "rf.keyword.assign",
+            "rf_item_index": "rf.item_index",
+            "rf_message": "rf.message",
+            "rf_suite_lineno": "rf.suite.lineno",
+            "rf_test_lineno": "rf.test.lineno",
+            "rf_test_source": "rf.test.source",
+            "rf_suite_has_setup": "rf.suite.has_setup",
+            "rf_suite_has_teardown": "rf.suite.has_teardown",
+            "rf_test_has_setup": "rf.test.has_setup",
+            "rf_test_has_teardown": "rf.test.has_teardown",
+        }
+
+        spans: list[TraceSpan] = []
+        for row in rows:
+            span_id = str(row.get("spanID", ""))
+            if not span_id:
+                logger.warning("Skipping ClickHouse row with missing spanID: %s", row)
+                continue
+
+            trace_id = str(row.get("traceID", ""))
+            parent_span_id = str(row.get("parentSpanID", ""))
+            name = str(row.get("name", ""))
+            start_time_ns = int(row.get("timestamp", 0))
+            duration_ns = int(row.get("durationNano", 0))
+            if duration_ns < 0:
+                duration_ns = 0
+
+            raw_status = row.get("statusCode", 0)
+            status = ch_status_map.get(int(raw_status), "UNSET")
+
+            attributes: dict[str, str] = {}
+
+            # Place serviceName into attributes
+            service_name = str(row.get("serviceName", ""))
+            if service_name:
+                attributes["service.name"] = service_name
+
+            # Place non-empty rf_* aliases into attributes with rf.* keys
+            for alias, attr_key in rf_alias_map.items():
+                val = str(row.get(alias, ""))
+                if val:
+                    attributes[attr_key] = val
+
+            spans.append(
+                TraceSpan(
+                    span_id=span_id,
+                    parent_span_id=parent_span_id,
+                    trace_id=trace_id,
+                    start_time_ns=start_time_ns,
+                    duration_ns=duration_ns,
+                    status=status,
+                    attributes=attributes,
+                    name=name,
+                )
+            )
+        return spans
 
     # ------------------------------------------------------------------
     # HTTP client

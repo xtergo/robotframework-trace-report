@@ -72,6 +72,8 @@ class AppConfig:
     health_check_timeout: int = 2  # seconds
     clickhouse_host: str | None = None
     clickhouse_port: int = 8123
+    clickhouse_user: str | None = None
+    clickhouse_password: str | None = None
     max_concurrent_queries: int | None = None
     base_filter_config: str | None = None  # JSON string or file path
     rate_limit_per_ip: int | None = None  # requests per minute per IP
@@ -331,6 +333,8 @@ def load_config(cli_args: dict, config_path: str | None = None) -> AppConfig:
         "HEALTH_CHECK_TIMEOUT": "health_check_timeout",
         "CLICKHOUSE_HOST": "clickhouse_host",
         "CLICKHOUSE_PORT": "clickhouse_port",
+        "CLICKHOUSE_USER": "clickhouse_user",
+        "CLICKHOUSE_PASSWORD": "clickhouse_password",
         "MAX_CONCURRENT_QUERIES": "max_concurrent_queries",
         "BASE_FILTER_CONFIG": "base_filter_config",
         "RATE_LIMIT_PER_IP": "rate_limit_per_ip",
