@@ -43,8 +43,8 @@ class AppConfig:
     signoz_api_key: str | None = None
     execution_attribute: str = "execution_id"
     poll_interval: int = 5  # seconds (1-30)
-    max_spans_per_page: int = 10_000
-    max_spans: int = 500_000
+    max_spans_per_page: int = 100_000
+    max_spans: int = 5_000_000
     overlap_window_seconds: float = 2.0
     service_name: str | None = None  # filter by service.name in SigNoz queries
     signoz_jwt_secret: str | None = None  # self-hosted JWT secret for auto token refresh
@@ -97,8 +97,8 @@ class SigNozConfig:
     api_key: str  # Bearer token or empty for auto-auth
     execution_attribute: str = "execution_id"
     poll_interval: int = 5
-    max_spans_per_page: int = 10_000
-    max_spans: int = 500_000
+    max_spans_per_page: int = 100_000
+    max_spans: int = 5_000_000
     overlap_window_seconds: float = 2.0
     service_name: str | None = None  # filter spans by service.name
     jwt_secret: str | None = None  # JWT signing secret for self-hosted auto-auth

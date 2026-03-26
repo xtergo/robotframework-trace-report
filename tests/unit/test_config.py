@@ -352,8 +352,8 @@ def test_app_config_defaults():
     assert config.signoz_api_key is None
     assert config.execution_attribute == "execution_id"
     assert config.poll_interval == 5
-    assert config.max_spans_per_page == 10_000
-    assert config.max_spans == 500_000
+    assert config.max_spans_per_page == 100_000
+    assert config.max_spans == 5_000_000
     assert config.overlap_window_seconds == 2.0
     assert config.receiver is False
     assert config.forward is None
@@ -384,8 +384,8 @@ def test_signoz_config_defaults():
     cfg = SigNozConfig(endpoint="https://x.com", api_key="k")
     assert cfg.execution_attribute == "execution_id"
     assert cfg.poll_interval == 5
-    assert cfg.max_spans_per_page == 10_000
-    assert cfg.max_spans == 500_000
+    assert cfg.max_spans_per_page == 100_000
+    assert cfg.max_spans == 5_000_000
     assert cfg.overlap_window_seconds == 2.0
 
 
