@@ -331,8 +331,9 @@
             if (pEnd > pageMaxEndNs) pageMaxEndNs = pEnd;
           }
 
-          // Stop if we've reached or passed the slot boundary, or page was not full
-          if (pageMaxEndNs >= toNs || pageSize < 10000) {
+          // Stop if server says no more data, we've passed the slot boundary, or page was not full
+          var hasMore = data.has_more === true;
+          if (!hasMore || pageMaxEndNs >= toNs) {
             onComplete(fetched);
           } else {
             watermark = pageMaxEndNs;

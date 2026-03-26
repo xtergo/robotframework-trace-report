@@ -768,6 +768,16 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             # Add clickhouse_direct flag when the direct path was used
             if getattr(provider, "_last_query_used_clickhouse", False):
                 result["clickhouse_direct"] = True
+                result["has_more"] = False
+            else:
+                # SigNoz API path: if we got exactly max_spans_per_page,
+                # there are likely more spans to fetch.
+                page_limit = getattr(provider, "_config", None)
+                if page_limit is not None:
+                    page_limit = getattr(page_limit, "max_spans_per_page", 10_000)
+                else:
+                    page_limit = 10_000
+                result["has_more"] = len(view_model.spans) >= page_limit
 
             # Add fallback flag when a CH-eligible request fell back to SigNoz API
             if getattr(provider, "_last_query_fell_back", False):

@@ -467,6 +467,14 @@ class SigNozProvider(TraceProvider):
         start_ts = since_ns // 1_000_000_000
         end_ts = now_ns // 1_000_000_000
 
+        # Pad ts_bucket_start range by one bucket width (1800s) in each
+        # direction so partition pruning doesn't miss spans whose bucket
+        # straddles the slot boundary.  The timestamp filter still provides
+        # precise nanosecond scoping.
+        bucket_pad = 1800
+        bucket_start_ts = start_ts - bucket_pad
+        bucket_end_ts = end_ts + bucket_pad
+
         sql = """\
 SELECT
     spanID,
@@ -505,8 +513,8 @@ WHERE
 ORDER BY timestamp ASC"""
 
         params = {
-            "start_ts": str(start_ts),
-            "end_ts": str(end_ts),
+            "start_ts": str(bucket_start_ts),
+            "end_ts": str(bucket_end_ts),
             "start_ns": str(since_ns),
             "end_ns": str(now_ns),
         }
