@@ -499,8 +499,8 @@ FROM signoz_traces.distributed_signoz_index_v3
 WHERE
     ts_bucket_start >= toDateTime({start_ts:UInt64})
     AND ts_bucket_start <= toDateTime({end_ts:UInt64})
-    AND timestamp >= {start_ns:UInt64}
-    AND timestamp <= {end_ns:UInt64}
+    AND timestamp >= fromUnixTimestamp64Nano({start_ns:UInt64})
+    AND timestamp <= fromUnixTimestamp64Nano({end_ns:UInt64})
 ORDER BY timestamp ASC"""
 
         params = {
