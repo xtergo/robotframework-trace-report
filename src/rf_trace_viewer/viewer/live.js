@@ -281,9 +281,76 @@
   /* ── Delta fetch engine ────────────────────────────────────────── */
 
   /**
-   * Delta fetch: incrementally load spans for [fromTime, toTime] in 15-minute steps.
+   * Fetch spans for a single time slot [fromNs, toNs) with sequential pagination.
+   * Each page is 10k spans. Calls onComplete(totalFetched) when done.
+   */
+  function _fetchSlotSequential(fromNs, toNs, onComplete) {
+    var watermark = fromNs;
+    var fetched = 0;
+
+    function nextPage() {
+      if (allSpans.length >= MAX_SPANS) {
+        onComplete(fetched);
+        return;
+      }
+      var url = '/api/spans?since_ns=' + watermark;
+      url += '&service=';
+      if (_executionFilter) {
+        url += '&execution_id=' + encodeURIComponent(_executionFilter);
+      }
+
+      fetch(_appendSid(url))
+        .then(function (res) {
+          if (!res.ok) {
+            console.warn('[live] Slot fetch failed: HTTP ' + res.status);
+            return null;
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          if (data && data.earliest_db_span_ns && data.earliest_db_span_ns > 0) {
+            _connectionState.earliestDbSpanNs = data.earliest_db_span_ns;
+          }
+          if (!data || !data.spans || data.spans.length === 0) {
+            onComplete(fetched);
+            return;
+          }
+          var pageSize = data.spans.length;
+          fetched += pageSize;
+          var added = _ingestSigNozSpans(data.spans);
+
+          // Render incrementally so the user sees progress
+          if (added > 0) {
+            _rebuildAndRender();
+          }
+
+          // Check if all spans in this page are beyond our slot boundary
+          var pageMaxEndNs = watermark;
+          for (var pi = 0; pi < data.spans.length; pi++) {
+            var pEnd = (data.spans[pi].start_time_ns || 0) + (data.spans[pi].duration_ns || 0);
+            if (pEnd > pageMaxEndNs) pageMaxEndNs = pEnd;
+          }
+
+          // Stop if we've reached or passed the slot boundary, or page was not full
+          if (pageMaxEndNs >= toNs || pageSize < 10000) {
+            onComplete(fetched);
+          } else {
+            watermark = pageMaxEndNs;
+            nextPage();
+          }
+        })
+        .catch(function (err) {
+          console.warn('[live] Slot fetch error:', err.message);
+          onComplete(fetched);
+        });
+    }
+    nextPage();
+  }
+
+  /**
+   * Delta fetch: incrementally load spans for [fromTime, toTime].
    * fromTime and toTime are in epoch seconds.
-   * Fetches each step sequentially, merges into allSpans via existing ingest functions.
+   * Uses parallel hourly slots for ranges > 1 hour.
    */
   function _deltaFetch(fromTime, toTime) {
       if (_loadWindowState.isFetching) {
@@ -349,79 +416,46 @@
       var fromNs = fromTime * 1e9;
 
       if (provider === 'signoz') {
-        // Paginated fetch — server returns one page (max 10k spans) per request.
-        // Loop: fetch a page, advance the watermark to the highest span end time,
-        // fetch again until a page returns fewer than 10k (no more data).
-        var pageWatermark = fromNs;
+        // Parallel hourly fetch — split the time range into 1-hour slots and
+        // fetch each slot concurrently. Each slot paginates internally (10k pages).
+        // Browser limits ~6 concurrent connections, so 24 slots run in ~4 batches.
+        var SLOT_SECONDS = 3600; // 1 hour per slot
+        var rangeSeconds = toTime - fromTime;
+        var numSlots = Math.max(1, Math.ceil(rangeSeconds / SLOT_SECONDS));
+        // For short ranges (< 1h), use a single sequential fetch
+        if (numSlots <= 1) {
+          var pageWatermark = fromNs;
+          var totalFetched = 0;
+          _fetchSlotSequential(pageWatermark, toTime * 1e9, function (fetched) {
+            totalFetched = fetched;
+            _finishDeltaFetch();
+          });
+          return;
+        }
+
+        console.log('[live] Parallel delta fetch: ' + numSlots + ' hour-slots for ' +
+          Math.round(rangeSeconds) + 's range');
+
+        var slotsCompleted = 0;
         var totalFetched = 0;
 
-        function fetchNextPage() {
-          if (allSpans.length >= MAX_SPANS) {
-            console.warn('[live] Delta fetch stopped: span cap reached');
-            _finishDeltaFetch();
-            return;
-          }
-          var url = '/api/spans?since_ns=' + pageWatermark;
-          // Always fetch ALL services (like the normal poll path).
-          // Client-side checkboxes handle visibility at render time.
-          url += '&service=';
-          if (_executionFilter) {
-            url += '&execution_id=' + encodeURIComponent(_executionFilter);
-          }
-
-          fetch(_appendSid(url))
-            .then(function (res) {
-              if (!res.ok) {
-                console.warn('[live] Delta fetch page failed: HTTP ' + res.status);
-                return null;
-              }
-              return res.json();
-            })
-            .then(function (data) {
-              if (data && data.earliest_db_span_ns && data.earliest_db_span_ns > 0) {
-                _connectionState.earliestDbSpanNs = data.earliest_db_span_ns;
-              }
-              if (!data || !data.spans || data.spans.length === 0) {
-                console.log('[live] Delta fetch done: ' + totalFetched + ' spans total');
-                _finishDeltaFetch();
-                return;
-              }
-              var pageSize = data.spans.length;
-              totalFetched += pageSize;
-              var added = _ingestSigNozSpans(data.spans);
-              console.log('[live] Delta fetch page: ' + pageSize + ' spans (' + added + ' new), total=' + totalFetched);
-
-              // Render incrementally so the user sees progress
-              if (added > 0) {
-                _rebuildAndRender();
-              }
-
-              // If page was full (10k), there may be more — advance watermark and fetch next
-              if (pageSize >= 10000) {
-                // Compute page-local max end_time_ns for watermark advancement.
-                // We must NOT use the global lastSeenNs because it may have been
-                // set to a future value by lookback initialization or polling,
-                // which would cause pagination to skip over data.
-                var pageMaxEndNs = pageWatermark;
-                for (var pi = 0; pi < data.spans.length; pi++) {
-                  var pSpan = data.spans[pi];
-                  var pEnd = (pSpan.start_time_ns || 0) + (pSpan.duration_ns || 0);
-                  if (pEnd > pageMaxEndNs) pageMaxEndNs = pEnd;
-                }
-                console.log('[live] Delta fetch pagination: old watermark=' + pageWatermark + ' new watermark=' + pageMaxEndNs);
-                pageWatermark = pageMaxEndNs;
-                fetchNextPage();
-              } else {
-                console.log('[live] Delta fetch done: ' + totalFetched + ' spans total (last page < 10k)');
+        for (var si = 0; si < numSlots; si++) {
+          (function (slotIndex) {
+            var slotFrom = (fromTime + slotIndex * SLOT_SECONDS) * 1e9;
+            var slotTo = Math.min(fromTime + (slotIndex + 1) * SLOT_SECONDS, toTime) * 1e9;
+            _fetchSlotSequential(slotFrom, slotTo, function (fetched) {
+              totalFetched += fetched;
+              slotsCompleted++;
+              console.log('[live] Slot ' + (slotIndex + 1) + '/' + numSlots +
+                ' done: ' + fetched + ' spans (total: ' + totalFetched +
+                ', slots done: ' + slotsCompleted + '/' + numSlots + ')');
+              if (slotsCompleted >= numSlots) {
+                console.log('[live] All ' + numSlots + ' slots complete: ' + totalFetched + ' spans');
                 _finishDeltaFetch();
               }
-            })
-            .catch(function (err) {
-              console.warn('[live] Delta fetch error:', err.message);
-              _finishDeltaFetch();
             });
+          })(si);
         }
-        fetchNextPage();
       } else {
         // JSON provider: use stepped fetch (supports from_ns/to_ns)
         var stepSize = _loadWindowState.stepSize;
