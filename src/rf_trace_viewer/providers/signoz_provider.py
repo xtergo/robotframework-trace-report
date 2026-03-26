@@ -283,6 +283,7 @@ class SigNozProvider(TraceProvider):
     def poll_new_spans(
         self,
         since_ns: int,
+        until_ns: int | None = None,
         service_name: str | None = None,
         execution_id: str | None = None,
     ) -> TraceViewModel:
@@ -303,9 +304,9 @@ class SigNozProvider(TraceProvider):
         self._last_query_fell_back = False
 
         # --- ClickHouse direct path (bulk fetches) ---
-        if self._should_use_clickhouse(since_ns):
+        if self._should_use_clickhouse(since_ns, until_ns):
             try:
-                result = self._poll_new_spans_direct(since_ns)
+                result = self._poll_new_spans_direct(since_ns, until_ns)
                 return result
             except Exception:
                 self._record_ch_failure()

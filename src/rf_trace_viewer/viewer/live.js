@@ -293,7 +293,7 @@
         onComplete(fetched);
         return;
       }
-      var url = '/api/spans?since_ns=' + watermark;
+      var url = '/api/spans?since_ns=' + watermark + '&until_ns=' + toNs;
       url += '&service=';
       if (_executionFilter) {
         url += '&execution_id=' + encodeURIComponent(_executionFilter);

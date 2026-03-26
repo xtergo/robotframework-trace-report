@@ -222,6 +222,8 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
 
         if path in ("/api/v1/spans", "/api/spans"):
             since_ns = int(query.get("since_ns", ["0"])[0])
+            until_ns_raw = query.get("until_ns", [None])[0]
+            until_ns = int(until_ns_raw) if until_ns_raw else None
             service = query.get("service", [None])[0]
             # Normalize empty string to None so base_filter logic applies
             if service is not None and service.strip() == "":
@@ -229,6 +231,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             execution_id = query.get("execution_id", [None])[0]
             self._serve_signoz_spans(
                 since_ns,
+                until_ns=until_ns,
                 service_name=service,
                 execution_id=execution_id,
                 request_id=request_id,
@@ -654,6 +657,7 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
     def _serve_signoz_spans(
         self,
         since_ns: int,
+        until_ns: int | None = None,
         service_name: str | None = None,
         execution_id: str | None = None,
         request_id: str = "",
@@ -693,7 +697,10 @@ class _LiveRequestHandler(BaseHTTPRequestHandler):
             effective_service = None
 
             view_model = provider.poll_new_spans(
-                since_ns, service_name=effective_service, execution_id=execution_id
+                since_ns,
+                until_ns=until_ns,
+                service_name=effective_service,
+                execution_id=execution_id,
             )
 
             # Trace-follow enrichment: fetch cross-service spans sharing
