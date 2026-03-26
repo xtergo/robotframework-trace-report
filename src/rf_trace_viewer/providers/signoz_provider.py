@@ -381,7 +381,24 @@ class SigNozProvider(TraceProvider):
         limit = self._config.max_spans_per_page
         query = self._build_span_query(filters=filters, offset=0, limit=limit, light=True)
         query["start"] = start_s
-        response = self._api_request("/api/v3/query_range", query)
+        try:
+            response = self._api_request("/api/v3/query_range", query)
+        except ProviderError as exc:
+            # SigNoz returns 500 "maximum traces that can be paginated is 10000"
+            # when the time range contains too many distinct traces.  Fall back
+            # to ClickHouse if available — it has no such pagination limit.
+            if self._ch_client is not None and "maximum traces" in str(exc):
+                logger.info("SigNoz pagination limit hit, falling back to ClickHouse direct path")
+                try:
+                    result = self._poll_new_spans_direct(since_ns, until_ns)
+                    return result
+                except Exception:
+                    self._record_ch_failure()
+                    logger.warning(
+                        "ClickHouse fallback also failed after SigNoz pagination limit",
+                        exc_info=True,
+                    )
+            raise
         spans = self._parse_spans(response)
 
         # Attach _log_count and _log_severity_counts to each span
