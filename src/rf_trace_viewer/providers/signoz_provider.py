@@ -341,8 +341,9 @@ class SigNozProvider(TraceProvider):
 
         # Single page fetch — no server-side pagination loop.
         # The browser advances lastSeenNs and polls again for more.
+        # Use light=True to skip HTTP/DB detail attributes for faster queries.
         limit = self._config.max_spans_per_page
-        query = self._build_span_query(filters=filters, offset=0, limit=limit)
+        query = self._build_span_query(filters=filters, offset=0, limit=limit, light=True)
         query["start"] = start_s
         response = self._api_request("/api/v3/query_range", query)
         spans = self._parse_spans(response)
@@ -551,11 +552,18 @@ class SigNozProvider(TraceProvider):
             )
         return items
 
-    def _build_span_query(self, filters: list[dict], offset: int = 0, limit: int = 10_000) -> dict:
-        """Build query_range payload for fetching spans."""
+    def _build_span_query(
+        self, filters: list[dict], offset: int = 0, limit: int = 10_000, light: bool = False
+    ) -> dict:
+        """Build query_range payload for fetching spans.
+
+        When *light* is True, only core columns and RF classification tags
+        are requested — no HTTP/DB/detail attributes. This makes ClickHouse
+        queries ~5x faster for large fetches (timeline/gantt rendering).
+        Detail attributes are fetched on-demand via the trace-tree endpoint.
+        """
         now_s = int(time.time())
-        # Build select columns — always include the execution attribute
-        # as a resource-level column so SigNoz returns it in the response.
+        # Core columns — always needed
         select_columns = [
             {"key": "spanID", "dataType": "string", "type": "", "isColumn": True},
             {
@@ -609,21 +617,18 @@ class SigNozProvider(TraceProvider):
                 "type": "tag",
                 "isColumn": False,
             },
-            # rf.type for fast span classification (tracer >= 0.5.15)
             {
                 "key": "rf.type",
                 "dataType": "string",
                 "type": "tag",
                 "isColumn": False,
             },
-            # rf.message on keyword spans
             {
                 "key": "rf.message",
                 "dataType": "string",
                 "type": "tag",
                 "isColumn": False,
             },
-            # Line numbers for suites and tests
             {
                 "key": "rf.suite.lineno",
                 "dataType": "float64",
@@ -636,14 +641,12 @@ class SigNozProvider(TraceProvider):
                 "type": "tag",
                 "isColumn": False,
             },
-            # Test source file path
             {
                 "key": "rf.test.source",
                 "dataType": "string",
                 "type": "tag",
                 "isColumn": False,
             },
-            # Setup/teardown flags
             {
                 "key": "rf.suite.has_setup",
                 "dataType": "string",
@@ -668,105 +671,112 @@ class SigNozProvider(TraceProvider):
                 "type": "tag",
                 "isColumn": False,
             },
-            # HTTP semantic convention attributes (OTel)
-            {
-                "key": "http.request.method",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "http.route",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "url.path",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "http.response.status_code",
-                "dataType": "float64",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "server.address",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "server.port",
-                "dataType": "float64",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "client.address",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "url.scheme",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "user_agent.original",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            # Database semantic convention attributes (OTel)
-            {
-                "key": "db.system",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "db.operation",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "db.name",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "db.sql.table",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "db.statement",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "db.connection_string",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
-            {
-                "key": "db.user",
-                "dataType": "string",
-                "type": "tag",
-                "isColumn": False,
-            },
         ]
+
+        # Detail attributes — only when not in light mode
+        if not light:
+            select_columns.extend(
+                [
+                    # HTTP semantic convention attributes (OTel)
+                    {
+                        "key": "http.request.method",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "http.route",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "url.path",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "http.response.status_code",
+                        "dataType": "float64",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "server.address",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "server.port",
+                        "dataType": "float64",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "client.address",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "url.scheme",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "user_agent.original",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    # Database semantic convention attributes (OTel)
+                    {
+                        "key": "db.system",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "db.operation",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "db.name",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "db.sql.table",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "db.statement",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "db.connection_string",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                    {
+                        "key": "db.user",
+                        "dataType": "string",
+                        "type": "tag",
+                        "isColumn": False,
+                    },
+                ]
+            )
         # Execution attribute is a resource attribute set via
         # OTEL_RESOURCE_ATTRIBUTES — request it as type "resource"
         # so SigNoz includes it in the response.
