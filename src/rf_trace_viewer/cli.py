@@ -522,6 +522,18 @@ def _run_live_server(args: argparse.Namespace) -> int:
 
             query_semaphore = threading.Semaphore(config.max_concurrent_queries)
 
+        # Construct ClickHouseClient for direct span queries
+        from rf_trace_viewer.providers.clickhouse_client import ClickHouseClient
+
+        ch_client = ClickHouseClient(
+            host=config.clickhouse_host,
+            port=config.clickhouse_port,
+            user=config.clickhouse_user,
+            password=config.clickhouse_password,
+        )
+        if provider is not None:
+            provider._ch_client = ch_client
+
     server = LiveServer(
         trace_path=trace_path,
         port=config.port,
