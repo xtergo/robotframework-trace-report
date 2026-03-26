@@ -475,7 +475,7 @@ SELECT
     name,
     durationNano,
     statusCode,
-    timestamp,
+    toUnixTimestamp64Nano(timestamp) AS timestamp_ns,
     attributes_string['rf.type'] AS rf_type,
     attributes_string['rf.status'] AS rf_status,
     attributes_string['rf.suite.name'] AS rf_suite_name,
@@ -561,7 +561,7 @@ ORDER BY timestamp ASC"""
             trace_id = str(row.get("traceID", ""))
             parent_span_id = str(row.get("parentSpanID", ""))
             name = str(row.get("name", ""))
-            start_time_ns = int(row.get("timestamp", 0))
+            start_time_ns = int(row.get("timestamp_ns", 0))
             duration_ns = int(row.get("durationNano", 0))
             if duration_ns < 0:
                 duration_ns = 0
