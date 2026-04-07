@@ -40,7 +40,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     robotframework==7.4.1 \
     robotframework-browser==19.12.5 \
     robotframework-pabot==2.18.0 \
-    robotframework-tracer==0.5.15
+    robotframework-tracer==0.5.16
 
 # Initialize Browser library (downloads Playwright browsers)
 RUN rfbrowser init
